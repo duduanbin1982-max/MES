@@ -1,18 +1,4 @@
-// db.js - SQLite 数据库封装
-const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
-
-const DB_DIR = path.join(__dirname, 'data');
-const DB_PATH = process.env.DB_PATH || path.join(DB_DIR, 'mes.db');
-
-if (!process.env.DB_PATH && !fs.existsSync(DB_DIR)) {
-  fs.mkdirSync(DB_DIR, { recursive: true });
-}
-
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-db.pragma('synchronous = NORMAL');
-
-module.exports = db;
+// db.js - 兼容垫片 (2026-06-24 拆分后保留)
+// 旧 require('./db') 解析到 './db/index.js', 但 tests/utils-partno.test.js
+// 显式 require.resolve('../db.js') 改 require.cache, 必须有 .js 文件存在.
+module.exports = require('./db/index');
