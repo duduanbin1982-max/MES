@@ -27,7 +27,7 @@ echo "=========================================="
 if [ "$ALLOW_NO_TEST" = "1" ]; then
   echo "⚠️  --no-test: 跳过测试闸门 (紧急模式)"
 else
-  echo "[1/3] 跑测试闸门 ..."
+  echo "[1/4] 跑测试闸门 ..."
   if ! bash "$ROOT/scripts/pre-deploy-test.sh"; then
     echo "❌ 测试失败, 部署中止. 查看日志: $ROOT/data/predeploy-*.log"
     exit 1
@@ -40,7 +40,12 @@ if [ "$TEST_ONLY" = "1" ]; then
 fi
 
 # 滚动重启
-echo "[2/3] 重启 $SVC ..."
+echo "[2/4] 跑 migration ..."
+if ! bash "$ROOT/scripts/migrate.sh"; then
+  echo "❌ migration 失败, 部署中止. 查看日志"
+  exit 1
+fi
+echo "[3/4] 重启 $SVC ..."
 systemctl --user restart "$SVC"
 sleep 2
 ACTIVE=$(systemctl --user is-active "$SVC")
@@ -52,7 +57,7 @@ if [ "$ACTIVE" != "active" ]; then
 fi
 
 # 健康
-echo "[3/3] 健康检查 ..."
+echo "[4/4] 健康检查 ..."
 HEALTH=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3890/api/health)
 if [ "$HEALTH" != "200" ]; then
   echo "❌ /api/health 返回 $HEALTH"

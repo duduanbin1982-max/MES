@@ -54,6 +54,7 @@ run "processTreeCrossSubDeps" tests/processTreeCrossSubsystemDeps.test.js "expor
 run "processTreeMindmap"     tests/processTreeMindmap.test.js     ""
 run "scheduler"              tests/scheduler.test.js              ""
 run "recomputeSafetyStock"    tests/recompute-safety-stock.test.js ""
+run "migrate"                  tests/migrate.test.js                  ""
 
 echo "=== 总结: pass=$PASS fail=$FAIL skip=$SKIP ==="
 exit $FAIL
