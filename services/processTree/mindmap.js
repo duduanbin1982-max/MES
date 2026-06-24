@@ -10,7 +10,10 @@
 //
 // 主入口: getMindmap(instanceId, partId) - 根据 partId 路由到 4 个 view 之一
 //
-// 依赖: idCodec.js 编解码 partId
+// 拆分: 纯函数 (pickPartName / deriveStatus / statusFromChildren / aggregatePartsByBomId) 抽到
+//       services/processTree/mindmap/_helpers.js, 方便单测
+//       view 内的 DB 查询仍留本文件, 与 view 业务紧耦合
+// 依赖: ../idCodec 编解码 partId
 // Author: 三狗子 | Date: 2026-06-24
 
 const db = require("../../db");
@@ -25,6 +28,7 @@ const {
   processNodeIdOf,
   assertValid,
 } = require("./idCodec");
+const { pickPartName, statusFromChildren, aggregatePartsByBomId } = require("./mindmap/_helpers");
 // ---------------------------------------------------------------------------
 
 function getRootView(instanceId) {
@@ -54,9 +58,6 @@ function getRootView(instanceId) {
     )
     .all();
 
-  // Critical-path membership is computed upstream (processTreeGenerator).
-  // For now mark critical_count via subsystem by joining the critical set
-  // (we keep this light — only counts of children).
   const childCounts = db
     .prepare(
       `SELECT subsystem_id, COUNT(DISTINCT bom_node_id) AS parts,
@@ -71,7 +72,7 @@ function getRootView(instanceId) {
     .prepare(
       `SELECT COUNT(DISTINCT bom_node_id) AS parts, COUNT(*) AS ops
          FROM process_nodes
-        WHERE equipment_instance_id = ? AND subsystem_id IS NULL`
+         WHERE equipment_instance_id = ? AND subsystem_id IS NULL`
     )
     .get(instanceId);
 
@@ -85,12 +86,11 @@ function getRootView(instanceId) {
       name_en: s.name_en,
       sequence: s.sequence,
       level: 2,
-      child_count: c.parts, // distinct parts underneath
+      child_count: c.parts,
       op_count: c.ops,
       subsystem_id: s.id,
     });
   }
-  // Surface unassigned group as a child of root if any nodes lack subsystem.
   if (unassigned && unassigned.parts > 0) {
     children.push({
       part_id: 'sub_unassigned',
@@ -124,7 +124,6 @@ function getRootView(instanceId) {
 }
 
 function getSubsystemView(instanceId, subsystemId) {
-  // subsystemId may be a real int or NaN (the synthetic 'sub_unassigned' id).
   const isUnassigned = !Number.isFinite(subsystemId);
   const subRow = isUnassigned
     ? null
@@ -151,44 +150,8 @@ function getSubsystemView(instanceId, subsystemId) {
     )
     .all(isUnassigned ? instanceId : [instanceId, subsystemId]);
 
-  // Group nodes by bom_node_id → distinct parts.
-  const partMap = new Map();
-  for (const n of nodes) {
-    if (n.bom_node_id == null) continue;
-    if (!partMap.has(n.bom_node_id)) {
-      partMap.set(n.bom_node_id, {
-        part_id: `part_${n.bom_node_id}`,
-        kind: 'part',
-        level: 3,
-        bom_node_id: n.bom_node_id,
-        name: n.material_name || extractPartName(n.operation_name) || `零件 #${n.bom_node_id}`,
-        material_name: n.material_name || null,
-        operation_count: 0,
-        completed: 0,
-        in_progress: 0,
-        any_critical: false,
-      });
-    }
-    const p = partMap.get(n.bom_node_id);
-    p.operation_count += 1;
-    if (n.status === 'completed') p.completed += 1;
-    else if (n.status === 'in_progress') p.in_progress += 1;
-    if (false) p.any_critical = true;
-  }
-
-  const children = Array.from(partMap.values()).map((p) => ({
-    ...p,
-    progress_pct: p.operation_count === 0 ? 0 : Math.round((p.completed * 100) / p.operation_count),
-    status:
-      p.completed === p.operation_count
-        ? 'completed'
-        : p.in_progress > 0
-          ? 'in_progress'
-          : 'pending',
-  }));
-
-  // Sort by bom_node_id so children order is stable.
-  children.sort((a, b) => a.bom_node_id - b.bom_node_id);
+  // 30 行 group-by 逻辑已抽到 _helpers
+  const children = aggregatePartsByBomId(nodes);
 
   return {
     current: {
@@ -215,7 +178,6 @@ function getSubsystemView(instanceId, subsystemId) {
 }
 
 function getPartView(instanceId, bomNodeId) {
-  // Level 3: distinct part → show its operations (level 4).
   const rows = db
     .prepare(
       `SELECT n.id, n.operation_name, n.bom_node_id, n.sequence, m.material_name,
@@ -234,7 +196,7 @@ function getPartView(instanceId, bomNodeId) {
   }
 
   const first = rows[0];
-  const partName = first.material_name || extractPartName(first.operation_name) || `零件 #${bomNodeId}`;
+  const partName = pickPartName(first.material_name, first.operation_name, bomNodeId);
   const subsystemId = first.subsystem_id;
 
   const children = rows.map((n) => ({
@@ -252,7 +214,6 @@ function getPartView(instanceId, bomNodeId) {
     subsystem_id: n.subsystem_id,
   }));
 
-  // Breadcrumb: root → subsystem → part
   const breadcrumb = [{ part_id: ROOT_ID, name: '总装', level: 1 }];
   if (subsystemId != null) {
     const sub = db
@@ -268,7 +229,8 @@ function getPartView(instanceId, bomNodeId) {
   }
   breadcrumb.push({ part_id: `part_${bomNodeId}`, name: partName, level: 3 });
 
-  const completed = children.filter((c) => c.status === 'completed').length;
+  // status/progress_pct 已抽到 _helpers.statusFromChildren
+  const { status, progress_pct } = statusFromChildren(children);
 
   return {
     current: {
@@ -280,13 +242,8 @@ function getPartView(instanceId, bomNodeId) {
       material_name: first.material_name || null,
       subsystem_id: subsystemId,
       child_count: children.length,
-      progress_pct: children.length === 0 ? 0 : Math.round((completed * 100) / children.length),
-      status:
-        completed === children.length
-          ? 'completed'
-          : children.some((c) => c.status === 'in_progress')
-            ? 'in_progress'
-            : 'pending',
+      progress_pct,
+      status,
     },
     children,
     breadcrumb,
@@ -294,24 +251,23 @@ function getPartView(instanceId, bomNodeId) {
 }
 
 function getNodeView(instanceId, nodeId) {
-  // Level 4 (leaf): a single operation. Show its dependencies as "edges out".
   const row = db
     .prepare(
       `SELECT n.id, n.operation_name, n.bom_node_id, n.sequence, m.material_name,
-              n.status, n.estimated_hours, 0 AS is_critical, n.subsystem_id,
-              n.assigned_to, n.required_workstation_id,
-              n.notes, n.planned_start, n.planned_end, n.actual_start, n.actual_end
+              n.status, n.estimated_hours, n.assigned_to, n.required_workstation_id,
+              n.subsystem_id, n.notes, n.planned_start, n.planned_end,
+              n.actual_start, n.actual_end
          FROM process_nodes n
          LEFT JOIN instance_bom b ON b.id = n.bom_node_id AND b.equipment_instance_id = n.equipment_instance_id
          LEFT JOIN materials m ON m.id = b.material_id
         WHERE n.id = ? AND n.equipment_instance_id = ?`
     )
     .get(nodeId, instanceId);
+
   if (!row) {
-    throw Object.assign(new Error(`process_node ${nodeId} not found in instance ${instanceId}`), { status: 404 });
+    throw Object.assign(new Error(`node ${nodeId} not found in instance ${instanceId}`), { status: 404 });
   }
 
-  // Outgoing dependencies (this node precedes X) and incoming (Y precedes this).
   const outgoing = db
     .prepare(
       `SELECT d.successor_id AS to_id, d.dep_type, n.operation_name AS to_name, n.status AS to_status
@@ -329,8 +285,6 @@ function getNodeView(instanceId, nodeId) {
     )
     .all(nodeId);
 
-  // No children — show dependencies as "edges" so the mindmap still has
-  // something to render around the centre node.
   const childEdges = outgoing.map((e) => ({
     kind: 'edge',
     edge_kind: 'outgoing',
@@ -340,7 +294,6 @@ function getNodeView(instanceId, nodeId) {
     dep_type: e.dep_type,
   }));
 
-  // Breadcrumb up to part level.
   const breadcrumb = [{ part_id: ROOT_ID, name: '总装', level: 1 }];
   if (row.subsystem_id != null) {
     const sub = db
@@ -355,7 +308,7 @@ function getNodeView(instanceId, nodeId) {
     breadcrumb.push({ part_id: 'sub_unassigned', name: '总装/未分类', level: 2 });
   }
   if (row.bom_node_id != null) {
-    const partName = row.material_name || extractPartName(row.operation_name) || `零件 #${row.bom_node_id}`;
+    const partName = pickPartName(row.material_name, row.operation_name, row.bom_node_id);
     breadcrumb.push({ part_id: `part_${row.bom_node_id}`, name: partName, level: 3 });
   }
   breadcrumb.push({ part_id: `node_${nodeId}`, name: row.operation_name, level: 4 });
@@ -394,22 +347,6 @@ function getNodeView(instanceId, nodeId) {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Some operation_names double as part descriptors when the BOM doesn't
- * carry a material_name (typical for the demo dataset). Falls back to a
- * trimmed version of the operation name.
- */
-function extractPartName(operationName) {
-  if (!operationName) return null;
-  const trimmed = String(operationName).trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-
-// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -420,7 +357,6 @@ function getMindmap(instanceId, partId) {
   if (isSubsystem(partId)) return getSubsystemView(instanceId, subsystemIdOf(partId));
   if (isPart(partId))      return getPartView(instanceId, partBomIdOf(partId));
   if (isNode(partId))      return getNodeView(instanceId, processNodeIdOf(partId));
-  // assertValid 已经抛 400, 不会到这
   throw new Error("unreachable");
 }
 
@@ -430,7 +366,6 @@ module.exports = {
   getSubsystemView,
   getPartView,
   getNodeView,
-  extractPartName,
   // 注意: getBreadcrumb 不在这里 re-export, 避免与 breadcrumb.js 循环依赖
-  // 调用方请直接 require("./breadcrumb") 拿 getBreadcrumb
+  // 调用方请直接 require("../breadcrumb") 拿 getBreadcrumb
 };
