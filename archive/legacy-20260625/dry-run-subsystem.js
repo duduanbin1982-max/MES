@@ -1,5 +1,5 @@
 const Database = require('better-sqlite3')
-const { classifyBatch, RULES } = require('./services/process/subsystemClassifier.js')
+const { classifyBatch, RULES } = require('./subsystemClassifier.js')
 
 const db = new Database('/home/dubin/factory-mes/data/mes.db')
 

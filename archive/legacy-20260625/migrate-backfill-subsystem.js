@@ -10,7 +10,7 @@
  */
 
 const Database = require('better-sqlite3')
-const { classifyBatch } = require('./services/process/subsystemClassifier.js')
+const { classifyBatch } = require('./subsystemClassifier.js')
 
 const DB_PATH = '/home/dubin/factory-mes/data/mes.db'
 const DRY_RUN = process.env.DRY_RUN === '1'
