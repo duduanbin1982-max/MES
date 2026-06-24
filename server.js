@@ -33,6 +33,7 @@ require('./services/equipment/oee').register(app, db);
 require('./services/delayAlerts').register(app, db);
 require('./services/equipment/scheduler').register(app, db);
 require('./services/materialService').register(app, db);
+require('./services/purchase').register(app, db);
 require('./services/cost/keyComponentPrices').register(app, db);
 require('./services/cost/rollup/index').register(app, db);
 require('./services/cost/materialPrices').register(app, db);
