@@ -3,6 +3,9 @@
     <div class="page-header">
       <div class="page-title">📦 库存管理</div>
       <el-button @click="load">刷新</el-button>
+      <el-button type="success" @click="dlgReceive = true">📥 一键入库</el-button>
+      <el-button type="warning" @click="dlgAllocate = true">🔁 调拨/预留</el-button>
+      <el-button type="info" @click="dlgRelease = true">🔓 释放预留</el-button>
     </div>
     <el-alert v-if="alerts.length" type="error" :closable="false" style="margin-bottom: 12px" show-icon>
       ⚠ {{ alerts.length }} 项物料低于安全库存：{{ alerts.slice(0, 3).map(a => a.material_code).join('、') }}{{ alerts.length > 3 ? ` 等 ${alerts.length} 项` : '' }}
@@ -87,6 +90,46 @@
         </el-card>
       </el-tab-pane>
     </el-tabs>
+    <el-dialog v-model="dlgReceive" title="一键入库" width="520px">
+      <el-form :model="fReceive" label-width="100px">
+        <el-form-item label="物料"><el-select v-model="fReceive.material_id" filterable style="width:100%"><el-option v-for="m in materials" :key="m.id" :label="m.material_code+' | '+m.material_name" :value="m.id" /></el-select></el-form-item>
+        <el-form-item label="批次号"><el-input v-model="fReceive.lot_no" /></el-form-item>
+        <el-form-item label="供应商"><el-input v-model="fReceive.supplier" /></el-form-item>
+        <el-form-item label="炉号"><el-input v-model="fReceive.heat_no" /></el-form-item>
+        <el-form-item label="数量"><el-input-number v-model="fReceive.quantity" :min="0" :step="1" /></el-form-item>
+        <el-form-item label="单位"><el-input v-model="fReceive.unit" /></el-form-item>
+        <el-form-item label="库位"><el-input v-model="fReceive.location" /></el-form-item>
+        <el-form-item label="证书号"><el-input v-model="fReceive.certificate_no" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dlgReceive=false">取消</el-button>
+        <el-button type="primary" :loading="busy" @click="doReceive">入库</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="dlgAllocate" title="调拨/预留库存" width="480px">
+      <el-form :model="fAllocate" label-width="100px">
+        <el-form-item label="批次"><el-select v-model="fAllocate.material_lot_id" filterable style="width:100%"><el-option v-for="l in lots" :key="l.id" :label="l.lot_no+' | '+l.material_name" :value="l.id" /></el-select></el-form-item>
+        <el-form-item label="数量"><el-input-number v-model="fAllocate.quantity" :min="0" :step="1" /></el-form-item>
+        <el-form-item label="目标库位"><el-input v-model="fAllocate.location" placeholder="选填, 调拨时填" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="fAllocate.notes" type="textarea" :rows="2" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dlgAllocate=false">取消</el-button>
+        <el-button type="primary" :loading="busy" @click="doAllocate">确认</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="dlgRelease" title="释放预留" width="420px">
+      <el-form :model="fRelease" label-width="100px">
+        <el-form-item label="批次"><el-select v-model="fRelease.material_lot_id" filterable style="width:100%"><el-option v-for="l in lots.filter(x=>x.status==='allocated')" :key="l.id" :label="l.lot_no+' | '+l.material_name+' (余 '+x2.qty(l)+')'" :value="l.id" /></el-select></el-form-item>
+        <el-form-item label="数量"><el-input-number v-model="fRelease.quantity" :min="0" :step="1" /></el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dlgRelease=false">取消</el-button>
+        <el-button type="primary" :loading="busy" @click="doRelease">释放</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -144,5 +187,39 @@ const submit = async () => {
   finally { submitting.value = false }
 }
 
-onMounted(load)
+onMounted(async () => { await load(); materials.value = await api.materials() })
+
+const dlgReceive = ref(false)
+const dlgAllocate = ref(false)
+const dlgRelease = ref(false)
+const busy = ref(false)
+const materials = ref<any[]>([])
+const fReceive = reactive({ material_id: undefined as any, lot_no: '', supplier: '', heat_no: '', quantity: 1, unit: '件', location: '主仓库-A-01', certificate_no: '' })
+const fAllocate = reactive({ material_lot_id: undefined as any, quantity: 1, location: '', notes: '' })
+const fRelease = reactive({ material_lot_id: undefined as any, quantity: 1 })
+const x2 = { qty: (l: any) => l.available ?? l.quantity ?? 0 }
+
+const doReceive = async () => {
+  if (!fReceive.material_id || !fReceive.lot_no || !fReceive.quantity) { ElMessage.warning('请填完整'); return }
+  busy.value = true
+  try { await api.receiveLot(fReceive); ElMessage.success('入库成功'); dlgReceive.value = false; await load() }
+  catch (e: any) { ElMessage.error('失败: ' + (e.response?.data?.error || e.message)) }
+  finally { busy.value = false }
+}
+
+const doAllocate = async () => {
+  if (!fAllocate.material_lot_id || !fAllocate.quantity) { ElMessage.warning('请填完整'); return }
+  busy.value = true
+  try { await api.allocate(fAllocate); ElMessage.success('调拨成功'); dlgAllocate.value = false; await load() }
+  catch (e: any) { ElMessage.error('失败: ' + (e.response?.data?.error || e.message)) }
+  finally { busy.value = false }
+}
+
+const doRelease = async () => {
+  if (!fRelease.material_lot_id || !fRelease.quantity) { ElMessage.warning('请填完整'); return }
+  busy.value = true
+  try { await api.release(fRelease); ElMessage.success('已释放'); dlgRelease.value = false; await load() }
+  catch (e: any) { ElMessage.error('失败: ' + (e.response?.data?.error || e.message)) }
+  finally { busy.value = false }
+}
 </script>
