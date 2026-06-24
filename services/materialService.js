@@ -200,6 +200,66 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
       res.status(status).json({ error: e.message });
     }
   }));
+  // P1-#5 库存预留 (work_order 锁定一批 lot)
+  //   业务: 调度器预测"实际可用库存"时, allocated 也算 available 但要锁定
+  //   schema: inventory.status 已有 allocated 字段, 但此前无端点用
+  app.post('/api/inventory/allocate', wrap((req, res) => {
+    const { material_lot_id, work_order_id, quantity } = req.body;
+    if (!material_lot_id || !work_order_id || !quantity) return res.status(400).json({ error: 'material_lot_id/work_order_id/quantity 必填' });
+    const q = Number(quantity);
+    if (q <= 0) return res.status(400).json({ error: 'quantity 必须 > 0' });
+
+    const tx = db.transaction(() => {
+      const inv = get("SELECT id, quantity, status, location FROM inventory WHERE material_lot_id = ? AND status = 'available'", material_lot_id);
+      if (!inv) { const e = new Error('lot ' + material_lot_id + ' 无 available 库存'); e.status = 400; throw e; }
+      if (inv.quantity < q) { const e = new Error('available 不足: 现有 ' + inv.quantity + ', 要预留 ' + q); e.status = 400; throw e; }
+
+      // 拆成两行: available 减, allocated 加 (同 lot 同 location)
+      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [q, inv.id]);
+      const existingAlloc = get("SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ? AND status = 'allocated'", [material_lot_id, inv.location]);
+      if (existingAlloc) {
+        run("UPDATE inventory SET quantity = quantity + ?, last_updated = datetime('now') WHERE id = ?", [q, existingAlloc.id]);
+      } else {
+        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) SELECT material_lot_id, location, ?, unit, 'allocated' FROM inventory WHERE id = ?", [q, inv.id]);
+      }
+      // 记 movement (work_order 关联)
+      run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, notes) SELECT material_lot_id, 'transfer', ?, unit, location, location, ?, '预留: ' || ? FROM inventory WHERE id = ?",
+        [q, work_order_id, 'work_order ' + work_order_id, inv.id]);
+      return { ok: true, lot_id: material_lot_id, allocated_qty: q, location: inv.location };
+    });
+    try {
+      res.json(tx());
+    } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  }));
+
+  // 释放预留 (allocated -> available)
+  app.post('/api/inventory/release', wrap((req, res) => {
+    const { material_lot_id, work_order_id, quantity } = req.body;
+    if (!material_lot_id || !work_order_id || !quantity) return res.status(400).json({ error: 'material_lot_id/work_order_id/quantity 必填' });
+    const q = Number(quantity);
+    if (q <= 0) return res.status(400).json({ error: 'quantity 必须 > 0' });
+
+    const tx = db.transaction(() => {
+      // 找该 work_order 的预留
+      const alloc = get("SELECT id, quantity, location FROM inventory WHERE material_lot_id = ? AND status = 'allocated'", material_lot_id);
+      if (!alloc) { const e = new Error('lot ' + material_lot_id + ' 无 allocated 库存'); e.status = 400; throw e; }
+      if (alloc.quantity < q) { const e = new Error('allocated 不足: 现有 ' + alloc.quantity + ', 要释放 ' + q); e.status = 400; throw e; }
+
+      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [q, alloc.id]);
+      const existingAvail = get("SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ? AND status = 'available'", [material_lot_id, alloc.location]);
+      if (existingAvail) {
+        run("UPDATE inventory SET quantity = quantity + ?, status = 'available', last_updated = datetime('now') WHERE id = ?", [q, existingAvail.id]);
+      } else {
+        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) SELECT material_lot_id, location, ?, unit, 'available' FROM inventory WHERE id = ?", [q, alloc.id]);
+      }
+      run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, notes) SELECT material_lot_id, 'transfer', ?, unit, location, location, ?, '释放: ' || ? FROM inventory WHERE id = ?",
+        [q, work_order_id, 'work_order ' + work_order_id, alloc.id]);
+      return { ok: true, lot_id: material_lot_id, released_qty: q, location: alloc.location };
+    });
+    try {
+      res.json(tx());
+    } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
+  }));
 }
 
 module.exports = { register };

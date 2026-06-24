@@ -121,3 +121,48 @@ test('P0-2-6 return: 退料同 receive, 库存 +5', () => {
   const inv = _db.prepare('SELECT quantity FROM inventory WHERE material_lot_id = 1 AND location = ?').get('主仓库-A-01');
   assert.equal(inv.quantity, 5, 'return 后 = 5');
 });
+test('P1-5-1 allocate: 100 available -> 70 available + 30 allocated', () => {
+  // 准备: 100 available
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 100, 'available')").run();
+  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 30, location: 'A' });
+  ctx.routes['/api/inventory/allocate'].handler(req, res);
+  assert.equal(getResult().status, 200);
+  const a = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND status='available'").get();
+  const b = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND status='allocated'").get();
+  assert.equal(a.quantity, 70);
+  assert.equal(b.quantity, 30);
+});
+
+test('P1-5-2 allocate 超量应 400 + 事务回滚', () => {
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 10, 'available')").run();
+  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 50 });
+  ctx.routes['/api/inventory/allocate'].handler(req, res);
+  const r = getResult();
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /不足/);
+  // 状态应没变
+  const cnt = _db.prepare("SELECT COUNT(*) AS c FROM inventory WHERE material_lot_id=1 AND status='allocated'").get();
+  assert.equal(cnt.c, 0, '事务回滚, allocated 行不应存在');
+});
+
+test('P1-5-3 release: 30 allocated -> 30 available', () => {
+  // 准备: 100 available + 30 allocated
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 100, 'available')").run();
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 30, 'allocated')").run();
+  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 30 });
+  ctx.routes['/api/inventory/release'].handler(req, res);
+  assert.equal(getResult().status, 200);
+  const a = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND status='available'").get();
+  const b = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND status='allocated'").get();
+  assert.equal(a.quantity, 130, 'release 后 available 应 +30');
+  assert.equal(b.quantity, 0, 'allocated 应归 0');
+});
+
+test('P1-5-4 release 超量应 400', () => {
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 5, 'allocated')").run();
+  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 50 });
+  ctx.routes['/api/inventory/release'].handler(req, res);
+  const r = getResult();
+  assert.equal(r.status, 400);
+  assert.match(r.json.error, /不足/);
+});
