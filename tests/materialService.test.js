@@ -19,6 +19,7 @@ function freshDb() {
   db.exec('CREATE TABLE inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, location TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, status TEXT DEFAULT "available", last_updated TEXT DEFAULT "2026-01-01 00:00:00")');
   db.exec('CREATE TABLE material_movements (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, movement_type TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, from_location TEXT, to_location TEXT, work_order_id INTEGER, project_id INTEGER, operator_id INTEGER, notes TEXT, created_at TEXT DEFAULT "2026-01-01 00:00:00")');
   db.exec('CREATE TABLE work_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, wo_code TEXT)');
+  db.exec('CREATE TABLE material_units (id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER NOT NULL, from_unit TEXT NOT NULL, to_unit TEXT NOT NULL, factor REAL NOT NULL, notes TEXT, created_at TEXT DEFAULT \'2026-01-01 00:00:00\', UNIQUE(material_id, from_unit, to_unit))');
   db.exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT)');
   return db;
 }
@@ -206,4 +207,38 @@ test("P2-8-2 stagnant: 30 天前有 movement 不算呆滞", () => {
   ctx.routes["/api/inventory/stagnant"].handler(req, res);
   const r = getResult().json;
   assert.ok(!r.items.some(x => x.lot_no === "FRESH-1"), "30 天前有 movement 不应算呆滞");
+});
+
+// ---------------- P2-9 单位换算 ----------------
+
+test("P2-9-1 units_list: 列出物料的全部换算", () => {
+  _db.prepare("INSERT INTO material_units (material_id, from_unit, to_unit, factor) VALUES (1, '卷', '吨', 5)").run();
+  _db.prepare("INSERT INTO material_units (material_id, from_unit, to_unit, factor) VALUES (1, '箱', '件', 24)").run();
+  const { req, res, getResult } = mkReqRes({}, { params: { id: '1' } });
+  ctx.routes["/api/materials/:id/units"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.count, 2);
+  assert.equal(r.items[0].from_unit, "卷");
+  assert.equal(r.items[0].factor, 5);
+});
+
+test("P2-9-2 units_create: 加新换算返回 200", () => {
+  const { req, res, getResult } = mkReqRes({ material_id: 1, from_unit: "kg", to_unit: "g", factor: 1000 });
+  ctx.routes["/api/material_units"].handler(req, res);
+  assert.equal(getResult().status, 200);
+  const rows = _db.prepare("SELECT * FROM material_units").all();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].factor, 1000);
+});
+
+test("P2-9-3 units_create: from==to 应 400", () => {
+  const { req, res, getResult } = mkReqRes({ material_id: 1, from_unit: "件", to_unit: "件", factor: 1 });
+  ctx.routes["/api/material_units"].handler(req, res);
+  assert.equal(getResult().status, 400);
+});
+
+test("P2-9-4 units_create: 缺 factor 应 400", () => {
+  const { req, res, getResult } = mkReqRes({ material_id: 1, from_unit: "kg", to_unit: "g" });
+  ctx.routes["/api/material_units"].handler(req, res);
+  assert.equal(getResult().status, 400);
 });

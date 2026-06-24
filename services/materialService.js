@@ -298,6 +298,30 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
     res.json({ count: rows.length, days, items: rows });
   }));
 
+  // P2-9 物料单位换算 (1 卷 = factor 吨 / 1 箱 = factor 件)
+  app.get('/api/materials/:id/units', wrap((req, res) => {
+    const matId = req.params.id;
+    const rows = all('SELECT * FROM material_units WHERE material_id = ? ORDER BY from_unit', matId);
+    res.json({ count: rows.length, items: rows });
+  }));
+
+  app.post('/api/material_units', wrap((req, res) => {
+    const { material_id, from_unit, to_unit, factor, notes } = req.body || {};
+    if (!material_id || !from_unit || !to_unit || !factor) return res.status(400).json({ error: 'material_id/from_unit/to_unit/factor 必填' });
+    if (from_unit === to_unit) return res.status(400).json({ error: 'from_unit 和 to_unit 不能相同' });
+    const mat = get('SELECT id, unit FROM materials WHERE id = ?', material_id);
+    if (!mat) return res.status(404).json({ error: '物料不存在' });
+    try {
+      run('INSERT INTO material_units (material_id, from_unit, to_unit, factor, notes) VALUES (?, ?, ?, ?, ?)', [material_id, from_unit, to_unit, factor, notes || null]);
+      res.json({ ok: true, id: db.lastInsertRowid, message: '已添加换算 ' + from_unit + ' -> ' + to_unit + ' (×' + factor + ')' });
+    } catch (e) { res.status(400).json({ error: e.message }); }
+  }));
+
+  app.delete('/api/material_units/:id', wrap((req, res) => {
+    const r = run('DELETE FROM material_units WHERE id = ?', req.params.id);
+    res.json({ ok: true, changes: r.changes });
+  }));
+
 }
 
 module.exports = { register };
