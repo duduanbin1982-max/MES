@@ -99,7 +99,7 @@ function getNum(key, defaultVal) {
 }
 
 function register(app, _db) {
-  setDb(_db || require('../../db'));
+  setDb(_db);
   const all = (sql, p = []) => _db.prepare(sql).all(p);
   const get = (sql, p = []) => _db.prepare(sql).get(p);
   const run = (sql, p = []) => _db.prepare(sql).run(p);
