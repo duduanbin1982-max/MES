@@ -18,7 +18,7 @@ function freshDb() {
   db.exec('CREATE TABLE material_lots (id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER NOT NULL, lot_no TEXT NOT NULL, supplier TEXT, heat_no TEXT, certificate_no TEXT, received_date TEXT, quantity REAL, unit TEXT, quality_status TEXT DEFAULT "pending", notes TEXT)');
   db.exec('CREATE TABLE inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, location TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, status TEXT DEFAULT "available", last_updated TEXT DEFAULT "2026-01-01 00:00:00")');
   db.exec('CREATE TABLE material_movements (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, movement_type TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, from_location TEXT, to_location TEXT, work_order_id INTEGER, project_id INTEGER, operator_id INTEGER, notes TEXT, created_at TEXT DEFAULT "2026-01-01 00:00:00")');
-  db.exec('CREATE TABLE work_orders (id INTEGER PRIMARY KEY AUTOINCREMENT)');
+  db.exec('CREATE TABLE work_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, wo_code TEXT)');
   db.exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT)');
   return db;
 }
@@ -39,8 +39,8 @@ function makeApp(db) {
   return { app, routes };
 }
 
-function mkReqRes(body) {
-  const req = { body, query: {}, params: {} };
+function mkReqRes(body, opts = {}) {
+  const req = { body, query: opts.query || {}, params: opts.params || {} };
   let status = 200, json = null;
   const res = { status: (s) => { status = s; return res; }, json: (j) => { json = j; return res; }, _get: () => ({ status, json }) };
   return { req, res, getResult: () => ({ status, json }) };
@@ -165,4 +165,45 @@ test('P1-5-4 release 超量应 400', () => {
   const r = getResult();
   assert.equal(r.status, 400);
   assert.match(r.json.error, /不足/);
+});
+// ---------------- P2-7 + P2-8 ----------------
+
+test("P2-7-1 work_order_lots: 工单关联的 lot 追溯", () => {
+  _db.prepare("INSERT INTO work_orders (id, wo_code) VALUES (1, 'WO-001')").run();
+  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity, unit, received_date) VALUES (2, 1, 'L-1', 100, '件', '2026-01-01')").run();
+  _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, work_order_id, created_at) VALUES (2, 'issue', 10, '件', 1, '2026-01-15')").run();
+  _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, work_order_id, created_at) VALUES (2, 'issue', 15, '件', 1, '2026-01-20')").run();
+  const { req, res, getResult } = mkReqRes({}, { params: { id: '1' } });
+  ctx.routes["/api/work_orders/:id/lots"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.work_order.wo_code, "WO-001");
+  assert.equal(r.movements.length, 2);
+  assert.equal(r.lot_summary["L-1"], 25);
+});
+
+test("P2-7-2 work_order_lots: 工单不存在返 404", () => {
+  const { req, res, getResult } = mkReqRes({}, { params: { id: '999' } });
+  ctx.routes["/api/work_orders/:id/lots"].handler(req, res);
+  assert.equal(getResult().status, 404);
+});
+
+test("P2-8-1 stagnant: 91 天无 movement 标呆滞", () => {
+  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity, unit, received_date) VALUES (3, 1, 'OLD-1', 50, '件', '2026-03-15')").run();
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (3, 'A', 50, '件', 'available')").run();
+  const { req, res, getResult } = mkReqRes({});
+  ctx.routes["/api/inventory/stagnant"].handler(req, res);
+  const r = getResult().json;
+  const old1 = r.items.find(x => x.lot_no === "OLD-1");
+  assert.ok(old1, "OLD-1 应收录");
+  assert.ok(old1.idle_days >= 90, "idle_days 应 >= 90, 实际 " + old1.idle_days);
+});
+
+test("P2-8-2 stagnant: 30 天前有 movement 不算呆滞", () => {
+  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity, unit, received_date) VALUES (4, 1, 'FRESH-1', 50, '件', '2026-05-25')").run();
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (4, 'A', 50, '件', 'available')").run();
+  _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, created_at) VALUES (4, 'issue', 5, '件', '2026-06-20')").run();
+  const { req, res, getResult } = mkReqRes({});
+  ctx.routes["/api/inventory/stagnant"].handler(req, res);
+  const r = getResult().json;
+  assert.ok(!r.items.some(x => x.lot_no === "FRESH-1"), "30 天前有 movement 不应算呆滞");
 });

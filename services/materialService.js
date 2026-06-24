@@ -260,6 +260,44 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
       res.json(tx());
     } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
   }));
+
+  // P2-7 工单→批次反向追溯
+  app.get('/api/work_orders/:id/lots', wrap((req, res) => {
+    const woId = req.params.id;
+    const wo = get('SELECT id, wo_code FROM work_orders WHERE id = ?', woId);
+    if (!wo) return res.status(404).json({ error: '工单不存在' });
+    const rows = all(`SELECT ml.id as lot_id, ml.lot_no, m.material_code, m.material_name, m.spec,
+                             mm.movement_type, mm.quantity, mm.unit, mm.from_location, mm.to_location,
+                             mm.created_at, mm.notes
+                      FROM material_movements mm
+                      JOIN material_lots ml ON mm.material_lot_id = ml.id
+                      JOIN materials m ON ml.material_id = m.id
+                      WHERE mm.work_order_id = ?
+                      ORDER BY mm.created_at`, woId);
+    const summary = {};
+    rows.forEach(r => { summary[r.lot_no] = (summary[r.lot_no] || 0) + r.quantity; });
+    res.json({ work_order: wo, movements: rows, lot_summary: summary });
+  }));
+
+  // P2-8 呆滞料预警 (90 天无 movement)
+  app.get('/api/inventory/stagnant', wrap((req, res) => {
+    const days = parseInt(req.query.days) || 90;
+    const rows = all(`SELECT ml.id as lot_id, ml.lot_no, m.material_code, m.material_name, m.spec,
+                             ml.supplier, ml.received_date,
+                             i.quantity, i.unit, i.location, i.status, i.last_updated,
+                             (julianday('now') - julianday(COALESCE(MAX(mm.created_at), ml.received_date))) as idle_days
+                      FROM material_lots ml
+                      JOIN materials m ON ml.material_id = m.id
+                      LEFT JOIN inventory i ON i.material_lot_id = ml.id
+                      LEFT JOIN material_movements mm ON mm.material_lot_id = ml.id
+                      WHERE (i.status IS NULL OR i.status IN ('available', 'allocated'))
+                        AND (i.quantity IS NULL OR i.quantity > 0)
+                      GROUP BY ml.id
+                      HAVING idle_days >= ?
+                      ORDER BY idle_days DESC`, days);
+    res.json({ count: rows.length, days, items: rows });
+  }));
+
 }
 
 module.exports = { register };
