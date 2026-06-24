@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const Database = require('better-sqlite3');
 const path = require('path');
-const svcPath = path.resolve(__dirname, '../services/equipment/scheduler.js');
+const svcPath = path.resolve(__dirname, '../services/equipment/scheduler');
 
 function makeDb() {
   const db = new Database(':memory:');
