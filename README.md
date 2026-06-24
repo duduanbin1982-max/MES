@@ -160,3 +160,6 @@ ssh dubin@192.168.1.73 '/home/dubin/factory-mes/reset-to-demo.sh'
 - [ ] 移动端 / 车间 PDA
 - [ ] OA/ERP 对接
 - [ ] 设备集成（PLC）
+
+
+<!-- 2026-06-24 SSH key 已配置 -->
