@@ -42,7 +42,6 @@ require('./services/process/node').register(app, db);
 require('./services/reportService').register(app, db);
 require('./services/process/params').register(app, db);
 require('./services/eco').register(app, db);
-require('./services/materialMovement').register(app, db);
 require('./services/qcInspection').register(app, db);
 require('./services/systemSettings').register(app, db);
 require('./services/userManagement').register(app, db);
