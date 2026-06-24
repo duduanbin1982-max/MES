@@ -1,14 +1,19 @@
 #!/bin/bash
 # .githooks/pre-commit
-# commit 前跑测试闸门 (含 167 个测试 + 语法体检, 约 0.7s)
+# commit 前跑测试闸门 (167 个测试 + 语法体检, 约 0.7s)
 # 失败: 阻止 commit
 # 跳过: git commit --no-verify
-set -e
+set -u
 cd "$(git rev-parse --show-toplevel)"
-echo "[pre-commit] 跑测试闸门 ..."
-bash scripts/pre-deploy-test.sh --quiet
-RC=$?
-if [ "$RC" -ne 0 ]; then
+
+# 早退: 无任何 staged 改动 (如 git commit --amend 后跟新 message)
+STAGED=$(git diff --cached --name-only | wc -l)
+if [ "$STAGED" = "0" ]; then
+  exit 0
+fi
+
+echo "[pre-commit] 跑测试闸门 ($STAGED 个文件) ..."
+if ! bash scripts/pre-deploy-test.sh --quiet; then
   echo ""
   echo "❌ pre-commit: 测试失败, commit 被阻止"
   echo "   跳过: git commit --no-verify (不推荐)"
