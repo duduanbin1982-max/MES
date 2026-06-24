@@ -1,7 +1,7 @@
 "use strict";
 // db/index.js
 // 顶层入口: 暴露 db 单例
-//   兼容旧 require('../db') 拿 db 实例的代码 (server.js, migrate.js, middleware/auth.js, utils/partNo.js 等)
+//   兼容旧 require('../db') 拿 db 实例的代码 (server.js, migrate.js, middleware/auth.js 等)
 //   拆出: connection.js (路径+实例) + pragmas.js (性能/安全配置)
 // Author: 三狗子 | Date: 2026-06-24
 

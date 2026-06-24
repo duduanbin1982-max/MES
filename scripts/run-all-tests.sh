@@ -51,7 +51,6 @@ run "processTreeCrossSubDeps(integration)" tests/processTreeCrossSubsystemDeps.i
 run "processTreeCrossSubDeps" tests/processTreeCrossSubsystemDeps.test.js "export DB_PATH=$SEED_DB"
 run "processTreeMindmap"     tests/processTreeMindmap.test.js     ""
 run "scheduler"              tests/scheduler.test.js              ""
-run "utils-partno"           tests/utils-partno.test.js           ""
 
 echo "=== 总结: pass=$PASS fail=$FAIL skip=$SKIP ==="
 exit $FAIL
