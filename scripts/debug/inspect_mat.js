@@ -1,0 +1,10 @@
+const Database = require('better-sqlite3');
+const db = new Database('/home/dubin/factory-mes/data/mes.db', { readonly: true });
+console.log('process_nodes columns with "mat" or "bom":');
+db.prepare(`PRAGMA table_info(process_nodes)`).all().filter(c => /mat|bom|material/i.test(c.name)).forEach(c => console.log(`  ${c.name} ${c.type}`));
+console.log('\nALL process_nodes columns:');
+db.prepare(`PRAGMA table_info(process_nodes)`).all().forEach(c => console.log(`  ${c.name} ${c.type}`));
+console.log('\n--- row #148 (液压下某个零件) ---');
+console.log(JSON.stringify(db.prepare('SELECT * FROM process_nodes WHERE id = 148').get(), null, 2));
+console.log('\n--- materials sample ---');
+console.log(JSON.stringify(db.prepare('SELECT * FROM materials LIMIT 3').all(), null, 2));

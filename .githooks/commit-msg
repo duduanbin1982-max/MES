@@ -1,0 +1,31 @@
+#!/bin/bash
+# .githooks/commit-msg
+# 规范 commit message 格式: <type>(<scope>): <subject>
+# 例: feat(server): 拆 server.js 装配层
+#     fix(auth): 修 last_login 列名
+#     docs(readme): 加 CI 说明
+# type: feat fix refactor perf test docs chore style build ci
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(head -1 "$COMMIT_MSG_FILE")
+
+if [ -z "$COMMIT_MSG" ]; then
+  echo "[commit-msg] 提交信息为空"
+  exit 1
+fi
+
+# 允许 merge/revert 自动信息
+if echo "$COMMIT_MSG" | grep -qE '^(Merge|Revert) '; then
+  exit 0
+fi
+
+# 检查格式: type(scope)?: subject
+if echo "$COMMIT_MSG" | grep -qE '^(feat|fix|refactor|perf|test|docs|chore|style|build|ci)(\([a-z0-9_-]+\))?!?: .+'; then
+  exit 0
+fi
+
+echo "[commit-msg] ❌ 格式不符: $COMMIT_MSG"
+echo "  期望: <type>(<scope>): <subject>"
+echo "  例:   feat(server): 拆 server.js 装配层"
+echo "  type: feat fix refactor perf test docs chore style build ci"
+echo "  跳过: git commit --no-verify"
+exit 1

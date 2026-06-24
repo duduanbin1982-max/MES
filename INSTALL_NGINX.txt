@@ -1,0 +1,62 @@
+# factory-mes nginx 安装命令清单（批次 2 收尾）
+
+需要你手动执行 sudo 命令（Hermes 阻止 sudo -S 管道传密码）：
+
+## 1. 安装 nginx
+```bash
+sudo apt update && sudo apt install -y nginx
+```
+
+## 2. 复制配置 + 启用站点
+```bash
+# 备份默认配置
+sudo cp /etc/nginx/sites-available/default /etc/nginx/sites-available/default.bak
+
+# 复制我的配置
+sudo cp /home/dubin/factory-mes/nginx/factory-mes.conf /etc/nginx/sites-available/factory-mes
+
+# 启用（创建软链到 sites-enabled）
+sudo ln -sf /etc/nginx/sites-available/factory-mes /etc/nginx/sites-enabled/factory-mes
+
+# 移除默认站点（避免冲突）
+sudo rm -f /etc/nginx/sites-enabled/default
+```
+
+## 3. 测试 + 启动
+```bash
+# 测试配置
+sudo nginx -t
+# 应输出: syntax is ok / test is successful
+
+# 启动 nginx（首次会随系统启动）
+sudo systemctl enable nginx
+sudo systemctl restart nginx
+
+# 验证
+sudo systemctl status nginx --no-pager
+```
+
+## 4. 验证 HTTPS 通了
+```bash
+# 本机
+curl -sk https://localhost/api/health
+# 应输出: {"status":"ok","service":"tbm-mes",...}
+
+# 浏览器访问
+# https://192.168.1.73/
+# 浏览器会警告"证书不受信任"，点"高级"→"继续前往"即可（自签证书正常）
+```
+
+## 5. 验证 3890 已不再外网暴露
+```bash
+ss -tlnp | grep :3890
+# 应只看到 127.0.0.1:3890，不再有 0.0.0.0:3890
+```
+
+## 6. (可选) 防火墙开 443 关 3890
+```bash
+sudo ufw allow 443/tcp
+sudo ufw deny 3890/tcp    # 双重保险（虽然已不监听 0.0.0.0）
+```
+
+完成后告诉我，我会继续批次 3（代码重构）。

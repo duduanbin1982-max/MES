@@ -1,0 +1,29 @@
+# 批次 4 收尾（需要 sudo）
+
+## 1. 安装 logrotate 配置（用户级 sudo 即可，无需 root）
+
+```bash
+sudo cp /home/dubin/factory-mes/scripts/factory-mes-logrotate.conf /etc/logrotate.d/factory-mes
+sudo logrotate -d /etc/logrotate.d/factory-mes   # dry-run 验证
+```
+
+预期：dry-run 输出 `considering log /home/dubin/factory-mes/data/mes.log` 然后一系列操作，不报错。
+
+## 2. 验证 cron 备份明天会自动跑
+
+```bash
+# 看 crontab
+crontab -l
+
+# 或者设置短时间后跑一次测试（5 分钟后），然后看 backups/
+# crontab 里加一行：当前时间 +5 分钟 /home/dubin/factory-mes/scripts/backup-db.sh
+```
+
+## 3. （可选）启用 firewalld/ufw 限制 80/443 来源
+
+```bash
+sudo ufw allow from 192.168.0.0/16 to any port 443
+sudo ufw deny 3890    # 双重保险（虽然已经只 bind 127.0.0.1）
+```
+
+完成所有 sudo 后告诉我，我做最终全量验证。

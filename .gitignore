@@ -1,0 +1,68 @@
+# ============================================
+#  工厂 MES .gitignore
+#  Author: 三狗子 | Date: 2026-06-24
+# ============================================
+
+# 依赖
+node_modules/
+package-lock.json.bak
+
+# 运行时数据 (数据库, 日志, 测试产物)
+data/*.db
+data/*.db-*
+data/*.log
+data/*.log.*
+data/*.gz
+data/predeploy-*.log
+data/nightly-test.log
+data/seed-xsub.json
+data/mes.log
+!data/.gitkeep
+
+# 数据库备份目录 (按时间戳命名, 一律不进库)
+backups/
+
+# nginx / SSL (机器级配置 + 私钥, 不进库)
+nginx/
+ssl/
+
+# 前端构建产物 (build 时生成, 不入库)
+frontend/dist/
+
+# backups / 临时备份
+*.bak
+*.bak.*
+server.js.bak.*
+*.swp
+*.swo
+
+# tmp
+.tmp/
+*.tmp
+/tmp/seed-xsub.json
+/tmp/xsub-*/
+
+# env (含密码/密钥)
+.env
+.env.local
+.env.*.local
+
+# tooling caches
+.brooks-lint-history.json
+.brooks-lint.yaml
+.cache/
+
+# editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# coverage
+/coverage/
+/.nyc_output/
+
+# 锁文件: 留 package-lock.json 不忽略, 保证依赖可复现
+# db migration 废弃/历史副本 (中文后缀)
+db/migrations/*.废弃
+db/migrations/*.bak

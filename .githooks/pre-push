@@ -1,0 +1,15 @@
+#!/bin/bash
+# .githooks/pre-push
+# push 前完整闸门 (test-only 模式, 不重启服务)
+set -e
+cd "$(git rev-parse --show-toplevel)"
+echo "[pre-push] 跑完整闸门 ..."
+bash scripts/deploy.sh --test-only
+RC=$?
+if [ "$RC" -ne 0 ]; then
+  echo ""
+  echo "❌ pre-push: 闸门失败, push 被阻止"
+  echo "   跳过: git push --no-verify"
+  exit 1
+fi
+echo "[pre-push] ✅ 通过"
