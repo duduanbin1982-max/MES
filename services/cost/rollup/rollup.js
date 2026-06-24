@@ -2,9 +2,12 @@
 // services/cost/rollup/rollup.js
 // GET /api/equipment_instances/:id/cost_rollup
 // 主成本归集: 关键件 + 普通物料 + 工时 + 合同毛利
+// 聚合逻辑 (aggregateKeyComponents/aggregateMaterials/deriveContractMetrics) 抽到 aggregate.js
 // Author: 三狗子 | Date: 2026-06-24
 
-const { round2, KEY_COMP_SQL, NORMAL_MAT_SQL, HOURS_SQL } = require("./queries");
+const { KEY_COMP_SQL, NORMAL_MAT_SQL, HOURS_SQL } = require("./queries");
+const { round2 } = require("./queries");
+const { aggregateKeyComponents, aggregateMaterials, deriveContractMetrics } = require("./aggregate");
 
 function register(app, db) {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
@@ -18,85 +21,31 @@ function register(app, db) {
     const mats  = all(NORMAL_MAT_SQL, req.params.id);
     const hours = get(HOURS_SQL,      req.params.id);
 
-    let key_estimated_total = 0, key_actual_total = 0, key_signed = 0, key_pending = 0, key_over_budget = 0;
-    const key_rows = keys.map(k => {
-      const q = Number(k.quantity || 0);
-      const est_unit = Number(k.estimated_unit_price || 0);
-      const has_contract = k.actual_unit_price != null;
-      const act_unit = has_contract ? Number(k.actual_unit_price) : est_unit;
-      const est_total = round2(est_unit * q);
-      const act_total = round2(act_unit * q);
-      const diff = round2(act_total - est_total);
-      key_estimated_total += est_total;
-      key_actual_total    += act_total;
-      if (has_contract) key_signed++; else key_pending++;
-      if (has_contract && k.actual_unit_price > k.estimated_unit_price) key_over_budget++;
-      let cost_status;
-      if (!has_contract) cost_status = 'no_contract_yet';
-      else if (k.actual_unit_price <= k.estimated_unit_price) cost_status = 'on_or_under_budget';
-      else if (k.actual_unit_price > k.estimated_unit_price * 1.2) cost_status = 'over_20pct';
-      else cost_status = 'over_10pct';
-      return {
-        key_component_id: k.key_component_id,
-        material_code: k.material_code,
-        material_name: k.material_name,
-        component_type: k.component_type,
-        supplier: k.supplier,
-        quantity: q,
-        estimated_unit_price: est_unit,
-        actual_unit_price: has_contract ? Number(k.actual_unit_price) : null,
-        estimated_total: est_total,
-        actual_total: act_total,
-        price_diff: diff,
-        contract_no: k.contract_no,
-        currency: k.currency || 'CNY',
-        cost_status
-      };
-    });
-    key_estimated_total = round2(key_estimated_total);
-    key_actual_total    = round2(key_actual_total);
-
-    let mat_estimated_total = 0;
-    const mat_rows = mats.map(m => {
-      const q = Number(m.quantity || 0);
-      const unit = Number(m.estimated_unit_price || 0);
-      const est_total = round2(unit * q);
-      mat_estimated_total += est_total;
-      return {
-        material_id: m.material_id,
-        material_code: m.material_code,
-        material_name: m.material_name,
-        material_type: m.material_type,
-        unit: m.unit,
-        quantity: q,
-        unit_price: unit,
-        estimated_total: est_total,
-        actual_total: est_total
-      };
-    });
-    mat_estimated_total = round2(mat_estimated_total);
-    const mat_actual_total = mat_estimated_total;
+    const keyAgg = aggregateKeyComponents(keys);
+    const matAgg = aggregateMaterials(mats);
 
     const estimated_hours = Number(hours.estimated_hours || 0);
     const actual_hours    = Number(hours.actual_hours    || 0);
 
-    const total_estimated = round2(key_estimated_total + mat_estimated_total);
-    const total_actual    = round2(key_actual_total    + mat_actual_total);
+    const total_estimated = round2(keyAgg.estimated_total + matAgg.estimated_total);
+    const total_actual    = round2(keyAgg.actual_total    + matAgg.actual_total);
     const total_diff      = round2(total_actual - total_estimated);
     const over_budget_diff = round2(
-      key_rows.filter(r => r.actual_unit_price != null && r.actual_unit_price > r.estimated_unit_price)
-              .reduce((s, r) => s + r.price_diff, 0)
+      keyAgg.rows.filter(r => r.actual_unit_price != null && r.actual_unit_price > r.estimated_unit_price)
+                 .reduce((s, r) => s + r.price_diff, 0)
     );
     const under_budget_saved = round2(
-      key_rows.filter(r => r.actual_unit_price != null && r.actual_unit_price < r.estimated_unit_price)
-              .reduce((s, r) => s + (-r.price_diff), 0)
+      keyAgg.rows.filter(r => r.actual_unit_price != null && r.actual_unit_price < r.estimated_unit_price)
+                 .reduce((s, r) => s + (-r.price_diff), 0)
     );
 
     let project_status;
-    if (key_over_budget > 0) project_status = 'over_budget';
-    else if (key_pending > 0) project_status = 'partial';
-    else if (key_rows.length > 0) project_status = 'fully_contracted';
+    if (keyAgg.over_budget > 0) project_status = 'over_budget';
+    else if (keyAgg.pending > 0) project_status = 'partial';
+    else if (keyAgg.rows.length > 0) project_status = 'fully_contracted';
     else project_status = 'no_key_components';
+
+    const contract = deriveContractMetrics(inst, total_actual);
 
     res.json({
       equipment_instance: {
@@ -111,18 +60,18 @@ function register(app, db) {
         progress_pct: inst.progress_pct != null ? Number(inst.progress_pct) : null
       },
       key_components: {
-        count: key_rows.length,
-        contract_signed_count: key_signed,
-        pending_count: key_pending,
-        over_budget_count: key_over_budget,
-        estimated_total: key_estimated_total,
-        actual_total: key_actual_total,
-        price_diff: round2(key_actual_total - key_estimated_total)
+        count: keyAgg.rows.length,
+        contract_signed_count: keyAgg.signed,
+        pending_count: keyAgg.pending,
+        over_budget_count: keyAgg.over_budget,
+        estimated_total: keyAgg.estimated_total,
+        actual_total: keyAgg.actual_total,
+        price_diff: round2(keyAgg.actual_total - keyAgg.estimated_total)
       },
       materials: {
-        count: mat_rows.length,
-        estimated_total: mat_estimated_total,
-        actual_total: mat_actual_total
+        count: matAgg.rows.length,
+        estimated_total: matAgg.estimated_total,
+        actual_total: matAgg.actual_total
       },
       labor: {
         work_order_count: hours.work_order_count,
@@ -139,29 +88,9 @@ function register(app, db) {
         under_budget_saved
       },
       project_status,
-      // 合同金额单位换算 -> 元
-      // contract_amount_unit = 'wan' 时 * 10000, 'yuan' 时原值
-      contract_yuan: (function () {
-        const a = inst.contract_amount;
-        if (a == null) return null;
-        const u = inst.contract_amount_unit || 'wan';
-        return round2(Number(a) * (u === 'wan' ? 10000 : 1));
-      })(),
-      contract_margin: (function () {
-        const a = inst.contract_amount;
-        if (a == null) return null;
-        const u = inst.contract_amount_unit || 'wan';
-        const y = Number(a) * (u === 'wan' ? 10000 : 1);
-        return round2(y - total_actual);
-      })(),
-      contract_margin_pct: (function () {
-        const a = inst.contract_amount;
-        if (a == null) return null;
-        const u = inst.contract_amount_unit || 'wan';
-        const y = Number(a) * (u === 'wan' ? 10000 : 1);
-        if (y <= 0) return null;
-        return round2((y - total_actual) / y * 100);
-      })()
+      contract_yuan: contract.yuan,
+      contract_margin: contract.margin,
+      contract_margin_pct: contract.margin_pct
     });
   }));
 }

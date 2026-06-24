@@ -1,39 +1,22 @@
 "use strict";
-// services/materialPrices.js
-// 普通物料价格 CRUD + 批量录入
+// services/cost/materialPrices/pricesCrud.js
+// 3 端点:
+//   GET  /api/materials/:id            详情 (含 estimated/actual 单价)
+//   PUT  /api/materials/:id/prices      改单价
+//   POST /api/materials/prices/bulk     批量更新
 // Author: 三狗子 | Date: 2026-06-24
-//
-// 端点:
-//   GET    /api/materials/:id              详情 (含 estimated/actual 单价)
-//   PUT    /api/materials/:id/prices        改单价 (estimated_unit_price / actual_unit_price)
-//   POST   /api/materials/prices/bulk      批量更新 (写=admin/foreman)
-//   GET    /api/materials/prices/summary   覆盖率: 总数 / 估价已填 / 实际已填 / 总估价
-//
-// 数据源:
-//   materials 表的 estimated_unit_price, actual_unit_price (migration 016 加的列)
 
-function nowISO() {
-  return new Date().toISOString().slice(0, 19).replace("T", " ");
-}
+const { makeHelpers, nowISO } = require("./_helpers");
 
 function register(app, db) {
-  const all = (sql, ...p) => db.prepare(sql).all(...p);
-  const get = (sql, ...p) => db.prepare(sql).get(...p);
-  const run = (sql, ...p) => db.prepare(sql).run(...p);
-  const wrap = (h) => (req, res) => { try { h(req, res); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } };
+  const { all, get, run, wrap, writeRoles } = makeHelpers(db);
 
-  const { requireRole } = require("../../middleware/auth");
-  const writeRoles = requireRole("admin", "foreman");
-
-  // ============================================================
-  // GET /api/materials/:id - 详情 (含单价)
-  // ============================================================
+  // 详情
   app.get("/api/materials/:id", wrap((req, res) => {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: "material id 必填" });
     const m = get("SELECT * FROM materials WHERE id = ?", id);
     if (!m) return res.status(404).json({ error: "material not found" });
-    // 补: 在哪些 instance BOM 中用过
     const used_in = all(
       `SELECT DISTINCT ei.id, ei.instance_code, ei.instance_name
          FROM instance_bom ib JOIN equipment_instances ei ON ei.id = ib.equipment_instance_id
@@ -43,10 +26,7 @@ function register(app, db) {
     res.json({ material: m, used_in });
   }));
 
-  // ============================================================
-  // PUT /api/materials/:id/prices - 改单价
-  // body: { estimated_unit_price?, actual_unit_price?, notes? }
-  // ============================================================
+  // 改单价
   app.put("/api/materials/:id/prices", writeRoles, wrap((req, res) => {
     const id = parseInt(req.params.id, 10);
     if (!id) return res.status(400).json({ error: "material id 必填" });
@@ -74,10 +54,7 @@ function register(app, db) {
     res.json({ ok: true, material: after, notes: notes || null });
   }));
 
-  // ============================================================
-  // POST /api/materials/prices/bulk - 批量改价
-  // body: { items: [{ material_id, estimated_unit_price?, actual_unit_price? }, ...] }
-  // ============================================================
+  // 批量改价
   app.post("/api/materials/prices/bulk", writeRoles, wrap((req, res) => {
     const { items } = req.body || {};
     if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: "items 必须是非空数组" });
@@ -103,36 +80,6 @@ function register(app, db) {
     });
     const result = tx(items);
     res.json({ ok: true, ...result });
-  }));
-
-  // ============================================================
-  // GET /api/materials/prices/summary - 覆盖率
-  // ============================================================
-  app.get("/api/materials/prices/summary", wrap((req, res) => {
-    const total = get("SELECT COUNT(*) AS c FROM materials").c;
-    const est_filled = get("SELECT COUNT(*) AS c FROM materials WHERE estimated_unit_price > 0").c;
-    const act_filled = get("SELECT COUNT(*) AS c FROM materials WHERE actual_unit_price > 0").c;
-    const tot_est = get("SELECT COALESCE(SUM(estimated_unit_price), 0) AS s FROM materials").s;
-    const tot_act = get("SELECT COALESCE(SUM(actual_unit_price), 0) AS s FROM materials").s;
-    // 哪些物料在 BOM 中用到了
-    const in_bom = get(`SELECT COUNT(DISTINCT material_id) AS c FROM instance_bom`).c;
-    const in_bom_est_filled = get(`
-      SELECT COUNT(DISTINCT ib.material_id) AS c
-        FROM instance_bom ib JOIN materials m ON m.id = ib.material_id
-       WHERE m.estimated_unit_price > 0
-    `).c;
-    res.json({
-      materials_total: total,
-      estimated_filled: est_filled,
-      actual_filled: act_filled,
-      estimated_coverage_pct: total ? Math.round(est_filled * 10000 / total) / 100 : 0,
-      actual_coverage_pct:    total ? Math.round(act_filled * 10000 / total) / 100 : 0,
-      total_estimated_unit_price_sum: Number(tot_est.toFixed(2)),
-      total_actual_unit_price_sum:    Number(tot_act.toFixed(2)),
-      used_in_bom_count: in_bom,
-      used_in_bom_estimated_filled: in_bom_est_filled,
-      used_in_bom_coverage_pct: in_bom ? Math.round(in_bom_est_filled * 10000 / in_bom) / 100 : 0
-    });
   }));
 }
 
