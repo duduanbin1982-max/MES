@@ -30,12 +30,14 @@ function makeApp(db) {
   const svc = require('../services/materialService');
   const routes = {};
   const app = {
-    get: (p, h) => { routes[p] = { method: 'get', handler: h }; },
-    post: (p, h) => { routes[p] = { method: 'post', handler: h }; },
-    put: (p, h) => { routes[p] = { method: 'put', handler: h }; },
-    patch: (p, h) => { routes[p] = { method: 'patch', handler: h }; },
-    delete: (p, h) => { routes[p] = { method: 'delete', handler: h }; },
+    get: (p, h) => { routes['GET ' + p] = { method: 'get', handler: h }; },
+    post: (p, h) => { routes['POST ' + p] = { method: 'post', handler: h }; },
+    put: (p, h) => { routes['PUT ' + p] = { method: 'put', handler: h }; },
+    patch: (p, h) => { routes['PATCH ' + p] = { method: 'patch', handler: h }; },
+    delete: (p, h) => { routes['DELETE ' + p] = { method: 'delete', handler: h }; },
   };
+  // 旧 key 兼容: ctx.routes['/api/xxx'] 默认 GET 行为
+  const _origGet = (k) => routes['GET ' + k] || routes[k];
   svc.register(app, db);
   return { app, routes };
 }
@@ -62,7 +64,7 @@ test.beforeEach(() => {
 
 test('P0-2-1 receive: 库存 + 100, 写 movement receive', () => {
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'receive', quantity: 100, to_location: '主仓库-A-01', unit: 'pcs' });
-  ctx.routes['/api/material_movements'].handler(req, res);
+  ctx.routes['POST /api/material_movements'].handler(req, res);
   const { status, json } = getResult();
   assert.equal(status, 200, 'expect 200');
   assert.ok(json.id, 'movement id 应返回');
@@ -73,18 +75,18 @@ test('P0-2-1 receive: 库存 + 100, 写 movement receive', () => {
 
 test('P0-2-2 issue: 在 receive 后 issue 30, 库存剩 70', () => {
   let { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'receive', quantity: 100, to_location: '主仓库-A-01', unit: 'pcs' });
-  ctx.routes['/api/material_movements'].handler(req, res);
+  ctx.routes['POST /api/material_movements'].handler(req, res);
   ({ req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'issue', quantity: 30, from_location: '主仓库-A-01', work_order_id: 1 }));
-  ctx.routes['/api/material_movements'].handler(req, res);
+  ctx.routes['POST /api/material_movements'].handler(req, res);
   const inv = _db.prepare('SELECT quantity FROM inventory WHERE material_lot_id = 1 AND location = ?').get('主仓库-A-01');
   assert.equal(inv.quantity, 70, 'issue 后剩 70');
 });
 
 test('P0-2-3 issue-overflow: 库存不足返回 400, 事务回滚', () => {
   let { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'receive', quantity: 10, to_location: '主仓库-A-01' });
-  ctx.routes['/api/material_movements'].handler(req, res);
+  ctx.routes['POST /api/material_movements'].handler(req, res);
   ({ req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'issue', quantity: 50, from_location: '主仓库-A-01' }));
-  ctx.routes['/api/material_movements'].handler(req, res);
+  ctx.routes['POST /api/material_movements'].handler(req, res);
   const r = getResult();
   assert.equal(r.status, 400, 'overflow 应 400');
   assert.match(r.json.error, /库存不足/);
@@ -97,7 +99,7 @@ test('P0-2-3 issue-overflow: 库存不足返回 400, 事务回滚', () => {
 test('P0-2-4 transfer: from 50 -> 20, to 0 -> 30', () => {
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 50, 'available')").run();
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'transfer', quantity: 30, from_location: 'A', to_location: 'B' });
-  ctx.routes['/api/material_movements'].handler(req, res);
+  ctx.routes['POST /api/material_movements'].handler(req, res);
   assert.equal(getResult().status, 200);
   const a = _db.prepare('SELECT quantity FROM inventory WHERE location = ?').get('A');
   const b = _db.prepare('SELECT quantity FROM inventory WHERE location = ?').get('B');
@@ -108,7 +110,7 @@ test('P0-2-4 transfer: from 50 -> 20, to 0 -> 30', () => {
 test('P0-2-5 adjust: 盘点把 100 改成 80', () => {
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 100, 'available')").run();
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'adjust', quantity: 80, to_location: 'A' });
-  ctx.routes['/api/material_movements'].handler(req, res);
+  ctx.routes['POST /api/material_movements'].handler(req, res);
   assert.equal(getResult().status, 200);
   const inv = _db.prepare('SELECT quantity, status FROM inventory WHERE location = ?').get('A');
   assert.equal(inv.quantity, 80, 'adjust 后 = 80');
@@ -117,7 +119,7 @@ test('P0-2-5 adjust: 盘点把 100 改成 80', () => {
 
 test('P0-2-6 return: 退料同 receive, 库存 +5', () => {
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'return', quantity: 5, to_location: '主仓库-A-01' });
-  ctx.routes['/api/material_movements'].handler(req, res);
+  ctx.routes['POST /api/material_movements'].handler(req, res);
   assert.equal(getResult().status, 200);
   const inv = _db.prepare('SELECT quantity FROM inventory WHERE material_lot_id = 1 AND location = ?').get('主仓库-A-01');
   assert.equal(inv.quantity, 5, 'return 后 = 5');
@@ -126,7 +128,7 @@ test('P1-5-1 allocate: 100 available -> 70 available + 30 allocated', () => {
   // 准备: 100 available
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 100, 'available')").run();
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 30, location: 'A' });
-  ctx.routes['/api/inventory/allocate'].handler(req, res);
+  ctx.routes['POST /api/inventory/allocate'].handler(req, res);
   assert.equal(getResult().status, 200);
   const a = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND status='available'").get();
   const b = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND status='allocated'").get();
@@ -137,7 +139,7 @@ test('P1-5-1 allocate: 100 available -> 70 available + 30 allocated', () => {
 test('P1-5-2 allocate 超量应 400 + 事务回滚', () => {
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 10, 'available')").run();
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 50 });
-  ctx.routes['/api/inventory/allocate'].handler(req, res);
+  ctx.routes['POST /api/inventory/allocate'].handler(req, res);
   const r = getResult();
   assert.equal(r.status, 400);
   assert.match(r.json.error, /不足/);
@@ -151,7 +153,7 @@ test('P1-5-3 release: 30 allocated -> 30 available', () => {
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 100, 'available')").run();
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 30, 'allocated')").run();
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 30 });
-  ctx.routes['/api/inventory/release'].handler(req, res);
+  ctx.routes['POST /api/inventory/release'].handler(req, res);
   assert.equal(getResult().status, 200);
   const a = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND status='available'").get();
   const b = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND status='allocated'").get();
@@ -162,7 +164,7 @@ test('P1-5-3 release: 30 allocated -> 30 available', () => {
 test('P1-5-4 release 超量应 400', () => {
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 5, 'allocated')").run();
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 50 });
-  ctx.routes['/api/inventory/release'].handler(req, res);
+  ctx.routes['POST /api/inventory/release'].handler(req, res);
   const r = getResult();
   assert.equal(r.status, 400);
   assert.match(r.json.error, /不足/);
@@ -175,7 +177,7 @@ test("P2-7-1 work_order_lots: 工单关联的 lot 追溯", () => {
   _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, work_order_id, created_at) VALUES (2, 'issue', 10, '件', 1, '2026-01-15')").run();
   _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, work_order_id, created_at) VALUES (2, 'issue', 15, '件', 1, '2026-01-20')").run();
   const { req, res, getResult } = mkReqRes({}, { params: { id: '1' } });
-  ctx.routes["/api/work_orders/:id/lots"].handler(req, res);
+  ctx.routes['GET /api/work_orders/:id/lots'].handler(req, res);
   const r = getResult().json;
   assert.equal(r.work_order.wo_code, "WO-001");
   assert.equal(r.movements.length, 2);
@@ -184,7 +186,7 @@ test("P2-7-1 work_order_lots: 工单关联的 lot 追溯", () => {
 
 test("P2-7-2 work_order_lots: 工单不存在返 404", () => {
   const { req, res, getResult } = mkReqRes({}, { params: { id: '999' } });
-  ctx.routes["/api/work_orders/:id/lots"].handler(req, res);
+  ctx.routes['GET /api/work_orders/:id/lots'].handler(req, res);
   assert.equal(getResult().status, 404);
 });
 
@@ -192,7 +194,7 @@ test("P2-8-1 stagnant: 91 天无 movement 标呆滞", () => {
   _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity, unit, received_date) VALUES (3, 1, 'OLD-1', 50, '件', '2026-03-15')").run();
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (3, 'A', 50, '件', 'available')").run();
   const { req, res, getResult } = mkReqRes({});
-  ctx.routes["/api/inventory/stagnant"].handler(req, res);
+  ctx.routes['GET /api/inventory/stagnant'].handler(req, res);
   const r = getResult().json;
   const old1 = r.items.find(x => x.lot_no === "OLD-1");
   assert.ok(old1, "OLD-1 应收录");
@@ -204,7 +206,7 @@ test("P2-8-2 stagnant: 30 天前有 movement 不算呆滞", () => {
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (4, 'A', 50, '件', 'available')").run();
   _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, created_at) VALUES (4, 'issue', 5, '件', '2026-06-20')").run();
   const { req, res, getResult } = mkReqRes({});
-  ctx.routes["/api/inventory/stagnant"].handler(req, res);
+  ctx.routes['GET /api/inventory/stagnant'].handler(req, res);
   const r = getResult().json;
   assert.ok(!r.items.some(x => x.lot_no === "FRESH-1"), "30 天前有 movement 不应算呆滞");
 });
@@ -215,7 +217,7 @@ test("P2-9-1 units_list: 列出物料的全部换算", () => {
   _db.prepare("INSERT INTO material_units (material_id, from_unit, to_unit, factor) VALUES (1, '卷', '吨', 5)").run();
   _db.prepare("INSERT INTO material_units (material_id, from_unit, to_unit, factor) VALUES (1, '箱', '件', 24)").run();
   const { req, res, getResult } = mkReqRes({}, { params: { id: '1' } });
-  ctx.routes["/api/materials/:id/units"].handler(req, res);
+  ctx.routes['GET /api/materials/:id/units'].handler(req, res);
   const r = getResult().json;
   assert.equal(r.count, 2);
   assert.equal(r.items[0].from_unit, "卷");
@@ -224,7 +226,7 @@ test("P2-9-1 units_list: 列出物料的全部换算", () => {
 
 test("P2-9-2 units_create: 加新换算返回 200", () => {
   const { req, res, getResult } = mkReqRes({ material_id: 1, from_unit: "kg", to_unit: "g", factor: 1000 });
-  ctx.routes["/api/material_units"].handler(req, res);
+  ctx.routes['POST /api/material_units'].handler(req, res);
   assert.equal(getResult().status, 200);
   const rows = _db.prepare("SELECT * FROM material_units").all();
   assert.equal(rows.length, 1);
@@ -233,13 +235,13 @@ test("P2-9-2 units_create: 加新换算返回 200", () => {
 
 test("P2-9-3 units_create: from==to 应 400", () => {
   const { req, res, getResult } = mkReqRes({ material_id: 1, from_unit: "件", to_unit: "件", factor: 1 });
-  ctx.routes["/api/material_units"].handler(req, res);
+  ctx.routes['POST /api/material_units'].handler(req, res);
   assert.equal(getResult().status, 400);
 });
 
 test("P2-9-4 units_create: 缺 factor 应 400", () => {
   const { req, res, getResult } = mkReqRes({ material_id: 1, from_unit: "kg", to_unit: "g" });
-  ctx.routes["/api/material_units"].handler(req, res);
+  ctx.routes['POST /api/material_units'].handler(req, res);
   assert.equal(getResult().status, 400);
 });
 
@@ -247,33 +249,79 @@ test("P2-9-4 units_create: 缺 factor 应 400", () => {
 
 test("P3-1-1 未登录应 401", () => {
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: "receive", quantity: 10, to_location: "A" }, { user: undefined });
-  ctx.routes["/api/material_movements"].handler(req, res);
+  ctx.routes["GET /api/material_movements"].handler(req, res);
   assert.equal(getResult().status, 401);
 });
 
 test("P3-1-2 viewer 调 receive_lot 应 403", () => {
   const { req, res, getResult } = mkReqRes({ material_id: 1, lot_no: "L-VW-" + Date.now(), quantity: 10 }, { user: { uid: 2, role: "viewer" } });
-  ctx.routes["/api/material_lots/receive"].handler(req, res);
+  ctx.routes['POST /api/material_lots/receive'].handler(req, res);
   assert.equal(getResult().status, 403);
 });
 
 test("P3-1-3 warehouse 调 receive_lot 应 200", () => {
   const { req, res, getResult } = mkReqRes({ material_id: 1, lot_no: "L-WH-" + Date.now(), quantity: 10, location: "A" }, { user: { uid: 3, role: "warehouse" } });
-  ctx.routes["/api/material_lots/receive"].handler(req, res);
+  ctx.routes['POST /api/material_lots/receive'].handler(req, res);
   const r = getResult();
   assert.equal(r.status, 200, "status=" + r.status + " err=" + JSON.stringify(r.json));
 });
 
 test("P3-1-4 worker 调 allocate 应 403", () => {
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 10 }, { user: { uid: 4, role: "worker" } });
-  ctx.routes["/api/inventory/allocate"].handler(req, res);
+  ctx.routes['POST /api/inventory/allocate'].handler(req, res);
   assert.equal(getResult().status, 403);
 });
 
 test("P3-1-5 planner 调 allocate 应 200", () => {
   _db.prepare("INSERT OR IGNORE INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 100, 'available')").run();
   const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 10 }, { user: { uid: 5, role: "planner" } });
-  ctx.routes["/api/inventory/allocate"].handler(req, res);
+  ctx.routes['POST /api/inventory/allocate'].handler(req, res);
   const r = getResult();
   assert.equal(r.status, 200, "status=" + r.status + " err=" + JSON.stringify(r.json));
+});
+
+// ---------------- P3-2 ----------------
+
+test("P3-2-1 movements 默认 limit 50", () => {
+  for (let i = 0; i < 60; i++) _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, created_at) VALUES (1, 'receive', 1, '2026-01-15')").run();
+  const { req, res, getResult } = mkReqRes({});
+  ctx.routes["GET /api/material_movements"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.limit, 50);
+  assert.equal(r.offset, 0);
+  assert.equal(r.count, 50);
+  assert.ok(r.total >= 60);
+  assert.equal(r.items.length, 50);
+});
+
+test("P3-2-2 movements 自定义 limit offset", () => {
+  const { req, res, getResult } = mkReqRes({}, { query: { limit: "10", offset: "20" } });
+  ctx.routes["GET /api/material_movements"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.limit, 10);
+  assert.equal(r.offset, 20);
+  assert.ok(r.items.length <= 10);
+});
+
+test("P3-2-3 movements 过滤 movement_type", () => {
+  for (let i = 0; i < 3; i++) _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, created_at) VALUES (1, 'issue', 5, '2026-02-15')").run();
+  const { req, res, getResult } = mkReqRes({}, { query: { movement_type: "issue" } });
+  ctx.routes["GET /api/material_movements"].handler(req, res);
+  const r = getResult().json;
+  assert.ok(r.items.length >= 3);
+  assert.ok(r.items.every(m => m.movement_type === "issue"));
+});
+
+test("P3-2-4 movements 日期范围过滤", () => {
+  const { req, res, getResult } = mkReqRes({}, { query: { date_from: "2026-02-01", date_to: "2026-02-28" } });
+  ctx.routes["GET /api/material_movements"].handler(req, res);
+  const r = getResult().json;
+  assert.ok(r.items.every(m => m.created_at >= "2026-02-01" && m.created_at <= "2026-02-28 23:59:59"));
+});
+
+test("P3-2-5 movements limit 上限 500", () => {
+  const { req, res, getResult } = mkReqRes({}, { query: { limit: "10000" } });
+  ctx.routes["GET /api/material_movements"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.limit, 500, "limit 10000 应截到 500");
 });

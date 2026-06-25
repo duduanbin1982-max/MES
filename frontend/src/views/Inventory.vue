@@ -170,7 +170,7 @@ const load = async () => {
     api.get('/material_lots'), api.get('/work_orders'),
     api.get('/inventory/alerts')
   ])
-  inv.value = a; movs.value = b; lots.value = c; workOrders.value = d; alerts.value = (e as any).items || []
+  inv.value = a; movs.value = b.items || b; lots.value = c; workOrders.value = d; alerts.value = (e as any).items || []
 }
 
 const submit = async () => {
