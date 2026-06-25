@@ -308,8 +308,18 @@ const router = useRouter()
 const auth = useAuthStore()
 
 // tab 支持 URL 同步: /materials?tab=inv
-const activeTab = ref<string>((route.query.tab as string) || 'materials')
-watch(() => route.query.tab, (v) => { if (v && typeof v === 'string') activeTab.value = v })
+// tab 默认值: URL ?tab=xxx 优先, 否则按角色预设
+//   admin / foreman / planner / engineer -> "materials" (物料主数据, 先看全貌)
+//   warehouse -> "inv" (库存清单, 仓库最关心)
+//   viewer -> "materials" (只读看)
+//   welder -> "ops" (操作, 现场执行)
+const TAB_BY_ROLE: Record<string, string> = {
+  admin: 'materials', foreman: 'materials', planner: 'materials', engineer: 'materials',
+  warehouse: 'inv', viewer: 'materials', welder: 'ops',
+}
+const defaultTab = (route.query.tab as string) || TAB_BY_ROLE[auth.user?.role || ''] || 'materials'
+const activeTab = ref<string>(defaultTab)
+watch(() => route.query.tab, (v) => { if (v && typeof v === 'string' && v !== activeTab.value) activeTab.value = v })
 watch(activeTab, (v) => {
   if (route.query.tab !== v) router.replace({ query: { ...route.query, tab: v } })
 })
