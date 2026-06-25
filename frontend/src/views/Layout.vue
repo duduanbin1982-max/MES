@@ -71,7 +71,6 @@ const PERM_BY_PATH: Record<string, string> = {
   '/multi-schedule': 'work_order:read',
   '/oee': 'equipment:read',
   '/settings': 'settings:read',
-  '/inventory': 'material:read',
   '/quality': 'quality:read',
   '/schedule': 'work_order:read',
   '/process-tree': 'process:read',
