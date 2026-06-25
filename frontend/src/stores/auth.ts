@@ -48,9 +48,17 @@ export const useAuthStore = defineStore('auth', () => {
     delete api.defaults.headers.common['Authorization']
   }
 
-  const restore = () => {
+  const restore = async () => {
     if (token.value) {
       api.defaults.headers.common['Authorization'] = 'Bearer ' + token.value
+      // 旧 token 可能没 permissions, 拉一次 /me 拿最新
+      if (!user.value?.permissions || user.value.permissions.length === 0) {
+        try {
+          const me: any = await api.me()
+          user.value = { ...user.value, ...me }
+          localStorage.setItem(USER_KEY, JSON.stringify(user.value))
+        } catch (_e) { /* 401 时 api 拦截器会跳登录 */ }
+      }
     }
   }
 
