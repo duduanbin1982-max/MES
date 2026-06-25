@@ -389,3 +389,104 @@ test("P3-3-4 batch 空数组应 400", () => {
   ctx.routes["POST /api/material_movements/batch"].handler(req, res);
   assert.equal(getResult().status, 400);
 });
+
+
+// ---------------- P3-4 GET /:id ----------------
+
+test("P3-4-1 GET /api/material_lots/:id 存在", () => {
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity) VALUES (1, 'A', 50), (1, 'B', 30)").run();
+  _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity) VALUES (1, 'receive', 80), (1, 'issue', 10), (1, 'issue', 5)").run();
+  const { req, res, getResult } = mkReqRes({}, { params: { id: "1" } });
+  ctx.routes["GET /api/material_lots/:id"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.id, 1);
+  assert.equal(r.lot_no, "LOT-001");
+  assert.equal(r.material_name, "测试物料");
+  assert.equal(r.inventory_total, 80);
+  assert.equal(r.inventory.length, 2);
+  assert.equal(r.movement_stats.receive.qty, 80);
+  assert.equal(r.movement_stats.issue.cnt, 2);
+});
+
+test("P3-4-2 GET /api/material_lots/:id 不存在 404", () => {
+  const { req, res, getResult } = mkReqRes({}, { params: { id: "999" } });
+  ctx.routes["GET /api/material_lots/:id"].handler(req, res);
+  assert.equal(getResult().status, 404);
+});
+
+test("P3-4-3 GET /api/material_lots/:id 非数字 400", () => {
+  const { req, res, getResult } = mkReqRes({}, { params: { id: "abc" } });
+  ctx.routes["GET /api/material_lots/:id"].handler(req, res);
+  assert.equal(getResult().status, 400);
+});
+
+test("P3-4-4 GET /api/material_lots/:id 未登录 401", () => {
+  const { req, res, getResult } = mkReqRes({}, { params: { id: "1" }, user: undefined });
+  ctx.routes["GET /api/material_lots/:id"].handler(req, res);
+  assert.equal(getResult().status, 401);
+});
+
+
+// ---------------- P3-5 split ----------------
+
+test("P3-5-1 split: 从 lot 1 拆 30 到新 lot", () => {
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity) VALUES (1, 'A', 100)").run();
+  const { req, res, getResult } = mkReqRes({ quantity: 30, new_lot_no: "LOT-001-S1", location: "A" }, { params: { id: "1" } });
+  ctx.routes["POST /api/material_lots/:id/split"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(getResult().status, 200);
+  assert.equal(r.new_lot_no, "LOT-001-S1");
+  assert.equal(r.quantity, 30);
+  const src = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND location='A'").get();
+  assert.equal(src.quantity, 70);
+  const newLot = _db.prepare("SELECT * FROM material_lots WHERE lot_no='LOT-001-S1'").get();
+  assert.equal(newLot.quantity, 30);
+  const newInv = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=? AND location='A'").get(newLot.id);
+  assert.equal(newInv.quantity, 30);
+});
+
+test("P3-5-2 split 库存不足应 400", () => {
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity) VALUES (1, 'A', 10)").run();
+  const { req, res, getResult } = mkReqRes({ quantity: 50, new_lot_no: "LOT-001-S2" }, { params: { id: "1" } });
+  ctx.routes["POST /api/material_lots/:id/split"].handler(req, res);
+  assert.equal(getResult().status, 400);
+});
+
+test("P3-5-3 split new_lot_no 重复应 400", () => {
+  const { req, res, getResult } = mkReqRes({ quantity: 10, new_lot_no: "LOT-001" }, { params: { id: "1" } });
+  ctx.routes["POST /api/material_lots/:id/split"].handler(req, res);
+  assert.equal(getResult().status, 400);
+});
+
+// ---------------- P3-6 merge ----------------
+
+test("P3-6-1 merge: 2 个源 lot 合并到目标 lot", () => {
+  // 准备: lot 1 (id=1) 已有 100, 新建 lot 2, 3 各 50
+  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity) VALUES (2, 1, 'LOT-002', 50)").run();
+  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity) VALUES (3, 1, 'LOT-003', 50)").run();
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity) VALUES (1, 'A', 100), (2, 'A', 50), (3, 'A', 50)").run();
+  const { req, res, getResult } = mkReqRes({ source_lot_ids: [2, 3], location: "A" }, { params: { id: "1" } });
+  ctx.routes["POST /api/material_lots/:id/merge"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(getResult().status, 200);
+  assert.equal(r.merged.length, 2);
+  const dst = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND location='A'").get();
+  assert.equal(dst.quantity, 200, "目标 lot 库存 = 100 + 50 + 50");
+  const s2 = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=2 AND location='A'").get();
+  assert.equal(s2.quantity, 0, "源 lot 2 库存归零");
+});
+
+test("P3-6-2 merge 物料不同应 400", () => {
+  _db.prepare("INSERT INTO materials (id, material_code, material_name) VALUES (2, 'T-002', '另物料')").run();
+  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity) VALUES (4, 2, 'LOT-004', 10)").run();
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity) VALUES (4, 'A', 10)").run();
+  const { req, res, getResult } = mkReqRes({ source_lot_ids: [4], location: "A" }, { params: { id: "1" } });
+  ctx.routes["POST /api/material_lots/:id/merge"].handler(req, res);
+  assert.equal(getResult().status, 400);
+});
+
+test("P3-6-3 merge 自己合自己应 400", () => {
+  const { req, res, getResult } = mkReqRes({ source_lot_ids: [1] }, { params: { id: "1" } });
+  ctx.routes["POST /api/material_lots/:id/merge"].handler(req, res);
+  assert.equal(getResult().status, 400);
+});

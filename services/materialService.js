@@ -13,7 +13,7 @@ function register(app, db) {
   const run = (sql, params = []) => db.prepare(sql).run(params);
   const wrap = (handler) => (req, res) => {
     try { handler(req, res); }
-    catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
+    catch (e) { console.error(e); res.status(e.status || 500).json({ error: e.message }); }
   };
   // P3-1 权限守卫: 写端点限制角色, 读端点只要求登录
   const requireRole = (...allowed) => (req, res) => {
@@ -40,11 +40,102 @@ function register(app, db) {
     res.json(all(sql, params));
   }));
 
+  // P3-4 单查 lot: 含 lot 详情 + 当前各库位库存 + 累计 movements 汇总
+  app.get('/api/material_lots/:id', wrap((req, res) => {
+    if (requireLogin(req, res)) return;
+    const id = parseInt(req.params.id);
+    if (!id) return res.status(400).json({ error: 'id 必填且必须为数字' });
+    const lot = get("SELECT ml.*, m.material_code, m.material_name, m.spec, m.unit AS material_unit FROM material_lots ml JOIN materials m ON ml.material_id = m.id WHERE ml.id = ?", id);
+    if (!lot) return res.status(404).json({ error: 'lot 不存在' });
+    const inventory = all("SELECT location, quantity, unit, status, last_updated FROM inventory WHERE material_lot_id = ? ORDER BY location", id);
+    const totalQty = inventory.reduce((s, r) => s + (r.quantity || 0), 0);
+    const movements = all("SELECT movement_type, SUM(quantity) AS qty, COUNT(*) AS cnt FROM material_movements WHERE material_lot_id = ? GROUP BY movement_type", id);
+    const movementStats = {};
+    for (const m of movements) movementStats[m.movement_type] = { qty: m.qty, cnt: m.cnt };
+    res.json({ ...lot, inventory, inventory_total: totalQty, movement_stats: movementStats });
+  }));
+
+
   // ============================================================
   // 库存
   // ============================================================
     // P0-#3 一键入库: 建 lot + 初始 inventory + 写 receive movement, 事务内
   //   后续 P1-#4 采购模块做好后, 收货可带 PO 单号 + 自动写 key_component_prices
+  // P3-5 拆批: 从源 lot 拆出 quantity 到新 lot (新 lot_no 必带), 同步 inventory (源 -qty, 新 +qty)
+  app.post('/api/material_lots/:id/split', wrap((req, res) => {
+    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
+    const srcId = parseInt(req.params.id);
+    if (!srcId) return res.status(400).json({ error: 'id 非法' });
+    const { quantity, new_lot_no, location, notes } = req.body;
+    if (!quantity || !new_lot_no) return res.status(400).json({ error: 'quantity/new_lot_no 必填' });
+    const qty = Math.abs(Number(quantity));
+    if (qty <= 0) return res.status(400).json({ error: 'quantity 必须 > 0' });
+    const dup = get('SELECT id FROM material_lots WHERE lot_no = ?', new_lot_no);
+    if (dup) return res.status(400).json({ error: '新 lot_no 已存在' });
+    const result = db.transaction(() => {
+      const src = get('SELECT * FROM material_lots WHERE id = ?', srcId);
+      if (!src) { const e = new Error('源 lot 不存在'); e.status = 404; throw e; }
+      // 找源 lot 在 location 的可用库存
+      const loc = location || '主仓库-A-01';
+      const inv = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [srcId, loc]);
+      if (!inv || inv.quantity < qty) { const e = new Error('源库位库存不足: 现有 ' + (inv ? inv.quantity : 0) + ', 要拆 ' + qty); e.status = 400; throw e; }
+      // 1) 源 lot 库存 -qty
+      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [qty, inv.id]);
+      // 2) 创建新 lot
+      const r = run(
+        "INSERT INTO material_lots (material_id, lot_no, supplier, heat_no, certificate_no, received_date, quantity, unit, quality_status, notes) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, ?, ?)",
+        [src.material_id, new_lot_no, src.supplier, src.heat_no, src.certificate_no, qty, src.unit, src.quality_status, '由 ' + src.lot_no + ' 拆出 ' + qty + (notes ? '; ' + notes : '')]
+      );
+      const newId = r.lastInsertRowid;
+      // 3) 新 lot 库存 +qty
+      run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [newId, loc, qty, src.unit]);
+      // 4) 源 lot 写 transfer movement (split 视为内部调拨)
+      run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, notes) VALUES (?, 'transfer', ?, ?, ?, ?, ?)",
+        [srcId, qty, src.unit, loc, loc, 'split to ' + new_lot_no]);
+      return { source_lot_id: srcId, new_lot_id: newId, new_lot_no, quantity: qty, location: loc };
+    })();
+    res.json(result);
+  }));
+
+  // P3-6 合批: 把多个源 lot 合并到目标 lot, 库存累加, 写 movement
+  app.post('/api/material_lots/:id/merge', wrap((req, res) => {
+    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
+    const dstId = parseInt(req.params.id);
+    if (!dstId) return res.status(400).json({ error: 'id 非法' });
+    const { source_lot_ids, location, notes } = req.body;
+    if (!Array.isArray(source_lot_ids) || source_lot_ids.length === 0) return res.status(400).json({ error: 'source_lot_ids 数组必填' });
+    if (source_lot_ids.length > 50) return res.status(400).json({ error: '源 lot 上限 50 个' });
+    if (source_lot_ids.includes(dstId)) return res.status(400).json({ error: '不能合到自身' });
+    const result = db.transaction(() => {
+      const dst = get('SELECT * FROM material_lots WHERE id = ?', dstId);
+      if (!dst) { const e = new Error('目标 lot 不存在'); e.status = 404; throw e; }
+      const loc = location || '主仓库-A-01';
+      const merged = [];
+      for (const sid of source_lot_ids) {
+        const src = get('SELECT * FROM material_lots WHERE id = ?', sid);
+        if (!src) { const e = new Error('源 lot ' + sid + ' 不存在'); e.status = 404; throw e; }
+        if (src.material_id !== dst.material_id) { const e = new Error('源 lot ' + sid + ' 物料 ' + src.material_id + ' 与目标 ' + dst.material_id + ' 不同'); e.status = 400; throw e; }
+        const inv = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [sid, loc]);
+        if (!inv) { const e = new Error('源 lot ' + sid + ' 在 ' + loc + ' 无库存'); e.status = 400; throw e; }
+        // 1) 源 lot 库存归零
+        run("UPDATE inventory SET quantity = 0, last_updated = datetime('now') WHERE id = ?", [inv.id]);
+        // 2) 目标 lot 库存 +qty
+        const dstInv = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [dstId, loc]);
+        if (dstInv) {
+          run("UPDATE inventory SET quantity = quantity + ?, last_updated = datetime('now') WHERE id = ?", [inv.quantity, dstInv.id]);
+        } else {
+          run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [dstId, loc, inv.quantity, src.unit]);
+        }
+        // 3) 写 transfer movement
+        run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, notes) VALUES (?, 'transfer', ?, ?, ?, ?, ?)",
+          [sid, inv.quantity, src.unit, loc, loc, 'merged to lot ' + dst.lot_no + (notes ? '; ' + notes : '')]);
+        merged.push({ source_lot_id: sid, source_lot_no: src.lot_no, quantity: inv.quantity });
+      }
+      return { target_lot_id: dstId, target_lot_no: dst.lot_no, location: loc, merged };
+    })();
+    res.json(result);
+  }));
+
   app.post('/api/material_lots/receive', wrap((req, res) => {
     if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
     const { material_id, lot_no, supplier, heat_no, certificate_no, quantity, unit, location, notes } = req.body;
