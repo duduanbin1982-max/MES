@@ -1,33 +1,88 @@
-// frontend/src/api/index.ts - API client
-import axios from 'axios'
+// frontend/src/api/index.ts - API client (P0-2: 双 token + 自动 refresh)
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
 const api = axios.create({ baseURL: '/api' })
 
+// P0-2: 双 token 存储
+const ACCESS_KEY  = 'tbm_access_token'
+const REFRESH_KEY = 'tbm_refresh_token'
+const USER_KEY    = 'tbm_user'
+
+// P0-2: 防止多个请求同时触发 refresh
+let refreshing: Promise<string | null> | null = null
+
+async function doRefresh(): Promise<string | null> {
+  const rt = localStorage.getItem(REFRESH_KEY)
+  if (!rt) return null
+  try {
+    // 用一个干净实例 (不带 auth header)
+    const r = await axios.post('/api/auth/refresh', { refresh_token: rt })
+    const newAccess = r.data.access_token
+    localStorage.setItem(ACCESS_KEY, newAccess)
+    return newAccess
+  } catch (_e) {
+    return null
+  }
+}
+
 api.interceptors.request.use((config) => {
-  const t = localStorage.getItem('tbm_token')
+  // P0-2: 用 access_token 键
+  const t = localStorage.getItem(ACCESS_KEY) || localStorage.getItem('tbm_token')
   if (t) config.headers.Authorization = `Bearer ${t}`
   return config
 })
 
 api.interceptors.response.use(
   (r) => r.data,
-  (err) => {
-    if (err.response?.status === 401) {
-      localStorage.removeItem('tbm_token')
-      localStorage.removeItem('tbm_user')
+  async (err: AxiosError<any>) => {
+    const original = err.config as InternalAxiosRequestConfig & { _retry?: boolean }
+    const status = err.response?.status
+
+    // P0-2: 401 自动 refresh (除登录/刷新本身)
+    if (status === 401 && !original._retry &&
+        !original.url?.includes('/auth/login') &&
+        !original.url?.includes('/auth/refresh')) {
+      original._retry = true
+      // 单一 refresh 共享
+      refreshing = refreshing || doRefresh()
+      const newAccess = await refreshing
+      refreshing = null
+      if (newAccess) {
+        original.headers!.Authorization = `Bearer ${newAccess}`
+        return api.request(original)
+      }
+      // refresh 失败 → 清空 + 跳登录
+      localStorage.removeItem(ACCESS_KEY)
+      localStorage.removeItem(REFRESH_KEY)
+      localStorage.removeItem(USER_KEY)
+      if (location.pathname !== '/login') location.href = '/login'
+    } else if (status === 401) {
+      // 登录/refresh 本身 401 → 直接清
+      localStorage.removeItem(ACCESS_KEY)
+      localStorage.removeItem(REFRESH_KEY)
+      localStorage.removeItem(USER_KEY)
       if (location.pathname !== '/login') location.href = '/login'
     }
+
     const msg = err.response?.data?.error || err.message
-    if (err.response?.status !== 401) ElMessage.error(msg)
+    if (status !== 401) ElMessage.error(msg)
     return Promise.reject(err)
   }
 )
 
 const Api: any = {
   // auth
-  login: (username: string, password: string) => api.post('/auth/login', { username, password }),
+  login: async (username: string, password: string) => {
+    const r: any = await api.post('/auth/login', { username, password })
+    // P0-2: 存双 token
+    localStorage.setItem(ACCESS_KEY,  r.access_token)
+    localStorage.setItem(REFRESH_KEY, r.refresh_token)
+    localStorage.setItem(USER_KEY,    JSON.stringify(r.user))
+    return r
+  },
   me: () => api.get('/auth/me'),
+  refresh: () => api.post('/auth/refresh', { refresh_token: localStorage.getItem(REFRESH_KEY) }),
   logout: () => api.post('/auth/logout'),
 
   // dashboard
@@ -73,6 +128,11 @@ const Api: any = {
 
   // work orders
   workOrders: (params?: any) => api.get('/work_orders', { params }),
+
+  // roles & audit (P0-1 / P1-4)
+  roles: () => api.get('/roles'),
+  updateRolePermissions: (code: string, permissions: string[]) => api.put(`/roles/${code}/permissions`, { permissions }),
+  auditLogs: (params?: any) => api.get('/audit/logs', { params }),
 
   // settings
   settings: {

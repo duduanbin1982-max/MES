@@ -11,16 +11,12 @@
 //   - 兼容 requireRole (旧业务还在用)
 
 const crypto = require('crypto');
+const jwt = require('../app/jwt');
 const rateLimit = require('express-rate-limit');
 const { ApiError } = require('../app/errors');
 const { DEFAULT_ROLE_PERMISSIONS, hasPermission } = require('../app/permissions');
 
-const SECRET = process.env.JWT_SECRET;
-if (!SECRET || SECRET.length < 32) {
-  console.error('[middleware/auth] FATAL: JWT_SECRET 缺失或太短（<32字符）。请检查 .env');
-  process.exit(1);
-}
-const JWT_EXPIRE_HOURS = parseInt(process.env.JWT_EXPIRE_HOURS || '24', 10);
+// SECRET 校验在 app/jwt.js 模块加载时已做
 const LOGIN_RATE_LIMIT_WINDOW_MS = parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || '60000', 10);
 const LOGIN_RATE_LIMIT_MAX = parseInt(process.env.LOGIN_RATE_LIMIT_MAX || '10', 10);
 
@@ -54,28 +50,20 @@ function getRolePermissions(roleCode) {
   return DEFAULT_ROLE_PERMISSIONS[roleCode] || [];
 }
 
+// P0-2: 用新 jwt 模块 (旧函数名保留, 业务层零改动)
 function makeToken(uid, role, extra = {}) {
-  const payload = JSON.stringify({ uid, role, ...extra, exp: Date.now() + JWT_EXPIRE_HOURS * 3600 * 1000 });
-  const b64 = Buffer.from(payload).toString('base64url');
-  const sig = crypto.createHmac('sha256', SECRET).update(b64).digest('base64url');
-  return b64 + '.' + sig;
+  const r = jwt.signAccess({ sub: uid, role, permissions: extra.permissions, full_name: extra.username });
+  return r.token;
 }
-
 function verifyToken(token) {
-  if (!token) return null;
-  const [b64, sig] = token.split('.');
-  if (!b64 || !sig) return null;
-  const expected = crypto.createHmac('sha256', SECRET).update(b64).digest('base64url');
-  if (sig !== expected) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(b64, 'base64url').toString());
-    if (payload.exp < Date.now()) return null;
-    return payload;
-  } catch (_e) { return null; }
+  const p = jwt.verify(token);
+  if (!p) return null;
+  if (p.uid === undefined && p.sub !== undefined) p.uid = p.sub;
+  return p;
 }
 
 function authMiddleware(req, res, next) {
-  const publicPaths = ['/auth/login', '/health'];
+  const publicPaths = ['/auth/login', '/auth/refresh', '/health'];
   if (publicPaths.includes(req.path)) return next();
   const auth = req.headers.authorization || '';
   const token = auth.replace(/^Bearer /, '');
