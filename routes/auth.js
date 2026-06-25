@@ -36,7 +36,7 @@ function register(app, db) {
     run("UPDATE users SET last_login = datetime('now') WHERE id = ?", user.id);
     // P0-1: token 塞入 permissions, 前端不需再查
     const permissions = getRolePermissions(user.role_code);
-    const token = makeToken(user.id, user.role_code, { permissions });
+    const token = makeToken(user.id, user.role_code, { permissions, username: user.username });
     res.json({
       token,
       user: {

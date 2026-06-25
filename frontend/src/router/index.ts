@@ -23,6 +23,7 @@ const routes = [
       { path: '/multi-schedule', name: 'multi-schedule', component: () => import('../views/MultiSchedule.vue'), meta: { title: '多项目排程', icon: 'Connection' } },
       { path: '/oee', name: 'oee', component: () => import('../views/OEE.vue'), meta: { title: 'OEE', icon: 'Cpu' } },
       { path: '/settings', name: 'settings', component: () => import('../views/Settings.vue'), meta: { requires: 'settings:read', title: '系统设置', icon: 'Setting' } },
+      { path: '/audit', name: 'audit', component: () => import('../views/AuditLogs.vue'), meta: { requires: 'audit:read', title: '审计日志', icon: 'DocumentChecked' } },
       { path: '/inventory', name: 'inventory', component: () => import('../views/Inventory.vue'), meta: { title: '库存管理', icon: 'Box' } },
       { path: '/quality', name: 'quality', component: () => import('../views/Quality.vue'), meta: { title: '质检管理', icon: 'CircleCheck' } },
       { path: '/schedule', name: 'schedule', component: () => import('../views/Schedule.vue'), meta: { title: '项目排程', icon: 'Calendar' } },

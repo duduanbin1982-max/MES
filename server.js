@@ -28,6 +28,8 @@ require('./routes/health').register(app, db);
 require('./routes/settings').register(app);
 // P0-1: 角色管理 (admin only)
 require('./routes/roles').register(app, db);
+// P1-4: 审计日志查询 (audit:read)
+require('./routes/audit').register(app, db);
 
 // 实例重型路由 (16 条)
 require('./routes/instance').register(app, db);
