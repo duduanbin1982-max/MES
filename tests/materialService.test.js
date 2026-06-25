@@ -325,3 +325,67 @@ test("P3-2-5 movements limit 上限 500", () => {
   const r = getResult().json;
   assert.equal(r.limit, 500, "limit 10000 应截到 500");
 });
+
+
+// ---------------- P3-3 batch ----------------
+
+test("P3-3-1 batch 非原子: 3 条都成功", () => {
+  const movements = [
+    { material_lot_id: 1, movement_type: "receive", quantity: 10, to_location: "A" },
+    { material_lot_id: 1, movement_type: "receive", quantity: 20, to_location: "B" },
+    { material_lot_id: 1, movement_type: "issue", quantity: 5, from_location: "A" },
+  ];
+  const { req, res, getResult } = mkReqRes({ movements, atomic: false });
+  ctx.routes["POST /api/material_movements/batch"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.success, true);
+  assert.equal(r.atomic, false);
+  assert.equal(r.count, 3);
+  assert.equal(r.failed.length, 0);
+  assert.equal(r.ids.length, 3);
+  // 验证库存
+  const a = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND location='A'").get();
+  assert.equal(a.quantity, 5);
+  const b = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND location='B'").get();
+  assert.equal(b.quantity, 20);
+});
+
+test("P3-3-2 batch 非原子: 部分失败", () => {
+  const movements = [
+    { material_lot_id: 1, movement_type: "receive", quantity: 5, to_location: "C" },
+    { material_lot_id: 1, movement_type: "issue", quantity: 999, from_location: "C" }, // 库存不足
+  ];
+  const { req, res, getResult } = mkReqRes({ movements, atomic: false });
+  ctx.routes["POST /api/material_movements/batch"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.success, false);
+  assert.equal(r.count, 1);
+  assert.equal(r.failed.length, 1);
+  assert.equal(r.failed[0].index, 1);
+  assert.match(r.failed[0].error, /库存不足/);
+});
+
+test("P3-3-3 batch 原子: 第 2 条失败则全部回滚", () => {
+  // 先入库
+  _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity) VALUES (1, 'D', 50)").run();
+  const movements = [
+    { material_lot_id: 1, movement_type: "issue", quantity: 10, from_location: "D" },
+    { material_lot_id: 1, movement_type: "issue", quantity: 999, from_location: "D" }, // 失败
+    { material_lot_id: 1, movement_type: "issue", quantity: 5, from_location: "D" },
+  ];
+  const { req, res, getResult } = mkReqRes({ movements, atomic: true });
+  ctx.routes["POST /api/material_movements/batch"].handler(req, res);
+  const r = getResult().json;
+  assert.equal(r.success, false);
+  assert.equal(r.atomic, true);
+  assert.match(r.error, /库存不足/);
+  // 验证库存回滚
+  const d = _db.prepare("SELECT quantity FROM inventory WHERE material_lot_id=1 AND location='D'").get();
+  assert.equal(d.quantity, 50, "原子失败后库存应未变");
+});
+
+test("P3-3-4 batch 空数组应 400", () => {
+  const { req, res, getResult } = mkReqRes({ movements: [], atomic: true });
+  ctx.routes["POST /api/material_movements/batch"].handler(req, res);
+  assert.equal(getResult().status, 400);
+});

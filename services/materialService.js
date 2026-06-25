@@ -146,81 +146,104 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
   }));
 
   // P0-#2 事务化: movement + inventory.quantity 同步
+  // P3-3 抽出单 movement 逻辑为 _applyMovement, POST /batch 复用
+  const _defaultLocation = '主仓库-A-01';
+  const _applyMovement = (m) => {
+    const { material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes } = m;
+    if (!material_lot_id || !movement_type || quantity === undefined) { const e = new Error('material_lot_id/movement_type/quantity 必填'); e.status = 400; throw e; }
+    if (!['receive', 'issue', 'return', 'transfer', 'adjust'].includes(movement_type)) { const e = new Error('movement_type 非法'); e.status = 400; throw e; }
+    const lot = get('SELECT id, material_id FROM material_lots WHERE id = ?', material_lot_id);
+    if (!lot) { const e = new Error('lot 不存在'); e.status = 404; throw e; }
+    const absQty = Math.abs(Number(quantity));
+    const r = run(
+      "INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [material_lot_id, movement_type, absQty, unit || null, from_location || null, to_location || null, work_order_id || null, project_id || null, operator_id || null, notes || null]
+    );
+    const movementId = r.lastInsertRowid;
+    if (movement_type === 'receive') {
+      const loc = to_location || _defaultLocation;
+      const existing = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
+      if (existing) {
+        run("UPDATE inventory SET quantity = quantity + ?, status = ?, last_updated = datetime('now') WHERE id = ?", [absQty, 'available', existing.id]);
+      } else {
+        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
+      }
+    } else if (movement_type === 'issue') {
+      const loc = from_location || _defaultLocation;
+      const inv = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
+      if (!inv) { const e = new Error('lot ' + material_lot_id + ' @ ' + loc + ' 无库存, 不能出库'); e.status = 400; throw e; }
+      if (inv.quantity < absQty) { const e = new Error('库存不足: 现有 ' + inv.quantity + ', 要出 ' + absQty); e.status = 400; throw e; }
+      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [absQty, inv.id]);
+    } else if (movement_type === 'transfer') {
+      if (!from_location || !to_location) { const e = new Error('transfer 必须带 from_location + to_location'); e.status = 400; throw e; }
+      const from = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, from_location]);
+      if (!from || from.quantity < absQty) { const e = new Error('源库位库存不足'); e.status = 400; throw e; }
+      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [absQty, from.id]);
+      const to = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, to_location]);
+      if (to) {
+        run("UPDATE inventory SET quantity = quantity + ?, last_updated = datetime('now') WHERE id = ?", [absQty, to.id]);
+      } else {
+        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, to_location, absQty, unit || null]);
+      }
+    } else if (movement_type === 'adjust') {
+      const loc = to_location || from_location || _defaultLocation;
+      const existing = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
+      if (existing) {
+        run("UPDATE inventory SET quantity = ?, status = ?, last_updated = datetime('now') WHERE id = ?", [absQty, 'available', existing.id]);
+      } else {
+        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
+      }
+    } else if (movement_type === 'return') {
+      const loc = to_location || _defaultLocation;
+      const existing = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
+      if (existing) {
+        run("UPDATE inventory SET quantity = quantity + ?, status = ?, last_updated = datetime('now') WHERE id = ?", [absQty, 'available', existing.id]);
+      } else {
+        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
+      }
+    }
+    return { id: movementId };
+  };
+
   app.post('/api/material_movements', wrap((req, res) => {
     if (requireRole('admin', 'warehouse', 'planner', 'foreman')(req, res)) return;
-    const { material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes } = req.body;
-    if (!material_lot_id || !movement_type || quantity === undefined) return res.status(400).json({ error: 'material_lot_id/movement_type/quantity 必填' });
-    if (!['receive', 'issue', 'return', 'transfer', 'adjust'].includes(movement_type)) return res.status(400).json({ error: 'movement_type 非法' });
-
-    const lot = get('SELECT id, material_id FROM material_lots WHERE id = ?', material_lot_id);
-    if (!lot) return res.status(404).json({ error: 'lot 不存在' });
-
-    const defaultLocation = '主仓库-A-01';
-    const tx = db.transaction(() => {
-      // 1) 写 movement 行 (quantity 取绝对值, 让 receive/issue 物理一致)
-      const absQty = Math.abs(Number(quantity));
-      const r = run(
-        "INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [material_lot_id, movement_type, absQty, unit || null, from_location || null, to_location || null, work_order_id || null, project_id || null, operator_id || null, notes || null]
-      );
-      const movementId = r.lastInsertRowid;
-
-      // 2) 同步 inventory.quantity
-      if (movement_type === 'receive') {
-        const loc = to_location || defaultLocation;
-        const existing = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
-        if (existing) {
-          run('UPDATE inventory SET quantity = quantity + ?, status = ?, last_updated = datetime(\'now\') WHERE id = ?', [absQty, 'available', existing.id]);
-        } else {
-          run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
-        }
-      } else if (movement_type === 'issue') {
-        const loc = from_location || defaultLocation;
-        const inv = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
-        if (!inv) { const e = new Error('lot ' + material_lot_id + ' @ ' + loc + ' 无库存, 不能出库'); e.status = 400; throw e; }
-        if (inv.quantity < absQty) { const e = new Error('库存不足: 现有 ' + inv.quantity + ', 要出 ' + absQty); e.status = 400; throw e; }
-        run('UPDATE inventory SET quantity = quantity - ?, last_updated = datetime(\'now\') WHERE id = ?', [absQty, inv.id]);
-      } else if (movement_type === 'transfer') {
-        if (!from_location || !to_location) { const e = new Error('transfer 必须带 from_location + to_location'); e.status = 400; throw e; }
-        const from = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, from_location]);
-        if (!from || from.quantity < absQty) { const e = new Error('源库位库存不足'); e.status = 400; throw e; }
-        run('UPDATE inventory SET quantity = quantity - ?, last_updated = datetime(\'now\') WHERE id = ?', [absQty, from.id]);
-        const to = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, to_location]);
-        if (to) {
-          run('UPDATE inventory SET quantity = quantity + ?, last_updated = datetime(\'now\') WHERE id = ?', [absQty, to.id]);
-        } else {
-          run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, to_location, absQty, unit || null]);
-        }
-      } else if (movement_type === 'adjust') {
-        const loc = to_location || from_location || defaultLocation;
-        const existing = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
-        if (existing) {
-          run('UPDATE inventory SET quantity = ?, status = ?, last_updated = datetime(\'now\') WHERE id = ?', [absQty, 'available', existing.id]);
-        } else {
-          run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
-        }
-      } else if (movement_type === 'return') {
-        // return 走 from -> to 同样, 等同 transfer 但语义是退料
-        const loc = to_location || defaultLocation;
-        const existing = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
-        if (existing) {
-          run('UPDATE inventory SET quantity = quantity + ?, status = ?, last_updated = datetime(\'now\') WHERE id = ?', [absQty, 'available', existing.id]);
-        } else {
-          run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
-        }
-      }
-
-      return { id: movementId };
-    });
-
     try {
-      const result = tx();
+      const result = db.transaction(() => _applyMovement(req.body))();
       res.json(result);
     } catch (e) {
-      const status = e.status || 500;
-      res.status(status).json({ error: e.message });
+      res.status(e.status || 500).json({ error: e.message });
     }
   }));
+
+  // P3-3 批量入库: atomic=true 全成功或全回滚, atomic=false 部分成功
+  app.post('/api/material_movements/batch', wrap((req, res) => {
+    if (requireRole('admin', 'warehouse', 'planner', 'foreman')(req, res)) return;
+    const { movements, atomic } = req.body;
+    if (!Array.isArray(movements) || movements.length === 0) return res.status(400).json({ error: 'movements 数组必填, 不能为空' });
+    if (movements.length > 500) return res.status(400).json({ error: 'movements 单批上限 500 条' });
+    if (atomic) {
+      const ids = [];
+      try {
+        db.transaction(() => { for (let i = 0; i < movements.length; i++) ids.push(_applyMovement(movements[i]).id); })();
+        res.json({ success: true, atomic: true, count: ids.length, ids });
+      } catch (e) {
+        res.status(e.status || 500).json({ success: false, atomic: true, error: e.message, failed_index: -1 });
+      }
+    } else {
+      const results = [];
+      const failed = [];
+      for (let i = 0; i < movements.length; i++) {
+        try {
+          const r = db.transaction(() => _applyMovement(movements[i]))();
+          results.push(r);
+        } catch (e) {
+          failed.push({ index: i, error: e.message });
+        }
+      }
+      res.json({ success: failed.length === 0, atomic: false, count: results.length, ids: results.map(x => x.id), failed });
+    }
+  }));
+
   // P1-#5 库存预留 (work_order 锁定一批 lot)
   //   业务: 调度器预测"实际可用库存"时, allocated 也算 available 但要锁定
   //   schema: inventory.status 已有 allocated 字段, 但此前无端点用
