@@ -47,8 +47,8 @@ require('./services/qcInspection').register(app, db);
 require('./services/systemSettings').register(app, db);
 require('./services/userManagement').register(app, db);
 
-// 404
-app.use((req, res) => res.status(404).json({ error: 'not found', path: req.path }));
+// P0-3 统一错误响应: notFoundHandler + errorHandler (必须在所有 route 之后)
+app._mountErrorHandlers();
 
 // 启动
 app.listen(PORT, '127.0.0.1', () => {

@@ -105,8 +105,10 @@ function getKitCheck(req, res, db) {
     }
 
     // 查库存
-    const matIds = Object.keys(need);
-    const materials = matIds.length > 0 ? all(db, "SELECT i.id, i.location, i.quantity, i.unit, i.status, i.last_updated, ml.material_id FROM inventory i JOIN material_lots ml ON i.material_lot_id = ml.id WHERE ml.material_id IN (" + matIds.join(',') + ") AND i.status = 'available'") : [];
+    // P1-3 SQL 安全: matIds 强制 parseInt, IN 子句用 ? 占位
+    // P1-3 SQL 安全: 严格整数字符串校验 (/^\d+$/) + 范围, 拒绝任何 '1;DROP...' 攻击
+    const matIds = Object.keys(need).filter(id => /^\d+$/.test(String(id))).map(id => parseInt(id, 10)).filter(n => n > 0 && n <= 2147483647);
+    const materials = matIds.length > 0 ? all(db, `SELECT i.id, i.location, i.quantity, i.unit, i.status, i.last_updated, ml.material_id FROM inventory i JOIN material_lots ml ON i.material_lot_id = ml.id WHERE ml.material_id IN (${matIds.map(() => '?').join(',')}) AND i.status = 'available'`, matIds) : [];
     for (const inv of materials) {
       const key = inv.material_id;
       if (need[key]) need[key].in_stock_qty = (need[key].in_stock_qty || 0) + inv.quantity;

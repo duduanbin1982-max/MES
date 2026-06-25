@@ -12,6 +12,11 @@ const security   = require('./middleware/security');
 const corsMw     = require('./middleware/cors');
 const parser     = require('./middleware/parser');
 const logger     = require('./middleware/logger');
+const requestIdMw = require('./middleware/requestId');
+const responseInterceptor = require('./middleware/responseInterceptor');
+
+// 错误处理 (P0-3)
+const { errorHandler, notFoundHandler } = require('./errors');
 
 // 路径常量 (兼容旧 require('../app') 拿 DIST/DIST_EXISTS)
 const { DIST, DIST_EXISTS } = require('./config/paths');
@@ -27,8 +32,18 @@ function createApp() {
   corsMw(app);
   // 4. JSON / URL 解析
   parser(app);
-  // 5. 请求日志
+  // 5. 请求 ID (P0-3, 给日志和错误响应串联)
+  app.use(requestIdMw());
+  // 6. 响应拦截器 (P0-3: 把 {error:msg} 统一为 {code,message,details,requestId})
+  app.use(responseInterceptor());
+  // 7. 请求日志
   logger(app);
+
+  // 暴露给 server.js 挂 errorHandler/notFoundHandler (必须在所有 route 之后)
+  app._mountErrorHandlers = () => {
+    app.use(notFoundHandler);
+    app.use(errorHandler);
+  };
 
   return app;
 }

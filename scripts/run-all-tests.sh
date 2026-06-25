@@ -55,6 +55,8 @@ run "processTreeMindmap"     tests/processTreeMindmap.test.js     ""
 run "scheduler"              tests/scheduler.test.js              ""
 run "recomputeSafetyStock"    tests/recompute-safety-stock.test.js ""
 run "migrate"                  tests/migrate.test.js                  ""
+run "errorResponse"         tests/errorResponse.test.js         ""
+run "sqlInjection"          tests/sqlInjection.test.js          ""
 
 echo "=== 总结: pass=$PASS fail=$FAIL skip=$SKIP ==="
 exit $FAIL
