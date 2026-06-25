@@ -41,7 +41,7 @@ function makeApp(db) {
 }
 
 function mkReqRes(body, opts = {}) {
-  const req = { body, query: opts.query || {}, params: opts.params || {} };
+  const req = { body, query: opts.query || {}, params: opts.params || {}, user: 'user' in opts ? opts.user : { uid: 1, role: 'admin' } };
   let status = 200, json = null;
   const res = { status: (s) => { status = s; return res; }, json: (j) => { json = j; return res; }, _get: () => ({ status, json }) };
   return { req, res, getResult: () => ({ status, json }) };
@@ -241,4 +241,39 @@ test("P2-9-4 units_create: 缺 factor 应 400", () => {
   const { req, res, getResult } = mkReqRes({ material_id: 1, from_unit: "kg", to_unit: "g" });
   ctx.routes["/api/material_units"].handler(req, res);
   assert.equal(getResult().status, 400);
+});
+
+// ---------------- P3-1 ----------------
+
+test("P3-1-1 未登录应 401", () => {
+  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: "receive", quantity: 10, to_location: "A" }, { user: undefined });
+  ctx.routes["/api/material_movements"].handler(req, res);
+  assert.equal(getResult().status, 401);
+});
+
+test("P3-1-2 viewer 调 receive_lot 应 403", () => {
+  const { req, res, getResult } = mkReqRes({ material_id: 1, lot_no: "L-VW-" + Date.now(), quantity: 10 }, { user: { uid: 2, role: "viewer" } });
+  ctx.routes["/api/material_lots/receive"].handler(req, res);
+  assert.equal(getResult().status, 403);
+});
+
+test("P3-1-3 warehouse 调 receive_lot 应 200", () => {
+  const { req, res, getResult } = mkReqRes({ material_id: 1, lot_no: "L-WH-" + Date.now(), quantity: 10, location: "A" }, { user: { uid: 3, role: "warehouse" } });
+  ctx.routes["/api/material_lots/receive"].handler(req, res);
+  const r = getResult();
+  assert.equal(r.status, 200, "status=" + r.status + " err=" + JSON.stringify(r.json));
+});
+
+test("P3-1-4 worker 调 allocate 应 403", () => {
+  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 10 }, { user: { uid: 4, role: "worker" } });
+  ctx.routes["/api/inventory/allocate"].handler(req, res);
+  assert.equal(getResult().status, 403);
+});
+
+test("P3-1-5 planner 调 allocate 应 200", () => {
+  _db.prepare("INSERT OR IGNORE INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 100, 'available')").run();
+  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 10 }, { user: { uid: 5, role: "planner" } });
+  ctx.routes["/api/inventory/allocate"].handler(req, res);
+  const r = getResult();
+  assert.equal(r.status, 200, "status=" + r.status + " err=" + JSON.stringify(r.json));
 });

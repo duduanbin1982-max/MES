@@ -15,6 +15,18 @@ function register(app, db) {
     try { handler(req, res); }
     catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
   };
+  // P3-1 权限守卫: 写端点限制角色, 读端点只要求登录
+  const requireRole = (...allowed) => (req, res) => {
+    if (!req.user) { res.status(401).json({ error: '未登录' }); return true; }
+    if (!allowed.includes(req.user.role)) { res.status(403).json({ error: '权限不足, 需要角色: ' + allowed.join('/') }); return true; }
+    return false;
+  };
+  // 读端点: 只要登录 (any authenticated user)
+  const requireLogin = (req, res) => {
+    if (!req.user) { res.status(401).json({ error: '未登录' }); return true; }
+    return false;
+  };
+
 
   // ============================================================
   // 物料批次
@@ -34,6 +46,7 @@ function register(app, db) {
     // P0-#3 一键入库: 建 lot + 初始 inventory + 写 receive movement, 事务内
   //   后续 P1-#4 采购模块做好后, 收货可带 PO 单号 + 自动写 key_component_prices
   app.post('/api/material_lots/receive', wrap((req, res) => {
+    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
     const { material_id, lot_no, supplier, heat_no, certificate_no, quantity, unit, location, notes } = req.body;
     if (!material_id || !lot_no || !quantity) return res.status(400).json({ error: 'material_id/lot_no/quantity 必填' });
 
@@ -127,6 +140,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
 
   // P0-#2 事务化: movement + inventory.quantity 同步
   app.post('/api/material_movements', wrap((req, res) => {
+    if (requireRole('admin', 'warehouse', 'planner', 'foreman')(req, res)) return;
     const { material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes } = req.body;
     if (!material_lot_id || !movement_type || quantity === undefined) return res.status(400).json({ error: 'material_lot_id/movement_type/quantity 必填' });
     if (!['receive', 'issue', 'return', 'transfer', 'adjust'].includes(movement_type)) return res.status(400).json({ error: 'movement_type 非法' });
@@ -204,6 +218,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
   //   业务: 调度器预测"实际可用库存"时, allocated 也算 available 但要锁定
   //   schema: inventory.status 已有 allocated 字段, 但此前无端点用
   app.post('/api/inventory/allocate', wrap((req, res) => {
+    if (requireRole('admin', 'planner', 'foreman')(req, res)) return;
     const { material_lot_id, work_order_id, quantity } = req.body;
     if (!material_lot_id || !work_order_id || !quantity) return res.status(400).json({ error: 'material_lot_id/work_order_id/quantity 必填' });
     const q = Number(quantity);
@@ -234,6 +249,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
 
   // 释放预留 (allocated -> available)
   app.post('/api/inventory/release', wrap((req, res) => {
+    if (requireRole('admin', 'planner', 'foreman')(req, res)) return;
     const { material_lot_id, work_order_id, quantity } = req.body;
     if (!material_lot_id || !work_order_id || !quantity) return res.status(400).json({ error: 'material_lot_id/work_order_id/quantity 必填' });
     const q = Number(quantity);
@@ -306,6 +322,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
   }));
 
   app.post('/api/material_units', wrap((req, res) => {
+    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
     const { material_id, from_unit, to_unit, factor, notes } = req.body || {};
     if (!material_id || !from_unit || !to_unit || !factor) return res.status(400).json({ error: 'material_id/from_unit/to_unit/factor 必填' });
     if (from_unit === to_unit) return res.status(400).json({ error: 'from_unit 和 to_unit 不能相同' });
@@ -318,6 +335,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
   }));
 
   app.delete('/api/material_units/:id', wrap((req, res) => {
+    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
     const r = run('DELETE FROM material_units WHERE id = ?', req.params.id);
     res.json({ ok: true, changes: r.changes });
   }));
