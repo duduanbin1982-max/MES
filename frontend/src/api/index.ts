@@ -133,6 +133,38 @@ const Api: any = {
   roles: () => api.get('/roles'),
   updateRolePermissions: (code: string, permissions: string[]) => api.put(`/roles/${code}/permissions`, { permissions }),
   auditLogs: (params?: any) => api.get('/audit/logs', { params }),
+  // documents (P0-1: 文档/图纸 PLM)
+  documents: (params?: any) => api.get('/documents', { params }),
+  document: (id: number) => api.get(`/documents/${id}`),
+  documentVersions: (id: number) => api.get(`/documents/${id}/versions`),
+  documentStats: () => api.get('/documents/stats'),
+  // 上传: 后端走 raw body + X-Doc-Meta header 协议, 这里封装成 FormData 风格的 fetch
+  uploadDocument: async (file: File, meta: any) => {
+    const buf = await file.arrayBuffer()
+    const token = localStorage.getItem(ACCESS_KEY) || localStorage.getItem('tbm_token')
+    const r = await fetch('/api/documents', {
+      method: 'POST',
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-Doc-Meta': JSON.stringify(meta),
+        'X-File-Name': encodeURIComponent(file.name),
+        'X-File-Mime': file.type || 'application/octet-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: buf
+    })
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({ error: r.statusText }))
+      throw new Error(err.error || err.message || `HTTP ${r.status}`)
+    }
+    return r.json()
+  },
+  issueDocument: (id: number, issued_to: string) => api.put(`/documents/${id}/issue`, { issued_to }),
+  revokeDocument: (id: number, reason: string) => api.put(`/documents/${id}/revoke`, { reason }),
+  archiveDocument: (id: number) => api.del(`/documents/${id}`),
+  documentDownloadUrl: (id: number) => `/api/documents/${id}/download`,
+  documentPreviewUrl: (id: number) => `/uploads/${id}`,
+
 
   // settings
   settings: {

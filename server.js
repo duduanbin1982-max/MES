@@ -12,6 +12,13 @@ const { authMiddleware } = require('./middleware/auth');
 const { onlyForemanOrAdmin, onlyWelder } = require('./routes/guards');
 
 const app = createApp();
+const express = require('express');
+// P0-文档: 上传走 raw binary, 50MB 限制
+app.use('/api/documents', (req, res, next) => {
+  if (req.method === 'POST') {
+    express.raw({ type: '*/*', limit: '50mb' })(req, res, next);
+  } else next();
+});
 const PORT = 3890;
 
 // P0-1: 启动时加载所有角色 permissions 到内存 (middleware/auth.js 缓存)
@@ -42,6 +49,8 @@ require('./services/delayAlerts').register(app, db);
 require('./services/equipment/scheduler').register(app, db);
 require('./services/materialService').register(app, db);
 require('./services/bomService').register(app, db);
+// P0-文档: 文档/图纸管理
+require('./services/documentService').register(app, db);
 require('./services/purchase').register(app, db);
 require('./services/cost/keyComponentPrices').register(app, db);
 require('./services/cost/rollup/index').register(app, db);
@@ -55,6 +64,9 @@ require('./services/eco').register(app, db);
 require('./services/qcInspection').register(app, db);
 require('./services/systemSettings').register(app, db);
 require('./services/userManagement').register(app, db);
+
+// P0-文档: uploads 静态目录 (受 auth 保护, 仅 GET 可见)
+app.use('/uploads', require('express').static('/home/dubin/factory-mes/data/uploads', { fallthrough: true }));
 
 // P0-3 统一错误响应: notFoundHandler + errorHandler (必须在所有 route 之后)
 app._mountErrorHandlers();
