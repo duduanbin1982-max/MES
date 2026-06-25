@@ -83,12 +83,18 @@ const visibleRoutes = computed(() => {
   const layoutRoute = router.options.routes.find((r: any) => r.children && r.children.length > 0)
   const all = layoutRoute?.children?.filter((r: any) => !r.meta?.hidden) || []
   // P0-1: 按 permission 过滤
-  return all.filter((r: any) => {
+  const result = all.filter((r: any) => {
     const need = PERM_BY_PATH[r.path]
     if (!need) return true   // 未登记的路由 (首页等) 默认可见
     return auth.hasPerm(need)
   })
+  return result
 })
+// DEBUG: 监控可见路由数量
+import { watch } from 'vue'
+watch(visibleRoutes, (v) => {
+  console.log('[Layout] visibleRoutes 更新, count=' + v.length, 'permissions=' + JSON.stringify(auth.permissions), 'role=' + auth.user?.role)
+}, { immediate: true })
 
 const now = ref('')
 let timer: any

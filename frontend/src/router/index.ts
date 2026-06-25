@@ -38,7 +38,8 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('tbm_token')
+  // P0-2: 用 access_token key (兼容旧 tbm_token)
+  const token = localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token')
   if (to.path === '/login') return next()
   if (!token && to.meta?.requiresAuth !== false) {
     return next('/login')
