@@ -235,6 +235,29 @@ function compareVersions(db, instanceId, verA, verB) {
 /**
  * CSV 解析 (简单格式, 含表头)
  */
+// P2 BOM: 把平铺 rows 按 parent_id 拼成树状
+function buildTree(rows) {
+  const map = new Map();
+  const roots = [];
+  rows.forEach(r => map.set(r.id, { ...r, children: [] }));
+  rows.forEach(r => {
+    const node = map.get(r.id);
+    if (r.parent_id && map.has(r.parent_id)) {
+      map.get(r.parent_id).children.push(node);
+    } else {
+      roots.push(node);
+    }
+  });
+  return roots;
+}
+
+// P2 BOM: 4 级层级统计 (文章: 0 总装 / 1 部件 / 2 零件 / 3 毛坯)
+function tierSummary(rows) {
+  const summary = { 0: 0, 1: 0, 2: 0, 3: 0, total: rows.length };
+  rows.forEach(r => { if (summary[r.tier] !== undefined) summary[r.tier]++; });
+  return summary;
+}
+
 function parseCsv(text) {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) throw new Error('CSV 至少 2 行 (表头 + 数据)');
@@ -250,8 +273,61 @@ function parseCsv(text) {
 }
 
 function register(app, db) {
-  // 整树
+  // P2 BOM 4 级拆分法: 按层级/视图过滤
+  //   ?view=tree (默认) → 树状结构, 适合总览
+  //   ?view=flat        → 平铺数组, 配合 ?tier / ?part_id 过滤
+  //   ?tier=0/1/2/3     → 仅返指定层级 (0=总装, 1=部件, 2=零件, 3=毛坯)
+  //   ?part_id=N        → 仅返某部件下的子件 (仅看这个部件装什么)
   app.get('/api/equipment_instances/:id/bom', (req, res) => {
+    const instanceId = req.params.id;
+    const { view = 'tree', tier, part_id } = req.query;
+
+    const allRows = db.prepare(`
+      SELECT b.*, m.material_code, m.material_name, m.unit AS m_unit, m.spec
+      FROM instance_bom b
+      LEFT JOIN materials m ON m.id = b.material_id
+      WHERE b.equipment_instance_id = ?
+      ORDER BY b.tier, b.parent_id, b.id
+    `).all(instanceId);
+
+    const summary = tierSummary(allRows);
+
+    if (view === 'tree') {
+      let rows = allRows;
+      if (part_id) {
+        // 只取某部件子树
+        const ids = new Set([Number(part_id)]);
+        let added = true;
+        while (added) {
+          added = false;
+          for (const r of allRows) {
+            if (r.parent_id && ids.has(r.parent_id) && !ids.has(r.id)) { ids.add(r.id); added = true; }
+          }
+        }
+        rows = allRows.filter(r => ids.has(r.id));
+      }
+      return res.json({ view: 'tree', tier_summary: summary, tree: buildTree(rows), total: rows.length });
+    }
+
+    // view=flat
+    let flat = allRows;
+    if (tier !== undefined) flat = flat.filter(r => r.tier === Number(tier));
+    if (part_id) {
+      const ids = new Set([Number(part_id)]);
+      let added = true;
+      while (added) {
+        added = false;
+        for (const r of allRows) {
+          if (r.parent_id && ids.has(r.parent_id) && !ids.has(r.id)) { ids.add(r.id); added = true; }
+        }
+      }
+      flat = flat.filter(r => ids.has(r.id));
+    }
+    return res.json({ view: 'flat', tier_summary: summary, items: flat, total: flat.length, tier: tier !== undefined ? Number(tier) : null });
+  });
+
+  // P2 BOM: 4 级层级清单 (文章: 部件清单给装配班组, 零件清单给采购, 毛坯清单给生产下料)
+  app.get('/api/equipment_instances/:id/bom/levels', (req, res) => {
     const instanceId = req.params.id;
     const rows = db.prepare(`
       SELECT b.*, m.material_code, m.material_name, m.unit AS m_unit, m.spec
@@ -260,7 +336,9 @@ function register(app, db) {
       WHERE b.equipment_instance_id = ?
       ORDER BY b.tier, b.id
     `).all(instanceId);
-    res.json({ items: rows, total: rows.length });
+    const levels = { 0: [], 1: [], 2: [], 3: [] };
+    rows.forEach(r => { if (levels[r.tier]) levels[r.tier].push(r); });
+    res.json({ levels, summary: tierSummary(rows) });
   });
 
   // 成本汇总

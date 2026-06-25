@@ -224,3 +224,94 @@ function mkRes() {
   }
   return res
 }
+
+// ============== P2 BOM 4 级拆分法测试 ==============
+
+test('P2.BOM.11 GET /bom 默认返树状 + tier_summary', () => {
+  const db = freshDb()
+  const { find } = mkApp(db)
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, tier, quantity, unit, category) VALUES (1, 1, 0, 1, '台', '成品')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (2, 1, 1, 1, 10, 1, '套', '自制部件')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (3, 1, 2, 2, 11, 5, '件', '标准紧固件')").run()
+  const handler = find('GET', '/api/equipment_instances/:id/bom')
+  const req = { params: { id: 1 }, query: {} }
+  const res = mkRes()
+  handler(req, res, () => {})
+  const j = res._j.json
+  assert.equal(j.view, 'tree')
+  assert.deepEqual(j.tier_summary, { 0: 1, 1: 1, 2: 1, 3: 0, total: 3 })
+  assert.equal(j.tree.length, 1, '应只有 1 个根 (tier 0)')
+  assert.equal(j.tree[0].id, 1)
+  assert.equal(j.tree[0].children.length, 1, '根下挂 1 个部件')
+  assert.equal(j.tree[0].children[0].id, 2)
+  assert.equal(j.tree[0].children[0].children.length, 1, '部件下挂 1 个零件')
+  assert.equal(j.tree[0].children[0].children[0].id, 3)
+})
+
+test('P2.BOM.12 GET /bom?view=flat 返平铺', () => {
+  const db = freshDb()
+  const { find } = mkApp(db)
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, tier, quantity, unit, category) VALUES (1, 1, 0, 1, '台', '成品')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (2, 1, 1, 1, 10, 1, '套', '自制部件')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (3, 1, 2, 2, 11, 5, '件', '标准紧固件')").run()
+  const handler = find('GET', '/api/equipment_instances/:id/bom')
+  const res = mkRes()
+  handler({ params: { id: 1 }, query: { view: 'flat' } }, res, () => {})
+  const j = res._j.json
+  assert.equal(j.view, 'flat')
+  assert.equal(j.total, 3)
+  assert.equal(j.items.length, 3)
+})
+
+test('P2.BOM.13 GET /bom?view=flat&tier=2 只返零件清单 (给采购)', () => {
+  const db = freshDb()
+  const { find } = mkApp(db)
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, tier, quantity, unit, category) VALUES (1, 1, 0, 1, '台', '成品')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (2, 1, 1, 1, 10, 1, '套', '自制部件')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (3, 1, 2, 2, 11, 5, '件', '标准紧固件')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (4, 1, 2, 2, 12, 3, '件', '外购成品')").run()
+  const handler = find('GET', '/api/equipment_instances/:id/bom')
+  const res = mkRes()
+  handler({ params: { id: 1 }, query: { view: 'flat', tier: 2 } }, res, () => {})
+  const j = res._j.json
+  assert.equal(j.total, 2, 'tier=2 应该有 2 个零件')
+  assert.ok(j.items.every(it => it.tier === 2))
+  assert.equal(j.tier, 2)
+})
+
+test('P2.BOM.14 GET /bom?part_id=N 只看某部件下的子件', () => {
+  const db = freshDb()
+  const { find } = mkApp(db)
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, tier, quantity, unit, category) VALUES (1, 1, 0, 1, '台', '成品')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (2, 1, 1, 1, 10, 1, '套', '自制部件-A')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (3, 1, 2, 2, 11, 5, '件', '标准紧固件')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (4, 1, 1, 1, 12, 1, '套', '自制部件-B')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (5, 1, 4, 2, 13, 2, '件', '外购成品')").run()
+  const handler = find('GET', '/api/equipment_instances/:id/bom')
+  const res = mkRes()
+  // 只看部件-A (id=2) 下的子件
+  handler({ params: { id: 1 }, query: { part_id: 2, view: 'flat' } }, res, () => {})
+  const j = res._j.json
+  assert.equal(j.total, 2, '部件-A 自己和它下面的 1 个零件')
+  const ids = j.items.map(it => it.id).sort()
+  assert.deepEqual(ids, [2, 3])
+})
+
+test('P2.BOM.15 GET /bom/levels 4 级一次性出齐', () => {
+  const db = freshDb()
+  const { find } = mkApp(db)
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, tier, quantity, unit, category) VALUES (1, 1, 0, 1, '台', '成品')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (2, 1, 1, 1, 10, 1, '套', '部件A')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (3, 1, 1, 1, 11, 1, '套', '部件B')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (4, 1, 2, 2, 12, 3, '件', '零件X')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, parent_id, tier, material_id, quantity, unit, category) VALUES (5, 1, 4, 3, 13, 1, '米', '毛坯')").run()
+  const handler = find('GET', '/api/equipment_instances/:id/bom/levels')
+  const res = mkRes()
+  handler({ params: { id: 1 }, query: {} }, res, () => {})
+  const j = res._j.json
+  assert.equal(j.levels[0].length, 1, '总装 1 个')
+  assert.equal(j.levels[1].length, 2, '部件 2 个 (A, B)')
+  assert.equal(j.levels[2].length, 1, '零件 1 个 (X)')
+  assert.equal(j.levels[3].length, 1, '毛坯 1 个')
+  assert.equal(j.summary.total, 5)
+})
