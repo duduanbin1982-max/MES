@@ -3,10 +3,17 @@
 // 2026-06-23 settings 化：加 requirePermission(permCode) 守卫
 //        适配 roles 表 (id, role_code, role_name, permissions JSON, description)
 //        permissions 数组支持 'project:read' / 'project:*' / '*' (admin)
+// 2026-06-25 P0-1 RBAC 升级:
+//   - 启动时一次性缓存所有 role 的 permissions 到内存 (loadRolePermissions)
+//   - 登录时把 permissions 塞进 token, req.user.permissions 直接可用
+//   - 兜底: 旧 token (无 permissions) 走 DB 查一次, 缓存到 req.user
+//   - requirePermission 改用 ApiError (P0-3 统一错误)
+//   - 兼容 requireRole (旧业务还在用)
 
 const crypto = require('crypto');
 const rateLimit = require('express-rate-limit');
-const path = require('path');
+const { ApiError } = require('../app/errors');
+const { DEFAULT_ROLE_PERMISSIONS, hasPermission } = require('../app/permissions');
 
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET || SECRET.length < 32) {
@@ -17,8 +24,38 @@ const JWT_EXPIRE_HOURS = parseInt(process.env.JWT_EXPIRE_HOURS || '24', 10);
 const LOGIN_RATE_LIMIT_WINDOW_MS = parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || '60000', 10);
 const LOGIN_RATE_LIMIT_MAX = parseInt(process.env.LOGIN_RATE_LIMIT_MAX || '10', 10);
 
-function makeToken(uid, role) {
-  const payload = JSON.stringify({ uid, role, exp: Date.now() + JWT_EXPIRE_HOURS * 3600 * 1000 });
+// P0-1: 内存缓存 role permissions
+//   Map<role_code, permissions_array>
+const ROLE_PERMS_CACHE = new Map();
+
+function loadRolePermissions(db) {
+  if (!db) return;
+  try {
+    const rows = db.prepare("SELECT role_code, permissions FROM roles").all();
+    ROLE_PERMS_CACHE.clear();
+    for (const r of rows) {
+      let perms = [];
+      try { perms = JSON.parse(r.permissions || '[]'); } catch (_e) { perms = []; }
+      ROLE_PERMS_CACHE.set(r.role_code, perms);
+    }
+    console.log(`[auth] 已加载 ${ROLE_PERMS_CACHE.size} 个角色权限`);
+  } catch (e) {
+    console.error('[auth] 加载角色权限失败:', e.message);
+  }
+}
+
+function getRolePermissions(roleCode) {
+  if (ROLE_PERMS_CACHE.has(roleCode)) {
+    const perms = ROLE_PERMS_CACHE.get(roleCode);
+    // DB 存了非空数组 → 用 DB 的; DB 是空/[] → 走 default
+    if (Array.isArray(perms) && perms.length > 0) return perms;
+  }
+  // 兜底: 旧角色或 DB 空 → DEFAULT_ROLE_PERMISSIONS
+  return DEFAULT_ROLE_PERMISSIONS[roleCode] || [];
+}
+
+function makeToken(uid, role, extra = {}) {
+  const payload = JSON.stringify({ uid, role, ...extra, exp: Date.now() + JWT_EXPIRE_HOURS * 3600 * 1000 });
   const b64 = Buffer.from(payload).toString('base64url');
   const sig = crypto.createHmac('sha256', SECRET).update(b64).digest('base64url');
   return b64 + '.' + sig;
@@ -44,11 +81,15 @@ function authMiddleware(req, res, next) {
   const token = auth.replace(/^Bearer /, '');
   const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: '未登录或 token 无效' });
+  // P0-1: 从 token 取 permissions; 旧 token 没塞, 兜底用 DEFAULT_ROLE_PERMISSIONS
+  if (!Array.isArray(payload.permissions)) {
+    payload.permissions = getRolePermissions(payload.role);
+  }
   req.user = payload;
   next();
 }
 
-// 角色字符串守卫（兼容旧代码，简单限制）
+// 兼容旧业务: 简单 role 字符串守卫
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: '未登录' });
@@ -59,24 +100,18 @@ function requireRole(...roles) {
   };
 }
 
-// 权限码守卫（细粒度，按 roles.permissions JSON 数组判断）
-// permCode 例: 'project:read' / 'project:write' / 'settings:write'
-// 用户的 permissions 数组里匹配 'project:*' / '*' / permCode 之一即通过
+// P0-1 升级: 细粒度 permission 守卫, 用 ApiError (P0-3 统一错误格式)
 function requirePermission(...permCodes) {
   return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: '未登录' });
-    // 延迟 require db（避免循环依赖）
-    const db = require('../db');
-    const row = db.prepare('SELECT permissions FROM roles r JOIN users u ON u.role_code = r.role_code WHERE u.id = ?').get(req.user.uid);
-    if (!row) return res.status(403).json({ error: '角色未配置: ' + (req.user.role || '-') });
-    let perms = [];
-    try { perms = JSON.parse(row.permissions || '[]'); } catch (_e) { perms = []; }
-    const ok = permCodes.some(code =>
-      perms.includes('*') || perms.includes(code) ||
-      perms.some(p => p.endsWith(':*') && code.startsWith(p.slice(0, -1)))
-    );
+    if (!req.user) return next(ApiError.unauthorized('未登录'));
+    const userPerms = req.user.permissions || getRolePermissions(req.user.role);
+    const ok = permCodes.some(code => hasPermission(userPerms, code));
     if (!ok) {
-      return res.status(403).json({ error: '权限不足, 需要: ' + permCodes.join(' / ') });
+      return next(ApiError.forbidden('权限不足, 需要: ' + permCodes.join(' / '), {
+        user: req.user.role,
+        have: userPerms.filter(p => p !== '*').slice(0, 10),
+        need: permCodes,
+      }));
     }
     next();
   };
@@ -90,4 +125,7 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-module.exports = { authMiddleware, loginLimiter, requireRole, requirePermission, makeToken, verifyToken };
+module.exports = {
+  authMiddleware, loginLimiter, requireRole, requirePermission,
+  makeToken, verifyToken, loadRolePermissions, getRolePermissions,
+};

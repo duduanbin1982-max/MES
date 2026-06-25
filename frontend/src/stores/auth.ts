@@ -8,6 +8,21 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const role = computed(() => user.value?.role || '')
+  // P0-1: permissions 数组持久化, 启动恢复
+  const permissions = computed<string[]>(() => user.value?.permissions || [])
+
+  // P0-1: 检查是否有某 permission
+  //  - '*' 拥有所有
+  //  - 'material:write' 精确匹配
+  //  - 'material:*' 资源级通配
+  const hasPerm = (code: string): boolean => {
+    const perms = permissions.value
+    if (perms.includes('*')) return true
+    if (perms.includes(code)) return true
+    return perms.some(p => p.endsWith(':*') && code.startsWith(p.slice(0, -1)))
+  }
+  // 多个 permission 任一满足即可
+  const hasAnyPerm = (...codes: string[]) => codes.some(hasPerm)
 
   const login = async (username: string, password: string) => {
     const r: any = await api.post('/auth/login', { username, password })
@@ -35,5 +50,5 @@ export const useAuthStore = defineStore('auth', () => {
   // 启动时恢复
   restore()
 
-  return { token, user, isLoggedIn, role, login, logout, restore }
+  return { token, user, isLoggedIn, role, permissions, hasPerm, hasAnyPerm, login, logout, restore }
 })

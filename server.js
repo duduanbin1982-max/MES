@@ -14,6 +14,10 @@ const { onlyForemanOrAdmin, onlyWelder } = require('./routes/guards');
 const app = createApp();
 const PORT = 3890;
 
+// P0-1: 启动时加载所有角色 permissions 到内存 (middleware/auth.js 缓存)
+const { loadRolePermissions } = require('./middleware/auth');
+loadRolePermissions(db);
+
 // 根路由 + favicon + SPA fallback (无需 auth)
 require('./routes/root').register(app);
 
@@ -22,6 +26,8 @@ app.use('/api', authMiddleware);
 require('./routes/auth').register(app, db);
 require('./routes/health').register(app, db);
 require('./routes/settings').register(app);
+// P0-1: 角色管理 (admin only)
+require('./routes/roles').register(app, db);
 
 // 实例重型路由 (16 条)
 require('./routes/instance').register(app, db);

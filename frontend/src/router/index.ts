@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const routes = [
   {
@@ -17,11 +18,11 @@ const routes = [
       { path: '/instances/:id', name: 'instance-detail', component: () => import('../views/EquipmentInstanceDetail.vue'), meta: { title: '实例详情', hidden: true } },
       { path: '/materials', name: 'materials', component: () => import('../views/Materials.vue'), meta: { title: '物料管理', icon: 'Goods' } },
       { path: '/reports', name: 'reports', component: () => import('../views/Reports.vue'), meta: { title: '报表中心', icon: 'DataLine' } },
-      { path: '/eco', name: 'eco', component: () => import('../views/Eco.vue'), meta: { title: '设计变更', icon: 'Refresh' } },
+      { path: '/eco', name: 'eco', component: () => import('../views/Eco.vue'), meta: { requires: 'settings:read', title: '设计变更', icon: 'Refresh' } },
       { path: '/gantt', name: 'gantt', component: () => import('../views/Gantt.vue'), meta: { title: 'gantt', icon: 'Calendar' } },
       { path: '/multi-schedule', name: 'multi-schedule', component: () => import('../views/MultiSchedule.vue'), meta: { title: '多项目排程', icon: 'Connection' } },
       { path: '/oee', name: 'oee', component: () => import('../views/OEE.vue'), meta: { title: 'OEE', icon: 'Cpu' } },
-      { path: '/settings', name: 'settings', component: () => import('../views/Settings.vue'), meta: { title: '系统设置', icon: 'Setting' } },
+      { path: '/settings', name: 'settings', component: () => import('../views/Settings.vue'), meta: { requires: 'settings:read', title: '系统设置', icon: 'Setting' } },
       { path: '/inventory', name: 'inventory', component: () => import('../views/Inventory.vue'), meta: { title: '库存管理', icon: 'Box' } },
       { path: '/quality', name: 'quality', component: () => import('../views/Quality.vue'), meta: { title: '质检管理', icon: 'CircleCheck' } },
       { path: '/schedule', name: 'schedule', component: () => import('../views/Schedule.vue'), meta: { title: '项目排程', icon: 'Calendar' } },
@@ -47,6 +48,14 @@ router.beforeEach((to, from, next) => {
   if (to.path === '/login') return next()
   if (!token && to.meta?.requiresAuth !== false) {
     return next('/login')
+  }
+  // P0-1: permission 守卫 (meta.requires 任一满足)
+  if (to.meta?.requires) {
+    const auth = useAuthStore()
+    const needs = Array.isArray(to.meta.requires) ? to.meta.requires : [to.meta.requires]
+    if (!auth.hasAnyPerm(...needs)) {
+      return next('/')  // 无权访问 → 回首页
+    }
   }
   next()
 })

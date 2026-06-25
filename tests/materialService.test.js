@@ -43,7 +43,7 @@ function makeApp(db) {
 }
 
 function mkReqRes(body, opts = {}) {
-  const req = { body, query: opts.query || {}, params: opts.params || {}, user: 'user' in opts ? opts.user : { uid: 1, role: 'admin' } };
+  const req = { body, query: opts.query || {}, params: opts.params || {}, user: 'user' in opts ? opts.user : { uid: 1, role: 'admin', permissions: ['*'] } };
   let status = 200, json = null;
   const res = { status: (s) => { status = s; return res; }, json: (j) => { json = j; return res; }, _get: () => ({ status, json }) };
   return { req, res, getResult: () => ({ status, json }) };
@@ -260,7 +260,7 @@ test("P3-1-2 viewer 调 receive_lot 应 403", () => {
 });
 
 test("P3-1-3 warehouse 调 receive_lot 应 200", () => {
-  const { req, res, getResult } = mkReqRes({ material_id: 1, lot_no: "L-WH-" + Date.now(), quantity: 10, location: "A" }, { user: { uid: 3, role: "warehouse" } });
+  const { req, res, getResult } = mkReqRes({ material_id: 1, lot_no: "L-WH-" + Date.now(), quantity: 10, location: "A" }, { user: { uid: 3, role: "warehouse", permissions: ["material:write"] } });
   ctx.routes['POST /api/material_lots/receive'].handler(req, res);
   const r = getResult();
   assert.equal(r.status, 200, "status=" + r.status + " err=" + JSON.stringify(r.json));
@@ -274,7 +274,7 @@ test("P3-1-4 worker 调 allocate 应 403", () => {
 
 test("P3-1-5 planner 调 allocate 应 200", () => {
   _db.prepare("INSERT OR IGNORE INTO inventory (material_lot_id, location, quantity, status) VALUES (1, 'A', 100, 'available')").run();
-  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 10 }, { user: { uid: 5, role: "planner" } });
+  const { req, res, getResult } = mkReqRes({ material_lot_id: 1, work_order_id: 1, quantity: 10 }, { user: { uid: 5, role: "planner", permissions: ["material:admin"] } });
   ctx.routes['POST /api/inventory/allocate'].handler(req, res);
   const r = getResult();
   assert.equal(r.status, 200, "status=" + r.status + " err=" + JSON.stringify(r.json));

@@ -4,9 +4,9 @@
       <div class="page-title">📦 库存管理</div>
       <el-button @click="load">刷新</el-button>
       <el-button type="success" @click="dlgReceive = true">📥 一键入库</el-button>
-      <el-button type="warning" @click="dlgAllocate = true">🔁 调拨/预留</el-button>
-      <el-button type="info" @click="dlgRelease = true">🔓 释放预留</el-button>
-      <el-button type="primary" @click="dlgBatch = true">⚡ 批量入库</el-button>
+      <el-button v-if="auth.hasPerm('material:admin')" type="warning" @click="dlgAllocate = true">🔁 调拨/预留</el-button>
+      <el-button v-if="auth.hasPerm('material:admin')" type="info" @click="dlgRelease = true">🔓 释放预留</el-button>
+      <el-button v-if="auth.hasPerm('material:write')" type="primary" @click="dlgBatch = true">⚡ 批量入库</el-button>
     </div>
     <el-alert v-if="alerts.length" type="error" :closable="false" style="margin-bottom: 12px" show-icon>
       ⚠ {{ alerts.length }} 项物料低于安全库存: {{ alerts.slice(0, 3).map(a => a.material_code).join('、') }}{{ alerts.length > 3 ? ` 等 ${alerts.length} 项` : '' }}
@@ -30,8 +30,8 @@
             <el-table-column label="操作" width="220" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" link type="primary" @click="openLotDetail(row)">详情</el-button>
-                <el-button size="small" link type="warning" @click="openSplit(row)" :disabled="!row.quantity || row.quantity <= 0">拆批</el-button>
-                <el-button size="small" link type="success" @click="openMerge(row)">合批</el-button>
+                <el-button v-if="auth.hasPerm('material:write')" size="small" link type="warning" @click="openSplit(row)" :disabled="!row.quantity || row.quantity <= 0">拆批</el-button>
+                <el-button v-if="auth.hasPerm('material:write')" size="small" link type="success" @click="openMerge(row)">合批</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -303,6 +303,7 @@
 import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
+import { useAuthStore } from '../stores/auth'
 
 const tab = ref('inv')
 const inv = ref<any[]>([])
@@ -429,6 +430,7 @@ const movStatRows = computed(() => {
   }))
 })
 
+const auth = useAuthStore()
 const fBatch = reactive({ atomic: false, rows: [] as any[], result: null as any })
 const addBatchRow = () => { fBatch.rows.push({ material_lot_id: undefined, movement_type: 'receive', quantity: 1, to_location: '主仓库-A-01' }) }
 const clearBatchRows = () => { fBatch.rows.splice(0, fBatch.rows.length); addBatchRow() }

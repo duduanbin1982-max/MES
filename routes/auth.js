@@ -4,11 +4,10 @@
 //   POST /api/auth/login
 //   GET  /api/auth/me
 //   POST /api/auth/logout
-//   onlyForemanOrAdmin / onlyWelder (供 workOrderService 注入)
-// Author: 三狗子 | Date: 2026-06-24
+// Author: 三狗子 | Date: 2026-06-25
 
 const bcrypt = require('bcryptjs');
-const { makeToken, loginLimiter } = require('../middleware/auth');
+const { makeToken, loginLimiter, getRolePermissions } = require('../middleware/auth');
 
 function register(app, db) {
   const { get, run } = require('./_helpers')(db);
@@ -35,10 +34,16 @@ function register(app, db) {
     if (!valid) return res.status(401).json({ error: '密码错误' });
 
     run("UPDATE users SET last_login = datetime('now') WHERE id = ?", user.id);
-    const token = makeToken(user.id, user.role_code);
+    // P0-1: token 塞入 permissions, 前端不需再查
+    const permissions = getRolePermissions(user.role_code);
+    const token = makeToken(user.id, user.role_code, { permissions });
     res.json({
       token,
-      user: { id: user.id, username: user.username, full_name: user.full_name, role: user.role_code, role_name: user.role_name }
+      user: {
+        id: user.id, username: user.username, full_name: user.full_name,
+        role: user.role_code, role_name: user.role_name,
+        permissions,  // 显式返回, 前端 store 直接用
+      },
     });
   });
 
@@ -46,7 +51,12 @@ function register(app, db) {
     if (!req.user) return res.status(401).json({ error: '未登录' });
     const user = get('SELECT u.id, u.username, u.full_name, u.role_id, r.role_code, r.role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?', req.user.uid);
     if (!user) return res.status(404).json({ error: 'user not found' });
-    res.json({ id: user.id, username: user.username, full_name: user.full_name, role: user.role_code, role_name: user.role_name });
+    // P0-1: 返回当前 token 的 permissions, 前端刷新页面后保持一致
+    res.json({
+      id: user.id, username: user.username, full_name: user.full_name,
+      role: user.role_code, role_name: user.role_name,
+      permissions: req.user.permissions || getRolePermissions(user.role_code),
+    });
   });
 
   app.post('/api/auth/logout', (req, res) => res.json({ message: '已登出 (前端清除 token 即可)' }));

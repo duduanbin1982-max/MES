@@ -58,28 +58,36 @@ import { ElMessage } from 'element-plus'
 const router = useRouter()
 const auth = useAuthStore()
 const onCmd = (cmd: string) => { if (cmd === 'logout') { auth.logout(); ElMessage.success('已登出'); router.push('/login') } }
-// 根据角色过滤菜单
-const role = computed(() => auth.user?.role || '')
-
-// 每个角色能看的菜单 (空数组 = 全部)
-const roleAccess: any = {
-  admin: [],                                          // 管理员全看
-  foreman: [],                                        // 车间主任全看
-  engineer: [],                                       // 工程师全看
-  worker: ['/scan'],                                  // 工人只看扫码
-  qc: ['/quality', '/work-orders', '/scan'],          // 质检员
-  welder: ['/scan', '/work-orders'],                  // 焊工
-  sales: ['/dashboard', '/instances']                 // 销售
+// frontend/src/views/Layout.vue (P0-1 改用 permission 过滤菜单)
+// 菜单可见性 = 该路由对应资源有 read 权限即可
+// 例如 /materials 需 material:read, /work-orders 需 work_order:read
+const PERM_BY_PATH: Record<string, string> = {
+  '/dashboard': 'report:read',
+  '/instances': 'equipment:read',
+  '/materials': 'material:read',
+  '/reports': 'report:read',
+  '/eco': 'settings:read',
+  '/gantt': 'work_order:read',
+  '/multi-schedule': 'work_order:read',
+  '/oee': 'equipment:read',
+  '/settings': 'settings:read',
+  '/inventory': 'material:read',
+  '/quality': 'quality:read',
+  '/schedule': 'work_order:read',
+  '/process-tree': 'process:read',
+  '/work-orders': 'work_order:read',
+  '/field-service': 'equipment:read',
 }
 
 const visibleRoutes = computed(() => {
-  // routes[0] = /login, routes[1] = / (Layout), routes[2] = /scan — 找有 children 的根路由
   const layoutRoute = router.options.routes.find((r: any) => r.children && r.children.length > 0)
   const all = layoutRoute?.children?.filter((r: any) => !r.meta?.hidden) || []
-  const allowed = roleAccess[role.value]
-  // undefined (未登录) 或空数组 (admin/foreman/engineer) → 全显示
-  if (allowed === undefined || allowed.length === 0) return all
-  return all.filter((r: any) => allowed.includes(r.path))
+  // P0-1: 按 permission 过滤
+  return all.filter((r: any) => {
+    const need = PERM_BY_PATH[r.path]
+    if (!need) return true   // 未登记的路由 (首页等) 默认可见
+    return auth.hasPerm(need)
+  })
 })
 
 const now = ref('')

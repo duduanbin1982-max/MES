@@ -26,6 +26,15 @@ function register(app, db) {
     if (!req.user) { res.status(401).json({ error: '未登录' }); return true; }
     return false;
   };
+  // P0-1 细粒度 permission 守卫 (高阶: 调用后 if (true) return 跳出)
+  const requirePermission = (...permCodes) => (req, res) => {
+    if (!req.user) { res.status(401).json({ error: '未登录' }); return true; }
+    const userPerms = req.user.permissions || [];
+    const ok = permCodes.some(code => userPerms.includes('*') || userPerms.includes(code) ||
+      userPerms.some(p => p.endsWith(':*') && code.startsWith(p.slice(0, -1))));
+    if (!ok) { res.status(403).json({ error: '权限不足, 需要: ' + permCodes.join(' / ') }); return true; }
+    return false;
+  };
 
 
   // ============================================================
@@ -63,7 +72,7 @@ function register(app, db) {
   //   后续 P1-#4 采购模块做好后, 收货可带 PO 单号 + 自动写 key_component_prices
   // P3-5 拆批: 从源 lot 拆出 quantity 到新 lot (新 lot_no 必带), 同步 inventory (源 -qty, 新 +qty)
   app.post('/api/material_lots/:id/split', wrap((req, res) => {
-    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
+    if (requirePermission('material:write')(req, res)) return;
     const srcId = parseInt(req.params.id);
     if (!srcId) return res.status(400).json({ error: 'id 非法' });
     const { quantity, new_lot_no, location, notes } = req.body;
@@ -99,7 +108,7 @@ function register(app, db) {
 
   // P3-6 合批: 把多个源 lot 合并到目标 lot, 库存累加, 写 movement
   app.post('/api/material_lots/:id/merge', wrap((req, res) => {
-    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
+    if (requirePermission('material:write')(req, res)) return;
     const dstId = parseInt(req.params.id);
     if (!dstId) return res.status(400).json({ error: 'id 非法' });
     const { source_lot_ids, location, notes } = req.body;
@@ -137,7 +146,7 @@ function register(app, db) {
   }));
 
   app.post('/api/material_lots/receive', wrap((req, res) => {
-    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
+    if (requirePermission('material:write')(req, res)) return;
     const { material_id, lot_no, supplier, heat_no, certificate_no, quantity, unit, location, notes } = req.body;
     if (!material_id || !lot_no || !quantity) return res.status(400).json({ error: 'material_id/lot_no/quantity 必填' });
 
@@ -297,7 +306,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
   };
 
   app.post('/api/material_movements', wrap((req, res) => {
-    if (requireRole('admin', 'warehouse', 'planner', 'foreman')(req, res)) return;
+    if (requirePermission('material:write')(req, res)) return;
     try {
       const result = db.transaction(() => _applyMovement(req.body))();
       res.json(result);
@@ -308,7 +317,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
 
   // P3-3 批量入库: atomic=true 全成功或全回滚, atomic=false 部分成功
   app.post('/api/material_movements/batch', wrap((req, res) => {
-    if (requireRole('admin', 'warehouse', 'planner', 'foreman')(req, res)) return;
+    if (requirePermission('material:write')(req, res)) return;
     const { movements, atomic } = req.body;
     if (!Array.isArray(movements) || movements.length === 0) return res.status(400).json({ error: 'movements 数组必填, 不能为空' });
     if (movements.length > 500) return res.status(400).json({ error: 'movements 单批上限 500 条' });
@@ -339,7 +348,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
   //   业务: 调度器预测"实际可用库存"时, allocated 也算 available 但要锁定
   //   schema: inventory.status 已有 allocated 字段, 但此前无端点用
   app.post('/api/inventory/allocate', wrap((req, res) => {
-    if (requireRole('admin', 'planner', 'foreman')(req, res)) return;
+    if (requirePermission('material:admin')(req, res)) return;
     const { material_lot_id, work_order_id, quantity } = req.body;
     if (!material_lot_id || !work_order_id || !quantity) return res.status(400).json({ error: 'material_lot_id/work_order_id/quantity 必填' });
     const q = Number(quantity);
@@ -370,7 +379,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
 
   // 释放预留 (allocated -> available)
   app.post('/api/inventory/release', wrap((req, res) => {
-    if (requireRole('admin', 'planner', 'foreman')(req, res)) return;
+    if (requirePermission('material:admin')(req, res)) return;
     const { material_lot_id, work_order_id, quantity } = req.body;
     if (!material_lot_id || !work_order_id || !quantity) return res.status(400).json({ error: 'material_lot_id/work_order_id/quantity 必填' });
     const q = Number(quantity);
@@ -443,7 +452,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
   }));
 
   app.post('/api/material_units', wrap((req, res) => {
-    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
+    if (requirePermission('material:write')(req, res)) return;
     const { material_id, from_unit, to_unit, factor, notes } = req.body || {};
     if (!material_id || !from_unit || !to_unit || !factor) return res.status(400).json({ error: 'material_id/from_unit/to_unit/factor 必填' });
     if (from_unit === to_unit) return res.status(400).json({ error: 'from_unit 和 to_unit 不能相同' });
@@ -456,7 +465,7 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
   }));
 
   app.delete('/api/material_units/:id', wrap((req, res) => {
-    if (requireRole('admin', 'warehouse', 'planner')(req, res)) return;
+    if (requirePermission('material:write')(req, res)) return;
     const r = run('DELETE FROM material_units WHERE id = ?', req.params.id);
     res.json({ ok: true, changes: r.changes });
   }));
