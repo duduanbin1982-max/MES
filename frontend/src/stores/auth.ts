@@ -29,7 +29,11 @@ export const useAuthStore = defineStore('auth', () => {
   const hasAnyPerm = (...codes: string[]) => codes.some(hasPerm)
 
   // P0-2: 登录 (api.login 内部已写 localStorage)
+  //   关键: 如果启动时的 restore() 还在跑 (带旧 token 拉 /me),
+  //   要先等它结束, 否则会 race condition 覆盖新 user
+  const _restorePromise: { value: Promise<void> | null } = { value: null }
   const login = async (username: string, password: string) => {
+    if (_restorePromise.value) { await _restorePromise.value }
     const r: any = await api.login(username, password)
     token.value = r.access_token
     refreshToken.value = r.refresh_token
@@ -62,8 +66,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // 启动时恢复
-  restore()
+  // 启动时恢复 (暴露 promise 给 login 等待)
+  _restorePromise.value = restore()
 
   return { token, refreshToken, user, isLoggedIn, role, permissions, hasPerm, hasAnyPerm, login, logout, restore }
 })

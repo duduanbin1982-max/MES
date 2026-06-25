@@ -47,10 +47,19 @@ const login = async () => {
   loading.value = true
   try {
     await auth.login(form.username, form.password)
-    ElMessage.success(`欢迎, ${auth.user?.full_name}!`)
-    router.push('/dashboard')
+    ElMessage.success(`欢迎, ${auth.user?.full_name || form.username}!`)
+    // 跳主页: 优先 /dashboard, 失败兜底 / (让 Layout 加载, 子路由会自己重定向)
+    try {
+      await router.push('/dashboard')
+      console.log('[login] 跳 /dashboard OK')
+    } catch (e) {
+      console.warn('[login] /dashboard 跳失败, 兜底 /', e)
+      await router.push('/')
+    }
   } catch (e: any) {
-    ElMessage.error(e.message || '登录失败')
+    console.error('[login] 失败:', e)
+    const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || '登录失败'
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }
