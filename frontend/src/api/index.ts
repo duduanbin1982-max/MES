@@ -58,6 +58,11 @@ const Api: any = {
   allocate: (data: any) => api.post('/inventory/allocate', data),
   release: (data: any) => api.post('/inventory/release', data),
   lotTrace: (params?: any) => api.get('/inventory/lot_trace', { params }),
+  materialMovement: (id: number) => api.get(`/material_movements/${id}`),
+  materialLot: (id: number) => api.get(`/material_lots/${id}`),
+  splitLot: (id: number, data: any) => api.post(`/material_lots/${id}/split`, data),
+  mergeLot: (id: number, data: any) => api.post(`/material_lots/${id}/merge`, data),
+  batchMovements: (movements: any[], atomic = false) => api.post('/material_movements/batch', { movements, atomic }),
   // purchase
   suppliers: () => api.get('/suppliers'),
   purchaseOrders: (params?: any) => api.get('/purchase_orders', { params }),
