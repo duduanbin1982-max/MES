@@ -77,6 +77,7 @@ const PERM_BY_PATH: Record<string, string> = {
   '/work-orders': 'work_order:read',
   '/field-service': 'equipment:read',
   '/audit': 'audit:read',
+  '/bom': 'equipment:read',
 }
 
 const visibleRoutes = computed(() => {

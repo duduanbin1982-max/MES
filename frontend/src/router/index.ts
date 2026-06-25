@@ -29,7 +29,8 @@ const routes = [
       { path: '/process-tree', name: 'process-tree', component: () => import('../views/ProcessTree.vue'), meta: { title: '工艺树', icon: 'Share' } },
       { path: '/work-orders', name: 'work-orders', component: () => import('../views/WorkOrders.vue'), meta: { title: '工单管理', icon: 'Document' } },
       { path: '/field-service', name: 'field-service', component: () => import('../views/FieldService.vue'), meta: { title: '现场服务', icon: 'Tools' } },
-      { path: '/audit', name: 'audit', component: () => import('../views/AuditLogs.vue'), meta: { title: '审计日志', icon: 'DocumentChecked' } }
+      { path: '/audit', name: 'audit', component: () => import('../views/AuditLogs.vue'), meta: { title: '审计日志', icon: 'DocumentChecked' } },
+      { path: '/bom', name: 'bom', component: () => import('../views/BomManagement.vue'), meta: { title: 'BOM 管理', icon: 'SetUp', requires: 'equipment:read' } }
     ]
   },
   {
