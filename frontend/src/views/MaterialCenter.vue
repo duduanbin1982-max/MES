@@ -72,7 +72,11 @@
             <el-table-column prop="risk_level" label="风险" width="100" />
           </el-table>
         </el-card>
-      </el-tab-pane>      <el-tab-pane label="🗄️ 库存清单" name="inv">
+      </el-tab-pane>      <el-tab-pane :name="'inv'">
+        <template #label>
+          <span>🗄️ 库存清单</span>
+          <el-badge v-if="alerts.length" :value="alerts.length" type="danger" :max="99" style="margin-left: 6px" />
+        </template>
         <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center">
           <el-input v-model="filter" placeholder="搜索物料/批次/位置" size="small" style="width: 300px" clearable />
           <el-button type="success" size="small" @click="dlgReceive = true">📥 一键入库</el-button>
