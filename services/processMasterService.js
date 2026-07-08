@@ -16,14 +16,14 @@ const DEFAULT_POSITIONS = [
 ];
 
 const DEFAULT_OPERATIONS = [
-  { operation_code: "cutting", operation_name: "下料", operation_type: "make", category: "fabrication", default_station_type: "cutting", required_skill: "cutting", required_position_code: "machinist", standard_hours: 4, worker_count: 1, qc_required: 0, sop_required: 1, sequence_hint: 10, description: "板材/型材切割下料" },
-  { operation_code: "forming", operation_name: "成型/折弯", operation_type: "make", category: "fabrication", default_station_type: "forming", required_skill: "forming", required_position_code: "machinist", standard_hours: 6, worker_count: 1, qc_required: 0, sop_required: 1, sequence_hint: 20, description: "折弯、卷制、成型" },
-  { operation_code: "machining", operation_name: "机加工", operation_type: "make", category: "machining", default_station_type: "machining", required_skill: "machining", required_position_code: "machinist", standard_hours: 8, worker_count: 1, qc_required: 1, sop_required: 1, sequence_hint: 30, description: "车铣镗钻/CNC 加工" },
-  { operation_code: "welding", operation_name: "焊接", operation_type: "make", category: "welding", default_station_type: "welding", required_skill: "welding", required_position_code: "welder", standard_hours: 10, worker_count: 1, qc_required: 1, sop_required: 1, sequence_hint: 40, description: "结构件焊接，需焊工资质" },
-  { operation_code: "ndt", operation_name: "无损检测", operation_type: "qc", category: "quality", default_station_type: "inspection", required_skill: "ndt", required_position_code: "ndt_inspector", standard_hours: 2, worker_count: 1, qc_required: 1, sop_required: 1, sequence_hint: 50, description: "焊缝/关键件无损检测" },
-  { operation_code: "assembly", operation_name: "部件装配", operation_type: "assemble", category: "assembly", default_station_type: "assembly", required_skill: "assembly", required_position_code: "assembly_worker", standard_hours: 16, worker_count: 2, qc_required: 1, sop_required: 1, sequence_hint: 60, description: "部件装配、预装" },
-  { operation_code: "process_qc", operation_name: "过程检验", operation_type: "qc", category: "quality", default_station_type: "inspection", required_skill: "qc", required_position_code: "qc_inspector", standard_hours: 2, worker_count: 1, qc_required: 1, sop_required: 1, sequence_hint: 70, description: "尺寸、外观、过程检验" },
-  { operation_code: "commissioning", operation_name: "调试", operation_type: "test", category: "commissioning", default_station_type: "commissioning", required_skill: "commissioning", required_position_code: "commissioning_engineer", standard_hours: 12, worker_count: 2, qc_required: 1, sop_required: 1, sequence_hint: 80, description: "液压/电气/整机调试" },
+  { operation_code: "cutting", operation_name: "下料", operation_type: "make", category: "fabrication", default_station_type: "cutting", required_skill: "cutting", required_position_code: "machinist", standard_hours: 4, worker_count: 1, drawing_required: 1, qc_required: 0, sop_required: 1, sequence_hint: 10, description: "板材/型材切割下料" },
+  { operation_code: "forming", operation_name: "成型/折弯", operation_type: "make", category: "fabrication", default_station_type: "forming", required_skill: "forming", required_position_code: "machinist", standard_hours: 6, worker_count: 1, drawing_required: 1, qc_required: 0, sop_required: 1, sequence_hint: 20, description: "折弯、卷制、成型" },
+  { operation_code: "machining", operation_name: "机加工", operation_type: "make", category: "machining", default_station_type: "machining", required_skill: "machining", required_position_code: "machinist", standard_hours: 8, worker_count: 1, drawing_required: 1, qc_required: 1, sop_required: 1, sequence_hint: 30, description: "车铣镗钻/CNC 加工" },
+  { operation_code: "welding", operation_name: "焊接", operation_type: "make", category: "welding", default_station_type: "welding", required_skill: "welding", required_position_code: "welder", standard_hours: 10, worker_count: 1, drawing_required: 1, qc_required: 1, sop_required: 1, sequence_hint: 40, description: "结构件焊接，需焊工资质" },
+  { operation_code: "ndt", operation_name: "无损检测", operation_type: "qc", category: "quality", default_station_type: "inspection", required_skill: "ndt", required_position_code: "ndt_inspector", standard_hours: 2, worker_count: 1, drawing_required: 0, qc_required: 1, sop_required: 1, sequence_hint: 50, description: "焊缝/关键件无损检测" },
+  { operation_code: "assembly", operation_name: "部件装配", operation_type: "assemble", category: "assembly", default_station_type: "assembly", required_skill: "assembly", required_position_code: "assembly_worker", standard_hours: 16, worker_count: 2, drawing_required: 1, qc_required: 1, sop_required: 1, sequence_hint: 60, description: "部件装配、预装" },
+  { operation_code: "process_qc", operation_name: "过程检验", operation_type: "qc", category: "quality", default_station_type: "inspection", required_skill: "qc", required_position_code: "qc_inspector", standard_hours: 2, worker_count: 1, drawing_required: 0, qc_required: 1, sop_required: 1, sequence_hint: 70, description: "尺寸、外观、过程检验" },
+  { operation_code: "commissioning", operation_name: "调试", operation_type: "test", category: "commissioning", default_station_type: "commissioning", required_skill: "commissioning", required_position_code: "commissioning_engineer", standard_hours: 12, worker_count: 2, drawing_required: 1, qc_required: 1, sop_required: 1, sequence_hint: 80, description: "液压/电气/整机调试" },
 ];
 
 function columnNames(db, table) {
@@ -67,6 +67,7 @@ function runMigration(db) {
       worker_count INTEGER NOT NULL DEFAULT 1,
       qc_required INTEGER NOT NULL DEFAULT 0,
       sop_required INTEGER NOT NULL DEFAULT 0,
+      drawing_required INTEGER NOT NULL DEFAULT 0,
       sequence_hint INTEGER NOT NULL DEFAULT 1,
       description TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
@@ -83,6 +84,8 @@ function runMigration(db) {
     ["qc_required", "qc_required INTEGER DEFAULT 0"],
     ["sop_required", "sop_required INTEGER DEFAULT 0"],
   ]) addColumn(db, "process_nodes", col[0], col[1]);
+  addColumn(db, "process_nodes", "drawing_required", "drawing_required INTEGER DEFAULT 0");
+  addColumn(db, "process_operation_templates", "drawing_required", "drawing_required INTEGER NOT NULL DEFAULT 0");
 
   const posInsert = db.prepare(`
     INSERT OR IGNORE INTO process_positions
@@ -94,15 +97,30 @@ function runMigration(db) {
   const opInsert = db.prepare(`
     INSERT OR IGNORE INTO process_operation_templates
       (operation_code, operation_name, operation_type, category, default_station_type, required_skill,
-       required_position_code, standard_hours, worker_count, qc_required, sop_required, sequence_hint, description)
+       required_position_code, standard_hours, worker_count, qc_required, sop_required, drawing_required, sequence_hint, description)
     VALUES (@operation_code, @operation_name, @operation_type, @category, @default_station_type, @required_skill,
-       @required_position_code, @standard_hours, @worker_count, @qc_required, @sop_required, @sequence_hint, @description)
+       @required_position_code, @standard_hours, @worker_count, @qc_required, @sop_required, @drawing_required, @sequence_hint, @description)
   `);
   for (const row of DEFAULT_OPERATIONS) opInsert.run(row);
 
   db.prepare("CREATE INDEX IF NOT EXISTS idx_process_positions_skill ON process_positions(skill_category, is_active)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_process_templates_category ON process_operation_templates(category, is_active)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_process_nodes_template ON process_nodes(operation_template_id)").run();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS process_operation_docs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      operation_template_id INTEGER NOT NULL,
+      doc_type TEXT NOT NULL DEFAULT 'sop',
+      title TEXT NOT NULL,
+      doc_id INTEGER,
+      is_required INTEGER NOT NULL DEFAULT 1,
+      notes TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (operation_template_id) REFERENCES process_operation_templates(id) ON DELETE CASCADE,
+      FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE SET NULL
+    );
+  `);
 }
 
 function findWorkstation(db, stationType) {
@@ -133,6 +151,7 @@ function applyTemplateToNode(db, nodeId, templateId) {
         worker_count = ?,
         qc_required = ?,
         sop_required = ?,
+        drawing_required = ?,
         updated_at = datetime('now')
     WHERE id = ?
   `).run(
@@ -146,6 +165,7 @@ function applyTemplateToNode(db, nodeId, templateId) {
     template.worker_count,
     template.qc_required,
     template.sop_required,
+    template.drawing_required,
     nodeId,
   );
   if (!result.changes) throw ApiError.notFound("工艺节点不存在");
@@ -184,8 +204,25 @@ function validateAssignment(db, { process_node_id, user_id }) {
     LIMIT 1
   `).get(user_id, certType) : null;
 
+  
+  // Check required docs from process_operation_docs
+  const requiredDocs = db.prepare(`
+    SELECT pod.*, d.status AS doc_status
+    FROM process_operation_docs pod
+    LEFT JOIN documents d ON d.id = pod.doc_id
+    WHERE pod.operation_template_id = ?
+  `).all(node.operation_template_id);
+  const missingDocs = [];
+  if (requiredDocs && requiredDocs.length > 0) {
+    for (const rd of requiredDocs) {
+      if (rd.is_required && (!rd.doc_id || rd.doc_status !== 'issued')) {
+        missingDocs.push(rd.title + ' missing/unsigned');
+      }
+    }
+  }
   const missing = [];
   if (skillCategory && !skill) missing.push(`缺少 ${skillCategory} L${minLevel}+ 技能`);
+  if (missingDocs.length > 0) missing.push(...missingDocs);
   if (certType && !cert) missing.push(`缺少有效 ${certType} 资质证书`);
   return {
     ok: missing.length === 0,
@@ -307,8 +344,8 @@ function register(app, db) {
       INSERT INTO process_operation_templates
         (operation_code, operation_name, operation_type, category, default_station_type,
          required_skill, required_position_code, standard_hours, worker_count, qc_required,
-         sop_required, sequence_hint, description, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         sop_required, drawing_required, sequence_hint, description, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       String(body.operation_code).trim(),
       String(body.operation_name).trim(),
@@ -321,6 +358,7 @@ function register(app, db) {
       Number(body.worker_count || 1),
       safeBool(body.qc_required),
       safeBool(body.sop_required),
+      safeBool(body.drawing_required !== false),
       Number(body.sequence_hint || 1),
       body.description || null,
       body.is_active === false ? 0 : 1,
@@ -332,7 +370,7 @@ function register(app, db) {
     const body = req.body || {};
     const current = get("SELECT id FROM process_operation_templates WHERE id = ?", [req.params.id]);
     if (!current) throw ApiError.notFound("工序模板不存在");
-    const fields = ["operation_code", "operation_name", "operation_type", "category", "default_station_type", "required_skill", "required_position_code", "standard_hours", "worker_count", "qc_required", "sop_required", "sequence_hint", "description", "is_active"];
+    const fields = ["operation_code", "operation_name", "operation_type", "category", "default_station_type", "required_skill", "required_position_code", "standard_hours", "worker_count", "qc_required", "sop_required", "drawing_required", "sequence_hint", "description", "is_active"];
     const sets = [];
     const params = [];
     for (const field of fields) {
@@ -369,6 +407,68 @@ function register(app, db) {
     const result = validateAssignment(db, req.body || {});
     res.json(result);
   }));
+
+  
+
+  // --- Operation Docs CRUD ---
+  app.get("/api/process-master/operations/:id/docs", wrap((req, res) => {
+    const rows = all(`
+      SELECT pod.*, d.title AS document_title, d.status AS document_status
+      FROM process_operation_docs pod
+      LEFT JOIN documents d ON d.id = pod.doc_id
+      WHERE pod.operation_template_id = ?
+      ORDER BY pod.doc_type, pod.id
+    `, [req.params.id]);
+    res.json({ items: rows });
+  }));
+
+  app.post("/api/process-master/operations/:id/docs", wrap((req, res) => {
+    const body = req.body || {};
+    if (!body.title) throw ApiError.validation("title required");
+    const result = run(`
+      INSERT INTO process_operation_docs
+        (operation_template_id, doc_type, title, doc_id, is_required, notes)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [
+      Number(req.params.id),
+      body.doc_type || "sop",
+      String(body.title).trim(),
+      body.doc_id || null,
+      body.is_required !== false ? 1 : 0,
+      body.notes || null,
+    ]);
+    res.status(201).json({ id: result.lastInsertRowid, created: true });
+  }));
+
+  app.put("/api/process-master/operations/:id/docs/:docId", wrap((req, res) => {
+    const body = req.body || {};
+    const sets = []; const params = [];
+    for (const field of ["doc_type", "title", "doc_id", "is_required", "notes"]) {
+      if (body[field] !== undefined) {
+        sets.push(field + " = ?");
+        params.push(field === "is_required" ? safeBool(body[field]) : body[field]);
+      }
+    }
+    if (!sets.length) throw ApiError.validation("no fields to update");
+    sets.push("updated_at = datetime('now')");
+    params.push(req.params.docId, req.params.id);
+    const result = run(
+      "UPDATE process_operation_docs SET " + sets.join(", ") + " WHERE id = ? AND operation_template_id = ?",
+      params
+    );
+    if (!result.changes) throw ApiError.notFound("doc binding not found");
+    res.json({ ok: true, changes: result.changes });
+  }));
+
+  app.delete("/api/process-master/operations/:id/docs/:docId", wrap((req, res) => {
+    const result = run(
+      "DELETE FROM process_operation_docs WHERE id = ? AND operation_template_id = ?",
+      [req.params.docId, req.params.id]
+    );
+    if (!result.changes) throw ApiError.notFound("doc binding not found");
+    res.json({ ok: true, deleted: true });
+  }));
+
 
   console.log("[processMasterService] Process operation/position master data registered");
 }

@@ -39,6 +39,13 @@ function freshDb() {
       expiry_date TEXT,
       status TEXT NOT NULL DEFAULT 'valid'
     );
+
+    CREATE TABLE documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      status TEXT DEFAULT 'draft',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
     CREATE TABLE workstations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT NOT NULL,
@@ -54,6 +61,10 @@ function freshDb() {
       operation_name TEXT NOT NULL,
       operation_type TEXT DEFAULT 'make',
       estimated_hours REAL DEFAULT 0,
+      drawing_required INTEGER DEFAULT 0,
+      qc_required INTEGER DEFAULT 0,
+      sop_required INTEGER DEFAULT 0,
+      operation_template_id INTEGER,
       required_workstation_id INTEGER,
       required_skill TEXT,
       status TEXT DEFAULT 'pending',
@@ -160,4 +171,46 @@ test("assignment validation checks skill and certificate", async () => {
   assert.equal(bad.body.ok, false);
   assert.ok(bad.body.missing.some((item) => item.includes("welding")));
   assert.ok(bad.body.missing.some((item) => item.includes("welding 资质")));
+});
+
+
+test("process operation template includes drawing_required", async () => {
+  const res = await request("GET", "/api/process-master/operations");
+  assert.equal(res.status, 200);
+  const w = res.body.items.find(r => r.operation_code === "welding");
+  const n = res.body.items.find(r => r.operation_code === "ndt");
+  assert.equal(w.drawing_required, 1, "welding requires drawings");
+  assert.equal(n.drawing_required, 0, "ndt does not require drawings");
+});
+
+test("can bind document to operation template and list", async () => {
+  const ops = await request("GET", "/api/process-master/operations");
+  const w = ops.body.items.find(r => r.operation_code === "welding");
+  assert.ok(w, "welding template exists");
+  const p1 = await request("POST", "/api/process-master/operations/" + w.id + "/docs", {
+    title: "WPS Welding Procedure",
+    doc_type: "sop",
+    is_required: true
+  });
+  assert.equal(p1.status, 201);
+  const list = await request("GET", "/api/process-master/operations/" + w.id + "/docs");
+  assert.equal(list.status, 200);
+  assert.ok(list.body.items.length >= 1);
+  assert.ok(list.body.items.some(d => d.title === "WPS Welding Procedure"));
+});
+
+test("validation checks missing required documents", async () => {
+  const ops = await request("GET", "/api/process-master/operations");
+  const t = ops.body.items.find(r => r.node_count > 0);
+  if (!t) return;
+  await request("POST", "/api/process-master/operations/" + t.id + "/docs", {
+    title: "Required SOP",
+    doc_type: "sop",
+    is_required: true
+  });
+  const r = await request("POST", "/api/process-master/validate-assignment", {
+    process_node_id: 1,
+    user_id: 1
+  });
+  assert.equal(r.status, 200);
 });

@@ -52,6 +52,7 @@
             <template #default="{ row }">
               <el-tag v-if="row.qc_required" size="small" type="warning">质检</el-tag>
               <el-tag v-if="row.sop_required" size="small" type="info" style="margin-left:4px">SOP</el-tag>
+              <el-tag v-if="row.drawing_required" size="small" type="primary" style="margin-left:4px">图纸</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="node_count" label="引用节点" width="90" />
@@ -153,7 +154,7 @@
           <el-col :span="12"><el-form-item label="顺序建议"><el-input-number v-model="opDlg.form.sequence_hint" :min="1" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="标准工时(h)"><el-input-number v-model="opDlg.form.standard_hours" :min="0" :step="0.5" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="定员(人)"><el-input-number v-model="opDlg.form.worker_count" :min="1" :max="50" style="width:100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="控制点"><el-checkbox v-model="opDlg.form.qc_required">质检</el-checkbox><el-checkbox v-model="opDlg.form.sop_required">SOP</el-checkbox></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="控制点"><el-checkbox v-model="opDlg.form.qc_required">质检</el-checkbox><el-checkbox v-model="opDlg.form.sop_required">SOP</el-checkbox><el-checkbox v-model="opDlg.form.drawing_required">图纸</el-checkbox></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="状态"><el-switch v-model="opDlg.form.is_active" active-text="启用" inactive-text="停用" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="说明"><el-input v-model="opDlg.form.description" type="textarea" :rows="2" /></el-form-item></el-col>
         </el-row>
@@ -230,7 +231,7 @@ async function loadAll() {
 }
 
 function openOperation(row?: any) {
-  opDlg.form = row ? { ...row, qc_required: !!row.qc_required, sop_required: !!row.sop_required, is_active: !!row.is_active } : {
+  opDlg.form = row ? { ...row, qc_required: !!row.qc_required, sop_required: !!row.sop_required, drawing_required: !!row.drawing_required, is_active: !!row.is_active } : {
     operation_code: '',
     operation_name: '',
     operation_type: 'make',
@@ -242,6 +243,7 @@ function openOperation(row?: any) {
     worker_count: 1,
     qc_required: false,
     sop_required: true,
+    drawing_required: true,
     sequence_hint: 1,
     description: '',
     is_active: true,
