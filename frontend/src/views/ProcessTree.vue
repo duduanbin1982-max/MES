@@ -19,6 +19,57 @@
       <!-- 总览统计 -->
       <ProcessTreeStats :progress="progress" :cpm="cpm" />
 
+      <!-- 部件工艺路线完整性 -->
+      <el-card class="overview-card" style="margin-bottom: 16px">
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <strong>部件工艺路线完整性</strong>
+            <el-button size="small" @click="loadComponentRoutes">刷新</el-button>
+          </div>
+        </template>
+        <el-row :gutter="12">
+          <el-col :span="4"><el-statistic title="部件数" :value="componentRouteSummary.component_count || 0" /></el-col>
+          <el-col :span="4"><el-statistic title="完整部件" :value="componentRouteSummary.complete_count || 0" /></el-col>
+          <el-col :span="4"><el-statistic title="缺工序" :value="componentRouteSummary.missing_route_count || 0" /></el-col>
+          <el-col :span="4"><el-statistic title="缺工时" :value="componentRouteSummary.missing_hours_count || 0" /></el-col>
+          <el-col :span="4"><el-statistic title="缺工位" :value="componentRouteSummary.missing_workstation_count || 0" /></el-col>
+          <el-col :span="4"><el-statistic title="标准人时" :value="componentRouteSummary.total_standard_man_hours || 0" suffix="h" /></el-col>
+        </el-row>
+        <el-table :data="componentRoutes" size="small" max-height="260" style="margin-top:12px" row-key="component.id">
+          <el-table-column label="部件" min-width="180">
+            <template #default="{ row }">
+              <strong>{{ row.component.name }}</strong>
+              <div style="color:#909399;font-size:12px">{{ row.component.part_number || row.component.material_code || '-' }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="row.ok ? 'success' : 'danger'" size="small">{{ row.ok ? '完整' : '待完善' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="operation_count" label="工序数" width="80" />
+          <el-table-column prop="estimated_hours" label="标准工时" width="90" />
+          <el-table-column prop="standard_man_hours" label="标准人时" width="90" />
+          <el-table-column prop="workstation_count" label="工位数" width="80" />
+          <el-table-column label="缺口" min-width="220">
+            <template #default="{ row }">
+              <el-tag v-for="m in row.missing" :key="m" size="small" type="warning" style="margin:1px">{{ m }}</el-tag>
+              <span v-if="!row.missing.length" style="color:#67c23a">已配置工序/工时/工位</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="工序路线" min-width="260">
+            <template #default="{ row }">
+              <span v-if="!row.operations.length" style="color:#909399">-</span>
+              <template v-else>
+                <el-tag v-for="op in row.operations" :key="op.id" size="small" style="margin:1px">
+                  {{ op.sequence }}.{{ op.operation_name }} / {{ op.estimated_hours || 0 }}h / {{ op.workstation_name || '未设工位' }}
+                </el-tag>
+              </template>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
       <!-- 子系统分布 -->
       <el-card v-if="subsystems.length > 0" class="overview-card" style="margin-bottom: 16px">
         <div style="font-weight: 600; margin-bottom: 8px">子系统分布</div>
@@ -106,15 +157,20 @@
       :users="users"
       :flat="flat"
       :subsystems-list="subsystemsList"
+      :operation-templates="operationTemplates"
       :saving="saving"
+      :show-hours="showHours"
+      :hours-form="hoursForm"
+      :hours-saving="hoursSaving"
       @save-node="saveNode"
       @save-assign="saveAssign"
       @save-dep="saveDep"
+      @save-hours="saveHours"
     />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
@@ -127,36 +183,57 @@ import ProcessTreeDialogs from '../components/ProcessTreeDialogs.vue'
 import ProcessTreeCrossSubsystemMatrix from '../components/ProcessTreeCrossSubsystemMatrix.vue'
 import ProcessTreeMindmap from '../components/ProcessTreeMindmap.vue'
 
-const authHeader = () => ({ Authorization: 'Bearer ' + localStorage.getItem('tbm_token') })
+const authHeader = () => ({ Authorization: 'Bearer ' + localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token') })
 
 const instances = ref([])
 const workstations = ref([])
 const users = ref([])
+const operationTemplates = ref([])
 const selectedInstance = ref(undefined)
 const regenerating = ref(false)
 const saving = ref(false)
 const showEdit = ref(false)
 const showAssign = ref(false)
 const showDep = ref(false)
+const showHours = ref(false)
+const hoursSaving = ref(false)
 const currentUserId = ref(null)
 
 // 子系统状态
 const subsystems = ref([])
 const uncategorized = ref([])
 const subsystemsList = ref([])  // 给 dialog 下拉用的全部 subsystem 元数据
+const componentRoutes = ref([])
+const componentRouteSummary = reactive({ component_count: 0, complete_count: 0, missing_route_count: 0, missing_hours_count: 0, missing_workstation_count: 0, total_operations: 0, total_estimated_hours: 0, total_standard_man_hours: 0 })
 
 // 复用 useProcessTree 拿进度 / 关键路径 / flat / tree
 const { tree, flat, cpm, progress, loading, criticalSet, load } = useProcessTree(selectedInstance)
 
-const editForm = reactive({ id: null, operation_name: '', operation_type: 'make', estimated_hours: 0, required_workstation_id: null, required_skill: '', notes: '', parent_id: null, equipment_instance_id: null, subsystem_id: null })
+const editForm = reactive({ id: null, operation_name: '', operation_type: 'make', estimated_hours: 0, required_workstation_id: null, required_skill: '', operation_template_id: null, required_position_code: '', worker_count: 1, qc_required: false, sop_required: false, notes: '', parent_id: null, equipment_instance_id: null, subsystem_id: null })
 const assignForm = reactive({ id: null, assigned_to: null, required_workstation_id: null })
 const depForm = reactive({ successor_id: null, predecessor_id: null, dep_type: 'FS' })
+const hoursForm = reactive({ id: null, operation_name: '', work_type: 'assembly', standard_hours: 8, worker_count: 2, description: '' })
 
 const filters = reactive({ searchKey: '', workstationId: null, onlyCritical: false, onlyMine: false })
 
 const reloadAll = async () => {
   await load()
   await loadSubsystems()
+  await loadComponentRoutes()
+}
+
+const loadComponentRoutes = async () => {
+  if (!selectedInstance.value) return
+  try {
+    const r = await fetch('/api/process-route/instances/' + selectedInstance.value + '/components', { headers: authHeader() })
+    if (!r.ok) throw new Error('HTTP ' + r.status)
+    const j = await r.json()
+    componentRoutes.value = j.components || []
+    Object.assign(componentRouteSummary, j.summary || {})
+  } catch (e) {
+    console.error('[loadComponentRoutes]', e)
+    ElMessage.warning('部件工艺路线加载失败: ' + e.message)
+  }
 }
 
 const onMindmapNavigate = (nav) => {
@@ -176,6 +253,13 @@ const loadSubsystems = async () => {
     console.error('[loadSubsystems]', e)
     ElMessage.error('子系统数据加载失败: ' + e.message)
   }
+}
+
+const loadProcessMasterOptions = async () => {
+  try {
+    const r = await Api.get('/process-master/operations')
+    operationTemplates.value = r.items || []
+  } catch (e) { console.error('[loadProcessMasterOptions]', e) }
 }
 
 const loadSubsystemsList = async () => {
@@ -221,7 +305,7 @@ const regenerate = async () => {
 }
 
 const onAddRoot = () => {
-  Object.assign(editForm, { id: null, operation_name: '', operation_type: 'make', estimated_hours: 4, required_workstation_id: null, required_skill: '', notes: '', parent_id: null, equipment_instance_id: selectedInstance.value, subsystem_id: null })
+  Object.assign(editForm, { id: null, operation_name: '', operation_type: 'make', estimated_hours: 4, required_workstation_id: null, required_skill: '', operation_template_id: null, required_position_code: '', worker_count: 1, qc_required: false, sop_required: false, notes: '', parent_id: null, equipment_instance_id: selectedInstance.value, subsystem_id: null })
   showEdit.value = true
 }
 
@@ -241,13 +325,16 @@ const onComplete = async (n) => {
 
 const onCmd = async (cmd, n) => {
   if (cmd === 'edit') {
-    Object.assign(editForm, { id: n.id, operation_name: n.operation_name, operation_type: n.operation_type, estimated_hours: n.estimated_hours, required_workstation_id: n.required_workstation_id, required_skill: n.required_skill, notes: n.notes, parent_id: n.parent_id, equipment_instance_id: n.equipment_instance_id, subsystem_id: n.subsystem_id ?? null })
+    Object.assign(editForm, { id: n.id, operation_name: n.operation_name, operation_type: n.operation_type, estimated_hours: n.estimated_hours, required_workstation_id: n.required_workstation_id, required_skill: n.required_skill, operation_template_id: n.operation_template_id ?? null, required_position_code: n.required_position_code || '', worker_count: n.worker_count || 1, qc_required: !!n.qc_required, sop_required: !!n.sop_required, notes: n.notes, parent_id: n.parent_id, equipment_instance_id: n.equipment_instance_id, subsystem_id: n.subsystem_id ?? null })
     showEdit.value = true
   } else if (cmd === 'assign') {
     Object.assign(assignForm, { id: n.id, assigned_to: n.assigned_to, required_workstation_id: n.required_workstation_id })
     showAssign.value = true
+  } else if (cmd === 'hours') {
+    Object.assign(hoursForm, { id: n.id, operation_name: n.operation_name || n.material_name, work_type: 'assembly', standard_hours: n.estimated_hours || 8, worker_count: 2, description: '' })
+    showHours.value = true
   } else if (cmd === 'addchild') {
-    Object.assign(editForm, { id: null, operation_name: '', operation_type: 'make', estimated_hours: 4, required_workstation_id: null, required_skill: '', notes: '', parent_id: n.id, equipment_instance_id: selectedInstance.value })
+    Object.assign(editForm, { id: null, operation_name: '', operation_type: 'make', estimated_hours: 4, required_workstation_id: null, required_skill: '', operation_template_id: null, required_position_code: '', worker_count: 1, qc_required: false, sop_required: false, notes: '', parent_id: n.id, equipment_instance_id: selectedInstance.value })
     showEdit.value = true
   } else if (cmd === 'adddep') {
     Object.assign(depForm, { successor_id: n.id, predecessor_id: null, dep_type: 'FS' })
@@ -305,6 +392,19 @@ const saveDep = async () => {
   await reloadAll()
 }
 
+const saveHours = async () => {
+  hoursSaving.value = true
+  try {
+    await fetch('/api/process/nodes/' + hoursForm.id + '/hours', {method: 'POST', headers: {'Content-Type': 'application/json', ...authHeader()}, body: JSON.stringify({work_type: hoursForm.work_type, standard_hours: hoursForm.standard_hours, worker_count: hoursForm.worker_count, description: hoursForm.description})}).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json() })
+    ElMessage.success('工时定额已保存')
+    showHours.value = false
+  } catch (e) {
+    ElMessage.error('保存失败: ' + e.message)
+  } finally {
+    hoursSaving.value = false
+  }
+}
+
 // 拖放节点改 subsystem (HTML5 drag/drop)
 const onNodeDropped = async ({ node_id, node_name, to_subsystem_id, to_subsystem_name }) => {
   try {
@@ -344,7 +444,7 @@ onMounted(async () => {
   const [ws, us] = await Promise.all([Api.workstations().catch(() => []), Api.users().catch(() => [])])
   workstations.value = ws || []
   users.value = us || []
-  await loadSubsystemsList()
+  await Promise.all([loadSubsystemsList(), loadProcessMasterOptions()])
   if (selectedInstance.value) await reloadAll()
 })
 </script>

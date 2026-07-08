@@ -1,38 +1,32 @@
 // services/materialService.js
-// P0-#1 拆 server.js: 物料/批次/库存/关键件/移动 (P2-#1 库存预警 + 物料追溯)
-// P0-#2 修 inventory 账面 bug: movement 事务同步 inventory.quantity
-//   receive: quantity += |qty| (upsert)
-//   issue:   quantity -= |qty| (校验 available)
-//   transfer: from 扣 -> to 增
-//   adjust:  quantity = |qty| (盘点)
-// Author: 三狗子 | Date: 2026-06-23
+const { ApiError } = require("../app/errors");
+// 物料管理 — 物料批次/关键件/单位路由 (brooks-debt R1: 库存/移动已拆分)
+'use strict';
+
+const { wrap } = require('../middleware/asyncHandler');
+const { makeDbHelpers, queryLowStock } = require('./material/core');
 
 function register(app, db) {
-  const all = (sql, params = []) => db.prepare(sql).all(params);
-  const get = (sql, params = []) => db.prepare(sql).get(params);
-  const run = (sql, params = []) => db.prepare(sql).run(params);
-  const wrap = (handler) => (req, res) => {
-    try { handler(req, res); }
-    catch (e) { console.error(e); res.status(e.status || 500).json({ error: e.message }); }
-  };
+  const { all, get, run } = makeDbHelpers(db);
+
   // P3-1 权限守卫: 写端点限制角色, 读端点只要求登录
   const requireRole = (...allowed) => (req, res) => {
-    if (!req.user) { res.status(401).json({ error: '未登录' }); return true; }
-    if (!allowed.includes(req.user.role)) { res.status(403).json({ error: '权限不足, 需要角色: ' + allowed.join('/') }); return true; }
+    if (!req.user) { throw ApiError.unauthorized(); return true; }
+    if (!allowed.includes(req.user.role)) { throw ApiError.forbidden('权限不足, 需要角色: ' + allowed.join('/')); return true; }
     return false;
   };
   // 读端点: 只要登录 (any authenticated user)
   const requireLogin = (req, res) => {
-    if (!req.user) { res.status(401).json({ error: '未登录' }); return true; }
+    if (!req.user) { throw ApiError.unauthorized(); return true; }
     return false;
   };
   // P0-1 细粒度 permission 守卫 (高阶: 调用后 if (true) return 跳出)
   const requirePermission = (...permCodes) => (req, res) => {
-    if (!req.user) { res.status(401).json({ error: '未登录' }); return true; }
+    if (!req.user) { throw ApiError.unauthorized(); return true; }
     const userPerms = req.user.permissions || [];
     const ok = permCodes.some(code => userPerms.includes('*') || userPerms.includes(code) ||
       userPerms.some(p => p.endsWith(':*') && code.startsWith(p.slice(0, -1))));
-    if (!ok) { res.status(403).json({ error: '权限不足, 需要: ' + permCodes.join(' / ') }); return true; }
+    if (!ok) { throw ApiError.forbidden('权限不足, 需要: ' + permCodes.join(' / ')); return true; }
     return false;
   };
 
@@ -53,9 +47,9 @@ function register(app, db) {
   app.get('/api/material_lots/:id', wrap((req, res) => {
     if (requireLogin(req, res)) return;
     const id = parseInt(req.params.id);
-    if (!id) return res.status(400).json({ error: 'id 必填且必须为数字' });
+    if (!id) throw ApiError.validation('id 必填且必须为数字');
     const lot = get("SELECT ml.*, m.material_code, m.material_name, m.spec, m.unit AS material_unit FROM material_lots ml JOIN materials m ON ml.material_id = m.id WHERE ml.id = ?", id);
-    if (!lot) return res.status(404).json({ error: 'lot 不存在' });
+    if (!lot) throw ApiError.notFound('lot 不存在');
     const inventory = all("SELECT location, quantity, unit, status, last_updated FROM inventory WHERE material_lot_id = ? ORDER BY location", id);
     const totalQty = inventory.reduce((s, r) => s + (r.quantity || 0), 0);
     const movements = all("SELECT movement_type, SUM(quantity) AS qty, COUNT(*) AS cnt FROM material_movements WHERE material_lot_id = ? GROUP BY movement_type", id);
@@ -74,13 +68,13 @@ function register(app, db) {
   app.post('/api/material_lots/:id/split', wrap((req, res) => {
     if (requirePermission('material:write')(req, res)) return;
     const srcId = parseInt(req.params.id);
-    if (!srcId) return res.status(400).json({ error: 'id 非法' });
+    if (!srcId) throw ApiError.validation('id 非法');
     const { quantity, new_lot_no, location, notes } = req.body;
-    if (!quantity || !new_lot_no) return res.status(400).json({ error: 'quantity/new_lot_no 必填' });
+    if (!quantity || !new_lot_no) throw ApiError.validation('quantity/new_lot_no 必填');
     const qty = Math.abs(Number(quantity));
-    if (qty <= 0) return res.status(400).json({ error: 'quantity 必须 > 0' });
+    if (qty <= 0) throw ApiError.validation('quantity 必须 > 0');
     const dup = get('SELECT id FROM material_lots WHERE lot_no = ?', new_lot_no);
-    if (dup) return res.status(400).json({ error: '新 lot_no 已存在' });
+    if (dup) throw ApiError.validation('新 lot_no 已存在');
     const result = db.transaction(() => {
       const src = get('SELECT * FROM material_lots WHERE id = ?', srcId);
       if (!src) { const e = new Error('源 lot 不存在'); e.status = 404; throw e; }
@@ -110,11 +104,11 @@ function register(app, db) {
   app.post('/api/material_lots/:id/merge', wrap((req, res) => {
     if (requirePermission('material:write')(req, res)) return;
     const dstId = parseInt(req.params.id);
-    if (!dstId) return res.status(400).json({ error: 'id 非法' });
+    if (!dstId) throw ApiError.validation('id 非法');
     const { source_lot_ids, location, notes } = req.body;
-    if (!Array.isArray(source_lot_ids) || source_lot_ids.length === 0) return res.status(400).json({ error: 'source_lot_ids 数组必填' });
-    if (source_lot_ids.length > 50) return res.status(400).json({ error: '源 lot 上限 50 个' });
-    if (source_lot_ids.includes(dstId)) return res.status(400).json({ error: '不能合到自身' });
+    if (!Array.isArray(source_lot_ids) || source_lot_ids.length === 0) throw ApiError.validation('source_lot_ids 数组必填');
+    if (source_lot_ids.length > 50) throw ApiError.validation('源 lot 上限 50 个');
+    if (source_lot_ids.includes(dstId)) throw ApiError.validation('不能合到自身');
     const result = db.transaction(() => {
       const dst = get('SELECT * FROM material_lots WHERE id = ?', dstId);
       if (!dst) { const e = new Error('目标 lot 不存在'); e.status = 404; throw e; }
@@ -148,13 +142,13 @@ function register(app, db) {
   app.post('/api/material_lots/receive', wrap((req, res) => {
     if (requirePermission('material:write')(req, res)) return;
     const { material_id, lot_no, supplier, heat_no, certificate_no, quantity, unit, location, notes } = req.body;
-    if (!material_id || !lot_no || !quantity) return res.status(400).json({ error: 'material_id/lot_no/quantity 必填' });
+    if (!material_id || !lot_no || !quantity) throw ApiError.validation('material_id/lot_no/quantity 必填');
 
     const mat = get('SELECT id, unit FROM materials WHERE id = ?', material_id);
-    if (!mat) return res.status(404).json({ error: '物料不存在' });
+    if (!mat) throw ApiError.notFound('物料不存在');
 
     const dup = get('SELECT id FROM material_lots WHERE lot_no = ?', lot_no);
-    if (dup) return res.status(400).json({ error: 'lot_no 已存在: ' + lot_no });
+    if (dup) throw ApiError.validation('lot_no 已存在: ' + lot_no);
 
     const loc = location || '主仓库-A-01';
     const u = unit || mat.unit || 'pcs';
@@ -178,32 +172,23 @@ function register(app, db) {
       res.json(result);
     } catch (e) {
       const status = e.status || 500;
-      res.status(status).json({ error: e.message });
+      throw e;
     }
   }));
 app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no, m.material_name FROM inventory i JOIN material_lots ml ON i.material_lot_id = ml.id JOIN materials m ON ml.material_id = m.id ORDER BY m.material_code"))));
 
   // P2-#1 低库存预警 (聚合所有 lot 的 quantity，对比 materials.safety_stock)
   app.get('/api/inventory/alerts', wrap((req, res) => {
-    const rows = all(`SELECT m.id, m.material_code, m.material_name, m.spec, m.unit,
-                             m.safety_stock, m.reorder_point,
-                             COALESCE(SUM(CASE WHEN i.status='available' THEN i.quantity ELSE 0 END), 0) as available_qty,
-                             COUNT(i.id) as lot_count
-                      FROM materials m
-                      LEFT JOIN material_lots ml ON ml.material_id = m.id
-                      LEFT JOIN inventory i ON i.material_lot_id = ml.id
-                      GROUP BY m.id
-                      HAVING available_qty < m.safety_stock
-                      ORDER BY (m.safety_stock - available_qty) DESC`);
+    const rows = queryLowStock(db, { includeSpec: true });
     res.json({ count: rows.length, items: rows });
   }));
 
   // P2-#1 批次追溯
   app.get('/api/inventory/lot_trace', wrap((req, res) => {
     const { lot_id } = req.query;
-    if (!lot_id) return res.status(400).json({ error: 'lot_id 必填' });
+    if (!lot_id) throw ApiError.validation('lot_id 必填');
     const lot = get('SELECT ml.*, m.material_code, m.material_name FROM material_lots ml JOIN materials m ON ml.material_id = m.id WHERE ml.id = ?', lot_id);
-    if (!lot) return res.status(404).json({ error: 'lot 不存在' });
+    if (!lot) throw ApiError.notFound('lot 不存在');
     const movements = all('SELECT * FROM material_movements WHERE material_lot_id = ? ORDER BY created_at', lot_id);
     const inventory = all('SELECT * FROM inventory WHERE material_lot_id = ?', lot_id);
     res.json({ lot, movements, inventory });
@@ -220,256 +205,204 @@ app.get('/api/inventory', wrap((req, res) => res.json(all("SELECT i.*, ml.lot_no
     sql += ' ORDER BY material_code';
     res.json(all(sql));
   }));
+
+
+  // ============================================================
+  // 物料主数据导入 / 编码规则校验 / 一物一码查重
+  // ============================================================
+  const CODE_PREFIX_BY_TYPE = {
+    machining: 'JJ',
+    sheet_metal: 'BJ',
+    fastener: 'BZ',
+    pneumatic: 'QD',
+    electrical: 'DQ',
+    purchased: 'WG',
+    raw: 'YL',
+    auxiliary: 'FL',
+  };
+
+  function normalizeHeader(value) {
+    const key = String(value || '').trim().toLowerCase();
+    const map = {
+      '物料编码': 'material_code', '编码': 'material_code', 'code': 'material_code', 'material_code': 'material_code',
+      '物料名称': 'material_name', '名称': 'material_name', 'name': 'material_name', 'material_name': 'material_name',
+      '物料类型': 'material_type', '类型': 'material_type', 'type': 'material_type', 'material_type': 'material_type',
+      '规格': 'spec', '型号': 'spec', 'spec': 'spec',
+      '单位': 'unit', 'unit': 'unit',
+      '关键件': 'is_key_component', 'is_key_component': 'is_key_component',
+      '自制': 'is_self_made', 'is_self_made': 'is_self_made',
+      '默认供应商': 'default_supplier', 'supplier': 'default_supplier', 'default_supplier': 'default_supplier',
+      '安全库存': 'safety_stock', 'safety_stock': 'safety_stock',
+      '再订货点': 'reorder_point', 'reorder_point': 'reorder_point',
+      '预估单价': 'estimated_unit_price', 'estimated_unit_price': 'estimated_unit_price',
+      '实际单价': 'actual_unit_price', 'actual_unit_price': 'actual_unit_price',
+      '备注': 'notes', 'notes': 'notes',
+    };
+    return map[key] || key;
+  }
+
+  function parseBool(value) {
+    if (value === true || value === 1) return 1;
+    const text = String(value || '').trim().toLowerCase();
+    return ['1', 'true', 'yes', 'y', '是', '关键', '自制'].includes(text) ? 1 : 0;
+  }
+
+  function parseNumber(value) {
+    if (value === undefined || value === null || value === '') return null;
+    const n = Number(String(value).replace(/,/g, '').trim());
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function splitCsvLine(line) {
+    const cells = [];
+    let current = '';
+    let quoted = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; continue; }
+      if (ch === '"') { quoted = !quoted; continue; }
+      if ((ch === ',' || ch === '\t') && !quoted) { cells.push(current.trim()); current = ''; continue; }
+      cells.push ? current += ch : null;
+    }
+    cells.push(current.trim());
+    return cells;
+  }
+
+  function parseMaterialRows(payload) {
+    if (Array.isArray(payload.rows)) return payload.rows;
+    if (Array.isArray(payload)) return payload;
+    const text = String(payload.text || payload.csv || '').trim();
+    if (!text) return [];
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) return [];
+    const headers = splitCsvLine(lines[0]).map(normalizeHeader);
+    return lines.slice(1).map((line) => {
+      const cells = splitCsvLine(line);
+      const row = {};
+      headers.forEach((header, index) => { row[header] = cells[index] ?? ''; });
+      return row;
+    });
+  }
+
+  function normalizeMaterial(row) {
+    return {
+      material_code: String(row.material_code || '').trim(),
+      material_name: String(row.material_name || '').trim(),
+      material_type: String(row.material_type || 'purchased').trim(),
+      spec: String(row.spec || '').trim() || null,
+      unit: String(row.unit || '件').trim(),
+      is_key_component: parseBool(row.is_key_component),
+      is_self_made: parseBool(row.is_self_made),
+      default_supplier: String(row.default_supplier || '').trim() || null,
+      safety_stock: parseNumber(row.safety_stock),
+      reorder_point: parseNumber(row.reorder_point),
+      estimated_unit_price: parseNumber(row.estimated_unit_price),
+      actual_unit_price: parseNumber(row.actual_unit_price),
+      notes: String(row.notes || '').trim() || null,
+    };
+  }
+
+  function validateMaterial(material, seenCodes, rowIndex) {
+    const errors = [];
+    const warnings = [];
+    if (!material.material_code) errors.push('物料编码必填');
+    if (!material.material_name) errors.push('物料名称必填');
+    if (!material.unit) errors.push('单位必填');
+    if (!/^[A-Z]{2,4}-[A-Z0-9][A-Z0-9-]{1,40}$/i.test(material.material_code)) {
+      errors.push('物料编码格式建议为 前缀-流水号，如 JJ-0001 / BZ-M8-020');
+    }
+    const expectedPrefix = CODE_PREFIX_BY_TYPE[material.material_type];
+    if (expectedPrefix && !material.material_code.toUpperCase().startsWith(expectedPrefix + '-')) {
+      warnings.push(`物料类型 ${material.material_type} 建议编码前缀 ${expectedPrefix}-`);
+    }
+    if (seenCodes.has(material.material_code)) errors.push('导入文件内物料编码重复');
+    seenCodes.add(material.material_code);
+    const existing = get('SELECT id, material_name, spec, unit FROM materials WHERE material_code = ?', material.material_code);
+    if (existing) errors.push(`系统中已存在相同物料编码: ${existing.material_name}`);
+    const sameIdentity = all(`
+      SELECT id, material_code
+      FROM materials
+      WHERE material_name = ? AND COALESCE(spec, '') = COALESCE(?, '') AND unit = ? AND material_type = ?
+      LIMIT 5
+    `, [material.material_name, material.spec || '', material.unit, material.material_type]);
+    if (sameIdentity.length) {
+      warnings.push('疑似一物多码: ' + sameIdentity.map(item => item.material_code).join(', '));
+    }
+    return { row: rowIndex, material, errors, warnings, valid: errors.length === 0 };
+  }
+
+  app.get('/api/materials/import/template', wrap((req, res) => {
+    res.type('text/csv; charset=utf-8');
+    res.send([
+      'material_code,material_name,material_type,spec,unit,is_key_component,is_self_made,default_supplier,safety_stock,reorder_point,estimated_unit_price,actual_unit_price,notes',
+      'JJ-0001,安装底板,machining,Q235B,件,0,1,机加工供应商A,2,1,120,118,示例',
+      'BZ-M8-020,内六角圆柱头螺钉,fastener,M8×20,件,0,0,东明,200,100,0.35,0.32,GB/T 70.1',
+    ].join('\n'));
+  }));
+
+  app.post('/api/materials/import/validate', wrap((req, res) => {
+    const rows = parseMaterialRows(req.body || {});
+    const seenCodes = new Set();
+    const results = rows.map((row, index) => validateMaterial(normalizeMaterial(row), seenCodes, index + 2));
+    const valid = results.filter(item => item.valid).length;
+    const invalid = results.length - valid;
+    const warnings = results.reduce((sum, item) => sum + item.warnings.length, 0);
+    res.json({ total: results.length, valid, invalid, warnings, items: results });
+  }));
+
+  app.post('/api/materials/import/commit', wrap((req, res) => {
+    if (requirePermission('material:write')(req, res)) return;
+    const rows = parseMaterialRows(req.body || {});
+    const seenCodes = new Set();
+    const results = rows.map((row, index) => validateMaterial(normalizeMaterial(row), seenCodes, index + 2));
+    const invalid = results.filter(item => !item.valid);
+    if (invalid.length) throw ApiError.validation('存在校验错误，禁止导入', invalid.slice(0, 20));
+    const tx = db.transaction(() => {
+      const created = [];
+      for (const item of results) {
+        const m = item.material;
+        const r = run(`
+          INSERT INTO materials (
+            material_code, material_name, material_type, spec, unit, is_key_component, is_self_made,
+            default_supplier, notes, safety_stock, reorder_point, estimated_unit_price, actual_unit_price
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          m.material_code, m.material_name, m.material_type, m.spec, m.unit, m.is_key_component, m.is_self_made,
+          m.default_supplier, m.notes, m.safety_stock, m.reorder_point, m.estimated_unit_price, m.actual_unit_price,
+        ]);
+        created.push({ id: r.lastInsertRowid, material_code: m.material_code });
+      }
+      return created;
+    });
+    const created = tx();
+    res.json({ created: created.length, items: created });
+  }));
+
+  app.get('/api/material_duplicates', wrap((req, res) => {
+    const codeDuplicates = all(`
+      SELECT material_code, COUNT(*) AS count
+      FROM materials
+      GROUP BY material_code
+      HAVING COUNT(*) > 1
+      ORDER BY count DESC
+    `);
+    const identityDuplicates = all(`
+      SELECT material_name, COALESCE(spec, '') AS spec, unit, material_type, COUNT(*) AS count,
+             GROUP_CONCAT(material_code) AS material_codes
+      FROM materials
+      GROUP BY material_name, COALESCE(spec, ''), unit, material_type
+      HAVING COUNT(*) > 1
+      ORDER BY count DESC
+    `);
+    res.json({ code_duplicates: codeDuplicates, identity_duplicates: identityDuplicates });
+  }));
+
   app.get('/api/key_components', wrap((req, res) => res.json(all("SELECT kc.*, m.material_name FROM key_components kc JOIN materials m ON kc.material_id = m.id ORDER BY kc.lead_time_weeks DESC"))));
   app.get('/api/key_components/long_leadtime', wrap((req, res) => res.json(all("SELECT kc.*, m.material_name FROM key_components kc JOIN materials m ON kc.material_id = m.id WHERE kc.lead_time_weeks >= 12 ORDER BY kc.lead_time_weeks DESC"))));
 
   // ============================================================
   // 物料移动 + 库存账面同步 (P0-#2 修)
   // ============================================================
-  // P3-2 分页 + 日期范围 + 默认 50/页 (max 500) 防止 OOM
-  app.get('/api/material_movements', wrap((req, res) => {
-    if (requireLogin(req, res)) return;
-    const { material_lot_id, work_order_id, project_id, movement_type, date_from, date_to, limit, offset } = req.query;
-    const lim = Math.min(Math.max(parseInt(limit) || 50, 1), 500);
-    const off = Math.max(parseInt(offset) || 0, 0);
-    let base = 'FROM material_movements mm JOIN material_lots ml ON mm.material_lot_id = ml.id JOIN materials m ON ml.material_id = m.id WHERE 1=1';
-    const params = [];
-    if (material_lot_id) { base += ' AND mm.material_lot_id = ?'; params.push(material_lot_id); }
-    if (work_order_id)   { base += ' AND mm.work_order_id = ?';   params.push(work_order_id); }
-    if (project_id)      { base += ' AND mm.project_id = ?';      params.push(project_id); }
-    if (movement_type)   { base += ' AND mm.movement_type = ?';   params.push(movement_type); }
-    if (date_from)       { base += ' AND mm.created_at >= ?';     params.push(date_from); }
-    if (date_to)         { base += ' AND mm.created_at <= ?';     params.push(date_to); }
-    const total = get('SELECT COUNT(*) AS c ' + base, params).c;
-    const rows = all('SELECT mm.*, ml.lot_no, m.material_name ' + base + ' ORDER BY mm.created_at DESC LIMIT ? OFFSET ?', params.concat([lim, off]));
-    res.json({ total, limit: lim, offset: off, count: rows.length, items: rows });
-  }));
-
-  // P0-#2 事务化: movement + inventory.quantity 同步
-  // P3-3 抽出单 movement 逻辑为 _applyMovement, POST /batch 复用
-  const _defaultLocation = '主仓库-A-01';
-  const _applyMovement = (m) => {
-    const { material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes } = m;
-    if (!material_lot_id || !movement_type || quantity === undefined) { const e = new Error('material_lot_id/movement_type/quantity 必填'); e.status = 400; throw e; }
-    if (!['receive', 'issue', 'return', 'transfer', 'adjust'].includes(movement_type)) { const e = new Error('movement_type 非法'); e.status = 400; throw e; }
-    const lot = get('SELECT id, material_id FROM material_lots WHERE id = ?', material_lot_id);
-    if (!lot) { const e = new Error('lot 不存在'); e.status = 404; throw e; }
-    const absQty = Math.abs(Number(quantity));
-    const r = run(
-      "INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [material_lot_id, movement_type, absQty, unit || null, from_location || null, to_location || null, work_order_id || null, project_id || null, operator_id || null, notes || null]
-    );
-    const movementId = r.lastInsertRowid;
-    if (movement_type === 'receive') {
-      const loc = to_location || _defaultLocation;
-      const existing = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
-      if (existing) {
-        run("UPDATE inventory SET quantity = quantity + ?, status = ?, last_updated = datetime('now') WHERE id = ?", [absQty, 'available', existing.id]);
-      } else {
-        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
-      }
-    } else if (movement_type === 'issue') {
-      const loc = from_location || _defaultLocation;
-      const inv = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
-      if (!inv) { const e = new Error('lot ' + material_lot_id + ' @ ' + loc + ' 无库存, 不能出库'); e.status = 400; throw e; }
-      if (inv.quantity < absQty) { const e = new Error('库存不足: 现有 ' + inv.quantity + ', 要出 ' + absQty); e.status = 400; throw e; }
-      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [absQty, inv.id]);
-    } else if (movement_type === 'transfer') {
-      if (!from_location || !to_location) { const e = new Error('transfer 必须带 from_location + to_location'); e.status = 400; throw e; }
-      const from = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, from_location]);
-      if (!from || from.quantity < absQty) { const e = new Error('源库位库存不足'); e.status = 400; throw e; }
-      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [absQty, from.id]);
-      const to = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, to_location]);
-      if (to) {
-        run("UPDATE inventory SET quantity = quantity + ?, last_updated = datetime('now') WHERE id = ?", [absQty, to.id]);
-      } else {
-        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, to_location, absQty, unit || null]);
-      }
-    } else if (movement_type === 'adjust') {
-      const loc = to_location || from_location || _defaultLocation;
-      const existing = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
-      if (existing) {
-        run("UPDATE inventory SET quantity = ?, status = ?, last_updated = datetime('now') WHERE id = ?", [absQty, 'available', existing.id]);
-      } else {
-        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
-      }
-    } else if (movement_type === 'return') {
-      const loc = to_location || _defaultLocation;
-      const existing = get('SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, loc]);
-      if (existing) {
-        run("UPDATE inventory SET quantity = quantity + ?, status = ?, last_updated = datetime('now') WHERE id = ?", [absQty, 'available', existing.id]);
-      } else {
-        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [material_lot_id, loc, absQty, unit || null]);
-      }
-    }
-    return { id: movementId };
-  };
-
-  app.post('/api/material_movements', wrap((req, res) => {
-    if (requirePermission('material:write')(req, res)) return;
-    try {
-      const result = db.transaction(() => _applyMovement(req.body))();
-      res.json(result);
-    } catch (e) {
-      res.status(e.status || 500).json({ error: e.message });
-    }
-  }));
-
-  // P3-3 批量入库: atomic=true 全成功或全回滚, atomic=false 部分成功
-  app.post('/api/material_movements/batch', wrap((req, res) => {
-    if (requirePermission('material:write')(req, res)) return;
-    const { movements, atomic } = req.body;
-    if (!Array.isArray(movements) || movements.length === 0) return res.status(400).json({ error: 'movements 数组必填, 不能为空' });
-    if (movements.length > 500) return res.status(400).json({ error: 'movements 单批上限 500 条' });
-    if (atomic) {
-      const ids = [];
-      try {
-        db.transaction(() => { for (let i = 0; i < movements.length; i++) ids.push(_applyMovement(movements[i]).id); })();
-        res.json({ success: true, atomic: true, count: ids.length, ids });
-      } catch (e) {
-        res.status(e.status || 500).json({ success: false, atomic: true, error: e.message, failed_index: -1 });
-      }
-    } else {
-      const results = [];
-      const failed = [];
-      for (let i = 0; i < movements.length; i++) {
-        try {
-          const r = db.transaction(() => _applyMovement(movements[i]))();
-          results.push(r);
-        } catch (e) {
-          failed.push({ index: i, error: e.message });
-        }
-      }
-      res.json({ success: failed.length === 0, atomic: false, count: results.length, ids: results.map(x => x.id), failed });
-    }
-  }));
-
-  // P1-#5 库存预留 (work_order 锁定一批 lot)
-  //   业务: 调度器预测"实际可用库存"时, allocated 也算 available 但要锁定
-  //   schema: inventory.status 已有 allocated 字段, 但此前无端点用
-  app.post('/api/inventory/allocate', wrap((req, res) => {
-    if (requirePermission('material:admin')(req, res)) return;
-    const { material_lot_id, work_order_id, quantity } = req.body;
-    if (!material_lot_id || !work_order_id || !quantity) return res.status(400).json({ error: 'material_lot_id/work_order_id/quantity 必填' });
-    const q = Number(quantity);
-    if (q <= 0) return res.status(400).json({ error: 'quantity 必须 > 0' });
-
-    const tx = db.transaction(() => {
-      const inv = get("SELECT id, quantity, status, location FROM inventory WHERE material_lot_id = ? AND status = 'available'", material_lot_id);
-      if (!inv) { const e = new Error('lot ' + material_lot_id + ' 无 available 库存'); e.status = 400; throw e; }
-      if (inv.quantity < q) { const e = new Error('available 不足: 现有 ' + inv.quantity + ', 要预留 ' + q); e.status = 400; throw e; }
-
-      // 拆成两行: available 减, allocated 加 (同 lot 同 location)
-      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [q, inv.id]);
-      const existingAlloc = get("SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ? AND status = 'allocated'", [material_lot_id, inv.location]);
-      if (existingAlloc) {
-        run("UPDATE inventory SET quantity = quantity + ?, last_updated = datetime('now') WHERE id = ?", [q, existingAlloc.id]);
-      } else {
-        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) SELECT material_lot_id, location, ?, unit, 'allocated' FROM inventory WHERE id = ?", [q, inv.id]);
-      }
-      // 记 movement (work_order 关联)
-      run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, notes) SELECT material_lot_id, 'transfer', ?, unit, location, location, ?, '预留: ' || ? FROM inventory WHERE id = ?",
-        [q, work_order_id, 'work_order ' + work_order_id, inv.id]);
-      return { ok: true, lot_id: material_lot_id, allocated_qty: q, location: inv.location };
-    });
-    try {
-      res.json(tx());
-    } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
-  }));
-
-  // 释放预留 (allocated -> available)
-  app.post('/api/inventory/release', wrap((req, res) => {
-    if (requirePermission('material:admin')(req, res)) return;
-    const { material_lot_id, work_order_id, quantity } = req.body;
-    if (!material_lot_id || !work_order_id || !quantity) return res.status(400).json({ error: 'material_lot_id/work_order_id/quantity 必填' });
-    const q = Number(quantity);
-    if (q <= 0) return res.status(400).json({ error: 'quantity 必须 > 0' });
-
-    const tx = db.transaction(() => {
-      // 找该 work_order 的预留
-      const alloc = get("SELECT id, quantity, location FROM inventory WHERE material_lot_id = ? AND status = 'allocated'", material_lot_id);
-      if (!alloc) { const e = new Error('lot ' + material_lot_id + ' 无 allocated 库存'); e.status = 400; throw e; }
-      if (alloc.quantity < q) { const e = new Error('allocated 不足: 现有 ' + alloc.quantity + ', 要释放 ' + q); e.status = 400; throw e; }
-
-      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [q, alloc.id]);
-      const existingAvail = get("SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ? AND status = 'available'", [material_lot_id, alloc.location]);
-      if (existingAvail) {
-        run("UPDATE inventory SET quantity = quantity + ?, status = 'available', last_updated = datetime('now') WHERE id = ?", [q, existingAvail.id]);
-      } else {
-        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) SELECT material_lot_id, location, ?, unit, 'available' FROM inventory WHERE id = ?", [q, alloc.id]);
-      }
-      run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, notes) SELECT material_lot_id, 'transfer', ?, unit, location, location, ?, '释放: ' || ? FROM inventory WHERE id = ?",
-        [q, work_order_id, 'work_order ' + work_order_id, alloc.id]);
-      return { ok: true, lot_id: material_lot_id, released_qty: q, location: alloc.location };
-    });
-    try {
-      res.json(tx());
-    } catch (e) { res.status(e.status || 500).json({ error: e.message }); }
-  }));
-
-  // P2-7 工单→批次反向追溯
-  app.get('/api/work_orders/:id/lots', wrap((req, res) => {
-    const woId = req.params.id;
-    const wo = get('SELECT id, wo_code FROM work_orders WHERE id = ?', woId);
-    if (!wo) return res.status(404).json({ error: '工单不存在' });
-    const rows = all(`SELECT ml.id as lot_id, ml.lot_no, m.material_code, m.material_name, m.spec,
-                             mm.movement_type, mm.quantity, mm.unit, mm.from_location, mm.to_location,
-                             mm.created_at, mm.notes
-                      FROM material_movements mm
-                      JOIN material_lots ml ON mm.material_lot_id = ml.id
-                      JOIN materials m ON ml.material_id = m.id
-                      WHERE mm.work_order_id = ?
-                      ORDER BY mm.created_at`, woId);
-    const summary = {};
-    rows.forEach(r => { summary[r.lot_no] = (summary[r.lot_no] || 0) + r.quantity; });
-    res.json({ work_order: wo, movements: rows, lot_summary: summary });
-  }));
-
-  // P2-8 呆滞料预警 (90 天无 movement)
-  app.get('/api/inventory/stagnant', wrap((req, res) => {
-    const days = parseInt(req.query.days) || 90;
-    const rows = all(`SELECT ml.id as lot_id, ml.lot_no, m.material_code, m.material_name, m.spec,
-                             ml.supplier, ml.received_date,
-                             i.quantity, i.unit, i.location, i.status, i.last_updated,
-                             (julianday('now') - julianday(COALESCE(MAX(mm.created_at), ml.received_date))) as idle_days
-                      FROM material_lots ml
-                      JOIN materials m ON ml.material_id = m.id
-                      LEFT JOIN inventory i ON i.material_lot_id = ml.id
-                      LEFT JOIN material_movements mm ON mm.material_lot_id = ml.id
-                      WHERE (i.status IS NULL OR i.status IN ('available', 'allocated'))
-                        AND (i.quantity IS NULL OR i.quantity > 0)
-                      GROUP BY ml.id
-                      HAVING idle_days >= ?
-                      ORDER BY idle_days DESC`, days);
-    res.json({ count: rows.length, days, items: rows });
-  }));
-
-  // P2-9 物料单位换算 (1 卷 = factor 吨 / 1 箱 = factor 件)
-  app.get('/api/materials/:id/units', wrap((req, res) => {
-    const matId = req.params.id;
-    const rows = all('SELECT * FROM material_units WHERE material_id = ? ORDER BY from_unit', matId);
-    res.json({ count: rows.length, items: rows });
-  }));
-
-  app.post('/api/material_units', wrap((req, res) => {
-    if (requirePermission('material:write')(req, res)) return;
-    const { material_id, from_unit, to_unit, factor, notes } = req.body || {};
-    if (!material_id || !from_unit || !to_unit || !factor) return res.status(400).json({ error: 'material_id/from_unit/to_unit/factor 必填' });
-    if (from_unit === to_unit) return res.status(400).json({ error: 'from_unit 和 to_unit 不能相同' });
-    const mat = get('SELECT id, unit FROM materials WHERE id = ?', material_id);
-    if (!mat) return res.status(404).json({ error: '物料不存在' });
-    try {
-      run('INSERT INTO material_units (material_id, from_unit, to_unit, factor, notes) VALUES (?, ?, ?, ?, ?)', [material_id, from_unit, to_unit, factor, notes || null]);
-      res.json({ ok: true, id: db.lastInsertRowid, message: '已添加换算 ' + from_unit + ' -> ' + to_unit + ' (×' + factor + ')' });
-    } catch (e) { res.status(400).json({ error: e.message }); }
-  }));
-
-  app.delete('/api/material_units/:id', wrap((req, res) => {
-    if (requirePermission('material:write')(req, res)) return;
-    const r = run('DELETE FROM material_units WHERE id = ?', req.params.id);
-    res.json({ ok: true, changes: r.changes });
-  }));
-
 }
 
 module.exports = { register };

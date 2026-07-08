@@ -4,15 +4,15 @@ After=network.target
 
 [Service]
 Type=simple
-Environment="PATH=/home/dubin/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+Environment="PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="NODE_ENV=production"
 WorkingDirectory=/home/dubin/factory-mes
-# 部署前测试闸门: 失败则阻止 service 启动 (systemd 会保留上一个运行版本)
-ExecStartPre=/bin/bash /home/dubin/factory-mes/scripts/pre-deploy-test.sh
-ExecStart=/home/dubin/.local/bin/node server.js
+ExecStartPre=/bin/bash /home/dubin/factory-mes/scripts/pre-deploy-test.sh --quiet
+ExecStart=/home/dubin/.nvm/versions/node/v22.22.3/bin/node server.js
 Restart=on-failure
 RestartSec=5s
-StandardOutput=append:/home/dubin/factory-mes/data/mes.log
-StandardError=append:/home/dubin/factory-mes/data/mes.log
+StandardOutput=append:/home/dubin/factory-mes/logs/mes.log
+StandardError=append:/home/dubin/factory-mes/logs/mes.log
 
 [Install]
 WantedBy=default.target

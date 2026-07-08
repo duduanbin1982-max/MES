@@ -3,11 +3,34 @@
 // getCrossSubsystemMatrix 主函数: 计算 N×N 矩阵 + strongest/weakest/bottlenecks
 // Author: 三狗子 | Date: 2026-06-24
 
-const db = require('../../../db');
-const { TYPE_FACTOR, UNASSIGNED, colorForId, round2 } = require('./constants');
+// Inline (brooks-debt R4)
+const TYPE_FACTOR = {
+  FS: 1.0,  // Finish-to-Start: 完成-开始
+  SS: 0.7,  // Start-to-Start: 同时开始
+  FF: 0.5,  // Finish-to-Finish: 同时完成
+  SF: 0.5,  // Start-to-Finish: 开始-完成 (少用)
+};
+
+// 虚拟 subsystem id: 表示 "未分配到任何 subsystem 的节点"
+const UNASSIGNED = "__unassigned__";
+
+// Stable colour palette — 按 subsystem id 散列取色, 保证 UI 跨视图一致
+const PALETTE = [
+  "#0ea5e9", "#22c55e", "#f97316", "#a855f7", "#ef4444",
+  "#14b8a6", "#eab308", "#ec4899", "#6366f1", "#10b981",
+];
+
+// 根据 id 取色 (稳定散列)
+function colorForId(id) {
+  if (id == null) return "#94a3b8";
+  return PALETTE[Math.abs(Number(id)) % PALETTE.length];
+}
+
+// 数字保留 2 位
+function round2(n) { return Math.round(n * 100) / 100; }
 const { loadSubsystemsForInstance } = require('./loadSubsystems');
-function getCrossSubsystemMatrix(instanceId) {
-  const subsystems = loadSubsystemsForInstance(instanceId);
+function getCrossSubsystemMatrix(db, instanceId) {
+  const subsystems = loadSubsystemsForInstance(db, instanceId);
   const subKeys = subsystems.map((s) => s.key);
 
   // Flat-lookup helpers.

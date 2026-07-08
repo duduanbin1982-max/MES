@@ -1,6 +1,7 @@
 // 全局看板: 实例/工单/节点/BOM/长交期关键件 总览
+const { wrap } = require('../../middleware/asyncHandler');
 function register(app, db) {
-  const { all, get, wrap } = require('./_helpers').makeHelpers(db)
+  const { all, get } = require('./_helpers').makeHelpers(db)
 
   app.get('/api/dashboard', wrap((req, res) => {
     res.json({
@@ -11,9 +12,10 @@ function register(app, db) {
       process_nodes: { total: get('SELECT count(*) c FROM process_nodes').c, by_status: all('SELECT status, count(*) c FROM process_nodes GROUP BY status') },
       bom_total: get('SELECT count(*) c FROM instance_bom').c,
       key_components: get('SELECT count(*) c FROM key_components').c,
-      long_leadtime: get('SELECT count(*) c FROM key_components WHERE lead_time_weeks >= 12').c
+      long_leadtime: get('SELECT count(*) c FROM key_components WHERE lead_time_weeks >= 12').c,
+      open_eco: get("SELECT count(*) c FROM instance_eco WHERE status='open'").c,
+      open_field_service: get("SELECT count(*) c FROM field_service WHERE status='open'").c
     })
   }))
 }
-
 module.exports = { register }

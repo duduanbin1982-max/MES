@@ -1,11 +1,35 @@
 "use strict";
 // services/processTree/mindmap.js
-// mindmap 入口 桥接 (routes/instance.js + tests 直接 require 这个)
-// 实际实现拆到 ./mindmap/ 子目录
-// 注意: require 写明 './mindmap/index', 不写 './mindmap' 避免解析成自己
-// Author: 三狗子 | Date: 2026-06-24
+// mindmap 入口桥接：所有调用必须显式注入 db，避免服务层回退到全局 DB singleton。
 
-const { getMindmap, getRootView, getSubsystemView, getPartView, getNodeView } = require('./mindmap/index');
+const impl = require('./mindmap/index');
+
+function requireDb(db) {
+  if (!db || typeof db.prepare !== 'function') {
+    throw new TypeError('processTree mindmap requires db as the first argument');
+  }
+  return db;
+}
+
+function getMindmap(db, instanceId, partId) {
+  return impl.getMindmap(requireDb(db), instanceId, partId);
+}
+
+function getRootView(db, instanceId) {
+  return impl.getRootView(requireDb(db), instanceId);
+}
+
+function getSubsystemView(db, instanceId, subsystemId) {
+  return impl.getSubsystemView(requireDb(db), instanceId, subsystemId);
+}
+
+function getPartView(db, instanceId, bomNodeId) {
+  return impl.getPartView(requireDb(db), instanceId, bomNodeId);
+}
+
+function getNodeView(db, instanceId, nodeId) {
+  return impl.getNodeView(requireDb(db), instanceId, nodeId);
+}
 
 module.exports = {
   getMindmap,

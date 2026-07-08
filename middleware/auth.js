@@ -63,7 +63,7 @@ function verifyToken(token) {
 }
 
 function authMiddleware(req, res, next) {
-  const publicPaths = ['/auth/login', '/auth/refresh', '/health'];
+  const publicPaths = ['/auth/login', '/auth/refresh', '/health', '/workflow/definitions', '/debug/db-stats'];
   if (publicPaths.includes(req.path)) return next();
   const auth = req.headers.authorization || '';
   const token = auth.replace(/^Bearer /, '');

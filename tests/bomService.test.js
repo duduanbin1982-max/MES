@@ -81,19 +81,20 @@ test('P2.BOM.2 validateTree 根/循环/物料/虚项', () => {
   // 缺根
   let r = bomService.validateTree(db, 1)
   assert.ok(r.errors.some(e => e.includes('根节点')))
-  // 加根 + 子
-  db.prepare("INSERT INTO instance_bom (equipment_instance_id, tier, quantity, unit, category) VALUES (1, 0, 1, '台', '成品')").run()
-  db.prepare("INSERT INTO instance_bom (equipment_instance_id, tier, parent_id, material_id, quantity, unit, category) VALUES (1, 2, 1, 10, 2, '件', '外购成品')").run()
+  // 加根 + 1级部件 + 2级零件，满足非标设备最低 0/1/2 结构
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, tier, quantity, unit, category) VALUES (1, 1, 0, 1, '台', '成品')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, tier, parent_id, part_number, quantity, unit, category) VALUES (2, 1, 1, 1, 'MOD-001', 1, '套', '自制部件')").run()
+  db.prepare("INSERT INTO instance_bom (id, equipment_instance_id, tier, parent_id, material_id, quantity, unit, category) VALUES (3, 1, 2, 2, 10, 2, '件', '外购成品')").run()
   r = bomService.validateTree(db, 1)
   assert.equal(r.ok, true)
   // 循环
-  db.prepare("UPDATE instance_bom SET parent_id = 2 WHERE id = 1").run()  // 根指向子 → 循环
+  db.prepare("UPDATE instance_bom SET parent_id = 3 WHERE id = 1").run()  // 根指向孙级 → 循环
   r = bomService.validateTree(db, 1)
   assert.ok(r.errors.some(e => e.includes('循环')))
   // 修
   db.prepare("UPDATE instance_bom SET parent_id = NULL WHERE id = 1").run()
   // 物料不存在
-  db.prepare("INSERT INTO instance_bom (equipment_instance_id, tier, parent_id, material_id, quantity, unit, category) VALUES (1, 2, 1, 999, 1, '件', '外购成品')").run()
+  db.prepare("INSERT INTO instance_bom (equipment_instance_id, tier, parent_id, material_id, quantity, unit, category) VALUES (1, 2, 2, 999, 1, '件', '外购成品')").run()
   r = bomService.validateTree(db, 1)
   assert.ok(r.errors.some(e => e.includes('物料不存在')))
   // 虚项作叶子
@@ -173,17 +174,21 @@ test('P2.BOM.8 POST/DELETE 节点 + 级联删除', () => {
   rootHandler(reqRoot, resRoot, () => {})
   assert.equal(resRoot._j.status, 200)
   const rootId = resRoot._j.json.id
-  // POST 子
-  const reqChild = { params: { id: 1 }, body: { tier: 2, parent_id: rootId, material_id: 10, quantity: 2, unit: '件', category: '外购成品' }, user: { uid: 1 } }
+  // POST 1级部件 + 2级子件
+  const reqModule = { params: { id: 1 }, body: { tier: 1, parent_id: rootId, part_number: 'MOD-001', quantity: 1, unit: '套', category: '自制部件' }, user: { uid: 1 } }
+  const resModule = mkRes()
+  rootHandler(reqModule, resModule, () => {})
+  assert.equal(resModule._j.status, 200)
+  const moduleId = resModule._j.json.id
+  const reqChild = { params: { id: 1 }, body: { tier: 2, parent_id: moduleId, material_id: 10, quantity: 2, unit: '件', category: '外购成品' }, user: { uid: 1 } }
   const resChild = mkRes()
   rootHandler(reqChild, resChild, () => {})
   assert.equal(resChild._j.status, 200)
-  const childId = resChild._j.json.id
   // DELETE 根 → 应级联删子
   const delHandler = find('DELETE', '/api/bom/:id')
   const resDel = mkRes()
   delHandler({ params: { id: rootId } }, resDel, () => {})
-  assert.equal(resDel._j.json.count, 2)
+  assert.equal(resDel._j.json.count, 3)
   assert.equal(db.prepare('SELECT count(*) AS c FROM instance_bom').get().c, 0)
 })
 
@@ -203,10 +208,10 @@ test('P2.BOM.10 POST 导入 CSV 成功', () => {
   const db = freshDb()
   const { find } = mkApp(db)
   const handler = find('POST', '/api/equipment_instances/:id/bom/import')
-  const csv = `tier,material_id,quantity,unit,category
-0,,1,台,成品
-2,10,5,件,外购成品
-2,11,2,个,标准紧固件`
+  const csv = `node_ref,parent_ref,tier,material_id,part_number,quantity,unit,category
+ROOT,,0,,TBM-ROOT,1,台,成品
+MOD-01,ROOT,1,,MOD-001,1,套,自制部件
+PART-01,MOD-01,2,10,,5,件,外购成品`
   const req = { params: { id: 1 }, body: { csv }, user: { uid: 1 } }
   const res = mkRes()
   handler(req, res, () => {})

@@ -1,4 +1,5 @@
 'use strict';
+const { wrap } = require('../../middleware/asyncHandler');
 // services/oee.js
 // P2-#C OEE 设备产能分析
 // 公式 (简化版):
@@ -9,7 +10,7 @@
 
 function register(app, db) {
   const all = (sql, params = []) => db.prepare(sql).all(params);
-  const wrap = (h) => (req, res) => { try { h(req, res); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } };
+  
 
   function getOEE(req, res) {
     const startDate = new Date(req.query.start_date || new Date().toISOString().slice(0, 10));

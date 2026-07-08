@@ -12,7 +12,8 @@ const { requirePermission } = require('../middleware/auth');
 const systemSettings = require('../services/systemSettings');
 const { feishuNotify } = require('../services/feishuNotify');
 
-function register(app) {
+function register(app, db) {
+  systemSettings.setDb(db);
   app.get('/api/settings',     requirePermission('settings:read', 'settings:write'), (req, res) => { const items = systemSettings.getAll(); res.json({ items }); });
   app.get('/api/settings/:key', requirePermission('settings:read', 'settings:write'), (req, res) => { const r = systemSettings.getOne(req.params.key); if (!r) return res.status(404).json({ error: 'setting not found' }); res.json(r); });
   app.put('/api/settings/:key', requirePermission('settings:write'), (req, res) => { const v = req.body && req.body.value; const result = systemSettings.setOne(req.params.key, v, req.user && req.user.uid); if (!result.ok) return res.status(404).json(result); res.json(result); });

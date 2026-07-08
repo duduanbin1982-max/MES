@@ -6,13 +6,11 @@
 
 const nodeCrud = require("./nodeCrud");
 const nodeActions = require("./nodeActions");
-const nodeParams = require("./nodeParams");
 const dependencies = require("./dependencies");
 
 function register(app, db) {
   nodeCrud.register(app, db);
   nodeActions.register(app, db);
-  nodeParams.register(app, db);
   dependencies.register(app, db);
 }
 

@@ -1,4 +1,5 @@
 'use strict';
+const { wrap } = require('../../middleware/asyncHandler');
 // services/multiInstanceScheduler.js
 // P2 扩展: 跨实例资源池调度
 // 思路: 对每个 instance 跑 P2-#A 的单实例排程(dryRun), 然后聚合工位占用, 检测跨实例冲突
@@ -7,7 +8,7 @@
 function register(app, db) {
   const all = (sql, params = []) => db.prepare(sql).all(params);
   const get = (sql, params = []) => db.prepare(sql).get(params);
-  const wrap = (h) => (req, res) => { try { h(req, res); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } };
+  
 
   function addHours(isoOrDate, hours) {
     if (!hours) hours = 0;

@@ -10,7 +10,7 @@
 import { ref, computed } from 'vue'
 import { decorateWithDerivedStatus } from '../utils/nodeStatus.js'
 
-const authHeader = () => ({ Authorization: 'Bearer ' + localStorage.getItem('tbm_token') })
+const authHeader = () => ({ Authorization: 'Bearer ' + localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token') })
 
 export function useProcessTree(instanceIdRef) {
   const tree = ref([])

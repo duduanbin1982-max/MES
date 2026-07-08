@@ -10,6 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const Database = require('better-sqlite3');
 
 const REAL_DB = '/home/dubin/factory-mes/data/mes.db';
 const skip = !fs.existsSync(REAL_DB);
@@ -19,12 +20,15 @@ if (skip) {
   process.env.DB_PATH = REAL_DB;
 }
 
+const db = skip ? null : new Database(REAL_DB, { readonly: true });
+if (db) process.on('exit', () => db.close());
+
 const svc = require('../services/processTree/mindmap');
 const { getBreadcrumb } = require('../services/processTree/breadcrumb');
 
 if (!skip) {
   test('root view returns 总装 + 9 subsystems + breadcrumb', () => {
-    const r = svc.getMindmap(1, 'root');
+    const r = svc.getMindmap(db, 1, 'root');
     assert.equal(r.current.part_id, 'root');
     assert.equal(r.current.kind, 'root');
     assert.equal(r.current.level, 1);
@@ -39,7 +43,7 @@ if (!skip) {
   });
 
   test('subsystem view returns distinct parts with ops summary', () => {
-    const r = svc.getMindmap(1, 'sub_3');
+    const r = svc.getMindmap(db, 1, 'sub_3');
     assert.equal(r.current.kind, 'subsystem');
     assert.equal(r.current.name, '盾体');
     assert.ok(r.current.child_count > 0);
@@ -54,7 +58,7 @@ if (!skip) {
   });
 
   test('hydraulic subsystem (sub_7) contains the 7 expected parts', () => {
-    const r = svc.getMindmap(1, 'sub_7');
+    const r = svc.getMindmap(db, 1, 'sub_7');
     const names = r.children.map((c) => c.name);
     // Sample the expected hydraulics parts the user already verified manually
     for (const expected of ['主密封 (唇形+挡圈)', '铰接油缸', '主液压泵']) {
@@ -66,7 +70,7 @@ if (!skip) {
   });
 
   test('part view returns 3 operation steps (采购/检验/安装)', () => {
-    const r = svc.getMindmap(1, 'part_22');
+    const r = svc.getMindmap(db, 1, 'part_22');
     assert.equal(r.current.kind, 'part');
     assert.equal(r.current.level, 3);
     assert.equal(r.current.child_count, 3);
@@ -81,7 +85,7 @@ if (!skip) {
   });
 
   test('operation (level-4) view exposes dependencies as edges', () => {
-    const r = svc.getMindmap(1, 'node_148');
+    const r = svc.getMindmap(db, 1, 'node_148');
     assert.equal(r.current.kind, 'operation');
     assert.equal(r.current.level, 4);
     // Breadcrumb should be 4 deep
@@ -97,12 +101,12 @@ if (!skip) {
   });
 
   test('invalid part_id throws 400', () => {
-    assert.throws(() => svc.getMindmap(1, 'bogus_xyz'), /invalid part_id/);
+    assert.throws(() => svc.getMindmap(db, 1, 'bogus_xyz'), /invalid part_id/);
   });
 
   test('non-existent subsystem id returns 404', () => {
     try {
-      svc.getMindmap(1, 'sub_99999');
+      svc.getMindmap(db, 1, 'sub_99999');
       assert.fail('should have thrown');
     } catch (e) {
       assert.equal(e.status, 404);
@@ -111,7 +115,7 @@ if (!skip) {
 
   test('non-existent bom_node_id returns 404', () => {
     try {
-      svc.getMindmap(1, 'part_99999');
+      svc.getMindmap(db, 1, 'part_99999');
       assert.fail('should have thrown');
     } catch (e) {
       assert.equal(e.status, 404);
@@ -119,7 +123,7 @@ if (!skip) {
   });
 
   test('getBreadcrumb is cheaper subset of getMindmap', () => {
-    const bc = getBreadcrumb(1, 'part_22');
+    const bc = getBreadcrumb(db, 1, 'part_22');
     assert.equal(bc.length, 3);
     assert.equal(bc[0].part_id, 'root');
     assert.equal(bc[2].part_id, 'part_22');
@@ -128,13 +132,13 @@ if (!skip) {
   test('all 129 nodes are reachable: total of leaf operations matches', () => {
     // Walk the tree: sum of (part.operation_count) across all subsystems should
     // equal the count of process_nodes for instance 1.
-    const root = svc.getMindmap(1, 'root');
+    const root = svc.getMindmap(db, 1, 'root');
     let totalParts = 0;
     for (const sub of root.children) {
       if (!sub.part_id.startsWith('sub_')) continue;
       const sid = parseInt(sub.part_id.slice(4), 10);
       if (Number.isNaN(sid)) continue;
-      const subView = svc.getMindmap(1, sub.part_id);
+      const subView = svc.getMindmap(db, 1, sub.part_id);
       totalParts += subView.children.length;
     }
     // We don't assert an exact number because unassigned group is skipped,

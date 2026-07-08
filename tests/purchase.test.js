@@ -59,7 +59,12 @@ function call(routes, method, path, body) {
     status: (s) => { status = s; return res; },
     json: (j) => { json = j; return res; },
   };
-  handler(req, res);
+  const next = (err) => {
+    if (!err) return;
+    status = err.status || 500;
+    json = { error: err.message, code: err.code || 'INTERNAL_ERROR', details: err.details || null };
+  };
+  handler(req, res, next);
   return { status, json };
 }
 

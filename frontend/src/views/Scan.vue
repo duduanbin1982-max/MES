@@ -42,6 +42,28 @@
           <el-descriptions-item label="工位">{{ target.data.workstation_name || '-' }}</el-descriptions-item>
         </el-descriptions>
 
+        <!-- 报工输入区 -->
+        <el-card shadow="never" style="margin-top: 12px; background: #fafafa">
+          <template #header><span style="font-weight: 600">📝 报工信息</span></template>
+          <el-form :model="reportForm" label-width="100px" size="default">
+            <el-form-item label="操作员">
+              <el-input :model-value="currentUserName" disabled />
+            </el-form-item>
+            <el-form-item label="工时">
+              <el-input-number v-model="reportForm.hours_worked" :min="0" :step="0.5" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="完成数量">
+              <el-input-number v-model="reportForm.quantity_completed" :min="0" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="不良数量">
+              <el-input-number v-model="reportForm.defect_quantity" :min="0" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="备注">
+              <el-input v-model="reportForm.notes" type="textarea" :rows="2" placeholder="可选备注" />
+            </el-form-item>
+          </el-form>
+        </el-card>
+
         <div class="action-grid">
           <el-button type="primary" size="large" :disabled="target.data.status === 'in_progress' || target.data.status === 'completed'" @click="doAction('start')">▶ 开始</el-button>
           <el-button type="warning" size="large" :disabled="target.data.status !== 'in_progress'" @click="doAction('pause')">⏸ 暂停</el-button>
@@ -70,12 +92,52 @@
           <el-descriptions-item label="后继节点">{{ target.data.successors?.length || 0 }} 个</el-descriptions-item>
         </el-descriptions>
 
+        <!-- 报工输入区 -->
+        <el-card shadow="never" style="margin-top: 12px; background: #fafafa">
+          <template #header><span style="font-weight: 600">📝 报工信息</span></template>
+          <el-form :model="reportForm" label-width="100px" size="default">
+            <el-form-item label="操作员">
+              <el-input :model-value="currentUserName" disabled />
+            </el-form-item>
+            <el-form-item label="工时">
+              <el-input-number v-model="reportForm.hours_worked" :min="0" :step="0.5" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="完成数量">
+              <el-input-number v-model="reportForm.quantity_completed" :min="0" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="不良数量">
+              <el-input-number v-model="reportForm.defect_quantity" :min="0" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="备注">
+              <el-input v-model="reportForm.notes" type="textarea" :rows="2" placeholder="可选备注" />
+            </el-form-item>
+          </el-form>
+        </el-card>
+
         <div class="action-grid">
           <el-button type="primary" size="large" :disabled="target.data.status === 'in_progress' || target.data.status === 'completed'" @click="doAction('start')">▶ 开始</el-button>
           <el-button type="success" size="large" :disabled="target.data.status === 'completed'" @click="doAction('complete')">✓ 完成</el-button>
           <el-button type="danger" size="large" @click="doAction('block')">⚠ 卡住</el-button>
           <el-button type="warning" size="large" @click="showIssue = true">📝 备注</el-button>
         </div>
+      </el-card>
+    </div>
+
+    <!-- 执行结果摘要 -->
+    <div v-if="resultSummary" class="result-card">
+      <el-card shadow="never">
+        <div class="result-header" :style="{ color: resultSummary.color }">
+          <span style="font-size: 20px">{{ resultSummary.icon }}</span>
+          <span style="font-size: 18px; font-weight: 600; margin-left: 8px">{{ resultSummary.title }}</span>
+        </div>
+        <el-descriptions :column="2" border style="margin-top: 12px">
+          <el-descriptions-item label="操作">{{ resultSummary.action }}</el-descriptions-item>
+          <el-descriptions-item label="目标类型">{{ resultSummary.target_type }}</el-descriptions-item>
+          <el-descriptions-item label="工时">{{ resultSummary.hours || '-' }} h</el-descriptions-item>
+          <el-descriptions-item label="完成数量">{{ resultSummary.quantity ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="不良数量">{{ resultSummary.defects ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="备注">{{ resultSummary.notes || '-' }}</el-descriptions-item>
+        </el-descriptions>
       </el-card>
     </div>
 
@@ -99,7 +161,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
 
@@ -109,6 +171,24 @@ const loading = ref(false)
 const searched = ref(false)
 const showIssue = ref(false)
 const issueForm = reactive({ notes: '', hours_worked: 0 })
+const resultSummary = ref<any>(null)
+
+const reportForm = reactive({
+  hours_worked: 0,
+  quantity_completed: 0,
+  defect_quantity: 0,
+  notes: ''
+})
+
+// current user - try to read from localStorage
+const currentUser = computed(() => {
+  try {
+    const raw = localStorage.getItem('tbm_user')
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+})
+const currentUserId = computed(() => currentUser.value?.id || currentUser.value?.user_id || 4)
+const currentUserName = computed(() => currentUser.value?.display_name || currentUser.value?.username || '当前用户')
 
 const woTagType = (s: string) => ({ pending: 'info', in_progress: 'primary', paused: 'warning', completed: 'success', issue: 'danger', rework: 'danger' }[s] || 'info')
 const pnTagType = (s: string) => ({ pending: 'info', ready: 'primary', in_progress: 'success', completed: 'success', blocked: 'danger', paused: 'warning' }[s] || 'info')
@@ -117,6 +197,7 @@ const lookup = async () => {
   if (!code.value.trim()) { ElMessage.warning('请输入码'); return }
   loading.value = true
   searched.value = true
+  resultSummary.value = null
   try {
     const res: any = await api.get('/scan/lookup?code=' + encodeURIComponent(code.value.trim()))
     if (res.error) {
@@ -144,9 +225,34 @@ const doAction = async (action: string) => {
     try { await ElMessageBox.confirm('确认' + (target.value.type === 'work_order' ? '工单' : '节点') + '已完成？', '完成确认', { type: 'success' }) } catch { return }
   }
   try {
-    const payload: any = { code: code.value.trim(), action, operator_id: 4 }
+    const payload: any = {
+      code: code.value.trim(),
+      action,
+      operator_id: currentUserId.value,
+      hours_worked: reportForm.hours_worked,
+      quantity_completed: reportForm.quantity_completed,
+      defect_quantity: reportForm.defect_quantity,
+      notes: reportForm.notes
+    }
     const res: any = await api.post('/scan/execute', payload)
     ElMessage.success(res.message)
+
+    // Show result summary
+    const colorMap: Record<string, string> = { complete: '#67c23a', start: '#409eff', pause: '#e6a23c' }
+    const iconMap: Record<string, string> = { complete: '✅', start: '▶️', pause: '⏸️' }
+    const actionLabelMap: Record<string, string> = { complete: '完成', start: '开始', pause: '暂停' }
+    resultSummary.value = {
+      title: res.message || '操作成功',
+      icon: iconMap[action] || '📋',
+      color: colorMap[action] || '#409eff',
+      action: actionLabelMap[action] || action,
+      target_type: target.value.type === 'work_order' ? '工单' : '工艺节点',
+      hours: reportForm.hours_worked,
+      quantity: reportForm.quantity_completed,
+      defects: reportForm.defect_quantity,
+      notes: reportForm.notes
+    }
+
     await lookup()  // 刷新
   } catch (e: any) {
     ElMessage.error(e.response?.data?.error || '操作失败')
@@ -157,7 +263,15 @@ const submitNote = async () => {
   if (!issueForm.notes) { ElMessage.warning('请填写内容'); return }
   try {
     const action = target.value?.type === 'work_order' ? 'note' : 'note'
-    await api.post('/scan/execute', { code: code.value.trim(), action, operator_id: 4, notes: issueForm.notes, hours_worked: issueForm.hours_worked })
+    await api.post('/scan/execute', {
+      code: code.value.trim(),
+      action,
+      operator_id: currentUserId.value,
+      notes: issueForm.notes,
+      hours_worked: issueForm.hours_worked,
+      quantity_completed: reportForm.quantity_completed,
+      defect_quantity: reportForm.defect_quantity
+    })
     ElMessage.success('已记录')
     showIssue.value = false
     issueForm.notes = ''; issueForm.hours_worked = 0
@@ -174,6 +288,8 @@ const submitNote = async () => {
 .wo-title { display: flex; justify-content: space-between; align-items: flex-start; }
 .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .action-grid .el-button { height: 60px; font-size: 18px; font-weight: 500; }
+.result-card { margin-bottom: 12px; }
+.result-header { display: flex; align-items: center; }
 @media (max-width: 480px) {
   .scan-page { padding: 8px; }
   .action-grid .el-button { height: 50px; font-size: 16px; }

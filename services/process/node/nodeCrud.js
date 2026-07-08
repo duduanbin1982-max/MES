@@ -9,6 +9,7 @@
 // Author: 三狗子 | Date: 2026-06-24
 
 const { all, get, run, wrap } = require("./_helpers");
+const { emit, Events } = require("../../../app/ws/EventBus");
 
 function register(app, db) {
 app.get('/api/equipment_instances/:id/process_tree', wrap((req, res) => {
@@ -47,20 +48,24 @@ app.get('/api/equipment_instances/:id/process_tree', wrap((req, res) => {
 app.post('/api/process_nodes', wrap((req, res) => {
   const { equipment_instance_id, parent_id, bom_node_id, operation_name, operation_type,
           sequence, estimated_hours, required_workstation_id, required_skill,
+          operation_template_id, required_position_code, worker_count, qc_required, sop_required,
           is_milestone, phase_code, planned_start, planned_end, notes } = req.body;
   if (!equipment_instance_id || !operation_name) return res.status(400).json({ error: 'equipment_instance_id/operation_name 必填' });
   const r = run( db, 
-    "INSERT INTO process_nodes (equipment_instance_id, parent_id, bom_node_id, operation_name, operation_type, sequence, estimated_hours, required_workstation_id, required_skill, is_milestone, phase_code, planned_start, planned_end, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "INSERT INTO process_nodes (equipment_instance_id, parent_id, bom_node_id, operation_name, operation_type, sequence, estimated_hours, required_workstation_id, required_skill, operation_template_id, required_position_code, worker_count, qc_required, sop_required, is_milestone, phase_code, planned_start, planned_end, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     [equipment_instance_id, parent_id || null, bom_node_id || null, operation_name, operation_type || 'make',
      sequence || 1, estimated_hours || 0, required_workstation_id || null, required_skill || null,
+     operation_template_id || null, required_position_code || null, worker_count || 1, qc_required ? 1 : 0, sop_required ? 1 : 0,
      is_milestone ? 1 : 0, phase_code || null, planned_start || null, planned_end || null, notes || null]
   );
+  emit(Events.BOM_CREATED, { node_id: r.lastInsertRowid, node_name: operation_name, equipment_instance_id, parent_id, bom_node_id });
   res.json({ id: r.lastInsertRowid, message: '工艺节点已创建' });
 }));
 
 app.put('/api/process_nodes/:id', wrap((req, res) => {
   const fields = ['operation_name', 'operation_type', 'sequence', 'estimated_hours',
-                  'required_workstation_id', 'required_skill', 'is_milestone', 'phase_code',
+                  'required_workstation_id', 'required_skill', 'operation_template_id', 'required_position_code',
+                  'worker_count', 'qc_required', 'sop_required', 'is_milestone', 'phase_code',
                   'planned_start', 'planned_end', 'actual_start', 'actual_end',
                   'planned_cost', 'actual_cost', 'status', 'sort_order', 'notes', 'parent_id', 'bom_node_id'];
   const updates = [];
@@ -69,14 +74,18 @@ app.put('/api/process_nodes/:id', wrap((req, res) => {
     if (req.body[f] !== undefined) { updates.push(f + ' = ?'); values.push(req.body[f]); }
   }
   if (updates.length === 0) return res.status(400).json({ error: 'no fields' });
+  const nodeBefore = get(db, 'SELECT id, equipment_instance_id, operation_name FROM process_nodes WHERE id = ?', req.params.id);
   updates.push("updated_at = datetime('now')");
   values.push(req.params.id);
   const r = run( db, 'UPDATE process_nodes SET ' + updates.join(', ') + ' WHERE id = ?', values);
+  if (nodeBefore) emit(Events.BOM_UPDATED, { node_id: nodeBefore.id, node_name: req.body.operation_name || nodeBefore.operation_name, equipment_instance_id: nodeBefore.equipment_instance_id, action: "updated" });
   res.json({ changes: r.changes, message: '已更新' });
 }));
 
 app.delete('/api/process_nodes/:id', wrap((req, res) => {
+  const nodeBefore = get(db, 'SELECT id, equipment_instance_id, operation_name FROM process_nodes WHERE id = ?', req.params.id);
   const r = run( db, 'DELETE FROM process_nodes WHERE id = ?', req.params.id);
+  if (nodeBefore) emit(Events.BOM_UPDATED, { node_id: nodeBefore.id, node_name: nodeBefore.operation_name, equipment_instance_id: nodeBefore.equipment_instance_id, action: "deleted" });
   res.json({ changes: r.changes, message: '已删除' });
 }));
 

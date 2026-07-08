@@ -31,6 +31,7 @@
           <el-dropdown-item command="edit">✏️ 编辑</el-dropdown-item>
           <el-dropdown-item command="assign">👷 分配</el-dropdown-item>
           <el-dropdown-item command="addchild">➕ 加子节点</el-dropdown-item>
+          <el-dropdown-item command="hours">⏱ 工时定额</el-dropdown-item>
           <el-dropdown-item command="adddep">🔗 加依赖</el-dropdown-item>
           <el-dropdown-item command="delete" divided><span style="color: #f56c6c">🗑 删除</span></el-dropdown-item>
         </el-dropdown-menu>

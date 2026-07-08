@@ -9,6 +9,7 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: [
+      { find: '@', replacement: path.resolve(__dirname, 'src') },
       { find: /^vue$/, replacement: path.resolve(__dirname, 'src/vue-shim.js') }
     ]
   },
@@ -24,6 +25,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    chunkSizeWarningLimit: 1200,
     sourcemap: false,
     rollupOptions: {
       output: {

@@ -14,11 +14,22 @@ const router = useRouter()
 const auth = useAuthStore()
 const msg = ref('加载中...')
 
+const defaultRouteByRole: Record<string, string> = {
+  warehouse: '/shopfloor?tab=pick',
+  storekeeper: '/shopfloor?tab=pick',
+  material: '/shopfloor?tab=pick',
+  inventory: '/shopfloor?tab=pick',
+  qc: '/shopfloor?tab=qc',
+  worker: '/shopfloor?tab=scan',
+  welder: '/shopfloor?tab=scan',
+}
+
 onMounted(() => {
   // 登录态决定去哪儿
   if (auth.isLoggedIn) {
-    msg.value = '进入仪表盘...'
-    router.replace('/dashboard')
+    const target = defaultRouteByRole[auth.user?.role || ''] || '/dashboard'
+    msg.value = target.startsWith('/shopfloor') ? '进入车间工作台...' : '进入仪表盘...'
+    router.replace(target)
   } else {
     msg.value = '进入登录...'
     router.replace('/login')

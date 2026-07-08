@@ -6,9 +6,13 @@
 
 require('dotenv').config();
 
+const http = require('http')
+const path = require('path');
 const { createApp } = require('./app');
+const { attachWebSocket } = require('./app/ws/manager');
 const db = require('./db');
 const { authMiddleware } = require('./middleware/auth');
+const { apiPermissionMiddleware } = require('./middleware/apiPermissions');
 const { onlyForemanOrAdmin, onlyWelder } = require('./routes/guards');
 
 const app = createApp();
@@ -28,51 +32,62 @@ loadRolePermissions(db);
 // 根路由 + favicon + SPA fallback (无需 auth)
 require('./routes/root').register(app);
 
+// P1-2: 查询性能统计
+app.get("/api/debug/db-stats", (_req, res) => {
+  try { const { profileStats } = require("./db"); res.json(profileStats()); }
+  catch(e) { res.json({ error: e.message }); }
+});
+
 // auth 白名单: /api/health 和 /api/auth/login
 app.use('/api', authMiddleware);
+app.use('/api', apiPermissionMiddleware);
+app.use('/api', require('./app/middleware/auditTrail')(db));
 require('./routes/auth').register(app, db);
 require('./routes/health').register(app, db);
-require('./routes/settings').register(app);
+require('./routes/settings').register(app, db);
 // P0-1: 角色管理 (admin only)
 require('./routes/roles').register(app, db);
 // P1-4: 审计日志查询 (audit:read)
 require('./routes/audit').register(app, db);
+// 帮助中心: 操作手册 Markdown
+require('./routes/help').register(app, db);
 
 // 实例重型路由 (16 条)
 require('./routes/instance').register(app, db);
 
 // services/ 模块化注册 (走 service 自己的 register)
-require('./services/qcService').register(app, db);
-require('./services/equipment/multiInstanceScheduler').register(app, db);
-require('./services/equipment/oee').register(app, db);
-require('./services/delayAlerts').register(app, db);
-require('./services/equipment/scheduler').register(app, db);
-require('./services/materialService').register(app, db);
-require('./services/bomService').register(app, db);
-// P0-文档: 文档/图纸管理
-require('./services/documentService').register(app, db);
-require('./services/purchase').register(app, db);
-require('./services/cost/keyComponentPrices').register(app, db);
-require('./services/cost/rollup/index').register(app, db);
-require('./services/cost/materialPrices').register(app, db);
-require('./services/workOrderService').register(app, db, { onlyForemanOrAdmin, onlyWelder });
-require('./services/equipment/service').register(app, db);
-require('./services/process/node').register(app, db);
-require('./services/reportService').register(app, db);
-require('./services/process/params').register(app, db);
-require('./services/eco').register(app, db);
-require('./services/qcInspection').register(app, db);
-require('./services/systemSettings').register(app, db);
-require('./services/userManagement').register(app, db);
+require('./services/register-all').registerAll(app, db, {});
+// MESA #5: IoT 数据采集器 (Modbus 模拟 + 实时入库 + WebSocket)
+const iotCollector = require('./services/iotCollector');
+// MESA #7: SPC 实时监控 (30s 间隔, WECO 规则 + Cpk 预警)
+const spcMonitor = require('./services/spcMonitor');
+iotCollector.start(db, 5000);
+spcMonitor.start(db, 30000);
 
-// P0-文档: uploads 静态目录 (受 auth 保护, 仅 GET 可见)
+// P0-文档: 文档/图纸管理 + uploads 静态目录 (受 auth 保护, 仅 GET 可见)
 app.use('/uploads', require('express').static('/home/dubin/factory-mes/data/uploads', { fallthrough: true }));
+
+
+// P2 前端 SPA: 静态文件 + history fallback (nginx 反代到此端口)
+const frontendDist = path.join(__dirname, 'frontend', 'dist');
+app.use(express.static(frontendDist, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript');
+    else if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css');
+  }
+}));
+app.get(/^(?!\/api\/|\/ws|\/uploads).*$/, (req, res) => {
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
+console.log('[spa] Frontend SPA served from ' + frontendDist);
 
 // P0-3 统一错误响应: notFoundHandler + errorHandler (必须在所有 route 之后)
 app._mountErrorHandlers();
 
 // 启动
-app.listen(PORT, '127.0.0.1', () => {
+const httpServer = http.createServer(app);
+attachWebSocket(httpServer);
+httpServer.listen(PORT, '127.0.0.1', () => {
   console.log('✓ TBM-MES v2.3 listening on 127.0.0.1:' + PORT + ' (经 nginx 443 反代暴露)');
   console.log('  Phase: phase-1 (Equipment-Centric + Process Tree + Settings)');
   console.log('  Routes: routes/ + services/');

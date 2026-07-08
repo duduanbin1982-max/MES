@@ -1,4 +1,5 @@
 "use strict";
+const { wrap } = require('../../../middleware/asyncHandler');
 // services/cost/rollup/rollup.js
 // GET /api/equipment_instances/:id/cost_rollup
 // 主成本归集: 关键件 + 普通物料 + 工时 + 合同毛利
@@ -12,7 +13,7 @@ const { aggregateKeyComponents, aggregateMaterials, deriveContractMetrics } = re
 function register(app, db) {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
   const get = (sql, ...p) => db.prepare(sql).get(...p);
-  const wrap = (h) => (req, res) => { try { h(req, res); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } };
+  
   app.get('/api/equipment_instances/:id/cost_rollup', wrap((req, res) => {
     const inst = get('SELECT * FROM equipment_instances WHERE id = ?', req.params.id);
     if (!inst) return res.status(404).json({ error: 'equipment_instance not found' });

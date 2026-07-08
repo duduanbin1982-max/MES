@@ -1,0 +1,333 @@
+.mindmap {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 0;
+  margin-bottom: 16px;
+}
+
+.mindmap-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  background: #fafbfc;
+  border-bottom: 1px solid #ebeef5;
+  border-radius: 6px 6px 0 0;
+}
+
+.mindmap-toggle {
+  color: #909399;
+  font-size: 12px;
+  width: 14px;
+  display: inline-block;
+}
+
+.mindmap-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #303133;
+}
+
+.mindmap-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: #909399;
+}
+
+.mindmap-body {
+  padding: 14px;
+}
+
+.mindmap-fade-enter-active,
+.mindmap-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.mindmap-fade-enter-from,
+.mindmap-fade-leave-to {
+  opacity: 0;
+}
+
+/* 面包屑 */
+.mindmap-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+
+.mindmap-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  color: #409eff;
+  transition: background 0.15s ease;
+}
+
+.mindmap-crumb:hover {
+  background: #ecf5ff;
+}
+
+.mindmap-crumb-current {
+  color: #303133;
+  cursor: default;
+  background: #fff;
+  font-weight: 600;
+}
+
+.mindmap-crumb-current:hover {
+  background: #fff;
+}
+
+.mindmap-crumb-icon {
+  font-size: 12px;
+}
+
+.mindmap-crumb-sep {
+  color: #c0c4cc;
+  margin-left: 4px;
+}
+
+/* KPI */
+.mindmap-kpi {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.mindmap-stat {
+  flex: 1 1 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 14px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  border-left: 3px solid #dcdfe6;
+}
+
+.mindmap-stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #303133;
+  line-height: 1.2;
+}
+
+.mindmap-stat-done { color: #67c23a; }
+.mindmap-stat-doing { color: #e6a23c; }
+.mindmap-stat-pct { color: #409eff; }
+
+.mindmap-stat-label {
+  font-size: 11px;
+  color: #909399;
+  margin-top: 2px;
+}
+
+/* 图区域 */
+.mindmap-chart {
+  width: 100%;
+  height: 420px;
+  background: #fafbfc;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+/* 操作按钮 */
+.mindmap-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* 子节点卡片网格 */
+.mindmap-children {
+  border-top: 1px dashed #ebeef5;
+  padding-top: 12px;
+}
+
+.mindmap-children-title {
+  font-size: 12px;
+  color: #606266;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.mindmap-child-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.mindmap-child-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.mindmap-child-card:hover {
+  border-color: #409eff;
+  background: #ecf5ff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.15);
+}
+
+.mindmap-child-icon {
+  font-size: 22px;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.mindmap-child-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mindmap-child-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mindmap-child-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.mindmap-child-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  border-radius: 2px;
+  background: #f0f2f5;
+  color: #606266;
+}
+
+.mindmap-child-tag-op { background: #fdf6ec; color: #e6a23c; }
+.mindmap-child-tag-done { background: #f0f9eb; color: #67c23a; }
+.mindmap-child-tag-doing { background: #fdf6ec; color: #e6a23c; }
+.mindmap-child-tag-pending { background: #f4f4f5; color: #909399; }
+
+.mindmap-child-status-pending { background: #f4f4f5; color: #909399; }
+.mindmap-child-status-ready { background: #ecf5ff; color: #409eff; }
+.mindmap-child-status-in_progress { background: #fdf6ec; color: #e6a23c; }
+.mindmap-child-status-completed { background: #f0f9eb; color: #67c23a; }
+.mindmap-child-status-blocked { background: #fef0f0; color: #f56c6c; }
+
+.mindmap-child-arrow {
+  color: #c0c4cc;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.mindmap-child-card:hover .mindmap-child-arrow {
+  color: #409eff;
+}
+
+.mindmap-hint-tiny {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #c0c4cc;
+  font-weight: normal;
+}
+
+/* tooltip 内容样式（渲染在 popper 内，scoped 不会生效，需用 :global 或放在非 scoped） */
+.mindmap-tooltip {
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 320px;
+}
+
+.mindmap-tooltip-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.mindmap-tooltip-icon {
+  font-size: 14px;
+}
+
+.mindmap-tooltip-name {
+  font-weight: 600;
+  color: #fff;
+  font-size: 13px;
+}
+
+.mindmap-tooltip-en {
+  color: #c0c4cc;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.mindmap-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.mindmap-tooltip-key {
+  color: #c0c4cc;
+  flex-shrink: 0;
+}
+
+.mindmap-tooltip-val {
+  color: #fff;
+  text-align: right;
+  word-break: break-word;
+}
+
+.mindmap-tooltip-row-notes .mindmap-tooltip-val {
+  text-align: left;
+  flex: 1;
+}
+
+.mindmap-tooltip-hint {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  color: #409eff;
+  font-size: 11px;
+  text-align: center;
+}
+
+/* Element Plus tooltip popper 全局样式（scoped 不生效） */
+.mindmap-tooltip-pop.el-popper {
+  background: #303133 !important;
+  color: #fff !important;
+  border: none !important;
+  padding: 8px 10px !important;
+  max-width: 360px;
+}
+.mindmap-tooltip-pop.el-popper .el-popper__arrow::before {
+  background: #303133 !important;
+  border-color: #303133 !important;
+}

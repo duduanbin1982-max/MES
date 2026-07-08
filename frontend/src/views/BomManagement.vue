@@ -50,11 +50,51 @@
       <el-tab-pane label="🌲 总览 (树状)" name="tree">
         <div style="display: flex; gap: 12px; margin-bottom: 8px">
           <el-button size="small" type="primary" @click="dlgAdd = true; editingNode = null">+ 新增根节点</el-button>
+          <el-button size="small" type="success" :disabled="summary.total > 0" @click="initMinimumBom">🧱 生成最低三级骨架</el-button>
           <el-button size="small" @click="dlgImport = true">📥 CSV 导入</el-button>
+          <el-button size="small" @click="loadTemplate">📋 工业模板</el-button>
           <el-button size="small" type="warning" @click="doValidate">🔍 校验</el-button>
           <el-button size="small" type="success" @click="dlgCompare = true">🔄 ECO 对比</el-button>
           <el-input v-model="treeFilter" placeholder="搜索零件/图号/物料名" size="small" style="width: 240px; margin-left: auto" clearable />
         </div>
+        <el-alert
+          v-if="minimumStructureMissing"
+          type="warning"
+          show-icon
+          :closable="false"
+          style="margin-bottom: 10px"
+          title="BOM 最低合格结构要求：必须至少包含 0级整机、1级部件、2级零件/外购件。"
+        />
+        <el-row :gutter="12" style="margin-bottom: 12px">
+          <el-col :span="6">
+            <el-card shadow="hover">
+              <div class="health-title">BOM 健康度</div>
+              <div class="health-score" :style="{ color: health.score >= 85 ? '#67c23a' : health.score >= 60 ? '#e6a23c' : '#f56c6c' }">{{ health.score || 0 }}</div>
+              <div class="health-sub">建议先把 80 分以上再流转采购/工艺</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card shadow="hover">
+              <div class="health-title">校验问题</div>
+              <div class="health-metric">{{ health.errors_count || 0 }} 错误 / {{ health.warnings_count || 0 }} 提醒</div>
+              <div class="health-sub">结构、层级、一物一码、字段完整性</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card shadow="hover">
+              <div class="health-title">业务缺口</div>
+              <div class="health-metric">缺单价 {{ health.checks?.missing_unit_price || 0 }} · 缺工艺 {{ health.checks?.missing_operation_route || 0 }}</div>
+              <div class="health-sub">成本与工艺闭环的关键入口</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card shadow="hover">
+              <div class="health-title">治理提醒</div>
+              <div class="health-metric">重复 {{ health.checks?.duplicate_material_nodes || 0 }} · 缺图纸 {{ health.checks?.nodes_without_documents || 0 }}</div>
+              <div class="health-sub">{{ (health.highlights || []).join('；') || '暂无重点提醒' }}</div>
+            </el-card>
+          </el-col>
+        </el-row>
         <el-row :gutter="12">
           <el-col :span="10">
             <el-card>
@@ -172,309 +212,157 @@
       <el-tab-pane :label="`毛坯 (${summary[3] || 0})`" name="l3">
         <LevelTable :rows="rowsOfLevel(3)" :tier="3" @select="onRowSelect" @delete="doDelete" />
       </el-tab-pane>
+
+      <BomBusinessTabs
+        :business-views="businessViews"
+        :flat="flat"
+        :bom-docs="bomDocs"
+        :doc-filter="docFilter"
+        :doc-loading="docLoading"
+        :doc-type-label="DOC_TYPE_LABEL"
+        @load-docs="loadBomDocs"
+        @download-doc="downloadBomDoc"
+        @risk-drill="openRiskDrill"
+      />
     </el-tabs>
     <el-empty v-else description="请先选择设备实例" />
 
-    <!-- 新增/编辑对话框 (同前, 略) -->
-    <el-dialog v-model="dlgAdd" :title="editingNode ? `编辑节点 #${editingNode.id}` : '新增 BOM 节点'" width="700px" @closed="resetAddForm">
-      <el-form :model="addForm" label-width="100px" size="small">
-        <el-row :gutter="12">
-          <el-col :span="8">
-            <el-form-item label="层级" required>
-              <el-select v-model="addForm.tier" @change="onTierChange">
-                <el-option label="0 总装" :value="0" />
-                <el-option label="1 部件" :value="1" />
-                <el-option label="2 零件" :value="2" />
-                <el-option label="3 毛坯" :value="3" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="父节点">
-              <el-select v-model="addForm.parent_id" filterable clearable style="width: 100%">
-                <el-option v-for="p in allNodes" :key="p.id" :label="`#${p.id} ${p.material_name || ''} (tier ${p.tier})`" :value="p.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="物料" v-if="addForm.tier > 0">
-              <el-select v-model="addForm.material_id" filterable clearable style="width: 100%">
-                <el-option v-for="m in materials" :key="m.id" :label="`${m.material_code} · ${m.material_name}`" :value="m.id" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8"><el-form-item label="数量" required><el-input-number v-model="addForm.quantity" :min="0.0001" :step="1" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="单位" required><el-select v-model="addForm.unit"><el-option v-for="u in ['件','个','米','千克','套','台','根','条','升']" :key="u" :label="u" :value="u" /></el-select></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="分类" required><el-select v-model="addForm.category"><el-option v-for="c in ['自制机加件','自制钣金件','标准紧固件','气动元件','电气元件','外购成品','辅助材料','成品','自制部件']" :key="c" :label="c" :value="c" /></el-select></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="图号/型号"><el-input v-model="addForm.part_number" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="材质"><el-input v-model="addForm.material_grade" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="表面处理"><el-input v-model="addForm.surface_treatment" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="品牌/等级"><el-input v-model="addForm.brand_recommend" v-if="addForm.brand_grade === '不可替代'" placeholder="不可替代" disabled /><el-input v-model="addForm.brand_recommend" v-else placeholder="东明" /><el-select v-model="addForm.brand_grade" size="small" style="width: 90px; margin-left: 4px"><el-option label="A" value="A" /><el-option label="B" value="B" /><el-option label="不可" value="不可替代" /></el-select></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="损耗"><el-input-number v-model="addForm.scrap_factor" :min="1.0" :max="2.0" :step="0.05" :precision="2" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="单价"><el-input-number v-model="addForm.unit_price" :min="0" :precision="2" /></el-form-item></el-col>
-          <el-col :span="8"><el-form-item label="存放"><el-input v-model="addForm.storage_location" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="标识"><el-checkbox v-model="addForm.is_phantom">虚项</el-checkbox><el-checkbox v-model="addForm.is_key_component">关键</el-checkbox><el-checkbox v-model="addForm.is_wear_part">易损</el-checkbox></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="备注"><el-input v-model="addForm.notes" type="textarea" :rows="2" /></el-form-item></el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <el-button @click="dlgAdd = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="doSave">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- CSV 导入对话框 -->
-    <el-dialog v-model="dlgImport" title="CSV 导入" width="700px">
-      <el-alert type="info" :closable="false" style="margin-bottom: 12px">
-        必填列: tier, quantity, unit, category<br>
-        可选列: material_id, part_number, parent_id, material_grade, surface_treatment, brand_recommend, scrap_factor, is_phantom, is_key_component, is_wear_part, notes
-      </el-alert>
-      <el-input v-model="csvText" type="textarea" :rows="10" placeholder="tier,parent_id,material_id,quantity,unit,category,material_grade,scrap_factor" />
-      <template #footer>
-        <el-button @click="dlgImport = false">取消</el-button>
-        <el-button type="primary" :loading="importing" @click="doImport">导入</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 校验对话框 -->
-    <el-dialog v-model="dlgValidate" title="校验结果" width="700px">
-      <el-alert v-if="validateResult?.ok" type="success" :closable="false">✅ 校验通过 ({{ validateResult?.total || 0 }} 节点)</el-alert>
-      <el-alert v-else type="error" :closable="false">{{ (validateResult?.errors || []).length }} 项错误</el-alert>
-      <ul style="margin-top: 12px"><li v-for="(e, i) in validateResult?.errors || []" :key="i">{{ e }}</li></ul>
-    </el-dialog>
-
-    <!-- ECO 对比对话框 -->
-    <el-dialog v-model="dlgCompare" title="ECO 版本对比" width="600px">
-      <el-form label-width="80px" size="small">
-        <el-form-item label="旧版本"><el-input v-model="compareV1" /></el-form-item>
-        <el-form-item label="新版本"><el-input v-model="compareV2" /></el-form-item>
-        <el-button type="primary" @click="doCompare" :loading="comparing">对比</el-button>
-      </el-form>
-      <el-row :gutter="12" v-if="compareResult" style="margin-top: 16px">
-        <el-col :span="8"><el-statistic title="新增" :value="compareResult.added.length" :value-style="{ color: '#67c23a' }" /></el-col>
-        <el-col :span="8"><el-statistic title="删除" :value="compareResult.removed.length" :value-style="{ color: '#f56c6c' }" /></el-col>
-        <el-col :span="8"><el-statistic title="修改" :value="compareResult.changed.length" :value-style="{ color: '#e6a23c' }" /></el-col>
-      </el-row>
-    </el-dialog>
+    <BomDialogs
+      v-model:dlg-add="dlgAdd"
+      v-model:dlg-import="dlgImport"
+      v-model:dlg-validate="dlgValidate"
+      v-model:dlg-compare="dlgCompare"
+      v-model:dlg-risk-drill="dlgRiskDrill"
+      v-model:dlg-risk-action="dlgRiskAction"
+      v-model:csv-text="csvText"
+      v-model:compare-v1="compareV1"
+      v-model:compare-v2="compareV2"
+      :editing-node="editingNode"
+      :add-form="addForm"
+      :all-nodes="allNodes"
+      :materials="materials"
+      :saving="saving"
+      :template-columns="templateColumns"
+      :importing="importing"
+      :validate-result="validateResult"
+      :comparing="comparing"
+      :compare-result="compareResult"
+      :selected-risk-component="selectedRiskComponent"
+      :selected-risk-item="selectedRiskItem"
+      :risk-action-mode="riskActionMode"
+      :risk-action-form="riskActionForm"
+      :risk-owners="riskOwners"
+      :risk-action-loading="riskActionLoading"
+      @reset-add-form="resetAddForm"
+      @tier-change="onTierChange"
+      @save="doSave"
+      @fill-template="fillTemplate"
+      @fill-sample="fillSample"
+      @copy-template="copyTemplate"
+      @import-csv="doImport"
+      @compare="doCompare"
+      @risk-followup="openRiskFollowup"
+      @risk-assign="openRiskAssign"
+      @risk-eta="openRiskEta"
+      @open-purchase="openPurchasePage"
+      @open-material-alerts="openMaterialAlerts"
+      @submit-risk-action="submitRiskAction"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, h } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '../api'
 import LevelTable from './bom/LevelTable.vue'
+import BomBusinessTabs from './bom/BomBusinessTabs.vue'
+import BomDialogs from './bom/BomDialogs.vue'
+import { useBomManagement } from './bom/useBomManagement'
 
-const instances = ref<any[]>([])
-const instanceId = ref<number | null>(null)
-const summary = ref<any>({ 0: 0, 1: 0, 2: 0, 3: 0, total: 0 })
-const tree = ref<any[]>([])
-const flat = ref<any[]>([])  // 平铺, 用于按 tier 过滤
-const costs = ref<any[]>([])
-const materials = ref<any[]>([])
-const treeFilter = ref('')
-const selected = ref<any | null>(null)
-const activeLevel = ref<number | null>(null)
-const mainTab = ref('tree')
-const totalCost = computed(() => costs.value.reduce((s, c) => s + (c.cost || 0), 0))
-const allNodes = computed(() => flat.value)
-
-// 按层级取节点
-function rowsOfLevel(t: number) {
-  return flat.value.filter(r => r.tier === t)
-}
-
-const filteredTree = computed(() => {
-  if (!treeFilter.value) return tree.value
-  const q = treeFilter.value.toLowerCase()
-  const match = (n: any): boolean => {
-    if ((n.material_name || '').toLowerCase().includes(q)) return true
-    if ((n.material_code || '').toLowerCase().includes(q)) return true
-    if ((n.part_number || '').toLowerCase().includes(q)) return true
-    return n.children?.some(match) || false
-  }
-  return tree.value.filter((r: any) => match(r))
-})
-
-async function loadAll() {
-  if (!instanceId.value) return
-  try {
-    const [treeR, levelsR, costR, matsR] = await Promise.all([
-      api.get(`/equipment_instances/${instanceId.value}/bom?view=tree`),
-      api.get(`/equipment_instances/${instanceId.value}/bom/levels`),
-      api.get(`/equipment_instances/${instanceId.value}/bom/cost`),
-      api.get(`/materials?limit=500`).catch(() => ({ items: [] })),
-    ])
-    tree.value = treeR.tree || []
-    summary.value = treeR.tier_summary || levelsR.summary
-    // 把 4 级扁平合并成一个数组
-    flat.value = []
-    for (let i = 0; i <= 3; i++) flat.value.push(...(levelsR.levels?.[i] || []))
-    costs.value = costR.items || []
-    materials.value = matsR.items || []
-  } catch (e: any) {
-    ElMessage.error('加载失败: ' + (e.message || e))
-  }
-}
-
-async function loadInstances() {
-  const r: any = await api.get('/equipment_instances?limit=100')
-  instances.value = r.items || r || []
-  if (instances.value.length && !instanceId.value) {
-    instanceId.value = instances.value[0].id
-    await loadAll()
-  }
-}
-
-function setLevel(t: number) {
-  activeLevel.value = t
-  mainTab.value = ['tree', 'l0', 'l1', 'l2', 'l3'][t] || 'tree'
-}
-
-function tierName(t: number) {
-  return ['0 总装', '1 部件', '2 零件', '3 毛坯'][t] || t
-}
-
-function onNodeClick(node: any) { selected.value = node }
-function onRowSelect(row: any) { selected.value = row }
-
-function prefillTier(t: number) {
-  resetAddForm()
-  addForm.value.tier = t
-  if (t === 0) { addForm.value.category = '成品' }
-  if (t === 1) { addForm.value.category = '自制部件' }
-  if (t === 2) { addForm.value.category = '外购成品' }
-}
-
-function onTierChange(t: number) {
-  if (t === 0) addForm.value.category = '成品'
-  else if (t === 1) addForm.value.category = '自制部件'
-  else if (t === 2) addForm.value.category = '外购成品'
-  else if (t === 3) addForm.value.category = '自制机加件'
-}
-
-// 部件下钻: 看某部件的子件
-const drillNode = ref<any | null>(null)
-const drillChildren = ref<any[]>([])
-function drillPart(node: any) {
-  drillNode.value = node
-  drillChildren.value = flat.value.filter(r => r.parent_id === node.id)
-}
-
-// 对话框状态
-const dlgAdd = ref(false)
-const dlgImport = ref(false)
-const dlgValidate = ref(false)
-const dlgCompare = ref(false)
-const saving = ref(false)
-const importing = ref(false)
-const comparing = ref(false)
-const editingNode = ref<any | null>(null)
-const addForm = ref<any>(defaultForm())
-function defaultForm() {
-  return {
-    tier: 2, quantity: 1, unit: '件', category: '外购成品',
-    material_id: null, part_number: '', material_grade: '',
-    surface_treatment: '', brand_recommend: '', brand_grade: '',
-    scrap_factor: 1.0, unit_price: null, storage_location: '',
-    is_phantom: false, is_key_component: false, is_wear_part: false,
-    notes: '', parent_id: null,
-  }
-}
-function resetAddForm() {
-  editingNode.value = null
-  addForm.value = defaultForm()
-}
-function openAddChild(parent: any) {
-  resetAddForm()
-  editingNode.value = { ...parent, _adding: true }
-  addForm.value.parent_id = parent.id
-  addForm.value.tier = Math.min(parent.tier + 1, 3)
-  onTierChange(addForm.value.tier)
-  dlgAdd.value = true
-}
-function openEdit() {
-  if (!selected.value) return
-  editingNode.value = selected.value
-  addForm.value = { ...defaultForm(), ...selected.value }
-  dlgAdd.value = true
-}
-async function doSave() {
-  saving.value = true
-  try {
-    if (editingNode.value && !editingNode.value._adding) {
-      await api.put(`/bom/${editingNode.value.id}`, addForm.value)
-      ElMessage.success(`已更新 #${editingNode.value.id}`)
-    } else {
-      const r: any = await api.post(`/equipment_instances/${instanceId.value}/bom`, {
-        ...addForm.value,
-        parent_id: addForm.value.parent_id || null,
-      })
-      ElMessage.success(`已新增 #${r.id}`)
-    }
-    dlgAdd.value = false
-    await loadAll()
-  } catch (e: any) {
-    const msg = e.response?.data?.message || e.message
-    const det = e.response?.data?.details
-    ElMessage.error('保存失败: ' + msg + (det ? ' ' + JSON.stringify(det) : ''))
-  } finally {
-    saving.value = false
-  }
-}
-async function doDelete(node: any) {
-  try {
-    await ElMessageBox.confirm(`确认删除节点 #${node.id} "${node.material_name || ''}" 及其所有子节点?`, '危险操作', { type: 'warning' })
-    await api.delete(`/bom/${node.id}`)
-    ElMessage.success('已删除')
-    if (selected.value?.id === node.id) selected.value = null
-    if (drillNode.value?.id === node.id) drillNode.value = null
-    await loadAll()
-  } catch (e: any) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error('删除失败: ' + (e.message || e))
-  }
-}
-
-const csvText = ref('')
-async function doImport() {
-  importing.value = true
-  try {
-    const r: any = await api.post(`/equipment_instances/${instanceId.value}/bom/import`, { csv: csvText.value })
-    ElMessage.success(`导入完成: ${r.inserted} 成功, ${r.errors} 失败`)
-    dlgImport.value = false
-    csvText.value = ''
-    await loadAll()
-  } catch (e: any) {
-    ElMessage.error('导入失败: ' + (e.response?.data?.message || e.message))
-  } finally {
-    importing.value = false
-  }
-}
-
-const validateResult = ref<any>(null)
-async function doValidate() {
-  const r: any = await api.get(`/equipment_instances/${instanceId.value}/bom/validate`)
-  validateResult.value = r
-  dlgValidate.value = true
-  if (r.ok) ElMessage.success('校验通过')
-  else ElMessage.warning(`${r.errors.length} 项错误`)
-}
-
-const compareV1 = ref('A0')
-const compareV2 = ref('A1')
-const compareResult = ref<any>(null)
-async function doCompare() {
-  comparing.value = true
-  try {
-    compareResult.value = await api.get(`/equipment_instances/${instanceId.value}/bom/compare?v1=${compareV1.value}&v2=${compareV2.value}`)
-  } catch (e: any) {
-    ElMessage.error('对比失败: ' + (e.message || e))
-  } finally {
-    comparing.value = false
-  }
-}
-
-onMounted(loadInstances)
+const {
+  instances,
+  instanceId,
+  summary,
+  tree,
+  flat,
+  costs,
+  materials,
+  health,
+  businessViews,
+  treeFilter,
+  selected,
+  activeLevel,
+  mainTab,
+  dlgRiskDrill,
+  selectedRiskComponent,
+  riskOwners,
+  dlgRiskAction,
+  riskActionMode,
+  selectedRiskItem,
+  riskActionLoading,
+  riskActionForm,
+  totalCost,
+  allNodes,
+  minimumStructureMissing,
+  templateMeta,
+  templateColumns,
+  docFilter,
+  DOC_TYPE_LABEL,
+  bomDocs,
+  docLoading,
+  filteredTree,
+  drillNode,
+  drillChildren,
+  dlgAdd,
+  dlgImport,
+  dlgValidate,
+  dlgCompare,
+  saving,
+  importing,
+  comparing,
+  editingNode,
+  addForm,
+  csvText,
+  validateResult,
+  compareV1,
+  compareV2,
+  compareResult,
+  loadBomDocs,
+  loadRiskOwners,
+  downloadBomDoc,
+  rowsOfLevel,
+  loadAll,
+  loadInstances,
+  setLevel,
+  tierName,
+  onNodeClick,
+  onRowSelect,
+  prefillTier,
+  onTierChange,
+  drillPart,
+  defaultForm,
+  resetAddForm,
+  openAddChild,
+  openEdit,
+  doSave,
+  doDelete,
+  doImport,
+  initMinimumBom,
+  doValidate,
+  doCompare,
+  loadTemplate,
+  fillTemplate,
+  fillSample,
+  copyTemplate,
+  templateDesc,
+  openRiskDrill,
+  resetRiskActionForm,
+  openRiskFollowup,
+  openRiskAssign,
+  openRiskEta,
+  refreshSelectedRiskComponent,
+  submitRiskAction,
+  openPurchasePage,
+  openMaterialAlerts,
+} = useBomManagement()
 </script>
 
 <style scoped>
@@ -486,5 +374,9 @@ onMounted(loadInstances)
 .level-num { font-size: 28px; font-weight: 600; }
 .level-label { font-size: 14px; font-weight: 500; margin-top: 4px; }
 .level-tip { font-size: 12px; color: #909399; margin-top: 2px; }
+.health-title { font-size: 13px; color: #606266; margin-bottom: 8px; }
+.health-score { font-size: 32px; font-weight: 700; line-height: 1; }
+.health-metric { font-size: 18px; font-weight: 600; line-height: 1.4; }
+.health-sub { font-size: 12px; color: #909399; margin-top: 8px; min-height: 32px; }
 :deep(.el-tree-node__content) { height: 32px; }
 </style>

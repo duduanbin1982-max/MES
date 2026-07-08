@@ -1,30 +1,41 @@
 <template>
   <el-container style="height: 100vh">
-    <el-aside width="220px" style="background: #001529; color: #fff">
+    <el-aside width="260px" class="sidebar">
       <div class="logo">
-        <span style="font-size: 18px; font-weight: 600">🛠️ TBM-MES</span>
-        <div style="font-size: 11px; color: #8c8c8c; margin-top: 4px">成套装备生产管理 v2.1</div>
+        <span class="logo-title">TBM-MES</span>
+        <div class="logo-sub">成套装备生产管理 v2.3</div>
       </div>
       <el-menu
-        :default-active="$route.path"
+        :default-active="activeMenuIndex"
+        :default-openeds="openedSections"
+        :collapse-transition="false"
         background-color="#001529"
         text-color="#cfd3dc"
         active-text-color="#409eff"
         router
       >
-        <el-menu-item v-for="r in visibleRoutes" :key="r.path" :index="r.path">
-          <el-icon><component :is="r.meta?.icon" /></el-icon>
-          <span>{{ r.meta?.title }}</span>
-        </el-menu-item>
+        <el-sub-menu v-for="section in visibleSections" :key="section.key" :index="section.key">
+          <template #title>
+            <el-icon><component :is="section.icon" /></el-icon>
+            <span>{{ section.title }}</span>
+          </template>
+          <el-menu-item v-for="item in section.items" :key="item.key" :index="item.to">
+            <el-icon><component :is="item.icon" /></el-icon>
+            <span>{{ item.title }}</span>
+          </el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-aside>
 
     <el-container>
-      <el-header style="background: #fff; box-shadow: 0 1px 4px rgba(0,21,41,.08); display: flex; align-items: center; justify-content: space-between">
+      <el-header class="top-header">
         <div style="font-size: 16px; font-weight: 500">{{ $route.meta?.title || 'TBM-MES' }}</div>
         <div style="display: flex; align-items: center; gap: 16px">
-          <router-link to="/scan" style="color: #409eff; text-decoration: none; font-size: 14px">📱 扫码报工</router-link>
-          <span style="color: #909399; font-size: 13px">{{ now }}</span>
+          <span :title="`WebSocket: ${wsStatus}`" :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: wsStatus === 'open' ? '#67c23a' : wsStatus === 'connecting' ? '#e6a23c' : '#f56c6c' }"></span>
+          <el-button :icon="isDark ? Sunny : Moon" circle size="small" @click="toggleTheme" :title="isDark ? '切换亮色' : '切换暗色'" />
+          <router-link to="/help/manual" class="manual-link">操作手册</router-link>
+          <router-link to="/scan" class="scan-link">扫码报工</router-link>
+          <span class="clock">{{ now }}</span>
           <el-dropdown @command="onCmd" trigger="click">
             <span style="cursor: pointer; display: flex; align-items: center; gap: 6px">
               <el-avatar :size="28" style="background: #409eff">{{ auth.user?.full_name?.[0] || '?' }}</el-avatar>
@@ -47,69 +58,135 @@
       </el-main>
     </el-container>
   </el-container>
+  <WsPanel />
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Moon, Sunny, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import WsPanel from '../components/WsPanel.vue'
+import { MENU_SECTIONS } from '../config/menuCatalog'
+import { filterMenuSections } from '../config/menuPolicy'
+import { useShellNotifications } from '../composables/useShellNotifications'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
-const onCmd = (cmd: string) => { if (cmd === 'logout') { auth.logout(); ElMessage.success('已登出'); router.push('/login') } }
-// frontend/src/views/Layout.vue (P0-1 改用 permission 过滤菜单)
-// 菜单可见性 = 该路由对应资源有 read 权限即可
-// 例如 /materials 需 material:read, /work-orders 需 work_order:read
-const PERM_BY_PATH: Record<string, string> = {
-  '/dashboard': 'report:read',
-  '/instances': 'equipment:read',
-  '/materials': 'material:read',
-  '/reports': 'report:read',
-  '/eco': 'settings:read',
-  '/gantt': 'work_order:read',
-  '/multi-schedule': 'work_order:read',
-  '/oee': 'equipment:read',
-  '/settings': 'settings:read',
-  '/quality': 'quality:read',
-  '/schedule': 'work_order:read',
-  '/process-tree': 'process:read',
-  '/work-orders': 'work_order:read',
-  '/field-service': 'equipment:read',
-  '/audit': 'audit:read',
-  '/documents': 'equipment:read',
-  '/bom': 'equipment:read',
+const now = ref('')
+const isDark = ref(false)
+let timer: ReturnType<typeof setInterval> | null = null
+
+const onCmd = (cmd: string) => {
+  if (cmd === 'logout') {
+    auth.logout()
+    ElMessage.success('已登出')
+    router.push('/login')
+  }
 }
 
-const visibleRoutes = computed(() => {
-  const layoutRoute = router.options.routes.find((r: any) => r.children && r.children.length > 0)
-  const all = layoutRoute?.children?.filter((r: any) => !r.meta?.hidden) || []
-  // P0-1: 按 permission 过滤
-  const result = all.filter((r: any) => {
-    const need = PERM_BY_PATH[r.path]
-    if (!need) return true   // 未登记的路由 (首页等) 默认可见
-    return auth.hasPerm(need)
-  })
-  return result
+const visibleSections = computed(() => filterMenuSections(MENU_SECTIONS, {
+  role: auth.user?.role || '',
+  hasAnyPerm: (...needs: string[]) => auth.hasAnyPerm(...needs),
+}))
+
+const openedSections = computed(() => visibleSections.value.map((section) => section.key))
+const activeMenuIndex = computed(() => {
+  const items = visibleSections.value.flatMap((section) => section.items)
+  const tabOnly = route.query.tab ? `${route.path}?tab=${route.query.tab}` : route.path
+  return items.find((item) => item.to === route.fullPath)?.to
+    || items.find((item) => item.to === tabOnly)?.to
+    || items.find((item) => item.to.split('?')[0] === route.path)?.to
+    || route.path
 })
-// DEBUG: 监控可见路由数量
-import { watch } from 'vue'
-watch(visibleRoutes, (v) => {
-  console.log('[Layout] visibleRoutes 更新, count=' + v.length, 'permissions=' + JSON.stringify(auth.permissions), 'role=' + auth.user?.role)
+
+watch(visibleSections, (sections) => {
+  console.log(
+    '[Layout] visible menu sections=',
+    sections.map((section) => ({ key: section.key, items: section.items.map((item) => item.to) })),
+    'permissions=' + JSON.stringify(auth.permissions),
+    'role=' + auth.user?.role,
+  )
 }, { immediate: true })
 
-const now = ref('')
-let timer: any
-const update = () => { now.value = new Date().toLocaleString('zh-CN') }
-onMounted(() => { update(); timer = setInterval(update, 1000) })
-onUnmounted(() => clearInterval(timer))
+watch(() => route.path, (path) => {
+  console.log('[Layout] active route=', path)
+}, { immediate: true })
+
+const toggleTheme = () => {
+  isDark.value = !isDark.value
+  localStorage.setItem('tbm-theme', isDark.value ? 'dark' : 'light')
+  if (isDark.value) document.documentElement.setAttribute('data-theme', 'dark')
+  else document.documentElement.removeAttribute('data-theme')
+}
+
+const update = () => {
+  now.value = new Date().toLocaleString('zh-CN')
+}
+
+const { status: wsStatus } = useShellNotifications()
+
+onMounted(() => {
+  const saved = localStorage.getItem('tbm-theme')
+  isDark.value = saved === 'dark'
+  if (isDark.value) document.documentElement.setAttribute('data-theme', 'dark')
+  else document.documentElement.removeAttribute('data-theme')
+  update()
+  timer = setInterval(update, 1000)
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
+})
 </script>
 
 <style scoped>
-.logo {
-  padding: 16px;
-  color: #fff;
-  border-bottom: 1px solid #1f2d3d;
-}
 .el-menu { border-right: 0; }
+
+.sidebar {
+  background: var(--el-menu-bg-color);
+  color: var(--el-menu-text-color);
+  border-right: 1px solid var(--el-border-color);
+}
+
+.logo {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.logo-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--el-menu-text-color);
+}
+
+.logo-sub {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  margin-top: 4px;
+}
+
+.top-header {
+  background: var(--el-bg-color-overlay);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-lg);
+  height: 56px;
+}
+
+.manual-link,
+.scan-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.clock {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
 </style>

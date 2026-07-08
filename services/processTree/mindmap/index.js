@@ -5,18 +5,15 @@
 
 const { ROOT_ID, isRoot, isSubsystem, isPart, isNode,
         subsystemIdOf, partBomIdOf, processNodeIdOf, assertValid } = require('../idCodec')
-const { getRootView } = require('./views/root')
-const { getSubsystemView } = require('./views/subsystem')
-const { getPartView } = require('./views/part')
-const { getNodeView } = require('./views/node')
+const { getRootView, getSubsystemView, getPartView, getNodeView } = require('./views')
 
-function getMindmap(instanceId, partId) {
+function getMindmap(db, instanceId, partId) {
   assertValid(partId)
   partId = partId || ROOT_ID
-  if (isRoot(partId))      return getRootView(instanceId)
-  if (isSubsystem(partId)) return getSubsystemView(instanceId, subsystemIdOf(partId))
-  if (isPart(partId))      return getPartView(instanceId, partBomIdOf(partId))
-  if (isNode(partId))      return getNodeView(instanceId, processNodeIdOf(partId))
+  if (isRoot(partId))      return getRootView(db, instanceId)
+  if (isSubsystem(partId)) return getSubsystemView(db, instanceId, subsystemIdOf(partId))
+  if (isPart(partId))      return getPartView(db, instanceId, partBomIdOf(partId))
+  if (isNode(partId))      return getNodeView(db, instanceId, processNodeIdOf(partId))
   throw new Error('unreachable')
 }
 
@@ -26,6 +23,5 @@ module.exports = {
   getSubsystemView,
   getPartView,
   getNodeView,
-  // 注意: getBreadcrumb 不在这里 re-export, 避免与 breadcrumb.js 循环依赖
-  // 调用方请直接 require('../breadcrumb') 拿 getBreadcrumb
+  // 注意: getBreadcrumb 不在这里 re-export；调用方请直接使用 breadcrumb.js。
 }

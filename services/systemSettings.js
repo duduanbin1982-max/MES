@@ -98,38 +98,5 @@ function getNum(key, defaultVal) {
   return defaultVal;
 }
 
-function register(app, _db) {
-  setDb(_db);
-  const all = (sql, p = []) => _db.prepare(sql).all(p);
-  const get = (sql, p = []) => _db.prepare(sql).get(p);
-  const run = (sql, p = []) => _db.prepare(sql).run(p);
-  const wrap = (h) => (req, res) => { try { h(req, res); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } };
 
-  app.get('/api/settings', wrap((req, res) => {
-    res.json({ items: getAll() });
-  }));
-
-  app.get('/api/settings/:key', wrap((req, res) => {
-    const r = getOne(req.params.key);
-    if (!r) return res.status(404).json({ error: 'setting not found' });
-    res.json(r);
-  }));
-
-  app.put('/api/settings/:key', wrap((req, res) => {
-    const v = req.body && req.body.value;
-    const result = setOne(req.params.key, v, req.user && req.user.uid);
-    if (!result.ok) return res.status(404).json(result);
-    res.json(result);
-  }));
-
-  // 发飞书测试消息（admin/feishu.notify 权限）
-  app.post('/api/settings/test-feishu', wrap(async (req, res) => {
-    const feishu = require('./feishuNotify');
-    const title = (req.body && req.body.title) || '🔔 MES 测试消息';
-    const content = (req.body && req.body.content) || '这是一条来自 systemSettings.test-feishu 的测试消息。';
-    const r = await feishu.feishuNotify(title, content);
-    res.json(r);
-  }));
-}
-
-module.exports = { register, setDb, getAll, getOne, setOne, getFeishuConfig, getBool, getNum };
+module.exports = { setDb, getAll, getOne, setOne, getFeishuConfig, getBool, getNum };

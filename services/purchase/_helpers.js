@@ -6,11 +6,7 @@ function makeHelpers(db) {
   const all = (sql, p = []) => db.prepare(sql).all(p)
   const get = (sql, p = []) => db.prepare(sql).get(p)
   const run = (sql, p = []) => db.prepare(sql).run(p)
-  const wrap = (h) => (req, res) => {
-    try { h(req, res) }
-    catch (e) { console.error(e); res.status(500).json({ error: e.message }) }
-  }
-  return { all, get, run, wrap }
+  return { all, get, run }
 }
 
 // 生成下一个 PO 号: PO-YYYY-NNN
@@ -22,7 +18,8 @@ function nextPoNo(db) {
   if (row) {
     n = parseInt(row.po_no.slice(prefix.length), 10) + 1
   }
-  return prefix + String(n).padStart(3, '0')
+  return prefix + String(n).padStart(3, "0") + "-" + String(Date.now()).slice(-3)
 }
 
 module.exports = { makeHelpers, nextPoNo }
+

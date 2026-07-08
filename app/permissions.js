@@ -6,6 +6,14 @@
 // Author: 三狗子 | Date: 2026-06-25
 
 const PERMISSIONS = {
+  // 现场/仓库
+  'shopfloor:read': '查看车间工作台',
+  'inventory:read': '查看库存与库存流水',
+  'inventory:write': '库存收发料/调拨/领退料',
+  'pick:read': '查看齐套/领退料清单',
+  'pick:write': '执行领料/退料/缺料闭环',
+  'document:read': '查看文档/图纸并签收',
+  'document:write': '上传/签发/收回文档图纸',
   // 物料
   'material:read': '查看物料/库存/批次',
   'material:write': '创建/更新物料/批次/库存移动',
@@ -45,8 +53,12 @@ const PERMISSIONS = {
 const DEFAULT_ROLE_PERMISSIONS = {
   admin: ['*'],
   warehouse: [
-    'material:read', 'material:write',
-    'purchase:read',
+    'shopfloor:read',
+    'material:read',
+    'inventory:read', 'inventory:write',
+    'work_order:read',
+    'pick:read', 'pick:write',
+    'document:read',
   ],
   planner: [
     'material:read', 'material:write',

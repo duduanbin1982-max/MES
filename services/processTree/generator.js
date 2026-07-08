@@ -1,3 +1,4 @@
+const { wrap } = require('../../middleware/asyncHandler');
 /**
  * 工艺树生成 + 关键路径
  *
@@ -15,10 +16,7 @@
 const all = (db, sql, params = []) => db.prepare(sql).all(params);
 const get = (db, sql, params = []) => db.prepare(sql).get(params);
 const run = (db, sql, params = []) => db.prepare(sql).run(params);
-const wrap = (handler) => (req, res) => {
-  try { handler(req, res); }
-  catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
-};
+
 
 // ─── 辅助：纯函数（无 DB，便于单测）───
 

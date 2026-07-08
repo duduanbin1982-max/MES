@@ -26,3 +26,4 @@ function maxDate(a, b) {
 }
 
 module.exports = { makeHelpers, addHours, maxDate }
+

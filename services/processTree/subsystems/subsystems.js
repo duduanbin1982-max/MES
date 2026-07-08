@@ -1,6 +1,6 @@
 // GET /api/equipment_instances/:id/subsystems
 // 按 subsystem_id 分组返回工艺树数据，每个 subsystem 一张卡片
-const { SUBSYSTEM_COLORS } = require('./constants')
+const SUBSYSTEM_COLORS = { 1: '#f56c6c', 2: '#e6a23c', 3: '#409eff', 4: '#67c23a', 5: '#909399', 6: '#9b59b6', 7: '#1abc9c', 8: '#f39c12', 9: '#34495e', null: '#909399' }
 const { buildForest } = require('./treeBuilder')
 const { computeStats } = require('./stats')
 

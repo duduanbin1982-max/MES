@@ -2,6 +2,16 @@
   <!-- 编辑/新增节点 -->
   <el-dialog :model-value="showEdit" @update:model-value="(v) => $emit('update:showEdit', v)" :title="editForm.id ? '编辑节点 #' + editForm.id : '新增节点'" width="500px">
     <el-form :model="editForm" label-width="100px">
+      <el-form-item label="工序模板">
+        <el-select v-model="editForm.operation_template_id" clearable filterable style="width: 100%" placeholder="从标准工序库套用" @change="applyTemplate">
+          <el-option
+            v-for="op in operationTemplates"
+            :key="op.id"
+            :label="op.sequence_hint + '. ' + op.operation_name + ' / ' + (op.position_name || op.required_position_code || '未设岗位') + ' / ' + (op.standard_hours || 0) + 'h'"
+            :value="op.id"
+          />
+        </el-select>
+      </el-form-item>
       <el-form-item label="操作名" required><el-input v-model="editForm.operation_name" /></el-form-item>
       <el-form-item label="工序类型">
         <el-select v-model="editForm.operation_type" style="width: 100%">
@@ -18,7 +28,13 @@
           <el-option v-for="w in workstations" :key="w.id" :label="w.name" :value="w.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="所需技能"><el-input v-model="editForm.required_skill" placeholder="焊接/机加/质检" /></el-form-item>
+      <el-form-item label="所需技能"><el-input v-model="editForm.required_skill" placeholder="welding / machining / qc" /></el-form-item>
+      <el-form-item label="所需岗位"><el-input v-model="editForm.required_position_code" placeholder="welder / machinist / qc_inspector" /></el-form-item>
+      <el-form-item label="定员/控制点">
+        <el-input-number v-model="editForm.worker_count" :min="1" :max="50" style="width: 120px; margin-right: 12px" />
+        <el-checkbox v-model="editForm.qc_required">质检点</el-checkbox>
+        <el-checkbox v-model="editForm.sop_required">SOP</el-checkbox>
+      </el-form-item>
       <el-form-item label="子系统">
         <el-select v-model="editForm.subsystem_id" filterable clearable style="width: 100%" placeholder="未分类">
           <el-option label="未分类" :value="null" />
@@ -73,10 +89,39 @@
       <el-button type="primary" @click="$emit('save-dep')">保存</el-button>
     </template>
   </el-dialog>
+  <!-- 工时定额 -->
+  <el-dialog :model-value="showHours" @update:model-value="(v) => $emit('update:showHours', v)" :title="'工时定额 #' + hoursForm.id" width="420px">
+    <el-form :model="hoursForm" label-width="100px">
+      <el-form-item label="节点">{{ hoursForm.operation_name }}</el-form-item>
+      <el-form-item label="工种">
+        <el-select v-model="hoursForm.work_type" style="width: 100%">
+          <el-option label="装配" value="assembly" />
+          <el-option label="焊接" value="welding" />
+          <el-option label="机加" value="machining" />
+          <el-option label="测试" value="testing" />
+          <el-option label="质检" value="qc" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="标准工时(h)">
+        <el-input-number v-model="hoursForm.standard_hours" :min="0" :step="0.5" :precision="1" style="width: 100%" />
+      </el-form-item>
+      <el-form-item label="定员(人)">
+        <el-input-number v-model="hoursForm.worker_count" :min="1" :max="50" style="width: 100%" />
+      </el-form-item>
+      <el-form-item label="备注">
+        <el-input v-model="hoursForm.description" placeholder="工艺要求等" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="$emit('update:showHours', false)">取消</el-button>
+      <el-button type="primary" @click="$emit('save-hours')" :loading="hoursSaving">保存</el-button>
+    </template>
+  </el-dialog>
+
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   showEdit: Boolean,
   showAssign: Boolean,
   showDep: Boolean,
@@ -87,10 +132,29 @@ defineProps({
   users: { type: Array, default: () => [] },
   flat: { type: Array, default: () => [] },
   subsystemsList: { type: Array, default: () => [] },
-  saving: Boolean
+  operationTemplates: { type: Array, default: () => [] },
+  saving: Boolean,
+  showHours: Boolean,
+  hoursForm: { type: Object, default: () => ({}) },
+  hoursSaving: Boolean
 })
 defineEmits([
   'update:showEdit', 'update:showAssign', 'update:showDep',
-  'save-node', 'save-assign', 'save-dep'
+  'save-node', 'save-assign', 'save-dep', 'save-hours', 'update:showHours'
 ])
+
+function applyTemplate(id) {
+  const template = props.operationTemplates.find((item) => item.id === id)
+  if (!template) return
+  Object.assign(props.editForm, {
+    operation_name: template.operation_name,
+    operation_type: template.operation_type,
+    estimated_hours: template.standard_hours || 0,
+    required_skill: template.required_skill || '',
+    required_position_code: template.required_position_code || '',
+    worker_count: template.worker_count || 1,
+    qc_required: !!template.qc_required,
+    sop_required: !!template.sop_required,
+  })
+}
 </script>

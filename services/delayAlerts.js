@@ -1,12 +1,14 @@
 'use strict';
+const { ApiError } = require('../app/errors');
+const { wrap } = require('../middleware/asyncHandler');
 // services/delayAlerts.js
 // P2-#D 延误预警
 // 规则: planned_end < today AND status NOT IN ('completed', 'cancelled')
 // 严重度: > 7d=critical, > 3d=high, > 0d=warning
 
 function register(app, db) {
-  const all = (sql, params = []) => db.prepare(sql).all(params);
-  const wrap = (h) => (req, res) => { try { h(req, res); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } };
+  const { all } = require('./material/core').makeDbHelpers(db);
+  
 
   function severityOf(d) {
     if (d > 7) return 'critical';

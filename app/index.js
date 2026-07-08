@@ -24,6 +24,11 @@ const { DIST, DIST_EXISTS } = require('./config/paths');
 function createApp() {
   const app = express();
 
+  // Node 只监听 127.0.0.1:3890，公网 HTTPS 由本机 Nginx 反向代理。
+  // 只信任 loopback 代理，允许 express-rate-limit 正确读取 X-Forwarded-For，
+  // 同时避免信任任意客户端伪造的代理头。
+  app.set('trust proxy', 'loopback');
+
   // 1. 静态资源 (先于 helmet)
   staticFiles(app);
   // 2. 安全头

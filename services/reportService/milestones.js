@@ -1,6 +1,7 @@
+const { wrap } = require('../../middleware/asyncHandler');
 // 里程碑: 列表 + 自动生成 S1-S10 阶段
 function register(app, db) {
-  const { all, wrap } = require('./_helpers').makeHelpers(db)
+  const { all } = require('./_helpers').makeHelpers(db)
 
   app.get('/api/equipment_instances/:id/milestones', wrap((req, res) =>
     res.json(all('SELECT * FROM instance_milestones WHERE equipment_instance_id = ? ORDER BY sequence', req.params.id))

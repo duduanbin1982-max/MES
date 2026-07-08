@@ -10,6 +10,10 @@ function applyPragmas(db) {
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.pragma('synchronous = NORMAL');
+  db.pragma('cache_size = -64000');     // ~64MB cache
+  db.pragma('mmap_size = 268435456');    // 256MB memory-mapped I/O
+  db.pragma('temp_store = MEMORY');      // temp tables in memory
+  db.pragma('busy_timeout = 5000');      // 5s busy wait
 }
 
 module.exports = applyPragmas;

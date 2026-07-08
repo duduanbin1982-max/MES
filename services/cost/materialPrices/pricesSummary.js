@@ -1,4 +1,5 @@
 "use strict";
+const { wrap } = require('../../../middleware/asyncHandler');
 // services/cost/materialPrices/pricesSummary.js
 // 1 端点:
 //   GET /api/materials/prices/summary   覆盖率: 总数 / 估价已填 / 实际已填 / 总估价
@@ -6,7 +7,7 @@
 
 function register(app, db) {
   const get = (sql, ...p) => db.prepare(sql).get(...p);
-  const wrap = (h) => (req, res) => { try { h(req, res); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } };
+  
 
   app.get("/api/materials/prices/summary", wrap((req, res) => {
     const total = get("SELECT COUNT(*) AS c FROM materials").c;

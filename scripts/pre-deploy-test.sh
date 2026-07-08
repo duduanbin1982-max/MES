@@ -13,8 +13,9 @@ set -u
 set -o pipefail
 
 ROOT=/home/dubin/factory-mes
-LOG_DIR=/home/dubin/factory-mes/data
+LOG_DIR=/home/dubin/factory-mes/logs/predeploy
 mkdir -p "$LOG_DIR"
+find "$LOG_DIR" -name 'predeploy-*.log' -mtime +14 -delete 2>/dev/null || true
 
 QUIET=0
 SKIP_INTEGRATION=0

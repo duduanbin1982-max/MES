@@ -22,8 +22,10 @@ data/mes.log
 # 数据库备份目录 (按时间戳命名, 一律不进库)
 backups/
 
-# nginx / SSL (机器级配置 + 私钥, 不进库)
-nginx/
+# nginx 模板配置入库；SSL 私钥/证书不入库
+/nginx/*
+!/nginx/
+!/nginx/factory-mes.conf
 ssl/
 
 # 前端构建产物 (build 时生成, 不入库)
@@ -66,3 +68,23 @@ Thumbs.db
 # db migration 废弃/历史副本 (中文后缀)
 db/migrations/*.废弃
 db/migrations/*.bak
+
+# archive / root debug leftovers
+archive/
+*.bak-*
+/.tmp_*
+/_check_*
+/*_probe.js
+/_schema_probe.*
+/test-h2.js
+/test-nginx.js
+/testws2.sh
+
+# runtime uploads / generated databases / logs
+data/uploads/
+data/mes.db*
+logs/
+
+# root one-off maintenance/debug scripts
+/_*.js
+/mes.db

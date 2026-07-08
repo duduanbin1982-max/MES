@@ -1,23 +1,28 @@
 // 报表: 项目进度 / 设备状态 / 工单汇总 / 关键件到货
+const { wrap } = require('../../middleware/asyncHandler');
 function register(app, db) {
-  const { all, get, wrap } = require('./_helpers').makeHelpers(db)
+  const { all, get } = require('./_helpers').makeHelpers(db)
 
   app.get('/api/reports/project_progress', wrap((req, res) => {
     const instances = all('SELECT * FROM equipment_instances ORDER BY created_at DESC')
+    // Fix N+1: batch query all wo/pn stats
+    const woStats = {}
+    for (const r of all("SELECT equipment_instance_id, count(*) total, sum(CASE WHEN status='completed' THEN 1 ELSE 0 END) completed FROM work_orders GROUP BY equipment_instance_id"))
+      woStats[r.equipment_instance_id] = r
+    const pnStats = {}
+    for (const r of all("SELECT equipment_instance_id, count(*) total, sum(CASE WHEN status='completed' THEN 1 ELSE 0 END) completed, sum(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) in_progress, sum(CASE WHEN status='blocked' THEN 1 ELSE 0 END) blocked FROM process_nodes GROUP BY equipment_instance_id"))
+      pnStats[r.equipment_instance_id] = r
+
     const report = instances.map((inst) => {
-      const wo_stats = get("SELECT count(*) total, sum(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) completed FROM work_orders WHERE equipment_instance_id = ?", inst.id)
-      const pn_stats = get("SELECT count(*) total, sum(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) completed, sum(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) in_progress, sum(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) blocked FROM process_nodes WHERE equipment_instance_id = ?", inst.id)
+      const wo = woStats[inst.id] || { total: 0, completed: 0 }
+      const pn = pnStats[inst.id] || { total: 0, completed: 0, in_progress: 0, blocked: 0 }
       return {
-        instance_code: inst.instance_code,
-        instance_name: inst.instance_name,
-        customer: inst.customer_name,
-        status: inst.status,
-        lifecycle: inst.lifecycle_stage,
-        planned_start: inst.planned_start,
-        planned_end: inst.planned_end,
+        instance_code: inst.instance_code, instance_name: inst.instance_name,
+        customer: inst.customer_name, status: inst.status, lifecycle: inst.lifecycle_stage,
+        planned_start: inst.planned_start, planned_end: inst.planned_end,
         contract_amount: inst.contract_amount,
-        work_orders: { total: wo_stats?.total || 0, completed: wo_stats?.completed || 0, progress_pct: wo_stats?.total ? Math.round(wo_stats.completed * 100 / wo_stats.total) : 0 },
-        process_nodes: { total: pn_stats?.total || 0, completed: pn_stats?.completed || 0, in_progress: pn_stats?.in_progress || 0, blocked: pn_stats?.blocked || 0, progress_pct: pn_stats?.total ? Math.round(pn_stats.completed * 100 / pn_stats.total) : 0 }
+        work_orders: { total: wo.total, completed: wo.completed, progress_pct: wo.total ? Math.round(wo.completed * 100 / wo.total) : 0 },
+        process_nodes: { total: pn.total, completed: pn.completed, in_progress: pn.in_progress, blocked: pn.blocked, progress_pct: pn.total ? Math.round(pn.completed * 100 / pn.total) : 0 }
       }
     })
     res.json({ count: report.length, projects: report })
@@ -48,5 +53,4 @@ function register(app, db) {
     res.json({ summary, items })
   }))
 }
-
 module.exports = { register }

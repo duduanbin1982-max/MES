@@ -32,6 +32,9 @@
       <el-tab-pane name="ops"><template #label><span>✍️ 操作</span></template>
         <TabOps v-if="activeTab === 'ops'" :tab="activeTab" @refresh="refresh" />
       </el-tab-pane>
+      <el-tab-pane name="import"><template #label><span>📥 导入校验</span></template>
+        <TabImport v-if="activeTab === 'import'" :tab="activeTab" />
+      </el-tab-pane>
     </el-tabs>
 
     <!-- Dialogs (动态 import) -->
@@ -56,6 +59,7 @@ const TabLong     = defineAsyncComponent(() => import('./materialCenter/TabLong.
 const TabInv      = defineAsyncComponent(() => import('./materialCenter/TabInv.vue'))
 const TabMov      = defineAsyncComponent(() => import('./materialCenter/TabMov.vue'))
 const TabOps      = defineAsyncComponent(() => import('./materialCenter/TabOps.vue'))
+const TabImport   = defineAsyncComponent(() => import('./materialCenter/TabImport.vue'))
 const DlgReceive      = defineAsyncComponent(() => import('./materialCenter/DlgReceive.vue'))
 const DlgAllocRelease = defineAsyncComponent(() => import('./materialCenter/DlgAllocRelease.vue'))
 const DlgSplitMerge   = defineAsyncComponent(() => import('./materialCenter/DlgSplitMerge.vue'))

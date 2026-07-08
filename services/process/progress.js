@@ -1,3 +1,4 @@
+const { wrap } = require('../../middleware/asyncHandler');
 // services/processProgress.js
 // 批次 3 重构：从 server.js 抽出
 
@@ -5,10 +6,7 @@
 const all = (db, sql, params = []) => db.prepare(sql).all(params);
 const get = (db, sql, params = []) => db.prepare(sql).get(params);
 const run = (db, sql, params = []) => db.prepare(sql).run(params);
-const wrap = (handler) => (req, res) => {
-  try { handler(req, res); }
-  catch (e) { console.error(e); res.status(500).json({ error: e.message }); }
-};
+
 
 function getProcessProgress(req, res, db) {
   const instanceId = req.params.id;

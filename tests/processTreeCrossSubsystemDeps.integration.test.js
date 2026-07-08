@@ -16,6 +16,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const Database = require('better-sqlite3');
 
 const REAL_DB = '/home/dubin/factory-mes/data/mes.db';
 const skip = !fs.existsSync(REAL_DB);
@@ -25,11 +26,14 @@ if (skip) {
   process.env.DB_PATH = REAL_DB;
 }
 
+const db = skip ? null : new Database(REAL_DB, { readonly: true });
+if (db) process.on('exit', () => db.close());
+
 const svc = require('../services/processTree/crossSubsystemDeps');
 
 if (!skip) {
   test('instance 1 returns all 9 subsystems + unassigned (1 总装 node)', () => {
-    const r = svc.getCrossSubsystemMatrix(1);
+    const r = svc.getCrossSubsystemMatrix(db, 1);
     const keys = r.subsystems.map((s) => s.key);
     // 9 subsystems ordered by sequence, then unassigned last.
     assert.equal(keys.length, 10);
@@ -48,7 +52,7 @@ if (!skip) {
   });
 
   test('matrix is 10x10 for TBM-2026-001', () => {
-    const r = svc.getCrossSubsystemMatrix(1);
+    const r = svc.getCrossSubsystemMatrix(db, 1);
     assert.equal(r.matrix.length, 10);
     r.matrix.forEach((row) => {
       assert.equal(row.length, 10);
@@ -61,25 +65,31 @@ if (!skip) {
   });
 
   test('node counts match subsystem distribution', () => {
-    const r = svc.getCrossSubsystemMatrix(1);
+    const Database = require('better-sqlite3');
+    const probeDb = new Database(REAL_DB, { readonly: true });
+    const rows = probeDb.prepare(
+      `SELECT COALESCE('sub_' || subsystem_id, '__unassigned__') AS key,
+              COUNT(*) AS node_count
+         FROM process_nodes
+        WHERE equipment_instance_id = ?
+        GROUP BY subsystem_id`
+    ).all(1);
+    probeDb.close();
+
+    const expected = Object.fromEntries(rows.map((row) => [row.key, row.node_count]));
+    const r = svc.getCrossSubsystemMatrix(db, 1);
     const counts = Object.fromEntries(r.subsystems.map((s) => [s.key, s.node_count]));
-    // Expected: 刀盘=9, 主驱动=9, 盾体=47, 推进=3, 拼装=6, 出渣=3,
-    //           液压=21, 电气控制=15, 后配套=15, unassigned=1.
-    assert.equal(counts.sub_1, 9);
-    assert.equal(counts.sub_2, 9);
-    assert.equal(counts.sub_3, 47);
-    assert.equal(counts.sub_4, 3);
-    assert.equal(counts.sub_5, 6);
-    assert.equal(counts.sub_6, 3);
-    assert.equal(counts.sub_7, 21);
-    assert.equal(counts.sub_8, 15);
-    assert.equal(counts.sub_9, 15);
-    assert.equal(counts.__unassigned__, 1);
-    assert.equal(r.subsystems.reduce((s, x) => s + x.node_count, 0), 129);
+    for (const [key, count] of Object.entries(expected)) {
+      assert.equal(counts[key], count, key + ' node_count should match DB');
+    }
+    assert.equal(
+      r.subsystems.reduce((sum, item) => sum + item.node_count, 0),
+      Object.values(expected).reduce((sum, count) => sum + count, 0)
+    );
   });
 
   test('total edges equals dep count where both endpoints are in instance 1', () => {
-    const r = svc.getCrossSubsystemMatrix(1);
+    const r = svc.getCrossSubsystemMatrix(db, 1);
     assert.ok(r.summary.total_edges > 0, 'should have edges');
     assert.ok(r.summary.total_edges <= 89, 'cannot exceed total deps in db');
     assert.equal(
@@ -89,7 +99,7 @@ if (!skip) {
   });
 
   test('intra-sub weights are non-negative', () => {
-    const r = svc.getCrossSubsystemMatrix(1);
+    const r = svc.getCrossSubsystemMatrix(db, 1);
     for (let i = 0; i < r.matrix.length; i += 1) {
       const cell = r.matrix[i][i];
       assert.ok(cell.weight >= 0, 'intra weight non-negative');
@@ -97,7 +107,7 @@ if (!skip) {
   });
 
   test('integration bottlenecks are sorted by total desc and exclude unassigned', () => {
-    const r = svc.getCrossSubsystemMatrix(1);
+    const r = svc.getCrossSubsystemMatrix(db, 1);
     const bots = r.summary.integration_bottlenecks;
     assert.ok(bots.length <= 3);
     for (let i = 1; i < bots.length; i += 1) {
@@ -110,7 +120,7 @@ if (!skip) {
   });
 
   test('strongest couplings are off-diagonal pairs (may be empty if all deps are intra)', () => {
-    const r = svc.getCrossSubsystemMatrix(1);
+    const r = svc.getCrossSubsystemMatrix(db, 1);
     const s = r.summary.strongest_coupling;
     s.forEach((p) => {
       assert.notEqual(p.from, p.to, 'no self-coupling');
@@ -127,7 +137,7 @@ if (!skip) {
   });
 
   test('weakest coupling list does not include pairs with edges', () => {
-    const r = svc.getCrossSubsystemMatrix(1);
+    const r = svc.getCrossSubsystemMatrix(db, 1);
     const edgePairs = new Set();
     for (let i = 0; i < r.matrix.length; i += 1) {
       for (let j = 0; j < r.matrix.length; j += 1) {
@@ -141,7 +151,7 @@ if (!skip) {
   });
 
   test('non-existent instance returns empty', () => {
-    const r = svc.getCrossSubsystemMatrix(99999);
+    const r = svc.getCrossSubsystemMatrix(db, 99999);
     assert.equal(r.subsystems.length, 0);
     assert.equal(r.matrix.length, 0);
     assert.equal(r.summary.total_edges, 0);

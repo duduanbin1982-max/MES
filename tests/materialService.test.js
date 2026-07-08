@@ -9,56 +9,19 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const Database = require('better-sqlite3');
-const path = require('path');
-
-function freshDb() {
-  const db = new Database(':memory:');
-  db.exec('CREATE TABLE materials (id INTEGER PRIMARY KEY, material_code TEXT UNIQUE NOT NULL, material_name TEXT NOT NULL, spec TEXT, unit TEXT, safety_stock REAL DEFAULT 0, reorder_point REAL DEFAULT 0)');
-  db.exec('CREATE TABLE material_lots (id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER NOT NULL, lot_no TEXT NOT NULL, supplier TEXT, heat_no TEXT, certificate_no TEXT, received_date TEXT, quantity REAL, unit TEXT, quality_status TEXT DEFAULT "pending", notes TEXT)');
-  db.exec('CREATE TABLE inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, location TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, status TEXT DEFAULT "available", last_updated TEXT DEFAULT "2026-01-01 00:00:00")');
-  db.exec('CREATE TABLE material_movements (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, movement_type TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, from_location TEXT, to_location TEXT, work_order_id INTEGER, project_id INTEGER, operator_id INTEGER, notes TEXT, created_at TEXT DEFAULT "2026-01-01 00:00:00")');
-  db.exec('CREATE TABLE work_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, wo_code TEXT)');
-  db.exec('CREATE TABLE material_units (id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER NOT NULL, from_unit TEXT NOT NULL, to_unit TEXT NOT NULL, factor REAL NOT NULL, notes TEXT, created_at TEXT DEFAULT \'2026-01-01 00:00:00\', UNIQUE(material_id, from_unit, to_unit))');
-  db.exec('CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT)');
-  return db;
-}
-
-function makeApp(db) {
-  const fakePath = path.resolve(__dirname, '../db');
-  require.cache[fakePath] = { exports: db, loaded: true, id: fakePath, filename: fakePath, children: [], paths: [] };
-  const svc = require('../services/materialService');
-  const routes = {};
-  const app = {
-    get: (p, h) => { routes['GET ' + p] = { method: 'get', handler: h }; },
-    post: (p, h) => { routes['POST ' + p] = { method: 'post', handler: h }; },
-    put: (p, h) => { routes['PUT ' + p] = { method: 'put', handler: h }; },
-    patch: (p, h) => { routes['PATCH ' + p] = { method: 'patch', handler: h }; },
-    delete: (p, h) => { routes['DELETE ' + p] = { method: 'delete', handler: h }; },
-  };
-  // 旧 key 兼容: ctx.routes['/api/xxx'] 默认 GET 行为
-  const _origGet = (k) => routes['GET ' + k] || routes[k];
-  svc.register(app, db);
-  return { app, routes };
-}
-
-function mkReqRes(body, opts = {}) {
-  const req = { body, query: opts.query || {}, params: opts.params || {}, user: 'user' in opts ? opts.user : { uid: 1, role: 'admin', permissions: ['*'] } };
-  let status = 200, json = null;
-  const res = { status: (s) => { status = s; return res; }, json: (j) => { json = j; return res; }, _get: () => ({ status, json }) };
-  return { req, res, getResult: () => ({ status, json }) };
-}
+const {
+  freshDb,
+  makeApp,
+  mkReqRes,
+  resetDbCache,
+  seedDefaultMaterialLot,
+} = require('./helpers/materialServiceHarness');
 
 let _db, ctx;
 test.beforeEach(() => {
-  for (const k of Object.keys(require.cache)) {
-    if (k.includes('/db') && !k.includes('better-sqlite3') && !k.includes('node_modules')) {
-      delete require.cache[k];
-    }
-  }
+  resetDbCache();
   _db = freshDb();
-  _db.prepare('INSERT INTO materials (id, material_code, material_name) VALUES (?, ?, ?)').run(1, 'T-001', '测试物料');
-  _db.prepare('INSERT INTO material_lots (id, material_id, lot_no, quantity) VALUES (?, ?, ?, ?)').run(1, 1, 'LOT-001', 100);
+  seedDefaultMaterialLot(_db);
   ctx = makeApp(_db);
 });
 

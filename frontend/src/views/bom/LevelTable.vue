@@ -51,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{ rows: any[]; tier: number; showActions?: boolean }>()
+defineProps<{ rows: any[]; tier: number; showActions?: boolean }>()
 const emit = defineEmits(['select', 'add', 'delete', 'drill'])
 function tierName(t: number) {
   return ['0 总装', '1 部件', '2 零件', '3 毛坯'][t] || t

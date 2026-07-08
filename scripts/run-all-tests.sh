@@ -6,6 +6,9 @@ export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
 export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
 cd /home/dubin/factory-mes
 
+echo "=== 0) 检查重复 API 路由 ==="
+node scripts/check-duplicate-routes.js
+
 echo "=== 1) 准备 cross-sub seed DB ==="
 node tests/_seedXsubDb.js > /tmp/seed-xsub.json
 SEED_DB=$(python3 -c "import json; print(json.load(open('/tmp/seed-xsub.json'))['DB_PATH'])")
@@ -16,7 +19,10 @@ run() {
   local label="$1"; local test_file="$2"; local pre_cmd="$3"
   if [ -n "$pre_cmd" ]; then eval "$pre_cmd"; fi
   local out
+  set +e
   out=$(node "$test_file" 2>&1)
+  local code=$?
+  set -e
   local p f
   p=$(echo "$out" | grep -E "^# pass " | awk '{print $3}')
   f=$(echo "$out" | grep -E "^# fail " | awk '{print $3}')
@@ -25,6 +31,12 @@ run() {
     f=$(echo "$out" | grep -E "^passed:" | awk '{print $4}')
   fi
   if [ -z "$p" ]; then
+    if [ "$code" != "0" ]; then
+      echo "  $label: command failed before TAP ❌"
+      FAIL=$((FAIL+1))
+      echo "$out" | head -20
+      return
+    fi
     echo "  $label: (no node:test output) skip"
     SKIP=$((SKIP+1))
     return
@@ -42,10 +54,12 @@ run() {
 echo "=== 2) 跑全部测试 ==="
 run "delayAlerts"            tests/delayAlerts.test.js            ""
 run "processParams"           tests/processParams.test.js           ""
+run "processMaster"          tests/processMaster.test.js          ""
 run "multiInstanceScheduler" tests/multiInstanceScheduler.test.js "export DB_PATH=$SEED_DB"
 run "oee"                    tests/oee.test.js                    ""
 run "keyComponentPrices"      tests/keyComponentPrices.test.js   ""
 run "purchase"             tests/purchase.test.js             ""
+run "purchaseFollowupTransition" tests/purchaseFollowupTransition.test.js ""
 run "materialService"           tests/materialService.test.js           ""
 run "costRollup"               tests/costRollup.test.js   ""
 run "materialPrices"            tests/materialPrices.test.js   ""
@@ -55,10 +69,13 @@ run "processTreeMindmap"     tests/processTreeMindmap.test.js     ""
 run "scheduler"              tests/scheduler.test.js              ""
 run "recomputeSafetyStock"    tests/recompute-safety-stock.test.js ""
 run "migrate"                  tests/migrate.test.js                  ""
+run "workflow"                  tests/workflow.test.js               ""
 run "errorResponse"         tests/errorResponse.test.js         ""
 run "rbac"                        tests/rbac.test.js                  ""
+run "roles"                  tests/roles.test.js                  ""
 run "bomService"              tests/bomService.test.js              ""
 run "documentService"          tests/documentService.test.js       ""
+run "ws"                       tests/ws.test.js                    ""
 run "audit"                       tests/audit.test.js                 ""
 run "jwt"                         tests/jwt.test.js                   ""
 run "sqlInjection"          tests/sqlInjection.test.js          ""

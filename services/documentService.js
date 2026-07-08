@@ -122,6 +122,27 @@ function register(app, db) {
   });
 
   // 详情
+  app.get('/api/documents/pending-ack', (req, res) => {
+    var uid = req.user ? req.user.id : 1;
+    var docs = db.prepare(`SELECT d.*, ei.instance_code FROM documents d LEFT JOIN equipment_instances ei ON d.equipment_instance_id = ei.id WHERE d.status = 'issued' AND d.id NOT IN (SELECT doc_id FROM doc_acknowledgements WHERE ack_by = ?) ORDER BY d.issued_at DESC LIMIT 50`).all(uid);
+    res.json({ pending: docs, count: docs.length });
+  });
+
+  app.post('/api/documents/:id/acknowledge', (req, res) => {
+    var doc = db.prepare('SELECT id FROM documents WHERE id = ?').get(req.params.id);
+    if (!doc) return res.status(404).json({error:'not found'});
+    var uid = req.user ? req.user.id : 1;
+    if (db.prepare('SELECT id FROM doc_acknowledgements WHERE doc_id = ? AND ack_by = ?').get(req.params.id, uid)) { res.json({ ok: true, already: true }); return; }
+    db.prepare('INSERT INTO doc_acknowledgements (doc_id, ack_by) VALUES (?, ?)').run(req.params.id, uid);
+    res.json({ ok: true });
+  });
+
+  app.get('/api/documents/:id/acknowledgements', (req, res) => {
+    var acks = db.prepare('SELECT da.*, u.full_name, u.username FROM doc_acknowledgements da LEFT JOIN users u ON da.ack_by = u.id WHERE da.doc_id = ? ORDER BY da.ack_at DESC').all(req.params.id);
+    res.json({ doc_id: parseInt(req.params.id), total: acks.length, acknowledgements: acks });
+  });
+
+  db.exec(`CREATE TABLE IF NOT EXISTS doc_acknowledgements (id INTEGER PRIMARY KEY AUTOINCREMENT, doc_id INTEGER NOT NULL, ack_by INTEGER NOT NULL, ack_at TEXT DEFAULT CURRENT_TIMESTAMP, ack_method TEXT DEFAULT 'web')`);
   app.get('/api/documents/:id', (req, res, next) => {
     const id = req.params.id;
     const r = db.prepare(`

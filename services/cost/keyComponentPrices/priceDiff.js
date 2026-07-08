@@ -1,4 +1,5 @@
 "use strict";
+const { wrap } = require('../../../middleware/asyncHandler');
 // services/cost/keyComponentPrices/priceDiff.js
 // 2 端点 (全部件价差):
 //   GET /api/key_components/price_diff        列表 (走 v_key_component_price_diff)
@@ -7,7 +8,7 @@
 
 function register(app, db) {
   const all = (sql) => db.prepare(sql).all();
-  const wrap = (h) => (req, res) => { try { h(req, res); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } };
+  
 
   // 全部件价差列表
   app.get("/api/key_components/price_diff", wrap((req, res) => {

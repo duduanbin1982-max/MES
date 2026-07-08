@@ -12,4 +12,9 @@ const { createConnection } = require('./connection');
 const db = createConnection();
 applyPragmas(db);
 
+// P1-2: 慢查询 profiler
+const profiler = require("./profiler");
+profiler.install(db);
+
 module.exports = db;
+module.exports.profileStats = profiler.getStats;

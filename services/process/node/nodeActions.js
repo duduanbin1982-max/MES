@@ -9,6 +9,8 @@
 // Author: 三狗子 | Date: 2026-06-24
 
 const { all, get, run, wrap, autoUnlockSuccessors } = require("./_helpers");
+const { validateAssignment } = require("../../processMasterService");
+const { ApiError } = require("../../../app/errors");
 
 function register(app, db) {
 app.post('/api/process_nodes/:id/execute', wrap((req, res) => {
@@ -63,16 +65,23 @@ app.put('/api/process_nodes/:id/move', wrap((req, res) => {
 
 
 app.put('/api/process_nodes/:id/assign', wrap((req, res) => {
-  const { assigned_to, required_workstation_id } = req.body;
+  const { assigned_to, required_workstation_id, force } = req.body;
   const updates = [];
   const values = [];
-  if (assigned_to !== undefined) { updates.push('assigned_to = ?'); values.push(assigned_to); }
+  let validation = null;
+  if (assigned_to !== undefined && assigned_to !== null) {
+    validation = validateAssignment(db, { process_node_id: Number(req.params.id), user_id: Number(assigned_to) });
+    if (!validation.ok && !force) {
+      throw ApiError.validation('人员资质不满足该工序要求', validation);
+    }
+    updates.push('assigned_to = ?'); values.push(assigned_to);
+  }
   if (required_workstation_id !== undefined) { updates.push('required_workstation_id = ?'); values.push(required_workstation_id); }
   if (updates.length === 0) return res.status(400).json({ error: 'no fields' });
   updates.push("updated_at = datetime('now')");
   values.push(req.params.id);
   const r = run( db, 'UPDATE process_nodes SET ' + updates.join(', ') + ' WHERE id = ?', values);
-  res.json({ changes: r.changes });
+  res.json({ changes: r.changes, validation });
 }));
 
 

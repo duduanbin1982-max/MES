@@ -136,7 +136,7 @@ const props = defineProps({
 });
 
 function authHeader() {
-  return { Authorization: 'Bearer ' + (localStorage.getItem('tbm_token') || '') };
+  return { Authorization: 'Bearer ' + (localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token') || '') };
 }
 
 const expanded = ref(false);

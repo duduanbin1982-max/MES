@@ -66,6 +66,11 @@
       </el-form>
     </el-card>
 
+      <el-card shadow="never" class="stat-card" style="cursor:pointer;border-left:3px solid #f56c6c" @click="loadPendingAck">
+        <div class="stat-label">待签收 <span style="color:#f56c6c">NEW</span></div>
+        <div class="stat-value" style="color:#f56c6c">{{ pendingCount }}</div>
+      </el-card>
+
     <!-- 列表 -->
     <el-card shadow="never">
       <el-table :data="items" v-loading="loading" stripe size="small" @row-click="onRowClick">
@@ -103,7 +108,9 @@
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button size="small" link @click.stop="downloadDoc(row)">下载</el-button>
-            <el-button size="small" link type="primary" @click.stop="openVersions(row)">版本</el-button>
+
+            <el-button v-if="row.status === 'issued'" size="small" link type="success" @click.stop="acknowledge(row)">签收</el-button>
+            <el-button size="small" link type="info" @click.stop="loadAcks(row)">签收记录</el-button>            <el-button size="small" link type="primary" @click.stop="openVersions(row)">版本</el-button>
             <el-button v-if="row.status === 'draft'" size="small" link type="success" @click.stop="openIssue(row)">签发</el-button>
             <el-button v-if="row.status === 'issued'" size="small" link type="warning" @click.stop="openRevoke(row)">收回</el-button>
             <el-button v-if="row.status !== 'archived'" size="small" link type="danger" @click.stop="archiveDoc(row)">归档</el-button>
@@ -235,6 +242,21 @@
       </div>
     </el-drawer>
   </div>
+
+    <!-- 签收记录对话框 -->
+    <el-dialog v-model="dlgAcks" :title="'签收记录: ' + (ackTarget ? ackTarget.title : '') + ' (' + (ackTarget ? ackTarget.version : '') + ')'" width="600px">
+      <el-table :data="ackList" size="small" border>
+        <el-table-column prop="full_name" label="签收人" width="120" />
+        <el-table-column prop="username" label="账号" width="100" />
+        <el-table-column prop="ack_at" label="签收时间" width="180" />
+        <el-table-column prop="ack_method" label="方式" width="80" />
+      </el-table>
+      <el-empty v-if="!ackList.length" description="暂无签收记录" />
+      <template #footer>
+        <el-button @click="dlgAcks = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
 </template>
 
 <script setup lang="ts">
@@ -408,6 +430,11 @@ const dlgIssue = ref(false)
 const issueTarget = ref<any>(null)
 const issueTo = ref('')
 const acting = ref(false)
+
+const pendingCount = ref(0)
+const dlgAcks = ref(false)
+const ackTarget = ref<any>(null)
+const ackList = ref<any[]>([])
 const openIssue = (row: any) => {
   issueTarget.value = row
   issueTo.value = row.issued_to || 'assembly'
@@ -462,8 +489,46 @@ const openVersions = async (row: any) => {
   finally { versionsLoading.value = false }
 }
 
+// 签收
+const acknowledge = async (row: any) => {
+  try {
+    await api.acknowledgeDocument(row.id)
+    ElMessage.success('签收成功')
+    refresh()
+    loadPendingCount()
+  } catch (e: any) { ElMessage.error(e.message || '签收失败') }
+}
+
+// 查看签收记录
+const loadAcks = async (row: any) => {
+  ackTarget.value = row
+  dlgAcks.value = true
+  try {
+    var r: any = await api.documentAcknowledgements(row.id)
+    ackList.value = r.acknowledgements || []
+  } catch (_e) { ackList.value = [] }
+}
+
+// 加载待签收数量
+const loadPendingCount = async () => {
+  try {
+    var r: any = await api.pendingAckDocuments()
+    pendingCount.value = r.count || 0
+  } catch (_e) { pendingCount.value = 0 }
+}
+
+// 加载待签收列表
+const loadPendingAck = async () => {
+  try {
+    var r: any = await api.pendingAckDocuments()
+    items.value = r.pending || []
+    total.value = r.count || 0
+  } catch (_e) { /* ignore */ }
+}
+
+
 onMounted(async () => {
-  await Promise.all([refresh(), loadInstances()])
+  await Promise.all([refresh(), loadInstances(), loadPendingCount()])
 })
 </script>
 

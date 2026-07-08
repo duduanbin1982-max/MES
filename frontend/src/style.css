@@ -1,14 +1,227 @@
-html, body, #app { height: 100%; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif; background: #f5f7fa; }
-.page { padding: 16px; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.page-title { font-size: 20px; font-weight: 600; }
-.stat-card { display: flex; flex-direction: column; gap: 8px; }
-.stat-value { font-size: 28px; font-weight: 600; color: #303133; }
-.stat-label { font-size: 13px; color: #909399; }
-.bom-tree { font-size: 13px; }
-.milestone-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
-.milestone-pending { background: #f4f4f5; color: #909399; }
-.milestone-active { background: #ecf5ff; color: #409eff; }
-.milestone-completed { background: #f0f9eb; color: #67c23a; }
-.milestone-delayed { background: #fef0f0; color: #f56c6c; }
+/* ===== TBM-MES Design System · Data-Dense Dashboard ===== */
+/* Generated: 2026-06-26 | Source: UI-UX-Pro-Max skill */
+
+/* ----- Google Fonts ----- */
+/* Fira Code + Fira Sans imported in index.html */
+
+/* ================================================================
+   LIGHT MODE (default)
+   ================================================================ */
+:root,
+[data-theme="light"] {
+  /* -- Brand Palette -- */
+  --color-primary: #64748B;
+  --color-secondary: #94A3B8;
+  --color-cta: #F97316;
+  --color-background: #F8FAFC;
+  --color-text: #334155;
+  --color-text-secondary: #64748B;
+  --color-border: #E2E8F0;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-info: #3B82F6;
+
+  /* -- Spacing -- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* -- Shadow -- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.08);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.10);
+
+  /* -- Border Radius -- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* -- Transitions -- */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* ================================================================
+     Element Plus Variable Overrides
+     ================================================================ */
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: #8193A0;
+  --el-color-primary-light-5: #9AADB8;
+  --el-color-primary-light-7: #B3C2CA;
+  --el-color-primary-light-8: #C5D1D7;
+  --el-color-primary-light-9: #D8E0E5;
+  --el-color-primary-dark-2: #4B5A6E;
+
+  --el-color-success: var(--color-success);
+  --el-color-warning: var(--color-warning);
+  --el-color-danger: var(--color-danger);
+  --el-color-info: var(--color-info);
+
+  --el-bg-color: var(--color-background);
+  --el-bg-color-overlay: #FFFFFF;
+  --el-bg-color-page: var(--color-background);
+
+  --el-text-color-primary: var(--color-text);
+  --el-text-color-regular: var(--color-text);
+  --el-text-color-secondary: var(--color-text-secondary);
+  --el-text-color-placeholder: #94A3B8;
+
+  --el-border-color: var(--color-border);
+  --el-border-color-light: #E2E8F0;
+  --el-border-color-lighter: #F1F5F9;
+
+  --el-border-radius-base: var(--radius-md);
+  --el-border-radius-small: var(--radius-sm);
+  --el-border-radius-round: 20px;
+
+  --el-font-family: 'Fira Sans', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --el-font-size-base: 14px;
+
+  /* Card overrides */
+  --el-card-border-radius: var(--radius-lg);
+  --el-card-bg-color: #FFFFFF;
+
+  /* Table overrides */
+  --el-table-header-bg-color: #F1F5F9;
+  --el-table-row-hover-bg-color: #F1F5F9;
+
+  /* Menu overrides */
+  --el-menu-bg-color: #1E293B;
+  --el-menu-text-color: #CBD5E1;
+  --el-menu-hover-bg-color: #334155;
+  --el-menu-active-color: #F97316;
+}
+
+/* ================================================================
+   DARK MODE (OLED) — 车间/夜班模式
+   ================================================================ */
+[data-theme="dark"] {
+  --color-primary: #64748B;
+  --color-secondary: #475569;
+  --color-cta: #22C55E;
+  --color-background: #020617;
+  --color-text: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-border: #1E293B;
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+  --color-info: #3B82F6;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.5);
+
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: #8193A0;
+  --el-color-primary-light-5: #9AADB8;
+  --el-color-primary-light-7: #B3C2CA;
+  --el-color-primary-light-8: #C5D1D7;
+  --el-color-primary-light-9: #D8E0E5;
+  --el-color-primary-dark-2: #4B5A6E;
+
+  --el-color-success: var(--color-success);
+  --el-color-warning: var(--color-warning);
+  --el-color-danger: var(--color-danger);
+  --el-color-info: var(--color-info);
+
+  --el-bg-color: #0F172A;
+  --el-bg-color-overlay: #1E293B;
+  --el-bg-color-page: var(--color-background);
+
+  --el-text-color-primary: var(--color-text);
+  --el-text-color-regular: var(--color-text);
+  --el-text-color-secondary: var(--color-text-secondary);
+  --el-text-color-placeholder: #475569;
+
+  --el-border-color: #1E293B;
+  --el-border-color-light: #334155;
+  --el-border-color-lighter: #1E293B;
+
+  --el-fill-color-blank: #0F172A;
+  --el-fill-color-light: #1E293B;
+
+  --el-card-bg-color: #0F172A;
+  --el-table-header-bg-color: #1E293B;
+  --el-table-row-hover-bg-color: #1E293B;
+
+  --el-menu-bg-color: #020617;
+  --el-menu-text-color: #CBD5E1;
+  --el-menu-hover-bg-color: #1E293B;
+  --el-menu-active-color: #22C55E;
+}
+
+/* ================================================================
+   GLOBAL STYLES
+   ================================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--el-font-family);
+  font-size: var(--el-font-size-base);
+  color: var(--el-text-color-primary);
+  background: var(--el-bg-color-page);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Fira Code for code/numbers/monospace elements */
+code, pre, .mono, .font-mono,
+.el-table td.num,
+.el-statistic__number {
+  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-feature-settings: 'tnum';
+}
+
+/* Smooth transitions on theme change */
+body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button {
+  transition: background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-secondary); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+
+/* Focus visible for a11y */
+:focus-visible {
+  outline: 2px solid var(--color-cta);
+  outline-offset: 2px;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Utility classes */
+.page { padding: var(--space-lg); }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-lg); }
+.page-title { font-size: 20px; font-weight: 600; color: var(--el-text-color-primary); }
+.toolbar { display: flex; gap: var(--space-sm); align-items: center; margin-bottom: var(--space-md); flex-wrap: wrap; }
+
+/* Data-dense: compact tables */
+.el-table--small .el-table__cell { padding: 8px 10px; }
+.el-card__body { padding: var(--space-md); }
