@@ -22,6 +22,7 @@ const SERVICES = [
   { name: "erpService", module: "./erpService" },
   { name: "fieldService", module: "./fieldService" },
   { name: "iotService", module: "./iotService" },
+  { name: "iotLifecycleService", module: "./iotLifecycleService" },
   { name: "kitCheck", module: "./kitCheck" },
   { name: "laborService", module: "./laborService" },
   { name: "masterDataService", module: "./masterDataService" },
