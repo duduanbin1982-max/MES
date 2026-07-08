@@ -22,3 +22,21 @@ CLEAN_VSCODE_SERVER=1 bash scripts/cleanup-dev-residue.sh
 ```cron
 45 3 * * 0 /home/dubin/factory-mes/scripts/restore-drill.sh
 ```
+
+## 2026-07-08 磁盘扩容记录
+
+`192.168.1.73` 已完成在线扩容：
+
+- 虚拟磁盘：`/dev/sda` 保持 `200G`
+- LVM 分区：`/dev/sda3` 从约 `46.9G` 扩到约 `196.9G`
+- 根 LV：`/dev/ubuntu-vg/ubuntu-lv` 从 `23.47G` 扩到 `80G`
+- 根文件系统：`ext4` 在线 resize 成功
+- 扩容后 `/`：约 `79G`，可用约 `61G`，使用率约 `20%`
+- VG 剩余空闲：约 `116.95G`，后续仍可继续在线扩容
+
+验证项：
+
+- `systemctl --user is-active factory-mes.service` 返回 `active`
+- `GET /api/health` 返回 `ok`
+- `backup-db.sh` / `offsite-backup.sh` / `restore-drill.sh` / `cleanup-dev-residue.sh` 语法检查通过
+
