@@ -11,6 +11,41 @@ const { emit, Events } = require("../app/ws/EventBus");
 let collectorInterval = null;
 let dbRef = null;
 
+const DEFAULT_ALARM_COOLDOWN_MINUTES = 30;
+const DEFAULT_SIM_ALARM_RATE = 0.0002;
+
+function readPositiveNumberEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function getAlarmCooldownMinutes() {
+  const minutes = readPositiveNumberEnv("IOT_ALARM_COOLDOWN_MINUTES", DEFAULT_ALARM_COOLDOWN_MINUTES);
+  return Math.max(1, Math.min(1440, Math.round(minutes)));
+}
+
+function getSimulatorAlarmRate() {
+  const rate = readPositiveNumberEnv("IOT_SIM_ALARM_RATE", DEFAULT_SIM_ALARM_RATE);
+  return Math.max(0, Math.min(1, rate));
+}
+
+function classifyAlarmSeverity(type, value, threshold, point) {
+  const low = Number(point && point.alarm_low);
+  const high = Number(point && point.alarm_high);
+  let span = 1;
+  if (Number.isFinite(low) && Number.isFinite(high) && high > low) {
+    span = high - low;
+  } else if (Number.isFinite(threshold) && threshold !== 0) {
+    span = Math.abs(threshold);
+  }
+
+  const distance = type === "low" ? threshold - value : value - threshold;
+  const ratio = distance / Math.max(span, 1);
+  return ratio >= 0.2 ? "critical" : "warning";
+}
+
 // Modbus 寄存器模拟值生成器 (正弦波 + 随机噪声)
 // 优先按点位阈值生成“正常区间”数据，避免演示模拟器 5s 周期制造报警风暴。
 function simulateModbusValue(point, fallbackBaseValue = 50) {
@@ -32,7 +67,7 @@ function simulateModbusValue(point, fallbackBaseValue = 50) {
     let value = center + Math.sin(t * freq) * amp + noise;
 
     // 极低概率制造真实演示报警，而不是每次采集都报警。
-    if (Math.random() < 0.001) value = high + Math.max(span * 0.05, 0.5);
+    if (getSimulatorAlarmRate() > 0 && Math.random() < getSimulatorAlarmRate()) value = high + Math.max(span * 0.05, 0.5);
     return Math.round(value * 100) / 100;
   }
 
@@ -43,12 +78,13 @@ function simulateModbusValue(point, fallbackBaseValue = 50) {
 }
 
 function insertAlarmIfNeeded(db, insAlarm, alarmIds, alarm) {
+  const cooldownModifier = "-" + getAlarmCooldownMinutes() + " minutes";
   const recent = db.prepare(`
     SELECT id FROM iot_alarms
     WHERE device_id = ? AND point_id = ? AND alarm_type = ? AND acknowledged = 0
-      AND created_at >= datetime('now', '-5 minutes')
+      AND created_at >= datetime('now', ?)
     LIMIT 1
-  `).get(alarm.deviceId, alarm.pointId, alarm.type);
+  `).get(alarm.deviceId, alarm.pointId, alarm.type, cooldownModifier);
   if (recent) return false;
 
   const row = insAlarm.run(
@@ -98,7 +134,7 @@ function collectDevice(db, device) {
       const r = insReading.run(device.id, pt.id, value);
       readingCount++;
       
-      // 检查报警。低阈值必须低于高阈值；同一点位同类未确认报警 5 分钟内去重。
+      // 检查报警。低阈值必须低于高阈值；同一点位同类未确认报警按冷却窗口去重。
       const low = Number(pt.alarm_low);
       const high = Number(pt.alarm_high);
       const validHigh = Number.isFinite(high) && high > 0;
@@ -112,7 +148,7 @@ function collectDevice(db, device) {
           value,
           pointName: pt.point_name,
           message: device.device_name + " " + pt.point_name + " 低于下限 " + low + " " + (pt.unit || ""),
-          severity: "warning",
+          severity: classifyAlarmSeverity("low", value, low, pt),
         });
       }
       if (validHigh && value > high) {
@@ -124,7 +160,7 @@ function collectDevice(db, device) {
           value,
           pointName: pt.point_name,
           message: device.device_name + " " + pt.point_name + " 高于上限 " + high + " " + (pt.unit || ""),
-          severity: "critical",
+          severity: classifyAlarmSeverity("high", value, high, pt),
         });
       }
     }
@@ -229,4 +265,4 @@ function triggerCollect(db) {
   return { ok: true };
 }
 
-module.exports = { start, stop, triggerCollect, runCollector };
+module.exports = { start, stop, triggerCollect, runCollector, simulateModbusValue, insertAlarmIfNeeded, getAlarmCooldownMinutes, getSimulatorAlarmRate, classifyAlarmSeverity };

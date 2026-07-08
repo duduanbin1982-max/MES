@@ -8,7 +8,18 @@ let cache = {};        // { key: { value, ts } }
 let cacheTs = 0;
 const CACHE_TTL_MS = 5000;
 
-function setDb(d) { db = d; cache = {}; cacheTs = 0; }
+function setDb(d) { db = d || null; cache = {}; cacheTs = 0; }
+
+function envFeishuConfig() {
+  const token = process.env.FEISHU_WEBHOOK_TOKEN || "";
+  const timeout = parseInt(process.env.FEISHU_WEBHOOK_TIMEOUT_MS || "3000", 10);
+  return {
+    enabled: !!token,
+    webhook_token: token,
+    timeout_ms: Number.isFinite(timeout) ? timeout : 3000,
+    receiver_open_id: "",
+  };
+}
 
 function coerce(value, valueType) {
   if (value == null) return null;
@@ -21,6 +32,7 @@ function coerce(value, valueType) {
 }
 
 function getAll() {
+  if (!db) return [];
   const rows = db.prepare('SELECT key, value, value_type, category, description, is_secret, updated_by, updated_at FROM system_settings ORDER BY category, key').all();
   return rows.map(r => ({
     key: r.key,
@@ -36,6 +48,7 @@ function getAll() {
 }
 
 function getOne(key) {
+  if (!db) return null;
   const r = db.prepare('SELECT key, value, value_type, category, description, is_secret, updated_by, updated_at FROM system_settings WHERE key = ?').get(key);
   if (!r) return null;
   return {
@@ -52,6 +65,7 @@ function getOne(key) {
 }
 
 function setOne(key, rawValue, updatedBy) {
+  if (!db) return { ok: false, error: 'settings db not initialized' };
   const exist = db.prepare('SELECT value_type, category, is_secret FROM system_settings WHERE key = ?').get(key);
   if (!exist) return { ok: false, error: 'setting not found: ' + key };
   const str = rawValue == null ? '' : String(rawValue);
@@ -62,6 +76,7 @@ function setOne(key, rawValue, updatedBy) {
 
 // 飞书 config（带 5s cache 避免高频 DB 读）
 function getFeishuConfig() {
+  if (!db) return envFeishuConfig();
   const now = Date.now();
   if (cacheTs && (now - cacheTs) < CACHE_TTL_MS) {
     return {
@@ -71,9 +86,14 @@ function getFeishuConfig() {
       receiver_open_id: cache.feishu_receiver_open_id || '',
     };
   }
-  const rows = db.prepare('SELECT key, value FROM system_settings WHERE key IN (?, ?, ?, ?)').all(
-    'feishu_enabled', 'feishu_webhook_token', 'feishu_webhook_timeout_ms', 'feishu_receiver_open_id'
-  );
+  let rows = [];
+  try {
+    rows = db.prepare('SELECT key, value FROM system_settings WHERE key IN (?, ?, ?, ?)').all(
+      'feishu_enabled', 'feishu_webhook_token', 'feishu_webhook_timeout_ms', 'feishu_receiver_open_id'
+    );
+  } catch (_e) {
+    return envFeishuConfig();
+  }
   const m = {}; rows.forEach(r => { m[r.key] = r.value; });
   // fallback 到 .env（兼容老的 process.env 写法）
   const enabled = m.feishu_enabled === '1' || (m.feishu_enabled == null && !!process.env.FEISHU_WEBHOOK_TOKEN);
@@ -85,6 +105,7 @@ function getFeishuConfig() {
 }
 
 function getBool(key, defaultVal) {
+  if (!db) return defaultVal;
   const r = db.prepare('SELECT value, value_type FROM system_settings WHERE key = ?').get(key);
   if (!r) return defaultVal;
   if (r.value_type === 'boolean') return coerce(r.value, r.value_type);
@@ -92,6 +113,7 @@ function getBool(key, defaultVal) {
 }
 
 function getNum(key, defaultVal) {
+  if (!db) return defaultVal;
   const r = db.prepare('SELECT value, value_type FROM system_settings WHERE key = ?').get(key);
   if (!r) return defaultVal;
   if (r.value_type === 'number') return coerce(r.value, r.value_type);
