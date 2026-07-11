@@ -195,14 +195,22 @@ function runCollector(db) {
       totalReadings += result.readings;
       allAlarms.push(...result.alarms);
       onlineDeviceIds.push(device.id);
-
-      // 更新设备状态为 online
-      db.prepare(
-        "UPDATE iot_devices SET status = 'online', last_seen_at = datetime('now'), updated_at = datetime('now') WHERE id = ?"
-      ).run(device.id);
-
     } catch (e) {
       console.error("[iotCollector] Device " + device.device_code + " error:", e.message);
+    }
+  }
+
+  // R3 优化 (2026-07-10): 把循环内每设备的单条 UPDATE 提到循环外,
+  // 改为基于在线 ID 列表的 IN-列表单次 UPDATE.
+  // 原来 7 设备 × ~30ms/条 + fsync = P50 ~205ms -> 现 P50 应 < 50ms.
+  if (onlineDeviceIds.length > 0) {
+    try {
+      const placeholders = onlineDeviceIds.map(() => "?").join(",");
+      db.prepare(
+        "UPDATE iot_devices SET status = 'online', last_seen_at = datetime('now'), updated_at = datetime('now') WHERE id IN (" + placeholders + ")"
+      ).run(...onlineDeviceIds);
+    } catch (e) {
+      console.error("[iotCollector] Batch heartbeat UPDATE failed:", e.message);
     }
   }
 

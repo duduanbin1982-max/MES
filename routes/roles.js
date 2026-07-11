@@ -12,6 +12,31 @@ const { requirePermission, getRolePermissions, loadRolePermissions } = require('
 const { ApiError } = require('../app/errors');
 const audit = require('../app/audit');
 
+
+// 中文名称 snake_case 编码映射
+const NAME_CODE_MAP = {
+  "管理员": "admin", "车间主任": "foreman", "工程师": "engineer", "工人": "worker",
+  "质检员": "qc", "焊工": "welder", "销售": "sales", "仓库员": "warehouse",
+  "计划员": "planner", "仓库主管": "warehouse_supervisor", "生产主管": "production_supervisor",
+  "采购员": "purchaser", "项目经理": "project_manager", "调试工程师": "commissioning_engineer",
+  "设备管理员": "equipment_admin", "安全员": "safety_officer", "无损检测员": "ndt_inspector",
+  "装配工": "assembly_worker", "机加工": "machinist", "财务": "finance",
+  "生产部": "production", "仓储部": "warehouse", "质量部": "quality",
+  "工艺工程部": "engineering", "采购部": "purchase", "财务部": "finance",
+  "综合管理部": "admin", "项目管理部": "project", "技术部": "technology",
+  "调试部": "commissioning", "焊接车间": "welding", "机加车间": "machining",
+  "生产调度": "production_scheduler", "维修工": "maintenance", "电工": "electrician",
+  "检验员": "inspector", "工艺员": "process_engineer", "车间调度": "shop_scheduler",
+  "库管": "storekeeper", "采购主管": "purchase_supervisor", "质量主管": "quality_supervisor",
+};
+
+function suggestCode(name) {
+  const trimmed = String(name).trim();
+  if (!trimmed) return "";
+  if (NAME_CODE_MAP[trimmed]) return NAME_CODE_MAP[trimmed];
+  return trimmed.replace(/[^a-zA-Z0-9_\u4e00-\u9fff]/g, "_").replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase().replace(/_+/g, "_").replace(/^_|_$/g, "").slice(0, 32) || "role";
+}
+
 const ROLE_CODE_RE = /^[a-z][a-z0-9_:-]{1,31}$/;
 const BUILTIN_ROLES = new Set(['admin', 'foreman', 'engineer', 'worker', 'qc', 'welder', 'sales', 'warehouse']);
 
@@ -28,6 +53,7 @@ function normalizePermissions(permissions) {
   if (!Array.isArray(permissions)) return [];
   return [...new Set(permissions.map(String).filter(Boolean))].sort();
 }
+
 
 function rowToRole(row, includeCached = true) {
   const permissions = includeCached ? getRolePermissions(row.role_code) : parsePermissions(row.permissions);
@@ -68,6 +94,31 @@ function validateRoleInput(body, { partial = false } = {}) {
 
 function register(app, db) {
   const { get, all, run } = require('./_helpers')(db);
+  // 角色/角色组编码自动建议
+  app.get("/api/roles/suggest-code", requirePermission("user:admin"), (req, res) => {
+    const name = (req.query.name || "").trim();
+    if (!name) return res.json({ code: "" });
+    const code = suggestCode(name);
+    let finalCode = code;
+    let suffix = 1;
+    while (get("SELECT id FROM roles WHERE role_code = ?", finalCode)) {
+      finalCode = code + "_" + (++suffix);
+    }
+    res.json({ code: finalCode, original: code, conflict: finalCode !== code });
+  });
+
+  app.get("/api/role-groups/suggest-code", requirePermission("user:admin"), (req, res) => {
+    const name = (req.query.name || "").trim();
+    if (!name) return res.json({ code: "" });
+    const code = suggestCode(name);
+    let finalCode = code;
+    let suffix = 1;
+    while (get("SELECT id FROM role_groups WHERE group_code = ?", finalCode)) {
+      finalCode = code + "_" + (++suffix);
+    }
+    res.json({ code: finalCode, original: code, conflict: finalCode !== code });
+  });
+
 
   // 列出所有角色
   app.get('/api/roles', requirePermission('user:read'), (req, res) => {

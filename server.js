@@ -55,6 +55,9 @@ require('./routes/help').register(app, db);
 // 实例重型路由 (16 条)
 require('./routes/instance').register(app, db);
 
+// P3-运维 (2026-07-10 Hermes R3 审计): 飞书/Andon 通知链路诊断端点 (admin only)
+require('./routes/admin/diag').register(app, db);
+
 // services/ 模块化注册 (走 service 自己的 register)
 require('./services/register-all').registerAll(app, db, {});
 // MESA #5: IoT 数据采集器 (Modbus 模拟 + 实时入库 + WebSocket)

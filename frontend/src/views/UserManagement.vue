@@ -171,7 +171,7 @@
         <el-form-item label="角色编码" required>
           <el-input v-model="roleDlg.form.role_code" :disabled="roleDlg.isEdit" placeholder="如 planner / warehouse_lead" />
         </el-form-item>
-        <el-form-item label="角色名称" required><el-input v-model="roleDlg.form.role_name" placeholder="如 计划员 / 仓库主管" /></el-form-item>
+        <el-form-item label="角色名称" required><el-input v-model="roleDlg.form.role_name" placeholder="如 计划员 / 仓库主管" @input="onRoleNameInput" /></el-form-item>
         <el-form-item v-if="!roleDlg.isEdit" label="复制权限">
           <el-select v-model="roleDlg.form.copy_from" clearable placeholder="可选择一个已有角色作为模板" style="width: 100%">
             <el-option v-for="r in roles" :key="r.code" :label="r.code + ' - ' + r.name" :value="r.code" />
@@ -322,6 +322,30 @@ const delUser = async (row: any) => {
   } catch (e: any) {
     if (e !== 'cancel' && e !== 'close') ElMessage.error('操作失败')
   }
+}
+
+
+let suggestTimer = null
+const onRoleNameInput = () => {
+  if (roleDlg.isEdit || !roleDlg.form.role_name) return
+  clearTimeout(suggestTimer)
+  suggestTimer = setTimeout(async () => {
+    try {
+      const res = await Api.get("/roles/suggest-code", { params: { name: roleDlg.form.role_name } })
+      if (res.code && !roleDlg.form.role_code) roleDlg.form.role_code = res.code
+    } catch (_) { /* ignore */ }
+  }, 400)
+}
+
+const onGroupNameInput = () => {
+  if (groupDlg.isEdit || !groupDlg.form.group_name) return
+  clearTimeout(suggestTimer)
+  suggestTimer = setTimeout(async () => {
+    try {
+      const res = await Api.get("/role-groups/suggest-code", { params: { name: groupDlg.form.group_name } })
+      if (res.code && !groupDlg.form.group_code) groupDlg.form.group_code = res.code
+    } catch (_) { /* ignore */ }
+  }, 400)
 }
 
 const openGroupDialog = (row?: any) => {
