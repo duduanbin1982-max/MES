@@ -13,7 +13,7 @@
       <el-col :span="6"><div class="stat-card"><div class="stat-label">在线设备</div><div class="stat-value" style="color:#67c23a">{{ dash.devices?.online||0 }}</div><div class="stat-sub">/ {{ dash.devices?.total||0 }} 总设备</div></div></el-col>
       <el-col :span="6"><div class="stat-card"><div class="stat-label">24h读数</div><div class="stat-value" style="color:#409eff">{{ dash.readings_24h||0 }}</div></div></el-col>
       <el-col :span="6"><div class="stat-card"><div class="stat-label">未确认报警</div><div class="stat-value" :style="{color: (dash.unack_alarms||0)>0?'#f56c6c':'#67c23a'}">{{ dash.unack_alarms||0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">活跃规则</div><div class="stat-value" style="color:#909399">{{ dash.active_rules||0 }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">配置就绪</div><div class="stat-value" style="color:#909399">{{ dash.configured_devices||0 }}</div><div class="stat-sub">{{ dash.mode==='production'?'生产模式':'模拟模式' }}</div></div></el-col>
     </el-row>
 
     <!-- Device Cards -->
@@ -24,6 +24,7 @@
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span style="font-weight:600">{{ dev.device_name }}</span>
               <el-tag :type="dev.status==='online'?'success':'info'" size="small">{{ dev.status==='online'?'在线':'离线' }}</el-tag>
+              <el-tag :type="dev.readiness?.configured?'success':'warning'" size="small">{{ dev.readiness?.configured?'已配置':'待配置' }}</el-tag>
             </div>
           </template>
           <div style="font-size:12px;color:#909399">
@@ -46,7 +47,7 @@
           <span style="font-weight:600">🔍 {{ selected.device_name }} — 数据点与读数</span>
           <div style="display:flex;gap:8px">
             <el-button size="small" @click="showAddPoint=true">+ 添加数据点</el-button>
-            <el-button size="small" type="success" @click="showPushReading=true">📊 模拟采集</el-button>
+            <el-button v-if="dash.mode==='simulator'" size="small" type="success" @click="showPushReading=true">模拟采集</el-button>
           </div>
         </div>
       </template>
@@ -165,7 +166,7 @@ async function refreshAll() {
 async function selectDevice(dev: any) {
   selected.value = dev
   try {
-    const detail = await Api.get(`/api/iot/devices/${dev.id}`)
+    const detail = await Api.get(`/iot/devices/${dev.id}`)
     selectedPoints.value = detail.points || []
     const latest = await Api.get('/iot/readings/latest')
     const map: Record<string,any> = {}
@@ -184,7 +185,7 @@ async function addDevice() {
 async function addPoint() {
   if (!selected.value) return
   saving.value = true
-  try { await Api.post(`/api/iot/devices/${selected.value.id}/points`, newPoint); showAddPoint.value = false; await selectDevice(selected.value); ElMessage.success('数据点添加成功') }
+  try { await Api.post(`/iot/devices/${selected.value.id}/points`, newPoint); showAddPoint.value = false; await selectDevice(selected.value); ElMessage.success('数据点添加成功') }
   catch(e:any) { ElMessage.error(e.message) }
   finally { saving.value = false }
 }
@@ -199,7 +200,7 @@ async function pushReadings() {
 }
 
 async function ackAlarm(id: number) {
-  try { await Api.patch(`/api/iot/alarms/${id}/ack`, {}); ElMessage.success('已确认'); await refreshAll() }
+  try { await Api.patch(`/iot/alarms/${id}/ack`, {}); ElMessage.success('已确认'); await refreshAll() }
   catch(e:any) { ElMessage.error(e.message) }
 }
 

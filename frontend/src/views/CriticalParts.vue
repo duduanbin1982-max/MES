@@ -49,6 +49,7 @@
       <!-- Certificates -->
       <el-tab-pane name="certs">
         <template #label>📜 资质证书</template>
+        <div style="margin-bottom:10px"><el-button type="primary" @click="openCertDialog">绑定已签发证书</el-button></div>
         <el-table :data="data.certs" size="small" stripe max-height="450">
           <el-table-column prop="component_type" label="部件" width="120" />
           <el-table-column prop="cert_type" label="证书类型" width="120"><template #default="{row}"><el-tag size="small">{{ certTypeLabel(row.cert_type) }}</el-tag></template></el-table-column>
@@ -86,16 +87,30 @@
         </el-table>
       </el-tab-pane>
     </el-tabs>
+    <el-dialog v-model="certDialog" title="绑定关键件证书" width="560px">
+      <el-form :model="certForm" label-width="90px">
+        <el-form-item label="关键件" required><el-select v-model="certForm.part_id" filterable style="width:100%"><el-option v-for="part in data.parts" :key="part.id" :value="part.id" :label="part.component_type+' · '+(part.material_name||part.material_code)" /></el-select></el-form-item>
+        <el-form-item label="证书类型" required><el-select v-model="certForm.cert_type" style="width:100%"><el-option label="材质证明" value="material_cert"/><el-option label="NDT 报告" value="ndt_report"/><el-option label="出厂验收" value="factory_accept"/><el-option label="型式认可" value="type_approval"/></el-select></el-form-item>
+        <el-form-item label="已签发文档" required><el-select v-model="certForm.document_id" filterable style="width:100%"><el-option v-for="doc in issuedDocuments" :key="doc.id" :value="doc.id" :label="doc.title+' · '+doc.version" /></el-select></el-form-item>
+        <el-form-item label="证书编号"><el-input v-model="certForm.cert_no" /></el-form-item>
+        <el-form-item label="签发机构"><el-input v-model="certForm.issued_by" /></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="certDialog=false">取消</el-button><el-button type="primary" @click="saveCertificate">绑定</el-button></template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref, onMounted } from "vue"
 import Api from "../api"
+import { ElMessage } from "element-plus"
 
 const loading = ref(false)
 const tab = ref("parts")
 const filterInstanceId = ref(null as any)
+const certDialog = ref(false)
+const issuedDocuments = ref<any[]>([])
+const certForm = reactive<any>({ part_id:null, cert_type:"material_cert", document_id:null, cert_no:"", issued_by:"" })
 
 const data = reactive({
   overview: { total_parts:0, high_risk:0, total_certs:0, total_logs:0, pending_checklists:0 },
@@ -115,6 +130,20 @@ async function loadAll() {
     const res = await Api.get("/critical-parts/dashboard", { params })
     Object.assign(data, res)
   } finally { loading.value = false }
+}
+
+async function openCertDialog() {
+  const response = await Api.get("/documents", { params: { status: "issued" } })
+  issuedDocuments.value = response.items || response || []
+  certDialog.value = true
+}
+
+async function saveCertificate() {
+  if (!certForm.part_id || !certForm.document_id) return ElMessage.warning("请选择关键件和已签发文档")
+  await Api.post(`/critical-parts/${certForm.part_id}/cert`, certForm)
+  certDialog.value = false
+  ElMessage.success("证书已绑定")
+  await loadAll()
 }
 
 onMounted(loadAll)

@@ -2,12 +2,17 @@
 // 关键件管理 —— 监造 + 证书 + 追溯 统一聚合
 "use strict";
 
-const fs = require("node:fs");
-const path = require("node:path");
 const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
+const { hasStoredFile } = require("./documentService");
+
+function ensureSchema(db) {
+  const columns = new Set(db.prepare("PRAGMA table_info(critical_part_certificates)").all().map((column) => column.name));
+  if (!columns.has("document_id")) db.prepare("ALTER TABLE critical_part_certificates ADD COLUMN document_id INTEGER").run();
+}
 
 function register(app, db) {
+  ensureSchema(db);
   const { get, all, run } = require("../routes/_helpers")(db);
 
   app.get("/api/critical-parts/dashboard", wrap((req, res) => {
@@ -32,9 +37,10 @@ function register(app, db) {
 
     // 证书
     const certs = all(`
-      SELECT cpc.*, kc.component_type, kc.supplier
+      SELECT cpc.*, kc.component_type, kc.supplier, d.title AS document_title, d.version AS document_version
       FROM critical_part_certificates cpc
       LEFT JOIN key_components kc ON kc.id = cpc.part_id
+      LEFT JOIN documents d ON d.id = cpc.document_id
       ORDER BY cpc.issue_date DESC
     `);
 
@@ -78,15 +84,12 @@ function register(app, db) {
   app.post("/api/critical-parts/:id/cert", wrap((req, res) => {
     const body = req.body || {};
     if (!body.cert_type) throw ApiError.validation("cert_type 必填");
-    if (!body.file_path) throw ApiError.validation("请先上传真实证书附件");
-    const certPath = path.resolve("/home/dubin/factory-mes/data", body.file_path);
-    const uploadRoot = path.resolve("/home/dubin/factory-mes/data/uploads");
-    if (!certPath.startsWith(uploadRoot + path.sep) || !fs.existsSync(certPath)) {
-      throw ApiError.validation("证书附件不存在或不在上传目录");
-    }
+    if (!body.document_id) throw ApiError.validation("请先在文档管理上传并签发证书，再选择 document_id");
+    const document = get("SELECT id,title,file_path,status FROM documents WHERE id=?", [body.document_id]);
+    if (!document || document.status !== "issued" || !hasStoredFile(document.file_path)) throw ApiError.validation("证书文档未签发或物理文件不存在");
     const result = run(
-      "INSERT INTO critical_part_certificates (part_id, cert_type, cert_no, issued_by, issue_date, expiry_date, file_path) VALUES (?,?,?,?,?,?,?)",
-      [Number(req.params.id), body.cert_type, body.cert_no||null, body.issued_by||null, body.issue_date||null, body.expiry_date||null, body.file_path||null]
+      "INSERT INTO critical_part_certificates (part_id, cert_type, cert_no, issued_by, issue_date, expiry_date, file_path, document_id) VALUES (?,?,?,?,?,?,?,?)",
+      [Number(req.params.id), body.cert_type, body.cert_no||null, body.issued_by||null, body.issue_date||null, body.expiry_date||null, document.file_path, document.id]
     );
     res.status(201).json({ id: result.lastInsertRowid, created: true });
   }));
@@ -104,4 +107,4 @@ function register(app, db) {
   console.log("[criticalParts] Registered");
 }
 
-module.exports = { register };
+module.exports = { ensureSchema, register };

@@ -5,6 +5,26 @@ const { wrap } = require("../middleware/asyncHandler");
 // P2-4 Digital Twin: 3D model registry + Assembly status overlay + Real-time position data
 const fs = require("fs");
 const path = require("path");
+const crypto = require("node:crypto");
+const express = require("express");
+
+const MODEL_ROOT = path.resolve("/home/dubin/factory-mes/data/uploads/digital-twin");
+
+function modelFilePath(filePath) {
+  if (!filePath) return null;
+  const relative = String(filePath).replace(/\\/g, "/").replace(/^uploads\//, "");
+  const absolute = path.resolve("/home/dubin/factory-mes/data/uploads", relative);
+  const uploadRoot = path.resolve("/home/dubin/factory-mes/data/uploads");
+  if (!absolute.startsWith(uploadRoot + path.sep) || !fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) return null;
+  return absolute;
+}
+
+function validateGlb(buffer, fileName) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 20) throw ApiError.validation("GLB 文件为空或过小");
+  if (path.extname(fileName || "").toLowerCase() !== ".glb") throw ApiError.validation("仅支持 .glb 文件");
+  if (buffer.subarray(0, 4).toString("ascii") !== "glTF") throw ApiError.validation("文件不是有效 GLB（二进制魔数错误）");
+  return true;
+}
 
 function runMigration(db) {
   db.exec(`
@@ -76,6 +96,11 @@ function runMigration(db) {
     CREATE INDEX IF NOT EXISTS idx_dt_asm_model ON dt_assembly_status(model_id);
     CREATE INDEX IF NOT EXISTS idx_dt_overlay_device ON dt_overlay_data(device_code);
   `);
+  const columns = new Set(db.prepare("PRAGMA table_info(dt_models)").all().map((column) => column.name));
+  if (!columns.has("file_hash")) db.prepare("ALTER TABLE dt_models ADD COLUMN file_hash TEXT").run();
+  for (const model of db.prepare("SELECT id,file_path,status FROM dt_models WHERE status='active'").all()) {
+    if (!modelFilePath(model.file_path)) db.prepare("UPDATE dt_models SET status='draft', updated_at=datetime('now') WHERE id=?").run(model.id);
+  }
 }
 
 function makeHelpers(db) {
@@ -98,7 +123,7 @@ function registerModels(app, db) {
     if (status) { sql += " AND m.status=?"; p.push(status); }
     if (format) { sql += " AND m.file_format=?"; p.push(format); }
     sql += " ORDER BY m.id";
-    res.json(all(sql, p));
+    res.json(all(sql, p).map((model) => ({ ...model, asset_ready: Boolean(modelFilePath(model.file_path)) })));
   }));
 
   app.get("/api/dt/models/:id", wrap((req, res) => {
@@ -106,22 +131,45 @@ function registerModels(app, db) {
     if (!m) throw ApiError.notFound("Model not found")
     const parts = all("SELECT * FROM dt_part_mappings WHERE model_id=? ORDER BY assembly_step, id", [req.params.id]);
     const asm = all("SELECT * FROM dt_assembly_status WHERE model_id=? ORDER BY id", [req.params.id]);
-    res.json(Object.assign({}, m, { parts, assembly_status: asm }));
+    res.json(Object.assign({}, m, { asset_ready: Boolean(modelFilePath(m.file_path)), parts, assembly_status: asm }));
   }));
 
   app.post("/api/dt/models", wrap((req, res) => {
-    const { model_code, model_name, equipment_instance_id, file_format, file_path, file_size, polygon_count, bounding_box, pivot_point, scale_factor, version } = req.body;
+    const { model_code, model_name, equipment_instance_id, file_format, polygon_count, bounding_box, pivot_point, scale_factor, version } = req.body;
     if (!model_code || !model_name) throw ApiError.validation("model_code and model_name required")
-    const r = run("INSERT INTO dt_models (model_code,model_name,equipment_instance_id,file_format,file_path,file_size,polygon_count,bounding_box,pivot_point,scale_factor,version) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-      [model_code, model_name, equipment_instance_id||null, file_format||"glb", file_path||null, file_size||null, polygon_count||null, bounding_box||null, pivot_point||null, scale_factor||1.0, version||"1.0"]);
+    const r = run("INSERT INTO dt_models (model_code,model_name,equipment_instance_id,file_format,polygon_count,bounding_box,pivot_point,scale_factor,version,status) VALUES (?,?,?,?,?,?,?,?,?,'draft')",
+      [model_code, model_name, equipment_instance_id||null, file_format||"glb", polygon_count||null, bounding_box||null, pivot_point||null, scale_factor||1.0, version||"1.0"]);
     res.json({ id: r.lastInsertRowid, model_code });
   }));
 
   app.put("/api/dt/models/:id", wrap((req, res) => {
-    const { model_name, file_path, file_size, polygon_count, bounding_box, scale_factor, version, status } = req.body;
-    run("UPDATE dt_models SET model_name=COALESCE(?,model_name), file_path=COALESCE(?,file_path), file_size=COALESCE(?,file_size), polygon_count=COALESCE(?,polygon_count), bounding_box=COALESCE(?,bounding_box), scale_factor=COALESCE(?,scale_factor), version=COALESCE(?,version), status=COALESCE(?,status), updated_at=datetime('now') WHERE id=?",
-      [model_name||null, file_path||null, file_size||null, polygon_count||null, bounding_box||null, scale_factor||null, version||null, status||null, req.params.id]);
+    const { model_name, polygon_count, bounding_box, scale_factor, version, status } = req.body;
+    const current = get("SELECT * FROM dt_models WHERE id=?", [req.params.id]);
+    if (!current) throw ApiError.notFound("Model not found");
+    if (status === "active" && !modelFilePath(current.file_path)) throw ApiError.validation("上传真实 GLB 文件后才能激活模型");
+    run("UPDATE dt_models SET model_name=COALESCE(?,model_name), polygon_count=COALESCE(?,polygon_count), bounding_box=COALESCE(?,bounding_box), scale_factor=COALESCE(?,scale_factor), version=COALESCE(?,version), status=COALESCE(?,status), updated_at=datetime('now') WHERE id=?",
+      [model_name||null, polygon_count||null, bounding_box||null, scale_factor||null, version||null, status||null, req.params.id]);
     res.json({ success: true });
+  }));
+
+  app.post("/api/dt/models/:id/file", express.raw({ type: "*/*", limit: "200mb" }), wrap((req, res) => {
+    const model = get("SELECT * FROM dt_models WHERE id=?", [req.params.id]);
+    if (!model) throw ApiError.notFound("Model not found");
+    const fileName = decodeURIComponent(req.headers["x-file-name"] || `${model.model_code}.glb`);
+    validateGlb(req.body, fileName);
+    fs.mkdirSync(MODEL_ROOT, { recursive: true });
+    const safeName = `${model.model_code.replace(/[^a-zA-Z0-9_-]/g, "_")}-${Date.now()}.glb`;
+    const absolute = path.join(MODEL_ROOT, safeName);
+    fs.writeFileSync(absolute, req.body);
+    const relative = path.join("uploads", "digital-twin", safeName).replace(/\\/g, "/");
+    const hash = crypto.createHash("sha256").update(req.body).digest("hex");
+    if (model.file_path) {
+      const previous = modelFilePath(model.file_path);
+      if (previous && previous.startsWith(MODEL_ROOT + path.sep)) fs.unlinkSync(previous);
+    }
+    run("UPDATE dt_models SET file_path=?,file_size=?,file_hash=?,file_format='glb',status='active',updated_at=datetime('now') WHERE id=?",
+      [relative, req.body.length, hash, model.id]);
+    res.status(201).json({ model_id: model.id, file_path: relative, file_size: req.body.length, file_hash: hash, status: "active" });
   }));
 }
 
@@ -206,7 +254,7 @@ function registerOverlay(app, db) {
     const iotLatest = all(
       "SELECT d.device_code, r.value, r.read_at, dp.point_name, dp.unit FROM iot_readings r JOIN iot_devices d ON r.device_id=d.id LEFT JOIN iot_data_points dp ON r.point_id=dp.id WHERE r.id IN (SELECT MAX(id) FROM iot_readings GROUP BY device_id) AND d.is_active=1"
     );
-    res.json({ model, parts, assembly_status: asm, overlay, iot_latest: iotLatest, generated_at: new Date().toISOString() });
+    res.json({ model: { ...model, asset_ready: Boolean(modelFilePath(model.file_path)) }, parts, assembly_status: asm, overlay, iot_latest: iotLatest, generated_at: new Date().toISOString() });
   }));
 }
 
@@ -238,4 +286,4 @@ function register(app, db) {
   console.log("[digitalTwinService] Digital Twin registered (Models + Parts + Assembly + Overlay + Scene)");
 }
 
-module.exports = { register };
+module.exports = { modelFilePath, register, runMigration, validateGlb };

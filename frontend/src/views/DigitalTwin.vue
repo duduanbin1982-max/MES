@@ -9,6 +9,9 @@
       <el-select v-model="selectedId" placeholder="选择装备" style="width:260px" @change="onInstanceChange" size="small">
         <el-option v-for="inst in instances" :key="inst.id" :label="inst.instance_name" :value="inst.id" />
       </el-select>
+      <el-tag :type="currentModel?.asset_ready?'success':'warning'">{{ currentModel?.asset_ready?'真实 GLB':'参考模型' }}</el-tag>
+      <el-button v-if="currentModel && !currentModel.asset_ready" size="small" type="primary" @click="fileInput?.click()">上传 GLB</el-button>
+      <input ref="fileInput" type="file" accept=".glb,model/gltf-binary" hidden @change="uploadModel" />
     </div>
 
     <!-- Info Panel -->
@@ -43,7 +46,9 @@
 import { ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import Api from "../api"
+import { ElMessage } from "element-plus"
 
 const containerRef = ref<HTMLElement>()
 const selectedId = ref(1)
@@ -53,6 +58,8 @@ const explode = ref(false)
 const instances = ref<any[]>([])
 const selectedInstance = ref<any>(null)
 const parts = ref<any[]>([])
+const currentModel = ref<any>(null)
+const fileInput = ref<HTMLInputElement>()
 
 // Three.js objects
 let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, controls: OrbitControls
@@ -208,10 +215,7 @@ function initScene() {
   grid.position.y = -3.5
   scene.add(grid)
 
-  // TBM Model
-  const tbm = buildTBMModel()
-  tbm.name = "tbm_group"
-  scene.add(tbm)
+  renderSelectedModel()
 
   // Raycaster for hover
   raycaster = new THREE.Raycaster()
@@ -222,6 +226,48 @@ function initScene() {
   renderer.domElement.addEventListener("mousemove", onMouseMove)
 
   animate()
+}
+
+function clearModel() {
+  const current = scene?.getObjectByName("tbm_group")
+  if (current) scene.remove(current)
+  partMeshes.clear()
+}
+
+function frameObject(object: THREE.Object3D) {
+  const box = new THREE.Box3().setFromObject(object)
+  const size = box.getSize(new THREE.Vector3())
+  const center = box.getCenter(new THREE.Vector3())
+  const distance = Math.max(size.x, size.y, size.z) * 1.8 || 10
+  controls.target.copy(center)
+  camera.position.copy(center.clone().add(new THREE.Vector3(distance, distance * 0.5, distance)))
+  controls.update()
+}
+
+function renderSelectedModel() {
+  if (!scene) return
+  clearModel()
+  if (currentModel.value?.asset_ready && currentModel.value.file_path) {
+    new GLTFLoader().load('/' + currentModel.value.file_path, (gltf) => {
+      const model = gltf.scene
+      model.name = "tbm_group"
+      const scale = Number(currentModel.value.scale_factor || 1)
+      model.scale.setScalar(scale)
+      model.traverse((child:any) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+          partMeshes.set(child.name, child)
+        }
+      })
+      scene.add(model)
+      frameObject(model)
+    }, undefined, () => ElMessage.error('GLB 加载失败，请检查文件'))
+    return
+  }
+  const reference = buildTBMModel()
+  reference.name = "tbm_group"
+  scene.add(reference)
 }
 
 function onResize() {
@@ -335,10 +381,30 @@ async function loadTwinData() {
   const model = (modelRows.items || modelRows || [])[0]
   if (!model) {
     parts.value = []
+    currentModel.value = null
+    renderSelectedModel()
     return
   }
   const sceneData = await Api.get("/dt/scene/" + model.id)
+  currentModel.value = sceneData.model
   parts.value = sceneData.parts || []
+  renderSelectedModel()
+}
+
+async function uploadModel(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file || !currentModel.value) return
+  const token = localStorage.getItem('token') || ''
+  const response = await fetch(`/api/dt/models/${currentModel.value.id}/file`, {
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) }, body: file,
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    return ElMessage.error(error.message || 'GLB 上传失败')
+  }
+  ElMessage.success('真实 GLB 已上传并激活')
+  await loadTwinData()
+  ;(event.target as HTMLInputElement).value = ''
 }
 
 async function loadData() {
