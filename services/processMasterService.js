@@ -175,9 +175,11 @@ function applyTemplateToNode(db, nodeId, templateId) {
 function validateAssignment(db, { process_node_id, user_id }) {
   if (!process_node_id || !user_id) throw ApiError.validation("process_node_id / user_id 必填");
   const node = db.prepare(`
-    SELECT pn.*, p.position_name, p.skill_category AS position_skill, p.min_level, p.required_cert_type AS position_cert_type
+    SELECT pn.*, p.position_name, p.skill_category AS position_skill, p.min_level, p.required_cert_type AS position_cert_type,
+           pot.sop_required AS template_sop_required, pot.drawing_required AS template_drawing_required
     FROM process_nodes pn
     LEFT JOIN process_positions p ON p.position_code = pn.required_position_code
+    LEFT JOIN process_operation_templates pot ON pot.id = pn.operation_template_id
     WHERE pn.id = ?
   `).get(process_node_id);
   if (!node) throw ApiError.notFound("工艺节点不存在");
@@ -207,17 +209,22 @@ function validateAssignment(db, { process_node_id, user_id }) {
   
   // Check required docs from process_operation_docs
   const requiredDocs = db.prepare(`
-    SELECT pod.*, d.status AS doc_status
+    SELECT pod.*, d.status AS doc_status, da.id AS acknowledgement_id
     FROM process_operation_docs pod
     LEFT JOIN documents d ON d.id = pod.doc_id
+    LEFT JOIN doc_acknowledgements da ON da.doc_id = d.id AND da.ack_by = ?
     WHERE pod.operation_template_id = ?
-  `).all(node.operation_template_id);
+  `).all(user_id, node.operation_template_id);
   const missingDocs = [];
-  if (requiredDocs && requiredDocs.length > 0) {
-    for (const rd of requiredDocs) {
-      if (rd.is_required && (!rd.doc_id || rd.doc_status !== 'issued')) {
-        missingDocs.push(rd.title + ' missing/unsigned');
-      }
+  const requiredTypes = new Set(requiredDocs.filter((item) => Number(item.is_required) === 1).map((item) => item.doc_type));
+  if (Number(node.template_sop_required) === 1 && !requiredTypes.has("sop")) missingDocs.push("工序模板要求 SOP，但尚未绑定必需文档");
+  if (Number(node.template_drawing_required) === 1 && !requiredTypes.has("drawing")) missingDocs.push("工序模板要求图纸，但尚未绑定必需文档");
+  for (const rd of requiredDocs) {
+    if (Number(rd.is_required) !== 1) continue;
+    if (!rd.doc_id || rd.doc_status !== "issued") {
+      missingDocs.push(`${rd.title} 未绑定或未签发`);
+    } else if (!rd.acknowledgement_id) {
+      missingDocs.push(`${rd.title} 尚未由 ${user.full_name} 签收`);
     }
   }
   const missing = [];

@@ -35,6 +35,7 @@ const SERVICES = [
   { name: "pickService", module: "./pickService" },
   { name: "plmService", module: "./plmService" },
   { name: "processMasterService", module: "./processMasterService" },
+  { name: "projectMasterService", module: "./projectMasterService" },
 
   { name: "process", module: "./process" },
   { name: "processHoursService", module: "./processHoursService" },

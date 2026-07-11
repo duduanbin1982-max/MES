@@ -46,6 +46,12 @@ function freshDb() {
       status TEXT DEFAULT 'draft',
       created_at TEXT DEFAULT (datetime('now'))
     );
+    CREATE TABLE doc_acknowledgements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_id INTEGER NOT NULL,
+      ack_by INTEGER NOT NULL,
+      ack_at TEXT DEFAULT (datetime('now'))
+    );
     CREATE TABLE workstations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT NOT NULL,
@@ -162,6 +168,18 @@ test("apply template writes node operation, station, skill and position", async 
 });
 
 test("assignment validation checks skill and certificate", async () => {
+  const blocked = await request("POST", "/api/process-master/validate-assignment", { process_node_id: 1, user_id: 1 });
+  assert.equal(blocked.body.ok, false);
+  assert.ok(blocked.body.missing.some((item) => item.includes("SOP")));
+  assert.ok(blocked.body.missing.some((item) => item.includes("图纸")));
+
+  const welding = db.prepare("SELECT id FROM process_operation_templates WHERE operation_code='welding'").get();
+  const sop = db.prepare("INSERT INTO documents (title,status) VALUES ('WPS','issued')").run().lastInsertRowid;
+  const drawing = db.prepare("INSERT INTO documents (title,status) VALUES ('焊接图','issued')").run().lastInsertRowid;
+  db.prepare("INSERT INTO process_operation_docs (operation_template_id,doc_type,title,doc_id,is_required) VALUES (?,?,?,?,1)").run(welding.id, "sop", "WPS", sop);
+  db.prepare("INSERT INTO process_operation_docs (operation_template_id,doc_type,title,doc_id,is_required) VALUES (?,?,?,?,1)").run(welding.id, "drawing", "焊接图", drawing);
+  db.prepare("INSERT INTO doc_acknowledgements (doc_id,ack_by) VALUES (?,1),(?,1)").run(sop, drawing);
+
   const ok = await request("POST", "/api/process-master/validate-assignment", { process_node_id: 1, user_id: 1 });
   assert.equal(ok.status, 200);
   assert.equal(ok.body.ok, true);
@@ -189,7 +207,7 @@ test("can bind document to operation template and list", async () => {
   assert.ok(w, "welding template exists");
   const p1 = await request("POST", "/api/process-master/operations/" + w.id + "/docs", {
     title: "WPS Welding Procedure",
-    doc_type: "sop",
+    doc_type: "qc_std",
     is_required: true
   });
   assert.equal(p1.status, 201);
