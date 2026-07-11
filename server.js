@@ -62,9 +62,11 @@ require('./routes/admin/diag').register(app, db);
 require('./services/register-all').registerAll(app, db, {});
 // MESA #5: IoT 数据采集器 (Modbus 模拟 + 实时入库 + WebSocket)
 const iotCollector = require('./services/iotCollector');
+const iotLifecycle = require('./services/iotLifecycleService');
 // MESA #7: SPC 实时监控 (30s 间隔, WECO 规则 + Cpk 预警)
 const spcMonitor = require('./services/spcMonitor');
 iotCollector.start(db, 5000);
+iotLifecycle.start(db);
 spcMonitor.start(db, 30000);
 
 // P0-文档: 文档/图纸管理 + uploads 静态目录 (受 auth 保护, 仅 GET 可见)

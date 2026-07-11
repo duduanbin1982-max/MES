@@ -66,6 +66,7 @@ function runMigration(db) {
     CREATE INDEX IF NOT EXISTS idx_ai_training_runs_time ON ai_training_runs(started_at DESC);
   `);
   addColumn(db, "ai_predictions", "model_id", "model_id INTEGER");
+  addColumn(db, "ai_models", "training_source", "training_source TEXT NOT NULL DEFAULT 'production'");
 }
 
 function safeCode(value) {
@@ -93,6 +94,12 @@ function modelRow(row) {
 function trainingGroups(db, filters = {}) {
   const conditions = ["h.sample_count > 0", "h.avg_value IS NOT NULL", "dp.is_active = 1"];
   const parameters = [];
+  const dataSource = filters.data_source || "production";
+  if (dataSource === "simulator") {
+    conditions.push("h.source = 'simulator'");
+  } else {
+    conditions.push("h.source <> 'simulator'");
+  }
   if (filters.device_code) {
     conditions.push("d.device_code = ?");
     parameters.push(filters.device_code);
@@ -117,10 +124,11 @@ function trainingGroups(db, filters = {}) {
 }
 
 function trainGroup(db, group, options = {}) {
+  const sourceCondition = options.data_source === "simulator" ? "source = 'simulator'" : "source <> 'simulator'";
   const rows = db.prepare(`
     SELECT bucket_hour, avg_value
     FROM iot_reading_hourly
-    WHERE device_id = ? AND point_id = ? AND avg_value IS NOT NULL
+    WHERE device_id = ? AND point_id = ? AND ${sourceCondition} AND avg_value IS NOT NULL
     ORDER BY bucket_hour
   `).all(group.device_id, group.point_id);
   const values = rows.map((row) => Number(row.avg_value));
@@ -155,8 +163,8 @@ function trainGroup(db, group, options = {}) {
       INSERT INTO ai_models
         (model_code, model_type, target_type, target_id, device_id, point_id, algorithm, version, status,
          training_rows, validation_rows, train_from, train_to, feature_schema, parameters, metrics,
-         data_quality, artifact_hash, trained_by)
-      VALUES (?, 'time_series', 'iot_point', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         data_quality, artifact_hash, trained_by, training_source)
+      VALUES (?, 'time_series', 'iot_point', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       modelCode,
       group.point_id,
@@ -175,6 +183,7 @@ function trainGroup(db, group, options = {}) {
       qualityJson,
       artifactHash,
       options.trained_by || null,
+      options.data_source || "production",
     );
     db.prepare(`
       INSERT INTO ai_training_runs
@@ -206,6 +215,11 @@ function trainGroup(db, group, options = {}) {
 }
 
 function trainModels(db, options = {}) {
+  const dataSource = options.data_source || "production";
+  if (dataSource === "simulator" && String(process.env.IOT_MODE || "production").toLowerCase() !== "simulator") {
+    throw ApiError.validation("生产模式禁止使用模拟数据训练模型");
+  }
+  options = { ...options, data_source: dataSource };
   const groups = trainingGroups(db, options);
   const models = [];
   const failures = [];
@@ -245,9 +259,10 @@ function predictFaultWithModels(db, deviceCode, hoursBack = 168) {
   const pointPredictions = [];
   for (const model of modelRows) {
     const limit = Math.max(model.parameters.lag + 1, Math.min(Number(hoursBack || 168), 720));
+    const sourceCondition = model.training_source === "simulator" ? "source = 'simulator'" : "source <> 'simulator'";
     const rows = db.prepare(`
       SELECT avg_value FROM iot_reading_hourly
-      WHERE device_id = ? AND point_id = ? AND avg_value IS NOT NULL
+      WHERE device_id = ? AND point_id = ? AND ${sourceCondition} AND avg_value IS NOT NULL
       ORDER BY bucket_hour DESC LIMIT ?
     `).all(model.device_id, model.point_id, limit).reverse();
     const history = rows.map((row) => Number(row.avg_value));
@@ -271,6 +286,7 @@ function predictFaultWithModels(db, deviceCode, hoursBack = 168) {
       calibration_status: thresholds.calibration_status,
       confidence: Math.round(confidenceFor(model) * 100) / 100,
       metrics: model.metrics,
+      training_source: model.training_source,
     });
   }
   if (!pointPredictions.length) return null;
@@ -296,6 +312,7 @@ function predictFaultWithModels(db, deviceCode, hoursBack = 168) {
   return {
     prediction_id: Number(result.lastInsertRowid),
     model_source: "trained_ridge_ar_v1",
+    training_source: highest.training_source,
     device_code: device.device_code,
     device_name: device.device_name,
     fault_risk_pct: Math.round(highest.risk_pct),

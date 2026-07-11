@@ -9,6 +9,8 @@ const { wrap } = require("../middleware/asyncHandler");
 const DEFAULT_RAW_READING_DAYS = Number(process.env.IOT_RAW_READING_RETENTION_DAYS || 7);
 const DEFAULT_ACKED_ALARM_DAYS = Number(process.env.IOT_ACKED_ALARM_RETENTION_DAYS || 30);
 const DEFAULT_BATCH_LIMIT = Number(process.env.IOT_LIFECYCLE_BATCH_LIMIT || 200000);
+const DEFAULT_RUN_INTERVAL_HOURS = Number(process.env.IOT_LIFECYCLE_INTERVAL_HOURS || 24);
+let lifecycleTimer = null;
 
 function positiveInt(value, fallback, max = 3650) {
   const parsed = Number(value);
@@ -52,6 +54,12 @@ function runMigration(db) {
       error TEXT
     );
   `);
+  const hourlyColumns = new Set(db.prepare("PRAGMA table_info(iot_reading_hourly)").all().map((column) => column.name));
+  if (!hourlyColumns.has("source")) db.prepare("ALTER TABLE iot_reading_hourly ADD COLUMN source TEXT NOT NULL DEFAULT 'external_adapter'").run();
+  const readingColumns = new Set(db.prepare("PRAGMA table_info(iot_readings)").all().map((column) => column.name));
+  if (!readingColumns.has("source")) db.prepare("ALTER TABLE iot_readings ADD COLUMN source TEXT NOT NULL DEFAULT 'external_adapter'").run();
+  const alarmColumns = new Set(db.prepare("PRAGMA table_info(iot_alarms)").all().map((column) => column.name));
+  if (!alarmColumns.has("source")) db.prepare("ALTER TABLE iot_alarms ADD COLUMN source TEXT NOT NULL DEFAULT 'external_adapter'").run();
 }
 
 function getCutoffs(db, options = {}) {
@@ -70,7 +78,7 @@ function aggregateReadings(db, cutoff) {
   const result = db.prepare(`
     INSERT INTO iot_reading_hourly (
       bucket_hour, device_id, point_id, point_code, unit, quality,
-      sample_count, min_value, max_value, avg_value, first_read_at, last_read_at,
+      source, sample_count, min_value, max_value, avg_value, first_read_at, last_read_at,
       created_at, updated_at
     )
     SELECT
@@ -80,6 +88,7 @@ function aggregateReadings(db, cutoff) {
       COALESCE(r.point_code, dp.point_code, CAST(r.point_id AS TEXT), 'unknown') AS point_code,
       COALESCE(r.unit, dp.unit) AS unit,
       r.quality,
+      r.source,
       COUNT(*) AS sample_count,
       MIN(r.value) AS min_value,
       MAX(r.value) AS max_value,
@@ -97,7 +106,8 @@ function aggregateReadings(db, cutoff) {
       r.point_id,
       COALESCE(r.point_code, dp.point_code, CAST(r.point_id AS TEXT), 'unknown'),
       COALESCE(r.unit, dp.unit),
-      r.quality
+      r.quality,
+      r.source
     ON CONFLICT(bucket_hour, device_id, point_id, point_code, quality) DO UPDATE SET
       sample_count = excluded.sample_count,
       min_value = excluded.min_value,
@@ -106,6 +116,7 @@ function aggregateReadings(db, cutoff) {
       first_read_at = excluded.first_read_at,
       last_read_at = excluded.last_read_at,
       unit = excluded.unit,
+      source = excluded.source,
       updated_at = datetime('now')
   `).run(cutoff);
   return result.changes || 0;
@@ -234,9 +245,25 @@ function register(app, db) {
   console.log("[iotLifecycleService] IoT lifecycle governance registered");
 }
 
+function start(db, intervalHours = DEFAULT_RUN_INTERVAL_HOURS) {
+  if (lifecycleTimer) clearInterval(lifecycleTimer);
+  const hours = positiveInt(intervalHours, 24, 168);
+  lifecycleTimer = setInterval(() => {
+    try {
+      const result = runLifecycle(db);
+      console.log(`[iotLifecycleService] scheduled run deleted ${result.deletedReadings} readings and ${result.deletedAlarms} alarms`);
+    } catch (error) {
+      console.error("[iotLifecycleService] scheduled run failed:", error.message);
+    }
+  }, hours * 60 * 60 * 1000);
+  lifecycleTimer.unref?.();
+  return hours;
+}
+
 module.exports = {
   runMigration,
   runLifecycle,
   getLifecycleStatus,
   register,
+  start,
 };

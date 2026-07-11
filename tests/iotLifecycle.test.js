@@ -72,6 +72,7 @@ test("iot lifecycle aggregates old readings and keeps recent raw data", () => {
   assert.equal(hourly.min_value, 10);
   assert.equal(hourly.max_value, 20);
   assert.equal(hourly.avg_value, 15);
+  assert.equal(hourly.source, "external_adapter");
 });
 
 test("iot lifecycle deletes only acknowledged old alarms", () => {

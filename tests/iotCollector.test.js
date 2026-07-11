@@ -71,3 +71,13 @@ test("iot alarm severity escalates only on meaningful excursion", () => {
   assert.equal(iotCollector.classifyAlarmSeverity("low", -1, 0, point), "warning");
   assert.equal(iotCollector.classifyAlarmSeverity("low", -30, 0, point), "critical");
 });
+
+test("iot collector defaults to production mode", () => {
+  const oldMode = process.env.IOT_MODE;
+  delete process.env.IOT_MODE;
+  assert.equal(iotCollector.getMode(), "production");
+  process.env.IOT_MODE = "simulator";
+  assert.equal(iotCollector.getMode(), "simulator");
+  if (oldMode === undefined) delete process.env.IOT_MODE;
+  else process.env.IOT_MODE = oldMode;
+});

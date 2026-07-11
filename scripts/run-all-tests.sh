@@ -59,6 +59,7 @@ run "multiInstanceScheduler" tests/multiInstanceScheduler.test.js "export DB_PAT
 run "oee"                    tests/oee.test.js                    ""
 run "iotLifecycle"            tests/iotLifecycle.test.js            ""
 run "iotCollector"            tests/iotCollector.test.js            ""
+run "iotGovernance"           tests/iotGovernance.test.js           ""
 run "aiModelTraining"         tests/aiModelTraining.test.js         ""
 run "serviceRegistration"      tests/serviceRegistration.test.js      ""
 run "keyComponentPrices"      tests/keyComponentPrices.test.js   ""

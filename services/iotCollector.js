@@ -14,6 +14,11 @@ let dbRef = null;
 const DEFAULT_ALARM_COOLDOWN_MINUTES = 30;
 const DEFAULT_SIM_ALARM_RATE = 0.0002;
 
+function getMode() {
+  const mode = String(process.env.IOT_MODE || "production").trim().toLowerCase();
+  return mode === "simulator" ? "simulator" : "production";
+}
+
 function readPositiveNumberEnv(name, fallback) {
   const raw = process.env[name];
   if (raw === undefined || raw === null || raw === "") return fallback;
@@ -115,10 +120,10 @@ function collectDevice(db, device) {
   if (points.length === 0) return { readings: 0, alarms: [] };
 
   const insReading = db.prepare(
-    "INSERT INTO iot_readings (device_id, point_id, value, quality, read_at) VALUES (?, ?, ?, 'good', datetime('now'))"
+    "INSERT INTO iot_readings (device_id, point_id, value, quality, source, read_at) VALUES (?, ?, ?, 'simulated', 'simulator', datetime('now'))"
   );
   const insAlarm = db.prepare(
-    "INSERT INTO iot_alarms (device_id, point_id, alarm_type, threshold_value, actual_value, message, severity) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO iot_alarms (device_id, point_id, alarm_type, threshold_value, actual_value, message, severity, source) VALUES (?, ?, ?, ?, ?, ?, ?, 'simulator')"
   );
 
   let readingCount = 0;
@@ -178,6 +183,7 @@ function collectDevice(db, device) {
 
 // 主采集循环
 function runCollector(db) {
+  if (getMode() !== "simulator") return { skipped: true, reason: "IOT_MODE is production" };
   const devices = db
     .prepare("SELECT * FROM iot_devices WHERE is_active = 1")
     .all();
@@ -235,6 +241,11 @@ function runCollector(db) {
 function start(db, intervalMs) {
   if (collectorInterval) stop();
 
+  if (getMode() !== "simulator") {
+    console.log("[iotCollector] Production mode: simulator is disabled");
+    return false;
+  }
+
   dbRef = db;
   const interval = intervalMs || 5000;
 
@@ -255,6 +266,7 @@ function start(db, intervalMs) {
 
   // 定时运行
   collectorInterval = setInterval(() => runCollector(db), interval);
+  return true;
 }
 
 // 停止采集器
@@ -273,4 +285,4 @@ function triggerCollect(db) {
   return { ok: true };
 }
 
-module.exports = { start, stop, triggerCollect, runCollector, simulateModbusValue, insertAlarmIfNeeded, getAlarmCooldownMinutes, getSimulatorAlarmRate, classifyAlarmSeverity };
+module.exports = { start, stop, triggerCollect, runCollector, simulateModbusValue, insertAlarmIfNeeded, getAlarmCooldownMinutes, getSimulatorAlarmRate, classifyAlarmSeverity, getMode };

@@ -8,6 +8,29 @@ const { wrap } = require('../middleware/asyncHandler');
 const { emit, Events } = require('../app/ws/EventBus');
 const path = require("path");
 
+function columnNames(db, table) {
+  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
+}
+
+function addColumn(db, table, name, definition) {
+  if (!columnNames(db, table).has(name)) db.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition}`).run();
+}
+
+function validateThresholds(input) {
+  const low = input.alarm_low === null || input.alarm_low === undefined || input.alarm_low === "" ? null : Number(input.alarm_low);
+  const high = input.alarm_high === null || input.alarm_high === undefined || input.alarm_high === "" ? null : Number(input.alarm_high);
+  const min = input.min_value === null || input.min_value === undefined || input.min_value === "" ? null : Number(input.min_value);
+  const max = input.max_value === null || input.max_value === undefined || input.max_value === "" ? null : Number(input.max_value);
+  if ([low, high, min, max].some((value) => value !== null && !Number.isFinite(value))) {
+    throw ApiError.validation("点位上下限必须是有效数字");
+  }
+  if (low !== null && high !== null && low >= high) throw ApiError.validation("alarm_low 必须小于 alarm_high");
+  if (min !== null && max !== null && min >= max) throw ApiError.validation("min_value 必须小于 max_value");
+  if (min !== null && low !== null && low < min) throw ApiError.validation("alarm_low 不能小于 min_value");
+  if (max !== null && high !== null && high > max) throw ApiError.validation("alarm_high 不能大于 max_value");
+  return { low, high, min, max };
+}
+
 function runMigration(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS iot_devices (
@@ -79,6 +102,12 @@ function runMigration(db) {
     CREATE INDEX IF NOT EXISTS idx_iot_readings_point ON iot_readings(point_id, read_at);
     CREATE INDEX IF NOT EXISTS idx_iot_alarms_device ON iot_alarms(device_id, acknowledged);
     CREATE INDEX IF NOT EXISTS idx_iot_devices_status ON iot_devices(status);
+  `);
+  addColumn(db, "iot_readings", "source", "source TEXT NOT NULL DEFAULT 'external_adapter'");
+  addColumn(db, "iot_alarms", "source", "source TEXT NOT NULL DEFAULT 'external_adapter'");
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_iot_readings_source_time ON iot_readings(source, read_at);
+    CREATE INDEX IF NOT EXISTS idx_iot_alarms_source_time ON iot_alarms(source, created_at);
   `);
 }
 
@@ -158,9 +187,22 @@ function registerPoints(app, db) {
   app.post("/api/iot/devices/:id/points", wrap((req, res) => {
     const { point_name, point_code, data_type, unit, register_offset, min_value, max_value, alarm_low, alarm_high } = req.body;
     if (!point_name || !point_code) throw ApiError.validation("point_name and point_code required")
+    const thresholds = validateThresholds({ min_value, max_value, alarm_low, alarm_high });
     const r = run("INSERT INTO iot_data_points (device_id,point_name,point_code,data_type,unit,register_offset,min_value,max_value,alarm_low,alarm_high) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      [req.params.id, point_name, point_code, data_type||"float", unit||null, register_offset||null, min_value||null, max_value||null, alarm_low||null, alarm_high||null]);
+      [req.params.id, point_name, point_code, data_type||"float", unit||null, register_offset||null, thresholds.min, thresholds.max, thresholds.low, thresholds.high]);
     res.json({ id: r.lastInsertRowid, point_code });
+  }));
+
+  app.patch("/api/iot/points/:id", wrap((req, res) => {
+    const current = get("SELECT * FROM iot_data_points WHERE id=?", [req.params.id]);
+    if (!current) throw ApiError.notFound("Point not found");
+    const merged = { ...current, ...req.body };
+    const thresholds = validateThresholds(merged);
+    run(`UPDATE iot_data_points SET point_name=?, unit=?, min_value=?, max_value=?, alarm_low=?, alarm_high=?, is_active=? WHERE id=?`, [
+      merged.point_name, merged.unit || null, thresholds.min, thresholds.max, thresholds.low, thresholds.high,
+      merged.is_active === undefined ? current.is_active : Number(Boolean(merged.is_active)), req.params.id,
+    ]);
+    res.json(get("SELECT * FROM iot_data_points WHERE id=?", [req.params.id]));
   }));
 }
 
@@ -178,8 +220,8 @@ function registerReadings(app, db) {
 
     let count = 0;
     const alarmIds = [];
-    const insReading = db.prepare("INSERT INTO iot_readings (device_id,point_id,value,read_at) VALUES (?,?,?,datetime('now'))");
-    const insAlarm = db.prepare("INSERT INTO iot_alarms (device_id,point_id,alarm_type,threshold_value,actual_value,message,severity) VALUES (?,?,?,?,?,?,?)");
+    const insReading = db.prepare("INSERT INTO iot_readings (device_id,point_id,value,quality,source,read_at) VALUES (?,?,?,'good','external_adapter',datetime('now'))");
+    const insAlarm = db.prepare("INSERT INTO iot_alarms (device_id,point_id,alarm_type,threshold_value,actual_value,message,severity,source) VALUES (?,?,?,?,?,?,?,'external_adapter')");
 
     const tx = db.transaction(() => {
       for (const p of points) {
@@ -284,7 +326,7 @@ function register(app, db) {
     var reading = req.body;
     if (!reading.device_code && !reading.equipment_instance_id) reading.equipment_instance_id = null;
     var r = db.prepare(
-      "INSERT INTO iot_readings (device_id, point_id, value, quality, read_at, point_code, unit, equipment_instance_id, operator_id, notes) VALUES (?, ?, ?, 'manual', datetime('now'), ?, ?, ?, ?, ?)"
+      "INSERT INTO iot_readings (device_id, point_id, value, quality, source, read_at, point_code, unit, equipment_instance_id, operator_id, notes) VALUES (?, ?, ?, 'manual', 'manual', datetime('now'), ?, ?, ?, ?, ?)"
     ).run(
       reading.device_id || null, reading.point_id || null, reading.value,
       reading.point_code || 'manual', reading.unit || null, reading.equipment_instance_id || null,
@@ -299,7 +341,7 @@ function register(app, db) {
       var v = parseFloat(reading.value);
       if (v < alarm.min_value || v > alarm.max_value) {
         db.prepare(
-          "INSERT INTO iot_alarms (device_id, point_id, alarm_type, threshold_value, actual_value, message, severity) VALUES (?, NULL, 'threshold', ?, ?, ?, ?)"
+          "INSERT INTO iot_alarms (device_id, point_id, alarm_type, threshold_value, actual_value, message, severity, source) VALUES (?, NULL, 'threshold', ?, ?, ?, ?, 'manual')"
         ).run(alarm.device_id, v < alarm.min_value ? alarm.min_value : alarm.max_value, v,
           (v < alarm.min_value ? '低于' : '超出') + '阈值: ' + v + ' (' + alarm.min_value + '~' + alarm.max_value + ')',
           v < alarm.min_value ? 'warning' : 'critical');
@@ -353,7 +395,7 @@ function register(app, db) {
     var inserted = 0;
     
     var insert = db.prepare(
-      "INSERT INTO iot_readings (device_id, point_code, value, unit, quality, read_at) VALUES (?, ?, ?, ?, 'good', datetime('now'))"
+      "INSERT INTO iot_readings (device_id, point_code, value, unit, quality, source, read_at) VALUES (?, ?, ?, ?, 'good', 'modbus_gateway', datetime('now'))"
     );
     
     var tx = db.transaction(function() {
@@ -382,4 +424,4 @@ function register(app, db) {
 
 }
 
-module.exports = { register };
+module.exports = { register, runMigration, validateThresholds };
