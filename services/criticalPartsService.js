@@ -12,7 +12,7 @@ function register(app, db) {
 
     // 关键件清单 (from key_components + critical_parts)
     const parts = all(`
-      SELECT kc.id, kc.component_type, m.name AS material_name, m.material_code,
+      SELECT kc.id, kc.component_type, m.material_name, m.material_code,
         kc.supplier, kc.supplier_part_no, kc.lead_time_weeks, kc.unit_price, kc.risk_level,
         cp.part_code, cp.drawing_no, cp.spec, cp.manufacturing_standard, cp.inspection_points,
         cp.status AS critical_status,
@@ -22,9 +22,10 @@ function register(app, db) {
       FROM key_components kc
       LEFT JOIN materials m ON m.id = kc.material_id
       LEFT JOIN critical_parts cp ON cp.id = kc.id
-      LEFT JOIN equipment_instances ei ON ei.id = COALESCE(cp.equipment_instance_id, ?)
+      LEFT JOIN equipment_instances ei ON ei.id = cp.equipment_instance_id
+      WHERE (? IS NULL OR cp.equipment_instance_id = ? OR cp.equipment_instance_id IS NULL)
       ORDER BY CASE kc.risk_level WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, kc.id
-    `, [instanceId]);
+    `, [instanceId, instanceId]);
 
     // 证书
     const certs = all(`

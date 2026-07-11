@@ -327,21 +327,33 @@ function metricColor(m: any) {
 async function onInstanceChange() {
   const inst = instances.value.find(i => i.id === selectedId.value)
   selectedInstance.value = inst
+  await loadTwinData()
+}
+
+async function loadTwinData() {
+  const modelRows = await Api.get("/dt/models", { params: { instance_id: selectedId.value } })
+  const model = (modelRows.items || modelRows || [])[0]
+  if (!model) {
+    parts.value = []
+    return
+  }
+  const sceneData = await Api.get("/dt/scene/" + model.id)
+  parts.value = sceneData.parts || []
 }
 
 async function loadData() {
   try {
-    const [instRes, partsRes] = await Promise.all([
-      Api.get("/critical-parts/dashboard"),
-      Api.get("/digital-twin/parts"),
-    ])
-    instances.value = instRes.instances || []
-    parts.value = (partsRes as any).items || []
+    const instanceRows = await Api.instances()
+    instances.value = instanceRows.items || instanceRows || []
     if (instances.value.length > 0) {
       selectedId.value = instances.value[0].id
       selectedInstance.value = instances.value[0]
+      await loadTwinData()
     }
-  } catch (_) {}
+  } catch (_) {
+    instances.value = []
+    parts.value = []
+  }
 }
 
 onMounted(async () => {

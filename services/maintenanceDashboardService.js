@@ -14,7 +14,7 @@ function register(app, db) {
     const params = instanceId ? [instanceId] : [];
 
     // 维保计划概览
-    const plans = all(`SELECT * FROM maintenance_plans ${instFilter} ORDER BY next_due_date ASC`);
+    const plans = all(`SELECT * FROM maintenance_plans ${instFilter} ORDER BY next_due_date ASC`, params);
     const overduePlans = plans.filter(p => p.next_due_date && p.next_due_date < new Date().toISOString().slice(0,10) && p.status !== "completed");
     const dueSoonPlans = plans.filter(p => {
       if (!p.next_due_date || p.status === "completed") return false;
@@ -24,11 +24,11 @@ function register(app, db) {
     });
 
     // 故障报修
-    const breakdowns = all(`SELECT * FROM breakdown_reports ${instFilter} ORDER BY reported_at DESC`);
+    const breakdowns = all(`SELECT * FROM breakdown_reports ${instFilter} ORDER BY reported_at DESC`, params);
     const openBreakdowns = breakdowns.filter(b => b.status === "open" || b.status === "in_progress");
 
     // 备件库存
-    const spareParts = all(`SELECT * FROM spare_parts ${instFilter} ORDER BY part_code`);
+    const spareParts = all(`SELECT * FROM spare_parts ${instFilter} ORDER BY part_code`, params);
     const lowStock = spareParts.filter(s => s.quantity <= s.min_stock);
 
     // 维保日志近期
@@ -42,10 +42,10 @@ function register(app, db) {
     `, params);
 
     // 点检
-    const checklists = all(`SELECT * FROM maintenance_checklists ${instFilter}`);
+    const checklists = all(`SELECT * FROM maintenance_checklists ${instFilter}`, params);
 
     // 现场服务
-    const fieldServices = all(`SELECT * FROM field_service ${instFilter} ORDER BY reported_date DESC LIMIT 10`);
+    const fieldServices = all(`SELECT * FROM field_service ${instFilter} ORDER BY reported_date DESC LIMIT 10`, params);
 
     // 设备实例列表
     const instances = all("SELECT id, instance_code, instance_name, status FROM equipment_instances");
