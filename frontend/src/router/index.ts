@@ -52,6 +52,8 @@ const routes = [
       { path: '/documents', name: 'documents', component: () => import('../views/DocumentManagement.vue'), meta: { title: '文档/图纸', icon: 'FolderOpened', requires: 'document:read' } },
       { path: '/bom', name: 'bom', component: () => import('../views/BomManagement.vue'), meta: { title: 'BOM 管理', icon: 'SetUp', requires: 'equipment:read' } },
       { path: '/users', name: 'users', component: () => import('../views/UserManagement.vue'), meta: { title: '用户管理', icon: 'User' } },
+      
+      { path: '/critical-parts', name: 'critical-parts', component: () => import('../views/CriticalParts.vue'), meta: { title: '关键件管理', icon: 'Key' } },
       { path: '/cost', name: 'cost', component: () => import('../views/CostAllocation.vue'), meta: { title: '成本归集', icon: 'Money' } },
       { path: '/workflow', name: 'workflow', component: () => import('../views/WorkflowEngine.vue'), meta: { title: '工作流引擎', icon: 'Guide' } },
       { path: '/iot', name: 'iot', component: () => import('../views/IoTMonitor.vue'), meta: { title: 'IoT 监控', icon: 'Connection' } },
