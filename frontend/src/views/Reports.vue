@@ -41,7 +41,7 @@
             </div>
           </div>
           <el-table :data="lastResult.rows || []" stripe size="small" max-height="450">
-            <el-table-column v-for="col in lastResult.columns" :key="col" :prop="col" :label="col" min-width="140" show-overflow-tooltip />
+            <el-table-column v-for="col in (lastResult.columns || Object.keys(lastResult.rows?.[0] || {}))" :key="col" :prop="col" :label="col" min-width="140" show-overflow-tooltip />
           </el-table>
         </el-card>
         <el-empty v-else description="选择报表类型并点击【生成报表】" :image-size="80" />
@@ -191,13 +191,13 @@ const lastResult = ref<any>(null)
 const generateReport = async () => {
   genLoading.value = true
   try {
-    const params: any = { report_type: instant.type }
-    if (instant.instance_id) params.equipment_instance_id = instant.instance_id
+    const filters: any = {}
+    if (instant.instance_id) filters.instance_id = instant.instance_id
     if (instant.dateRange) {
-      params.date_from = instant.dateRange[0]?.toISOString?.() || instant.dateRange[0]
-      params.date_to = instant.dateRange[1]?.toISOString?.() || instant.dateRange[1]
+      filters.from = instant.dateRange[0]?.toISOString?.() || instant.dateRange[0]
+      filters.to = instant.dateRange[1]?.toISOString?.() || instant.dateRange[1]
     }
-    lastResult.value = await Api.post('/reports/generate', params)
+    lastResult.value = await Api.post('/reports/generate', { type: instant.type, filters })
   } catch (e: any) {
     console.error('[Reports] generate failed:', e)
   } finally { genLoading.value = false }
@@ -207,8 +207,9 @@ const exportCSV = async () => {
   if (!lastResult.value) return
   try {
     const res = await Api.post('/reports/export', {
-      report_type: instant.type,
-      data: lastResult.value
+      type: instant.type,
+      filters: lastResult.value.filters || {},
+      format: 'csv'
     }, { responseType: 'blob' })
     const blob = res instanceof Blob ? res : new Blob([res])
     const url = URL.createObjectURL(blob)
@@ -270,7 +271,7 @@ const saveScheduled = async () => {
 
 const toggleScheduled = async (row: any) => {
   try {
-    await Api.patch('/reports/scheduled/' + row.id, { is_active: row.is_active })
+    await Api.put('/reports/scheduled/' + row.id, { is_active: row.is_active })
   } catch { row.is_active = !row.is_active }
 }
 
@@ -282,7 +283,7 @@ const deleteScheduled = async (row: any) => {
 }
 
 const runScheduled = async (row: any) => {
-  try { await Api.post('/reports/scheduled/' + row.id + '/run-now') }
+  try { await Api.post('/reports/scheduled/' + row.id + '/run-now'); await Promise.all([loadScheduled(), loadHistory()]) }
   catch {}
 }
 

@@ -2,6 +2,7 @@
 const { wrap } = require('../../middleware/asyncHandler');
 const { ApiError } = require('../../app/errors');
 const { makeHelpers } = require('./_helpers');
+const { compileCron, executeScheduledReport, startScheduler } = require('./scheduler');
 // services/reportService/reportService.js
 // 报表中心: 计划报表 / 即时生成 / CSV导出 / 调度管理
 // Author: 三狗子 | Date: 2026-06-26
@@ -17,7 +18,8 @@ function register(app, db) {
   function generateReport(type, filters) {
     const { instance_id, from, to, limit } = filters || {};
     switch (type) {
-      case "production_daily": {
+      case "production_daily":
+      case "daily_production": {
         let sql = `SELECT wo.wo_code, wo.title, wo.status, wo.planned_start, wo.planned_end, wo.actual_hours, ei.instance_code, ei.instance_name
           FROM work_orders wo JOIN equipment_instances ei ON wo.equipment_instance_id = ei.id WHERE 1=1`;
         const params = [];
@@ -102,7 +104,12 @@ function register(app, db) {
 
   // ====== 即时生成报表 ======
   app.post("/api/reports/generate", wrap((req, res) => {
-    const { type, filters } = req.body;
+    const type = req.body.type || req.body.report_type;
+    const filters = req.body.filters || {
+      instance_id: req.body.instance_id || req.body.equipment_instance_id,
+      from: req.body.from || req.body.date_from,
+      to: req.body.to || req.body.date_to,
+    };
     if (!type) throw ApiError.validation("type 必填");
     const data = generateReport(type, filters);
     res.json(data);
@@ -110,7 +117,9 @@ function register(app, db) {
 
   // ====== 导出CSV ======
   app.post("/api/reports/export", wrap((req, res) => {
-    const { type, filters, format } = req.body;
+    const type = req.body.type || req.body.report_type;
+    const filters = req.body.filters || req.body.data?.filters || {};
+    const format = req.body.format || "csv";
     if (!type) throw ApiError.validation("type 必填");
     const data = generateReport(type, filters);
     if (format === "csv" || format === "excel") {
@@ -131,6 +140,7 @@ function register(app, db) {
   app.post("/api/reports/scheduled", wrap((req, res) => {
     const { report_name, report_type, schedule_cron, recipients, filters, format, is_active } = req.body;
     if (!report_name || !report_type) throw ApiError.validation("report_name/report_type 必填");
+    compileCron(schedule_cron || "0 8 * * *");
     const r = run("INSERT INTO scheduled_reports (report_name, report_type, schedule_cron, recipients, filters, format, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [report_name, report_type, schedule_cron || null, recipients || null, filters ? JSON.stringify(filters) : null, format || "json", is_active !== undefined ? (is_active ? 1 : 0) : 1]);
     res.status(201).json(get("SELECT * FROM scheduled_reports WHERE id = ?", Number(r.lastInsertRowid)));
@@ -140,6 +150,7 @@ function register(app, db) {
     const row = get("SELECT * FROM scheduled_reports WHERE id = ?", req.params.id);
     if (!row) throw ApiError.notFound("报表不存在");
     const { report_name, report_type, schedule_cron, recipients, filters, format, is_active } = req.body;
+    if (schedule_cron !== undefined) compileCron(schedule_cron);
     const sets = [], params = [];
     if (report_name !== undefined) { sets.push("report_name = ?"); params.push(report_name); }
     if (report_type !== undefined) { sets.push("report_type = ?"); params.push(report_type); }
@@ -160,16 +171,31 @@ function register(app, db) {
     res.json({ ok: true });
   }));
 
+  app.post("/api/reports/scheduled/:id/run-now", wrap((req, res) => {
+    const report = get("SELECT * FROM scheduled_reports WHERE id = ?", req.params.id);
+    if (!report) throw ApiError.notFound("报表不存在");
+    const result = executeScheduledReport(db, report, generateReport);
+    if (result.status === "failed") throw ApiError.unprocessable("报表执行失败: " + result.error);
+    res.json(result);
+  }));
+
   // ====== 报表执行历史 ======
   app.get("/api/reports/history", wrap((req, res) => {
     const { report_id, limit } = req.query;
-    let sql = "SELECT * FROM report_history";
+    let sql = `SELECT h.*, s.report_name, s.report_type
+      FROM report_history h LEFT JOIN scheduled_reports s ON s.id=h.report_id`;
     const params = [];
-    if (report_id) { sql += " WHERE report_id = ?"; params.push(report_id); }
+    const conditions = [];
+    if (report_id) { conditions.push("h.report_id = ?"); params.push(report_id); }
+    if (req.query.report_name) { conditions.push("s.report_name = ?"); params.push(req.query.report_name); }
+    if (req.query.status) { conditions.push("h.status = ?"); params.push(req.query.status); }
+    if (conditions.length) sql += " WHERE " + conditions.join(" AND ");
     sql += " ORDER BY run_at DESC LIMIT ?";
     params.push(parseInt(limit) || 50);
     res.json(all(sql, params));
   }));
+
+  startScheduler(db, generateReport);
 }
 
 module.exports = { register };
