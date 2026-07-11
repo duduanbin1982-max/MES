@@ -60,6 +60,8 @@ const routes = [
       { path: '/plm', name: 'plm', component: () => import('../views/PlmDrawings.vue'), meta: { title: 'PLM 图纸', icon: 'EditPen' } },
       { path: '/ai', name: 'ai', component: () => import('../views/AiPrediction.vue'), meta: { title: 'AI 预测', icon: 'MagicStick' } },
       { path: '/erp', name: 'erp', component: () => import('../views/ErpLedger.vue'), meta: { title: 'ERP 台账', icon: 'Money' } },
+      
+      { path: '/suppliers', name: 'suppliers', component: () => import('../views/SupplierDashboard.vue'), meta: { title: '供应商协同', icon: 'Connection' } },
       { path: '/resources', name: 'resources', component: () => import('../views/ResourceDashboard.vue'), meta: { title: '资源分配与状态', icon: 'Monitor' } },
       { path: '/digital-twin', name: 'digital-twin', component: () => import('../views/DigitalTwin.vue'), meta: { title: '数字孪生', icon: 'Monitor' } },
     ]
