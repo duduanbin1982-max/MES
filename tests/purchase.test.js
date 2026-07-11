@@ -22,6 +22,7 @@ function freshDb() {
   db.exec('CREATE TABLE material_lots (id INTEGER PRIMARY KEY AUTOINCREMENT, material_id INTEGER NOT NULL, lot_no TEXT UNIQUE NOT NULL, supplier TEXT, heat_no TEXT, certificate_no TEXT, received_date TEXT DEFAULT "2026-01-01 00:00:00", quantity REAL, unit TEXT, quality_status TEXT DEFAULT "pending", notes TEXT)');
   db.exec('CREATE TABLE inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, location TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, status TEXT DEFAULT "available", last_updated TEXT DEFAULT "2026-01-01 00:00:00")');
   db.exec('CREATE TABLE material_movements (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, movement_type TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, from_location TEXT, to_location TEXT, work_order_id INTEGER, project_id INTEGER, operator_id INTEGER, notes TEXT, created_at TEXT DEFAULT "2026-01-01 00:00:00")');
+  db.exec('CREATE TABLE purchase_receiving (id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER, po_item_id INTEGER, received_qty REAL, quality_status TEXT DEFAULT "pending", inspected_by INTEGER, lot_no TEXT, warehouse_location TEXT, received_at TEXT DEFAULT "2026-01-01 00:00:00", notes TEXT)');
   db.exec('CREATE TABLE purchase_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, po_no TEXT UNIQUE NOT NULL, supplier_id INTEGER NOT NULL, equipment_instance_id INTEGER, status TEXT NOT NULL DEFAULT "draft", ordered_date TEXT, expected_date TEXT, subtotal REAL DEFAULT 0, tax_amount REAL DEFAULT 0, total_amount REAL DEFAULT 0, currency TEXT DEFAULT "CNY", payment_terms TEXT, created_by INTEGER, approved_by INTEGER, approved_at TEXT, closed_at TEXT, notes TEXT, created_at TEXT DEFAULT "2026-01-01 00:00:00", updated_at TEXT DEFAULT "2026-01-01 00:00:00")');
   db.exec('CREATE TABLE po_lines (id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER NOT NULL, material_id INTEGER NOT NULL, quantity REAL NOT NULL, unit TEXT, unit_price REAL NOT NULL, line_amount REAL NOT NULL, expected_date TEXT, received_qty REAL DEFAULT 0, lot_no_at_receipt TEXT, notes TEXT, line_no INTEGER NOT NULL, created_at TEXT DEFAULT "2026-01-01 00:00:00")');
   return db;
@@ -145,9 +146,13 @@ test('P1-4-4 POST /api/purchase_orders/:id/receive 部分收货 -> partially_rec
   assert.equal(r.status, 200, JSON.stringify(r));
   assert.equal(r.json.po_status, 'partially_received');
   assert.equal(r.json.created_lots[0].received_qty, 6);
-  // 库存应 +6
-  const inv = _db.prepare('SELECT i.quantity FROM inventory i JOIN material_lots ml ON i.material_lot_id = ml.id WHERE ml.lot_no = ?').get('LOT-PO-1');
+  // 收货后库存进入待检隔离区，不能直接领用
+  const inv = _db.prepare('SELECT i.quantity, i.status FROM inventory i JOIN material_lots ml ON i.material_lot_id = ml.id WHERE ml.lot_no = ?').get('LOT-PO-1');
   assert.equal(inv.quantity, 6);
+  assert.equal(inv.status, 'quarantined');
+  const receiving = _db.prepare('SELECT * FROM purchase_receiving WHERE lot_no = ?').get('LOT-PO-1');
+  assert.equal(receiving.quality_status, 'pending');
+  assert.equal(receiving.received_qty, 6);
   // key_component_prices 应被写
   const kcp = _db.prepare('SELECT actual_price, vendor_po FROM key_component_prices').all();
   assert.equal(kcp.length, 1, '关键件应写 1 行 price');

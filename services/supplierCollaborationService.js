@@ -5,6 +5,11 @@
 const { wrap } = require("../middleware/asyncHandler");
 const { ApiError } = require("../app/errors");
 
+function addColumn(db, table, column, definition) {
+  const columns = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((item) => item.name));
+  if (!columns.has(column)) db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+}
+
 function ensureSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS incoming_inspections (
@@ -67,6 +72,11 @@ function ensureSchema(db) {
       UNIQUE(supplier_id, period)
     );
   `);
+  addColumn(db, "incoming_inspections", "receiving_id", "INTEGER");
+  addColumn(db, "purchase_receiving", "material_lot_id", "INTEGER");
+  addColumn(db, "purchase_receiving", "inventory_id", "INTEGER");
+  addColumn(db, "purchase_receiving", "inspection_id", "INTEGER");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_incoming_receiving ON incoming_inspections(receiving_id)");
 }
 
 function all(db, sql, params = []) { return db.prepare(sql).all(params); }
@@ -100,6 +110,27 @@ function createNcr(db, inspection, userId) {
     VALUES (?, 'incoming', ?, NULL, ?, ?, ?, 'major', ?)
   `, [ncrCode, inspection.id, partName, inspection.defect_desc || "来料检验不合格", inspection.defect_qty || 1, userId || null]);
   return { id: result.lastInsertRowid, ncr_code: ncrCode };
+}
+
+function findReceiving(db, body) {
+  if (body.receiving_id) return get(db, "SELECT * FROM purchase_receiving WHERE id = ?", [body.receiving_id]);
+  if (body.purchase_order_id && body.lot_no) {
+    return get(db, "SELECT * FROM purchase_receiving WHERE po_id = ? AND lot_no = ? ORDER BY id DESC LIMIT 1", [body.purchase_order_id, body.lot_no]);
+  }
+  return null;
+}
+
+function applyIncomingInspectionResult(db, receiving, inspectionId, result, inspectorId) {
+  if (!receiving) return null;
+  if (!["pass", "fail"].includes(result)) throw ApiError.validation("result 必须是 pass/fail");
+  const qualityStatus = result === "pass" ? "passed" : "failed";
+  const inventoryStatus = result === "pass" ? "available" : "quarantined";
+  run(db, `UPDATE purchase_receiving
+    SET quality_status=?, inspected_by=?, inspection_id=?
+    WHERE id=?`, [result, inspectorId || null, inspectionId, receiving.id]);
+  if (receiving.material_lot_id) run(db, "UPDATE material_lots SET quality_status=? WHERE id=?", [qualityStatus, receiving.material_lot_id]);
+  if (receiving.inventory_id) run(db, "UPDATE inventory SET status=?, last_updated=datetime('now') WHERE id=?", [inventoryStatus, receiving.inventory_id]);
+  return { receiving_id: receiving.id, quality_status: qualityStatus, inventory_status: inventoryStatus };
 }
 
 function scoreSupplier(db, supplierId, period = new Date().toISOString().slice(0, 7)) {
@@ -194,27 +225,32 @@ function register(app, db) {
     if (!body.supplier_id || !body.material_id || !body.result) {
       throw ApiError.validation("supplier_id / material_id / result 必填");
     }
+    if (!["pass", "fail"].includes(body.result)) throw ApiError.validation("result 必须是 pass/fail");
+    const receiving = findReceiving(db, body);
+    if (body.receiving_id && !receiving) throw ApiError.notFound("收货记录不存在");
+    if (receiving && Number(receiving.po_id) !== Number(body.purchase_order_id || receiving.po_id)) throw ApiError.validation("收货记录与采购单不匹配");
     const inspectionNo = body.inspection_no || nextNo(db, "incoming_inspections", "inspection_no", "IQC");
     const tx = db.transaction(() => {
       const result = run(db, `
         INSERT INTO incoming_inspections (
-          purchase_order_id, supplier_id, material_id, lot_no, inspection_no, inspection_date,
+          purchase_order_id, supplier_id, material_id, lot_no, inspection_no, inspection_date, receiving_id,
           inspector_id, sample_qty, defect_qty, result, defect_desc, disposition, notes
-        ) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         body.purchase_order_id || null, body.supplier_id, body.material_id, body.lot_no || null, inspectionNo,
-        body.inspection_date || null, body.inspector_id || req.user?.sub || req.user?.uid || null,
+        body.inspection_date || null, receiving?.id || null, body.inspector_id || req.user?.sub || req.user?.uid || null,
         Number(body.sample_qty || 0), Number(body.defect_qty || 0), body.result,
         body.defect_desc || null, body.disposition || null, body.notes || null,
       ]);
       const inspection = get(db, "SELECT * FROM incoming_inspections WHERE id = ?", [result.lastInsertRowid]);
+      const release = applyIncomingInspectionResult(db, receiving, inspection.id, body.result, inspection.inspector_id);
       let ncr = null;
       if (body.result === "fail") {
         ncr = createNcr(db, inspection, body.inspector_id || req.user?.sub || req.user?.uid);
         run(db, "UPDATE incoming_inspections SET ncr_id = ?, updated_at = datetime('now') WHERE id = ?", [ncr.id, inspection.id]);
       }
       scoreSupplier(db, body.supplier_id);
-      return { id: inspection.id, inspection_no: inspectionNo, ncr };
+      return { id: inspection.id, inspection_no: inspectionNo, receiving: release, ncr };
     });
     res.json(tx());
   }));
@@ -289,4 +325,4 @@ function register(app, db) {
   console.log("[supplierCollaborationService] registered");
 }
 
-module.exports = { register };
+module.exports = { applyIncomingInspectionResult, ensureSchema, findReceiving, register };

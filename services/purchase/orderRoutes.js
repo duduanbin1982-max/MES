@@ -7,8 +7,32 @@ const { ApiError } = require("../../app/errors");
 const { PURCHASE_ORDER_STATUSES: PO_STATUSES } = require("../../app/domain/statusCatalog");
 const { ensureTrackingForPo } = require("./trackingSync");
 
+function ensureReceivingSchema(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS purchase_receiving (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    po_id INTEGER NOT NULL,
+    po_item_id INTEGER NOT NULL,
+    received_qty REAL NOT NULL,
+    quality_status TEXT NOT NULL DEFAULT 'pending',
+    inspected_by INTEGER,
+    lot_no TEXT NOT NULL,
+    warehouse_location TEXT,
+    received_at TEXT DEFAULT (datetime('now')),
+    notes TEXT
+  )`);
+  const columns = new Set(db.prepare("PRAGMA table_info(purchase_receiving)").all().map((column) => column.name));
+  if (!columns.has("material_lot_id")) db.prepare("ALTER TABLE purchase_receiving ADD COLUMN material_lot_id INTEGER").run();
+  if (!columns.has("inventory_id")) db.prepare("ALTER TABLE purchase_receiving ADD COLUMN inventory_id INTEGER").run();
+  if (!columns.has("inspection_id")) db.prepare("ALTER TABLE purchase_receiving ADD COLUMN inspection_id INTEGER").run();
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_purchase_receiving_po ON purchase_receiving(po_id, po_item_id);
+    CREATE INDEX IF NOT EXISTS idx_purchase_receiving_lot ON purchase_receiving(lot_no);
+  `);
+}
+
 function registerPurchaseOrderRoutes(app, db, helpers) {
   const { all, get, run } = helpers;
+  ensureReceivingSchema(db);
 
   app.get("/api/purchase_orders", wrap((req, res) => {
     const { supplier_id, status, equipment_instance_id } = req.query;
@@ -124,7 +148,12 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
         const lotResult = run("INSERT INTO material_lots (material_id, lot_no, supplier, heat_no, certificate_no, received_date, quantity, unit, quality_status, notes) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, 'pending', ?)",
           [line.material_id, lotNo, po.supplier_id ? null : null, receivedLine.heat_no || null, receivedLine.certificate_no || null, recvQty, unit, "收货自 " + po.po_no]);
         const lotId = lotResult.lastInsertRowid;
-        run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [lotId, location, recvQty, unit]);
+        const inventoryResult = run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'quarantined')", [lotId, location, recvQty, unit]);
+        const receivingResult = run(`
+          INSERT INTO purchase_receiving
+            (po_id, po_item_id, received_qty, quality_status, lot_no, warehouse_location, material_lot_id, inventory_id, notes)
+          VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+        `, [po.id, line.id, recvQty, lotNo, location, lotId, inventoryResult.lastInsertRowid, receivedLine.notes || "待来料检验"]);
         run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, to_location, work_order_id, project_id, notes) VALUES (?, 'receive', ?, ?, ?, ?, ?, ?)",
           [lotId, recvQty, unit, location, null, po.equipment_instance_id, "PO 收货: " + po.po_no + " line " + line.line_no]);
 
@@ -137,7 +166,7 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
         run("UPDATE po_lines SET received_qty = received_qty + ?, lot_no_at_receipt = COALESCE(?, lot_no_at_receipt) WHERE id = ?",
           [recvQty, lotNo, line.id]);
 
-        createdLots.push({ line_id: line.id, lot_id: lotId, lot_no: lotNo, received_qty: recvQty });
+        createdLots.push({ receiving_id: receivingResult.lastInsertRowid, line_id: line.id, lot_id: lotId, lot_no: lotNo, received_qty: recvQty, quality_status: "pending", inventory_status: "quarantined" });
       }
 
       const total = get("SELECT SUM(quantity) AS q, SUM(received_qty) AS r FROM po_lines WHERE po_id = ?", po.id);
@@ -154,6 +183,7 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
 }
 
 module.exports = {
+  ensureReceivingSchema,
   registerPurchaseOrderRoutes,
   PO_STATUSES,
 };
