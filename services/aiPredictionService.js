@@ -1,6 +1,7 @@
 "use strict";
 const { ApiError } = require('../app/errors');
 const { wrap } = require('../middleware/asyncHandler');
+const modelTraining = require("./ai/modelTraining");
 // services/aiPredictionService.js
 // P2-5 AI Prediction: Fault probability + Quality trend + Anomaly detection
 // Lightweight statistical approach (no heavy ML libs)
@@ -80,6 +81,9 @@ function registerFaultPrediction(app, db) {
 
     const dev = get("SELECT id, device_name FROM iot_devices WHERE device_code=?", [device_code]);
     if (!dev) throw ApiError.notFound("Device not found")
+
+    const trainedPrediction = modelTraining.predictFaultWithModels(db, device_code, h);
+    if (trainedPrediction) return res.json(trainedPrediction);
 
     const readings = all(
       "SELECT r.value, r.read_at, dp.point_name, dp.alarm_high FROM iot_readings r JOIN iot_data_points dp ON r.point_id=dp.id WHERE r.device_id=? AND r.read_at >= datetime('now','-" + h + " hours') ORDER BY r.read_at",
@@ -241,11 +245,12 @@ function registerDashboard(app, db) {
 
 function register(app, db) {
   runMigration(db);
+  modelTraining.register(app, db);
   registerFaultPrediction(app, db);
   registerQualityPrediction(app, db);
   registerAnomalyDetection(app, db);
   registerDashboard(app, db);
-  console.log("[aiPredictionService] AI Prediction registered (Fault + Quality + Anomaly + Dashboard)");
+  console.log("[aiPredictionService] AI Prediction registered (Training + Fault + Quality + Anomaly + Dashboard)");
 }
 
 module.exports = { register };
