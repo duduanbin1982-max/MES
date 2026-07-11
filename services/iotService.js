@@ -31,16 +31,19 @@ function validateThresholds(input) {
   return { low, high, min, max };
 }
 
-function deviceReadiness(device, pointCount = 0) {
+function deviceReadiness(device, pointCount = 0, addressedPointCount = pointCount) {
   const protocol = String(device.protocol || "").toLowerCase();
   let connectionReady = false;
   if (protocol === "modbus") connectionReady = Boolean(device.ip_address && Number(device.port) > 0);
   else connectionReady = Boolean(device.connection_string);
+  const pointsReady = Number(pointCount) > 0 && (protocol !== "modbus" || Number(addressedPointCount) === Number(pointCount));
   return {
-    configured: connectionReady && Number(pointCount) > 0,
+    configured: connectionReady && pointsReady,
     connection_ready: connectionReady,
     point_count: Number(pointCount),
-    missing: [!connectionReady ? "connection" : null, Number(pointCount) <= 0 ? "data_points" : null].filter(Boolean),
+    addressed_point_count: Number(addressedPointCount),
+    missing: [!connectionReady ? "connection" : null, Number(pointCount) <= 0 ? "data_points" : null,
+      protocol === "modbus" && Number(addressedPointCount) !== Number(pointCount) ? "register_offsets" : null].filter(Boolean),
   };
 }
 
@@ -156,8 +159,8 @@ function registerDevices(app, db) {
     if (equipment_id) { sql += " AND d.equipment_id=?"; p.push(equipment_id); }
     sql += " ORDER BY d.id";
     res.json(all(sql, p).map((device) => {
-      const pointCount = db.prepare("SELECT COUNT(*) AS c FROM iot_data_points WHERE device_id=? AND is_active=1").get(device.id).c;
-      return { ...device, readiness: deviceReadiness(device, pointCount) };
+      const pointStats = db.prepare("SELECT COUNT(*) AS c, SUM(CASE WHEN register_offset IS NOT NULL THEN 1 ELSE 0 END) AS addressed FROM iot_data_points WHERE device_id=? AND is_active=1").get(device.id);
+      return { ...device, readiness: deviceReadiness(device, pointStats.c, pointStats.addressed || 0) };
     }));
   }));
 
@@ -165,7 +168,8 @@ function registerDevices(app, db) {
     const row = get("SELECT d.*, ei.instance_code FROM iot_devices d LEFT JOIN equipment_instances ei ON d.equipment_id=ei.id WHERE d.id=?", [req.params.id]);
     if (!row) throw ApiError.notFound("Device not found")
     const points = all("SELECT * FROM iot_data_points WHERE device_id=? ORDER BY id", [req.params.id]);
-    res.json(Object.assign({}, row, { readiness: deviceReadiness(row, points.filter((point) => point.is_active).length), points }));
+    const activePoints = points.filter((point) => point.is_active);
+    res.json(Object.assign({}, row, { readiness: deviceReadiness(row, activePoints.length, activePoints.filter((point) => point.register_offset !== null).length), points }));
   }));
 
   app.post("/api/iot/devices", wrap((req, res) => {
@@ -323,7 +327,8 @@ function registerDashboard(app, db) {
       WHERE d.is_active=1
         AND ((d.protocol='modbus' AND d.ip_address IS NOT NULL AND d.ip_address<>'' AND d.port>0)
           OR (d.protocol<>'modbus' AND d.connection_string IS NOT NULL AND d.connection_string<>''))
-        AND EXISTS (SELECT 1 FROM iot_data_points dp WHERE dp.device_id=d.id AND dp.is_active=1)`).get().c;
+        AND EXISTS (SELECT 1 FROM iot_data_points dp WHERE dp.device_id=d.id AND dp.is_active=1)
+        AND (d.protocol<>'modbus' OR NOT EXISTS (SELECT 1 FROM iot_data_points dp WHERE dp.device_id=d.id AND dp.is_active=1 AND dp.register_offset IS NULL))`).get().c;
     res.json({
       mode: String(process.env.IOT_MODE || "production").toLowerCase(),
       devices: { online: onlineCount, total: totalCount, offline: totalCount - onlineCount },
@@ -336,8 +341,8 @@ function registerDashboard(app, db) {
 
   app.get("/api/iot/readiness", wrap((_req, res) => {
     const devices = all("SELECT * FROM iot_devices WHERE is_active=1 ORDER BY device_code").map((device) => {
-      const pointCount = db.prepare("SELECT COUNT(*) AS c FROM iot_data_points WHERE device_id=? AND is_active=1").get(device.id).c;
-      return { id: device.id, device_code: device.device_code, device_name: device.device_name, ...deviceReadiness(device, pointCount) };
+      const stats = db.prepare("SELECT COUNT(*) AS c, SUM(CASE WHEN register_offset IS NOT NULL THEN 1 ELSE 0 END) AS addressed FROM iot_data_points WHERE device_id=? AND is_active=1").get(device.id);
+      return { id: device.id, device_code: device.device_code, device_name: device.device_name, ...deviceReadiness(device, stats.c, stats.addressed || 0) };
     });
     res.json({ mode: String(process.env.IOT_MODE || "production").toLowerCase(), ready: devices.filter((item) => item.configured).length, total: devices.length, devices });
   }));
@@ -450,8 +455,8 @@ function register(app, db) {
   app.post("/api/iot/devices/:id/heartbeat", wrap((req, res) => {
     const device = db.prepare("SELECT * FROM iot_devices WHERE id=?").get(req.params.id);
     if (!device) throw ApiError.notFound("设备不存在");
-    const pointCount = db.prepare("SELECT COUNT(*) AS c FROM iot_data_points WHERE device_id=? AND is_active=1").get(device.id).c;
-    if (String(process.env.IOT_MODE || "production").toLowerCase() === "production" && !deviceReadiness(device, pointCount).configured) {
+    const stats = db.prepare("SELECT COUNT(*) AS c, SUM(CASE WHEN register_offset IS NOT NULL THEN 1 ELSE 0 END) AS addressed FROM iot_data_points WHERE device_id=? AND is_active=1").get(device.id);
+    if (String(process.env.IOT_MODE || "production").toLowerCase() === "production" && !deviceReadiness(device, stats.c, stats.addressed || 0).configured) {
       throw ApiError.validation("设备连接参数或数据点未配置完成，不能标记在线");
     }
     db.prepare("UPDATE iot_devices SET last_seen_at = datetime('now'), status = 'online' WHERE id = ?").run(req.params.id);

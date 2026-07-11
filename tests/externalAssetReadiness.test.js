@@ -18,7 +18,9 @@ test("GLB validation accepts binary glTF magic only", () => {
 test("production device readiness requires connection and active points", () => {
   assert.equal(deviceReadiness({ protocol: "modbus", ip_address: null, port: 502 }, 3).configured, false);
   assert.equal(deviceReadiness({ protocol: "modbus", ip_address: "192.0.2.10", port: 502 }, 0).configured, false);
-  assert.equal(deviceReadiness({ protocol: "modbus", ip_address: "192.0.2.10", port: 502 }, 3).configured, true);
+  assert.equal(deviceReadiness({ protocol: "modbus", ip_address: "192.0.2.10", port: 502 }, 3, 0).configured, false);
+  assert.ok(deviceReadiness({ protocol: "modbus", ip_address: "192.0.2.10", port: 502 }, 3, 0).missing.includes("register_offsets"));
+  assert.equal(deviceReadiness({ protocol: "modbus", ip_address: "192.0.2.10", port: 502 }, 3, 3).configured, true);
   assert.equal(deviceReadiness({ protocol: "mqtt", connection_string: "mqtt://broker" }, 1).configured, true);
 });
 

@@ -118,6 +118,7 @@
         <el-form-item label="名称" required><el-input v-model="newPoint.point_name" /></el-form-item>
         <el-form-item label="数据类型"><el-select v-model="newPoint.data_type" style="width:100%"><el-option v-for="t in ['float','int','bool','string']" :key="t" :label="t" :value="t"/></el-select></el-form-item>
         <el-form-item label="单位"><el-input v-model="newPoint.unit" placeholder="rpm/°C/MPa"/></el-form-item>
+        <el-form-item v-if="selected?.protocol==='modbus'" label="寄存器地址" required><el-input-number v-model="newPoint.register_offset" :min="0" /></el-form-item>
         <el-form-item label="下限报警"><el-input-number v-model="newPoint.alarm_low" :precision="1"/></el-form-item>
         <el-form-item label="上限报警"><el-input-number v-model="newPoint.alarm_high" :precision="1"/></el-form-item>
       </el-form>
@@ -148,7 +149,7 @@ const readingValues = ref<Record<string,number>>({})
 const showAddDevice = ref(false); const showAddPoint = ref(false); const showPushReading = ref(false)
 
 const newDevice = reactive({ device_code:'', device_name:'', device_type:'machine', protocol:'modbus', ip_address:'', port:502, slave_id:1, register_start:40001, register_count:10, scan_interval_ms:5000, location:'' })
-const newPoint = reactive({ point_code:'', point_name:'', data_type:'float', unit:'', alarm_low:null, alarm_high:null })
+const newPoint = reactive({ point_code:'', point_name:'', data_type:'float', unit:'', register_offset:null, alarm_low:null, alarm_high:null })
 
 async function refreshAll() {
   loading.value = true
