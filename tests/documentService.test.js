@@ -6,7 +6,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Database = require('better-sqlite3');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
+
+const TEST_UPLOAD_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'mes-document-test-'));
+process.env.DOCUMENT_UPLOAD_ROOT = TEST_UPLOAD_ROOT;
+test.after(() => fs.rmSync(TEST_UPLOAD_ROOT, { recursive: true, force: true }));
 
 // stub auth
 const authPath = require.resolve('../middleware/auth');
@@ -129,8 +135,7 @@ test('P0.DOC.4 上传文档 (raw body + X-Doc-Meta)', () => {
   assert.equal(res._j.json.file_size, buf.length)
   assert.equal(res._j.json.file_hash.length, 64)  // sha256 hex
   // 文件应该写到了 data/uploads/2026/06/...
-  const fs = require('fs')
-  const abs = path.join('/home/dubin/factory-mes/data', res._j.json.file_path)
+  const abs = path.join(TEST_UPLOAD_ROOT, res._j.json.file_path.replace(/^uploads[\\/]/, ''))
   assert.ok(fs.existsSync(abs), '文件应已落盘: ' + abs)
 })
 
@@ -155,7 +160,8 @@ test('P0.DOC.5 同一 hash + version 重复上传被拒', () => {
 test('P0.DOC.6 签发 (issue)', () => {
   const db = freshDb()
   const { find } = mkApp(db)
-  db.prepare(`INSERT INTO documents (equipment_instance_id, doc_type, doc_name, file_path, file_size, status, title) VALUES (1, 'drawing', 'X', '/p', 100, 'draft', '机架图')`).run()
+  const issueFile = path.join(TEST_UPLOAD_ROOT, 'issue.pdf'); fs.writeFileSync(issueFile, 'pdf')
+  db.prepare(`INSERT INTO documents (equipment_instance_id, doc_type, doc_name, file_path, file_size, status, title, file_name) VALUES (1, 'drawing', 'X', 'uploads/issue.pdf', 3, 'draft', '机架图', 'issue.pdf')`).run()
   const issueHandler = find('PUT', '/api/documents/:id/issue')
   const req = { params: { id: 1 }, body: { issued_to: 'assembly' }, user: { uid: 1 } }
   const res = mkRes()

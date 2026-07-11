@@ -21,12 +21,25 @@ const path = require('path');
 const crypto = require('crypto');
 
 // 上传根目录
-const UPLOAD_ROOT = path.join('/home/dubin/factory-mes/data', 'uploads');
+const UPLOAD_ROOT = process.env.DOCUMENT_UPLOAD_ROOT || path.join('/home/dubin/factory-mes/data', 'uploads');
 
 // 文档类型枚举
 const DOC_TYPES = ['drawing', 'sop', 'process', 'qc_std', 'contract', 'report', 'other'];
 const DOC_STATUS = ['draft', 'issued', 'revoked', 'archived'];
 const ISSUE_TARGETS = ['assembly', 'welding', 'qc', 'warehouse', 'field', 'design', 'procurement', 'management'];
+
+function resolveStoredFile(filePath, uploadRoot = UPLOAD_ROOT) {
+  if (!filePath) return null;
+  const normalized = String(filePath).replace(/\\/g, "/").replace(/^uploads\//, "");
+  const root = path.resolve(uploadRoot);
+  const absolute = path.resolve(root, normalized);
+  if (absolute !== root && !absolute.startsWith(root + path.sep)) return null;
+  return fs.existsSync(absolute) && fs.statSync(absolute).isFile() ? absolute : null;
+}
+
+function hasStoredFile(filePath, uploadRoot = UPLOAD_ROOT) {
+  return Boolean(resolveStoredFile(filePath, uploadRoot));
+}
 
 // 工具: 计算 sha256
 function sha256(buf) {
@@ -167,8 +180,8 @@ function register(app, db) {
     const id = req.params.id;
     const r = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
     if (!r) return next(ApiError.notFound('文档不存在: ' + id));
-    const abs = path.join('/home/dubin/factory-mes/data', r.file_path);
-    if (!fs.existsSync(abs)) return next(ApiError.notFound('文件已丢失: ' + r.file_name));
+    const abs = resolveStoredFile(r.file_path);
+    if (!abs) return next(ApiError.notFound('文件已丢失: ' + r.file_name));
     res.setHeader('Content-Type', r.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(r.file_name)}"`);
     res.setHeader('Content-Length', r.file_size || fs.statSync(abs).size);
@@ -274,9 +287,10 @@ function register(app, db) {
       const id = req.params.id;
       const { issued_to } = req.body || {};
       if (!issued_to || !ISSUE_TARGETS.includes(issued_to)) return next(ApiError.validation('issued_to 必须是: ' + ISSUE_TARGETS.join('/')));
-      const exist = db.prepare('SELECT id, status FROM documents WHERE id = ?').get(id);
+      const exist = db.prepare('SELECT id, status, file_path, file_name FROM documents WHERE id = ?').get(id);
       if (!exist) return next(ApiError.notFound('文档不存在'));
       if (exist.status === 'revoked' || exist.status === 'archived') return next(ApiError.unprocessable('已收回/归档的文档不能签发'));
+      if (!hasStoredFile(exist.file_path)) return next(ApiError.unprocessable('文件不存在，不能签发: ' + (exist.file_name || id)));
       db.prepare(`UPDATE documents SET status='issued', issued_to=?, issued_at=datetime('now'), issued_by=?, updated_at=datetime('now') WHERE id=?`)
         .run(issued_to, req.user?.uid || null, id);
       res.json(db.prepare('SELECT * FROM documents WHERE id = ?').get(id));
@@ -309,5 +323,5 @@ function register(app, db) {
 }
 
 // stats moved to before :id
-module.exports = { register, validateMeta, DOC_TYPES, DOC_STATUS, ISSUE_TARGETS, sha256, humanSize, mimeToIcon, buildStoragePath };
+module.exports = { register, validateMeta, DOC_TYPES, DOC_STATUS, ISSUE_TARGETS, sha256, humanSize, mimeToIcon, buildStoragePath, resolveStoredFile, hasStoredFile };
 

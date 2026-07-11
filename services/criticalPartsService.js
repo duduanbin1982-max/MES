@@ -2,6 +2,9 @@
 // 关键件管理 —— 监造 + 证书 + 追溯 统一聚合
 "use strict";
 
+const fs = require("node:fs");
+const path = require("node:path");
+const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 
 function register(app, db) {
@@ -74,6 +77,13 @@ function register(app, db) {
   // 上传证书
   app.post("/api/critical-parts/:id/cert", wrap((req, res) => {
     const body = req.body || {};
+    if (!body.cert_type) throw ApiError.validation("cert_type 必填");
+    if (!body.file_path) throw ApiError.validation("请先上传真实证书附件");
+    const certPath = path.resolve("/home/dubin/factory-mes/data", body.file_path);
+    const uploadRoot = path.resolve("/home/dubin/factory-mes/data/uploads");
+    if (!certPath.startsWith(uploadRoot + path.sep) || !fs.existsSync(certPath)) {
+      throw ApiError.validation("证书附件不存在或不在上传目录");
+    }
     const result = run(
       "INSERT INTO critical_part_certificates (part_id, cert_type, cert_no, issued_by, issue_date, expiry_date, file_path) VALUES (?,?,?,?,?,?,?)",
       [Number(req.params.id), body.cert_type, body.cert_no||null, body.issued_by||null, body.issue_date||null, body.expiry_date||null, body.file_path||null]
