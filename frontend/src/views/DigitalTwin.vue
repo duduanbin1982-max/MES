@@ -1,194 +1,374 @@
 <template>
-  <div class="page">
-    <div class="page-header">
-      <div class="page-title">🌐 数字孪生</div>
-      <div style="display:flex;gap:8px">
-        <el-button type="primary" @click="showAddModel=true">+ 注册模型</el-button>
-        <el-button @click="refresh" :loading="loading">刷新</el-button>
+  <div class="dt-page">
+    <!-- 3D Canvas -->
+    <div ref="containerRef" class="dt-canvas"></div>
+
+    <!-- Overlay Panel -->
+    <div class="dt-overlay">
+      <div class="dt-title">🌐 数字孪生 · {{ selectedInstance?.instance_name || 'TBM 盾构机' }}</div>
+      <el-select v-model="selectedId" placeholder="选择装备" style="width:260px" @change="onInstanceChange" size="small">
+        <el-option v-for="inst in instances" :key="inst.id" :label="inst.instance_name" :value="inst.id" />
+      </el-select>
+    </div>
+
+    <!-- Info Panel -->
+    <div class="dt-info-panel" v-if="hoveredPart">
+      <div class="dt-info-title">{{ hoveredPart.part_name }}</div>
+      <div class="dt-info-row">装配步骤: {{ hoveredPart.assembly_step || '-' }}</div>
+      <div class="dt-info-row" v-if="hoveredPart.metric">
+        {{ hoveredPart.metric.metric_name }}: <b :style="{color: metricColor(hoveredPart.metric)}">{{ hoveredPart.metric.metric_value }}{{ hoveredPart.metric.metric_unit }}</b>
       </div>
     </div>
 
-    <!-- Dashboard -->
-    <el-row :gutter="12" style="margin-bottom:12px">
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">3D模型</div><div class="stat-value" style="color:#409eff">{{ dash.models||0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">部件数</div><div class="stat-value">{{ dash.parts||0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">装配进度</div><div class="stat-value" style="color:#67c23a">{{ dash.assembly?.pct||0 }}%</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">数据覆盖</div><div class="stat-value">{{ dash.overlay_data_points||0 }}</div></div></el-col>
-    </el-row>
-
-    <!-- Models List -->
-    <el-card style="margin-bottom:12px">
-      <template #header><span style="font-weight:600">📦 3D 模型注册</span></template>
-      <el-table :data="models" stripe size="small" @row-click="selectModel" highlight-current-row empty-text="暂无模型">
-        <el-table-column prop="model_code" label="编码" width="160" />
-        <el-table-column prop="model_name" label="名称" min-width="200" />
-        <el-table-column prop="file_format" label="格式" width="80" />
-        <el-table-column prop="polygon_count" label="面数" width="100">
-          <template #default="{row}">{{ row.polygon_count ? (row.polygon_count/1000).toFixed(0)+'K' : '-' }}</template>
-        </el-table-column>
-        <el-table-column prop="version" label="版本" width="60" />
-        <el-table-column prop="status" label="状态" width="80">
-          <template #default="{row}"><el-tag :type="row.status==='active'?'success':'info'" size="small">{{row.status}}</el-tag></template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <!-- Model Detail -->
-    <el-card v-if="currentModel" style="margin-bottom:12px">
-      <template #header>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">🔍 {{ currentModel.model_name }}</span>
-          <div style="display:flex;gap:4px">
-            <el-button size="small" @click="showAddPart=true">+ 部件</el-button>
-            <el-button size="small" type="success" @click="loadScene">加载场景</el-button>
-          </div>
-        </div>
-      </template>
-
-      <el-row :gutter="12">
-        <!-- Parts -->
-        <el-col :span="12">
-          <div style="font-weight:600;margin-bottom:4px">部件清单</div>
-          <el-table :data="currentParts" size="small" max-height="300" empty-text="暂无部件">
-            <el-table-column prop="part_name" label="名称" width="120" />
-            <el-table-column prop="mesh_name" label="Mesh" width="120" />
-            <el-table-column label="位置 (x,y,z)" width="140">
-              <template #default="{row}">{{ row.position_x }},{{ row.position_y }},{{ row.position_z }}</template>
-            </el-table-column>
-            <el-table-column prop="assembly_step" label="工序" width="60" />
-            <el-table-column label="色" width="60">
-              <template #default="{row}"><div :style="{width:'20px',height:'20px',background:row.color_hex,borderRadius:'4px'}" /></template>
-            </el-table-column>
-          </el-table>
-        </el-col>
-
-        <!-- Assembly + Overlay -->
-        <el-col :span="12">
-          <div style="font-weight:600;margin-bottom:4px">装配状态</div>
-          <el-table :data="currentAsm" size="small" max-height="300" empty-text="暂无">
-            <el-table-column prop="part_name" label="部件" width="100" />
-            <el-table-column label="状态" width="80">
-              <template #default="{row}"><el-tag :type="row.status==='completed'?'success':row.status==='started'?'warning':'info'" size="small">{{row.status}}</el-tag></template>
-            </el-table-column>
-            <el-table-column prop="progress_pct" label="进度" width="70"><template #default="{row}">{{row.progress_pct}}%</template></el-table-column>
-            <el-table-column prop="assigned_worker" label="工人" width="80" />
-          </el-table>
-        </el-col>
-      </el-row>
-
-      <!-- Scene Data (condensed) -->
-      <div v-if="sceneData" style="margin-top:12px;font-size:12px;color:#909399;background:#f5f7fa;padding:8px;border-radius:6px">
-        <div>场景生成: {{ sceneData.generated_at }} | IoT 数据点: {{ sceneData.iot_latest?.length||0 }} | 叠加: {{ sceneData.overlay?.length||0 }}</div>
+    <!-- Legend -->
+    <div class="dt-legend">
+      <div class="dt-legend-title">部件图例</div>
+      <div v-for="p in parts" :key="p.id" class="dt-legend-item" @click="focusPart(p)" :style="{borderLeftColor: p.color_hex}">
+        <span :style="{color: p.color_hex}">●</span> {{ p.part_name }}
       </div>
-    </el-card>
+    </div>
 
-    <!-- Assembly Progress Dashboard -->
-    <el-card>
-      <template #header><span style="font-weight:600">📊 装配进度总览</span></template>
-      <el-table :data="asmOverview" size="small" empty-text="无数据">
-        <el-table-column prop="model_name" label="模型" width="200" />
-        <el-table-column prop="total_parts" label="总部件" width="80" />
-        <el-table-column prop="completed" label="已完成" width="80" />
-        <el-table-column prop="in_progress" label="进行中" width="80" />
-        <el-table-column prop="pending" label="待开始" width="80" />
-        <el-table-column label="进度" min-width="200">
-          <template #default="{row}"><el-progress :percentage="row.progress_pct" :status="row.progress_pct===100?'success':''"/></template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <!-- Add Model Dialog -->
-    <el-dialog v-model="showAddModel" title="注册 3D 模型" width="460px">
-      <el-form :model="newModel" label-width="100px" size="small">
-        <el-form-item label="编码" required><el-input v-model="newModel.model_code"/></el-form-item>
-        <el-form-item label="名称" required><el-input v-model="newModel.model_name"/></el-form-item>
-        <el-form-item label="格式"><el-select v-model="newModel.file_format" style="width:100%"><el-option v-for="f in ['glb','gltf','obj','fbx','stp']" :key="f" :label="f" :value="f"/></el-select></el-form-item>
-        <el-form-item label="面数"><el-input-number v-model="newModel.polygon_count" :min="0" :step="10000" style="width:100%"/></el-form-item>
-        <el-form-item label="包围盒"><el-input v-model="newModel.bounding_box" placeholder='{"x":4.2,"y":4.5,"z":85}'/></el-form-item>
-        <el-form-item label="缩放"><el-input-number v-model="newModel.scale_factor" :min="0.01" :max="100" :step="0.1"/></el-form-item>
-      </el-form>
-      <template #footer><el-button @click="showAddModel=false">取消</el-button><el-button type="primary" @click="addModel" :loading="saving">确定</el-button></template>
-    </el-dialog>
-
-    <!-- Add Part Dialog -->
-    <el-dialog v-model="showAddPart" title="添加部件映射" width="460px">
-      <el-form :model="newPart" label-width="100px" size="small">
-        <el-form-item label="名称" required><el-input v-model="newPart.part_name"/></el-form-item>
-        <el-form-item label="Mesh名"><el-input v-model="newPart.mesh_name"/></el-form-item>
-        <el-form-item label="位置 X"><el-input-number v-model="newPart.position_x" :precision="2" style="width:100%"/></el-form-item>
-        <el-form-item label="位置 Y"><el-input-number v-model="newPart.position_y" :precision="2" style="width:100%"/></el-form-item>
-        <el-form-item label="位置 Z"><el-input-number v-model="newPart.position_z" :precision="2" style="width:100%"/></el-form-item>
-        <el-form-item label="颜色"><el-color-picker v-model="newPart.color_hex"/></el-form-item>
-        <el-form-item label="装配工序"><el-input-number v-model="newPart.assembly_step" :min="1" style="width:100%"/></el-form-item>
-      </el-form>
-      <template #footer><el-button @click="showAddPart=false">取消</el-button><el-button type="primary" @click="addPart" :loading="saving">确定</el-button></template>
-    </el-dialog>
+    <!-- Controls -->
+    <div class="dt-controls">
+      <el-button-group size="small">
+        <el-button @click="resetCamera">重置视角</el-button>
+        <el-button @click="toggleWireframe">{{ wireframe ? '实体' : '线框' }}</el-button>
+        <el-button @click="toggleExplode">{{ explode ? '合并' : '分解' }}</el-button>
+      </el-button-group>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import Api from '../api'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
+import * as THREE from "three"
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+import Api from "../api"
 
-const loading = ref(false); const saving = ref(false)
-const models = ref<any[]>([]); const dash = ref<any>({})
-const currentModel = ref<any>(null); const currentParts = ref<any[]>([]); const currentAsm = ref<any[]>([])
-const sceneData = ref<any>(null); const asmOverview = ref<any[]>([])
-const showAddModel = ref(false); const showAddPart = ref(false)
+const containerRef = ref<HTMLElement>()
+const selectedId = ref(1)
+const hoveredPart = ref<any>(null)
+const wireframe = ref(false)
+const explode = ref(false)
+const instances = ref<any[]>([])
+const selectedInstance = ref<any>(null)
+const parts = ref<any[]>([])
 
-const newModel = reactive({ model_code:'', model_name:'', file_format:'glb', polygon_count:0, bounding_box:'', scale_factor:1.0 })
-const newPart = reactive({ part_name:'', mesh_name:'', position_x:0, position_y:0, position_z:0, rotation_x:0, rotation_y:0, rotation_z:0, color_hex:'#888888', assembly_step:1 })
+// Three.js objects
+let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer, controls: OrbitControls
+let partMeshes: Map<string, THREE.Mesh> = new Map()
+let raycaster: THREE.Raycaster, mouse: THREE.Vector2
+let animationId: number
 
-async function refresh() {
-  loading.value = true
+// ===== Procedural TBM Model =====
+function buildTBMModel() {
+  const group = new THREE.Group()
+  group.name = "TBM"
+
+  const materials = {
+    cutterhead: new THREE.MeshPhongMaterial({ color: 0xcc3333, specular: 0x222222, shininess: 30 }),
+    mainDrive: new THREE.MeshPhongMaterial({ color: 0x3366cc, specular: 0x222222, shininess: 30 }),
+    shield: new THREE.MeshPhongMaterial({ color: 0x888888, specular: 0x333333, shininess: 50 }),
+    screw: new THREE.MeshPhongMaterial({ color: 0xff9933, specular: 0x111111, shininess: 20 }),
+    erector: new THREE.MeshPhongMaterial({ color: 0x33aa55, specular: 0x222222, shininess: 30 }),
+    gantry: new THREE.MeshPhongMaterial({ color: 0x666699, specular: 0x222222, shininess: 20 }),
+    segment: new THREE.MeshPhongMaterial({ color: 0xaaaaaa, specular: 0x111111, shininess: 10 }),
+  }
+
+  // Cutterhead (front disk)
+  const cutterGeo = new THREE.CylinderGeometry(2.1, 2.1, 0.5, 48)
+  const cutter = new THREE.Mesh(cutterGeo, materials.cutterhead)
+  cutter.position.set(0, 0, 4)
+  cutter.name = "cutterhead"
+  cutter.userData = { part_name: "刀盘", assembly_step: 1, color: "#cc3333" }
+  group.add(cutter)
+  partMeshes.set("cutterhead", cutter)
+
+  // Cutter teeth
+  for (let i = 0; i < 24; i++) {
+    const angle = (i / 24) * Math.PI * 2
+    const toothGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.4, 8)
+    const tooth = new THREE.Mesh(toothGeo, new THREE.MeshPhongMaterial({ color: 0xffdd00 }))
+    tooth.position.set(Math.cos(angle) * 2.0, Math.sin(angle) * 2.0, 4.3)
+    cutter.add(tooth)
+  }
+
+  // Main Drive
+  const driveGeo = new THREE.CylinderGeometry(1.6, 1.8, 2.5, 32)
+  const drive = new THREE.Mesh(driveGeo, materials.mainDrive)
+  drive.position.set(0, 0, 2.7)
+  drive.name = "main_drive"
+  drive.userData = { part_name: "主驱动", assembly_step: 2, color: "#3366cc" }
+  group.add(drive)
+  partMeshes.set("main_drive", drive)
+
+  // Shield body (front)
+  const shieldGeo = new THREE.CylinderGeometry(2.0, 2.1, 8, 32)
+  const shield = new THREE.Mesh(shieldGeo, materials.shield)
+  shield.position.set(0, 0, -2)
+  shield.name = "shield"
+  shield.userData = { part_name: "盾体", assembly_step: 3, color: "#888888" }
+  group.add(shield)
+  partMeshes.set("shield", shield)
+
+  // Screw Conveyor
+  const screwGeo = new THREE.CylinderGeometry(0.4, 0.5, 6, 16)
+  const screw = new THREE.Mesh(screwGeo, materials.screw)
+  screw.rotation.x = Math.PI / 6
+  screw.position.set(0, -0.8, -3)
+  screw.name = "screw"
+  screw.userData = { part_name: "螺旋输送机", assembly_step: 4, color: "#ff9933" }
+  group.add(screw)
+  partMeshes.set("screw", screw)
+
+  // Segment Erector
+  const erectorGeo = new THREE.TorusGeometry(1.8, 0.2, 16, 32)
+  const erector = new THREE.Mesh(erectorGeo, materials.erector)
+  erector.position.set(0, 0, -5)
+  erector.name = "erector"
+  erector.userData = { part_name: "管片拼装机", assembly_step: 5, color: "#33aa55" }
+  group.add(erector)
+  partMeshes.set("erector", erector)
+
+  // Segments ring
+  for (let i = 0; i < 8; i++) {
+    const angle = (i / 8) * Math.PI * 2
+    const segGeo = new THREE.BoxGeometry(0.5, 0.3, 1.2)
+    const seg = new THREE.Mesh(segGeo, materials.segment)
+    seg.position.set(Math.cos(angle) * 1.8, Math.sin(angle) * 1.8, -5)
+    seg.rotation.z = angle
+    group.add(seg)
+  }
+
+  // Gantry (trailing cars) - simplified
+  for (let i = 0; i < 3; i++) {
+    const gantryGeo = new THREE.BoxGeometry(3.5, 2.5, 4)
+    const gantry = new THREE.Mesh(gantryGeo, materials.gantry)
+    gantry.position.set(0, -0.5, -9 - i * 4.5)
+    gantry.name = `gantry_${i}`
+    gantry.userData = { part_name: `后配套拖车 ${i+1}`, assembly_step: 6 + i, color: "#666699" }
+    group.add(gantry)
+    partMeshes.set(`gantry_${i}`, gantry)
+  }
+
+  // Ground plane
+  const groundGeo = new THREE.PlaneGeometry(20, 30)
+  const groundMat = new THREE.MeshPhongMaterial({ color: 0x333333, side: THREE.DoubleSide })
+  const ground = new THREE.Mesh(groundGeo, groundMat)
+  ground.rotation.x = -Math.PI / 2
+  ground.position.set(0, -3.5, -5)
+  group.add(ground)
+
+  return group
+}
+
+// ===== Scene Setup =====
+function initScene() {
+  if (!containerRef.value) return
+
+  // Scene
+  scene = new THREE.Scene()
+  scene.background = new THREE.Color(0x1a1a2e)
+  scene.fog = new THREE.Fog(0x1a1a2e, 15, 40)
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(50, containerRef.value.clientWidth / containerRef.value.clientHeight, 0.5, 100)
+  camera.position.set(12, 6, 12)
+  camera.lookAt(0, 0, -2)
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setSize(containerRef.value.clientWidth, containerRef.value.clientHeight)
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  renderer.shadowMap.enabled = true
+  containerRef.value.appendChild(renderer.domElement)
+
+  // Controls
+  controls = new OrbitControls(camera, renderer.domElement)
+  controls.target.set(0, 0, -2)
+  controls.enableDamping = true
+  controls.dampingFactor = 0.08
+  controls.minDistance = 5
+  controls.maxDistance = 25
+  controls.maxPolarAngle = Math.PI * 0.7
+
+  // Lighting
+  const ambient = new THREE.AmbientLight(0x404060, 1.5)
+  scene.add(ambient)
+  const dir1 = new THREE.DirectionalLight(0xffffff, 2)
+  dir1.position.set(10, 15, 10)
+  dir1.castShadow = true
+  scene.add(dir1)
+  const dir2 = new THREE.DirectionalLight(0x4488cc, 1)
+  dir2.position.set(-5, 3, -5)
+  scene.add(dir2)
+
+  // Grid helper
+  const grid = new THREE.GridHelper(20, 20, 0x444466, 0x222244)
+  grid.position.y = -3.5
+  scene.add(grid)
+
+  // TBM Model
+  const tbm = buildTBMModel()
+  tbm.name = "tbm_group"
+  scene.add(tbm)
+
+  // Raycaster for hover
+  raycaster = new THREE.Raycaster()
+  mouse = new THREE.Vector2()
+
+  // Events
+  window.addEventListener("resize", onResize)
+  renderer.domElement.addEventListener("mousemove", onMouseMove)
+
+  animate()
+}
+
+function onResize() {
+  if (!containerRef.value) return
+  camera.aspect = containerRef.value.clientWidth / containerRef.value.clientHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(containerRef.value.clientWidth, containerRef.value.clientHeight)
+}
+
+function onMouseMove(e: MouseEvent) {
+  if (!containerRef.value) return
+  const rect = containerRef.value.getBoundingClientRect()
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+
+  raycaster.setFromCamera(mouse, camera)
+  const meshes = Array.from(partMeshes.values())
+  const intersects = raycaster.intersectObjects(meshes, true)
+
+  // Reset all emissive
+  meshes.forEach(m => {
+    const mat = (m as THREE.Mesh).material as THREE.MeshPhongMaterial
+    mat.emissive?.set(0x000000)
+  })
+
+  if (intersects.length > 0) {
+    let obj = intersects[0].object as THREE.Mesh
+    while (obj && !obj.userData?.part_name) obj = obj.parent as THREE.Mesh
+    if (obj?.userData?.part_name) {
+      const mat = obj.material as THREE.MeshPhongMaterial
+      mat.emissive?.set(0x333333)
+      hoveredPart.value = {
+        part_name: obj.userData.part_name,
+        assembly_step: obj.userData.assembly_step,
+        color: obj.userData.color,
+      }
+      containerRef.value.style.cursor = "pointer"
+      return
+    }
+  }
+  hoveredPart.value = null
+  if (containerRef.value) containerRef.value.style.cursor = "grab"
+}
+
+function animate() {
+  animationId = requestAnimationFrame(animate)
+  controls.update()
+
+  // Subtle screw rotation
+  const screw = partMeshes.get("screw")
+  if (screw) screw.rotation.z += 0.01
+
+  renderer.render(scene, camera)
+}
+
+function resetCamera() {
+  camera.position.set(12, 6, 12)
+  controls.target.set(0, 0, -2)
+  controls.update()
+}
+
+function toggleWireframe() {
+  wireframe.value = !wireframe.value
+  partMeshes.forEach(m => {
+    const mat = m.material as THREE.MeshPhongMaterial
+    mat.wireframe = wireframe.value
+  })
+}
+
+function toggleExplode() {
+  explode.value = !explode.value
+  const factor = explode.value ? 2.5 : 1
+  partMeshes.forEach((m, name) => {
+    if (name === "cutterhead") m.position.z = 4 * factor
+    else if (name === "main_drive") m.position.z = 2.7 * factor
+    else if (name === "screw") m.position.y = -0.8 * factor
+    else if (name === "erector") m.position.z = -5 * factor
+    else if (name.startsWith("gantry")) {
+      const idx = parseInt(name.split("_")[1])
+      m.position.z = (-9 - idx * 4.5) * factor
+    }
+  })
+}
+
+function focusPart(part: any) {
+  const mesh = partMeshes.get(part.mesh_name || part.part_name)
+  if (!mesh) return
+  const pos = new THREE.Vector3()
+  mesh.getWorldPosition(pos)
+  controls.target.copy(pos)
+  camera.position.copy(pos.clone().add(new THREE.Vector3(5, 3, 5)))
+  controls.update()
+}
+
+function metricColor(m: any) {
+  if (!m) return "#fff"
+  const v = m.metric_value
+  if (m.metric_name?.includes("temp")) return v > 80 ? "#f56c6c" : v > 60 ? "#e6a23c" : "#67c23a"
+  if (m.metric_name?.includes("vibration")) return v > 7 ? "#f56c6c" : "#67c23a"
+  return "#409eff"
+}
+
+async function onInstanceChange() {
+  const inst = instances.value.find(i => i.id === selectedId.value)
+  selectedInstance.value = inst
+}
+
+async function loadData() {
   try {
-    models.value = await Api.get('/dt/models')
-    dash.value = await Api.get('/dt/dashboard')
-  } catch(e:any) { ElMessage.error('加载失败: ' + (e.response?.data?.error || e.message)) }
-  finally { loading.value = false }
+    const [instRes, partsRes] = await Promise.all([
+      Api.get("/critical-parts/dashboard"),
+      Api.get("/digital-twin/parts"),
+    ])
+    instances.value = instRes.instances || []
+    parts.value = (partsRes as any).items || []
+    if (instances.value.length > 0) {
+      selectedId.value = instances.value[0].id
+      selectedInstance.value = instances.value[0]
+    }
+  } catch (_) {}
 }
 
-async function selectModel(row: any) {
-  currentModel.value = row
-  try {
-    const detail = await Api.get(`/api/dt/models/${row.id}`)
-    currentParts.value = detail.parts||[]
-    currentAsm.value = detail.assembly_status||[]
-    const prog = await Api.get(`/api/dt/assembly-progress/${row.id}`)
-    asmOverview.value = [prog]
-  } catch(e:any) { ElMessage.error(e.message) }
-}
+onMounted(async () => {
+  await loadData()
+  await nextTick()
+  initScene()
+})
 
-async function loadScene() {
-  if (!currentModel.value) return
-  try { sceneData.value = await Api.get(`/api/dt/scene/${currentModel.value.id}`); ElMessage.success('场景加载完成') }
-  catch(e:any) { ElMessage.error(e.message) }
-}
-
-async function addModel() {
-  saving.value = true
-  try { await Api.post('/dt/models', newModel); showAddModel.value = false; Object.assign(newModel,{model_code:'',model_name:'',polygon_count:0,bounding_box:''}); await refresh(); ElMessage.success('模型注册成功') }
-  catch(e:any) { ElMessage.error(e.message) }
-  finally { saving.value = false }
-}
-
-async function addPart() {
-  if (!currentModel.value) return
-  saving.value = true
-  try { await Api.post(`/api/dt/models/${currentModel.value.id}/parts`, newPart); showAddPart.value = false; await selectModel(currentModel.value); ElMessage.success('部件添加成功') }
-  catch(e:any) { ElMessage.error(e.message) }
-  finally { saving.value = false }
-}
-
-onMounted(refresh)
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", onResize)
+  if (renderer?.domElement) renderer.domElement.removeEventListener("mousemove", onMouseMove)
+  cancelAnimationFrame(animationId)
+  renderer?.dispose()
+})
 </script>
 
 <style scoped>
-.page { padding: 16px }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px }
-.page-title { font-size: 20px; font-weight: 700 }
-.stat-card { background: #f5f7fa; border-radius: 8px; padding: 16px; text-align: center }
-.stat-label { font-size: 12px; color: #909399 }
-.stat-value { font-size: 28px; font-weight: 700; margin: 4px 0 }
+.dt-page { position: relative; width: 100%; height: calc(100vh - 60px); overflow: hidden; background: #1a1a2e; }
+.dt-canvas { width: 100%; height: 100%; }
+.dt-overlay { position: absolute; top: 16px; left: 16px; display: flex; align-items: center; gap: 12px; z-index: 10; }
+.dt-title { color: #fff; font-size: 18px; font-weight: 700; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+.dt-info-panel { position: absolute; top: 80px; right: 16px; background: rgba(20,20,40,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 12px 16px; color: #fff; z-index: 10; min-width: 180px; backdrop-filter: blur(8px); }
+.dt-info-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.dt-info-row { font-size: 13px; color: #ccc; margin: 2px 0; }
+.dt-legend { position: absolute; bottom: 80px; left: 16px; background: rgba(20,20,40,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 14px; color: #fff; z-index: 10; backdrop-filter: blur(8px); }
+.dt-legend-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; color: #aaa; }
+.dt-legend-item { font-size: 12px; padding: 2px 0; cursor: pointer; border-left: 2px solid; padding-left: 8px; margin: 2px 0; color: #ccc; }
+.dt-legend-item:hover { color: #fff; }
+.dt-controls { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10; }
 </style>
