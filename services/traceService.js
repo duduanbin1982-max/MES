@@ -7,6 +7,7 @@ const { registerForwardTraceRoutes } = require("./trace/forward");
 const { registerBackwardTraceRoutes } = require("./trace/backward");
 const { registerTraceTreeRoutes } = require("./trace/tree");
 const { registerCertificateRoutes } = require("./trace/certificate");
+const { registerTraceRecordRoutes } = require("./trace/records");
 
 function register(app, db) {
   const store = createTraceStore(db);
@@ -14,6 +15,7 @@ function register(app, db) {
   registerBackwardTraceRoutes(app, store);
   registerTraceTreeRoutes(app, store);
   registerCertificateRoutes(app, store);
+  registerTraceRecordRoutes(app, db);
 }
 
 module.exports = { register };

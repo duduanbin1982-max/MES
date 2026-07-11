@@ -72,6 +72,18 @@ function registerBackwardTraceRoutes(app, store) {
         workOrderInfo.welds = welds.map((weld) => ({ weld_no: weld.weld_no, welder: weld.welder_name, result: weld.inspection_result }));
       }
 
+      const assemblies = all(`SELECT ar.*, u.full_name AS operator_name
+        FROM assembly_records ar LEFT JOIN users u ON u.id=ar.operator_id
+        WHERE ar.work_order_id=? ORDER BY ar.step_no, ar.id`, workOrder.id);
+      if (assemblies.length) workOrderInfo.assemblies = assemblies;
+
+      const ndt = all(`SELECT nr.*, wr.weld_no, u.full_name AS inspector_name
+        FROM ndt_records nr
+        LEFT JOIN weld_records wr ON wr.id=nr.weld_record_id
+        LEFT JOIN users u ON u.id=nr.inspector_id
+        WHERE nr.work_order_id=? ORDER BY nr.inspection_date, nr.id`, workOrder.id);
+      if (ndt.length) workOrderInfo.ndt = ndt;
+
       const qcRows = all("SELECT * FROM qc_inspections WHERE work_order_id = ?", workOrder.id);
       if (qcRows.length) {
         workOrderInfo.qc = qcRows.map((qc) => ({

@@ -175,11 +175,61 @@
       <el-empty v-if="!certData" description="选择设备实例查看追溯证书" />
     </el-tab-pane>
 
+    <el-tab-pane label="追溯登记" name="records">
+      <div class="toolbar">
+        <el-select v-model="recordFilter.instance_id" placeholder="选择设备实例" filterable style="width:320px" @change="loadRecordWorkspace">
+          <el-option v-for="i in instances" :key="i.id" :label="i.instance_code+' '+(i.instance_name||'')" :value="i.id" />
+        </el-select>
+        <el-button @click="loadRecordWorkspace" :loading="recordLoading">刷新</el-button>
+      </div>
+      <el-empty v-if="!recordFilter.instance_id" description="先选择设备实例" />
+      <template v-else>
+        <el-row :gutter="12">
+          <el-col :xs="24" :lg="8">
+            <el-card shadow="never"><template #header><b>序列号建档</b></template>
+              <el-form label-position="top" :model="serialForm">
+                <el-form-item label="序列号"><el-input v-model="serialForm.serial_no" placeholder="扫描或输入铭牌序列号" /></el-form-item>
+                <el-form-item label="物料批次"><el-select v-model="serialForm.lot_id" filterable style="width:100%"><el-option v-for="lot in recordContext.lots" :key="lot.id" :value="lot.id" :label="lot.lot_no+' · '+lot.material_code+' '+lot.material_name" /></el-select></el-form-item>
+                <el-form-item label="备注"><el-input v-model="serialForm.notes" /></el-form-item>
+                <el-button type="primary" @click="createSerial">建档</el-button>
+              </el-form>
+            </el-card>
+          </el-col>
+          <el-col :xs="24" :lg="8">
+            <el-card shadow="never"><template #header><b>装配步骤登记</b></template>
+              <el-form label-position="top" :model="assemblyForm">
+                <el-form-item label="工单"><el-select v-model="assemblyForm.work_order_id" filterable style="width:100%"><el-option v-for="wo in recordContext.work_orders" :key="wo.id" :value="wo.id" :label="wo.wo_code+' · '+wo.title" /></el-select></el-form-item>
+                <el-row :gutter="8"><el-col :span="8"><el-form-item label="步骤号"><el-input-number v-model="assemblyForm.step_no" :min="1" style="width:100%" /></el-form-item></el-col><el-col :span="16"><el-form-item label="步骤名称"><el-input v-model="assemblyForm.step_name" /></el-form-item></el-col></el-row>
+                <el-row :gutter="8"><el-col :span="12"><el-form-item label="扭矩 N·m"><el-input-number v-model="assemblyForm.torque_value_nm" :min="0" style="width:100%" /></el-form-item></el-col><el-col :span="12"><el-form-item label="间隙 mm"><el-input-number v-model="assemblyForm.clearance_mm" :min="0" :precision="3" style="width:100%" /></el-form-item></el-col></el-row>
+                <el-button type="primary" @click="createAssembly">登记</el-button>
+              </el-form>
+            </el-card>
+          </el-col>
+          <el-col :xs="24" :lg="8">
+            <el-card shadow="never"><template #header><b>NDT 登记</b></template>
+              <el-form label-position="top" :model="ndtForm">
+                <el-form-item label="焊缝"><el-select v-model="ndtForm.weld_record_id" filterable style="width:100%" @change="syncNdtWorkOrder"><el-option v-for="w in recordContext.welds" :key="w.id" :value="w.id" :label="w.wo_code+' · '+w.weld_no" /></el-select></el-form-item>
+                <el-row :gutter="8"><el-col :span="12"><el-form-item label="方法"><el-select v-model="ndtForm.ndt_method" style="width:100%"><el-option v-for="m in ['UT','RT','MT','PT']" :key="m" :value="m" /></el-select></el-form-item></el-col><el-col :span="12"><el-form-item label="结果"><el-segmented v-model="ndtForm.result" :options="[{label:'合格',value:'pass'},{label:'不合格',value:'fail'}]" /></el-form-item></el-col></el-row>
+                <el-form-item label="报告编号"><el-input v-model="ndtForm.report_no" placeholder="附件请到文档管理上传" /></el-form-item>
+                <el-button type="primary" @click="createNdt">登记</el-button>
+              </el-form>
+            </el-card>
+          </el-col>
+        </el-row>
+        <el-tabs class="record-lists">
+          <el-tab-pane :label="'序列号 '+recordData.serials.length"><el-table :data="recordData.serials" size="small" border><el-table-column prop="serial_no" label="序列号"/><el-table-column prop="material_code" label="物料"/><el-table-column prop="lot_no" label="批次"/><el-table-column prop="status" label="状态"/></el-table></el-tab-pane>
+          <el-tab-pane :label="'装配 '+recordData.assemblies.length"><el-table :data="recordData.assemblies" size="small" border><el-table-column prop="wo_code" label="工单"/><el-table-column prop="step_no" label="步骤" width="70"/><el-table-column prop="step_name" label="名称"/><el-table-column prop="operator_name" label="操作人"/><el-table-column prop="assembly_date" label="时间"/></el-table></el-tab-pane>
+          <el-tab-pane :label="'NDT '+recordData.ndt.length"><el-table :data="recordData.ndt" size="small" border><el-table-column prop="wo_code" label="工单"/><el-table-column prop="weld_no" label="焊缝"/><el-table-column prop="ndt_method" label="方法"/><el-table-column prop="result" label="结果"/><el-table-column prop="report_no" label="报告编号"/></el-table></el-tab-pane>
+        </el-tabs>
+      </template>
+    </el-tab-pane>
+
   </el-tabs></div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Api } from '../api'
 
 const tab = ref('forward')
@@ -234,10 +284,62 @@ const printCertificate = () => {
   window.print()
 }
 
+const recordFilter = reactive({ instance_id: null as number | null })
+const recordLoading = ref(false)
+const recordContext = reactive<any>({ work_orders: [], lots: [], welds: [], users: [] })
+const recordData = reactive<any>({ serials: [], assemblies: [], ndt: [] })
+const serialForm = reactive<any>({ serial_no: '', lot_id: null, notes: '' })
+const assemblyForm = reactive<any>({ work_order_id: null, step_no: 1, step_name: '', torque_value_nm: null, clearance_mm: null })
+const ndtForm = reactive<any>({ work_order_id: null, weld_record_id: null, ndt_method: 'UT', result: 'pass', report_no: '' })
+
+const loadRecordWorkspace = async () => {
+  if (!recordFilter.instance_id) return
+  recordLoading.value = true
+  try {
+    const [context, records] = await Promise.all([
+      Api.get('/trace/context', { params: { instance_id: recordFilter.instance_id } }),
+      Api.get('/trace/records', { params: { instance_id: recordFilter.instance_id } }),
+    ])
+    Object.assign(recordContext, context)
+    Object.assign(recordData, records)
+  } finally { recordLoading.value = false }
+}
+
+const createSerial = async () => {
+  if (!serialForm.serial_no || !serialForm.lot_id) return ElMessage.warning('请选择批次并填写序列号')
+  await Api.post('/trace/serials', { ...serialForm, equipment_instance_id: recordFilter.instance_id })
+  Object.assign(serialForm, { serial_no: '', lot_id: null, notes: '' })
+  ElMessage.success('序列号已建档')
+  await loadRecordWorkspace()
+}
+
+const createAssembly = async () => {
+  if (!assemblyForm.work_order_id || !assemblyForm.step_name) return ElMessage.warning('请选择工单并填写步骤名称')
+  await Api.post('/trace/assembly-records', assemblyForm)
+  assemblyForm.step_no += 1
+  assemblyForm.step_name = ''
+  ElMessage.success('装配步骤已登记')
+  await loadRecordWorkspace()
+}
+
+const syncNdtWorkOrder = (weldId: number) => {
+  ndtForm.work_order_id = recordContext.welds.find((item:any) => item.id === weldId)?.work_order_id || null
+}
+
+const createNdt = async () => {
+  if (!ndtForm.weld_record_id || !ndtForm.work_order_id) return ElMessage.warning('请选择焊缝')
+  await Api.post('/trace/ndt-records', ndtForm)
+  ndtForm.weld_record_id = null
+  ndtForm.work_order_id = null
+  ndtForm.report_no = ''
+  ElMessage.success('NDT 结果已登记')
+  await loadRecordWorkspace()
+}
+
 const doMatrix = async () => { if(!bw.instance_id) return; bw.mloading=true; try { bw.matrix = await Api.get('/trace/matrix',{params:{instance_id:bw.instance_id}}) } catch(_){} finally { bw.mloading=false } }
 </script>
 
-<style scoped>.page{padding:16px 24px}.page-header{margin-bottom:16px}.page-title{font-size:20px;font-weight:600}.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px}@media print {
+<style scoped>.page{padding:16px 24px}.page-header{margin-bottom:16px}.page-title{font-size:20px;font-weight:600}.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px}.record-lists{margin-top:16px}@media print {
   body * { visibility: hidden; }
   #certificate-print-area, #certificate-print-area * { visibility: visible; }
   #certificate-print-area { position: absolute; left: 0; top: 0; width: 100%; }
