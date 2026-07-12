@@ -2,6 +2,12 @@
 // app/workflow/definitions.js
 // P0-5 三套工作流定义: BOM 审批 / ECO 变更 / 工单流转
 // Author: 三狗子 | Date: 2026-06-25
+//
+// ⚠️  @deprecated 2026-07-11 (brooks-audit R4 决策 ADR-003)
+//   仅 tests/workflow.test.js 引用, 实际运行链不引
+//   实际工作流业务跑在 services/workflowService.js
+//   保留: 历史快照 + 测试 fixture
+//   未来: Phase 2 cleanup 时评估删除
 
 /**
  * 状态定义: { id, label, is_terminal?, is_initial? }

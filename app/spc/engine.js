@@ -3,6 +3,12 @@
 // P1 SPC 统计过程控制引擎
 //   Xbar-R 控制图 / Cpk/Ppk 过程能力 / WECO 异常规则
 // Author: 三狗子 | Date: 2026-06-26
+//
+// ⚠️  @deprecated 2026-07-11 (brooks-audit R4 决策 ADR-003)
+//   0 外部 require (只有 spcService.js 自己提了一些, 但 register-all 未注册这个路径)
+//   实际 SPC 业务跑在 services/spcService.js + services/spcMonitor.js
+//   保留: 历史快照 / 复盘参考
+//   未来: Phase 2 cleanup 时评估删除
 
 // d2 常数 (子组大小 n 的无偏估计因子)
 const D2 = [0, 0, 1.128, 1.693, 2.059, 2.326, 2.534, 2.704, 2.847, 2.970, 3.078];

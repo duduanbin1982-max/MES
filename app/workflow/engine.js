@@ -6,6 +6,12 @@
 //   - getAvailableActions(instanceId): 查询当前可执行动作
 //   - getInstance(instanceId): 获取实例 + 历史
 // Author: 三狗子 | Date: 2026-06-25
+//
+// ⚠️  @deprecated 2026-07-11 (brooks-audit R4 决策 ADR-003)
+//   0 外部 require (仅被 services/eco.js 间接提到名字, 但 require 路径走的是 services/workflowService.js)
+//   实际工作流引擎跑在 services/workflowService.js
+//   保留: 历史快照 / API 文档参考
+//   未来: Phase 2 cleanup 时评估删除
 
 const { definitions } = require("./definitions");
 const { emit, Events } = require("../ws/EventBus");

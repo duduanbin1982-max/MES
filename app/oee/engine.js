@@ -4,6 +4,13 @@
 //   OEE = Availability × Performance × Quality
 //   六大损失: 故障/换型/空转/速度降/废品/返工
 // Author: 三狗子 | Date: 2026-06-26
+//
+// ⚠️  @deprecated 2026-07-11 (brooks-audit R4 决策 ADR-003)
+//   0 外部 require (services/oee/* 自己定义 store, 不引这里)
+//   0 注册到 routes (register-all.js 不调用 services/oeeService.js)
+//   实际 OEE 业务跑在 services/oee/ (7 个文件, store + routes + migration)
+//   保留: 历史快照 / 复盘参考
+//   未来: Phase 2 cleanup 时评估删除
 
 /**
  * @typedef {Object} OEEInput
