@@ -1,5 +1,6 @@
 "use strict";
 const { wrap } = require('../middleware/asyncHandler');
+const { ApiError } = require('../app/errors');
 // services/andonService.js
 // P1 ANDON 安灯系统: 告警触发 / 确认 / 解决 / 查询 / 规则管理
 //   GET    /api/andon/alerts              活跃告警列表
@@ -13,9 +14,12 @@ const { wrap } = require('../middleware/asyncHandler');
 //   PUT    /api/andon/rules/:id            更新规则
 //   POST   /api/andon/scan                 扫描所有规则 (批量检查)
 // Author: 三狗子 | Date: 2026-06-26
+// 2026-07-11 OWASP A10 P0-3: webhook URL 校验, 防 SSRF
 
 const { emit, Events } = require("../app/ws/EventBus");
 const { queryLowStock } = require("./material/core");
+// P0-3 SSRF 防御
+const { validateWebhookUrl } = require("./webhookValidator");
 
 function register(app, db) {
   const all = (sql, p = []) => db.prepare(sql).all(p);
@@ -54,28 +58,28 @@ function register(app, db) {
   }
 
   async function sendNotification(channel, message) {
-    const https = require("https");
-    const { URL } = require("url");
-    let payload, parsed;
-    if (channel.channel_type === "dingtalk") {
-      payload = JSON.stringify({ msgtype: "markdown", markdown: { title: message.title, text: message.text } });
-    } else if (channel.channel_type === "feishu") {
-      payload = JSON.stringify({ msg_type: "interactive", card: { header: { title: { tag: "plain_text", content: message.title } }, elements: [{ tag: "markdown", content: message.text }] } });
+    // P0-1 brooks-lint: 用统一的 buildWebhookUrl + sendWebhook (R3 dup 收编)
+    const { buildWebhookUrl, sendWebhook } = require('./webhookValidator');
+
+    // 1. 构造 payload (按 channel_type 选)
+    let payload;
+    if (channel.channel_type === 'dingtalk') {
+      payload = JSON.stringify({ msgtype: 'markdown', markdown: { title: message.title, text: message.text } });
+    } else if (channel.channel_type === 'feishu') {
+      payload = JSON.stringify({ msg_type: 'interactive', card: { header: { title: { tag: 'plain_text', content: message.title } }, elements: [{ tag: 'markdown', content: message.text }] } });
     } else {
-      return { ok: false, error: "unsupported channel_type: " + channel.channel_type };
+      return { ok: false, error: 'unsupported channel_type: ' + channel.channel_type };
     }
-    try { parsed = new URL(channel.webhook_url); } catch (e) { return { ok: false, error: "invalid webhook_url: " + e.message }; }
-    return new Promise((resolve) => {
-      const req = https.request({ method: "POST", hostname: parsed.hostname, path: parsed.pathname + (parsed.search || ""), headers: { "Content-Type": "application/json; charset=utf-8", "Content-Length": Buffer.byteLength(payload) }, timeout: 5000 }, (res) => {
-        let body = "";
-        res.on("data", (chunk) => body += chunk);
-        res.on("end", () => resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, body }));
-      });
-      req.on("timeout", () => { req.destroy(new Error("timeout")); });
-      req.on("error", (e) => resolve({ ok: false, error: e.message }));
-      req.write(payload);
-      req.end();
-    });
+
+    // 2. 用 buildWebhookUrl 校验 + 构造 (channel 存的是完整 URL, 标 fullUrl: true)
+    const v = buildWebhookUrl(channel.webhook_url, { fullUrl: true, platform: channel.channel_type });
+    if (v.error) {
+      console.warn('[andon notify] SSRF blocked:', channel.webhook_url, v.error);
+      return { ok: false, error: 'webhook_url 被 SSRF 防护拦截: ' + v.error };
+    }
+
+    // 3. 统一发送
+    return await sendWebhook(v.url, payload, { timeout: 5000 });
   }
 
   async function notifyChannels(alertType, severity, title, message) {
@@ -260,6 +264,9 @@ function register(app, db) {
   app.post("/api/andon/channels", wrap((req, res) => {
     const { channel_type, channel_name, webhook_url, secret, notify_severities, is_active } = req.body;
     if (!channel_type || !webhook_url) throw ApiError.validation("channel_type/webhook_url 必填");
+    // P0-3 OWASP A10 SSRF: 创建时就拦截, 防止后来被触发打内网
+    const v = validateWebhookUrlSync(webhook_url);
+    if (!v.ok) throw ApiError.validation("webhook_url 被 SSRF 防护拦截: " + v.error);
     const r = run("INSERT INTO andon_notify_channels (channel_type, channel_name, webhook_url, secret, notify_severities, is_active) VALUES (?, ?, ?, ?, ?, ?)", [channel_type, channel_name || null, webhook_url, secret || null, notify_severities || "critical,warning", is_active !== undefined ? (is_active ? 1 : 0) : 1]);
     const channel = get("SELECT * FROM andon_notify_channels WHERE id = ?", Number(r.lastInsertRowid));
     res.status(201).json(channel);
@@ -272,7 +279,12 @@ function register(app, db) {
     const sets = [], params = [];
     if (channel_type !== undefined) { sets.push("channel_type = ?"); params.push(channel_type); }
     if (channel_name !== undefined) { sets.push("channel_name = ?"); params.push(channel_name); }
-    if (webhook_url !== undefined) { sets.push("webhook_url = ?"); params.push(webhook_url); }
+    // P0-3 OWASP A10 SSRF: 更新时也校验
+    if (webhook_url !== undefined) {
+      const v = validateWebhookUrlSync(webhook_url);
+      if (!v.ok) throw ApiError.validation("webhook_url 被 SSRF 防护拦截: " + v.error);
+      sets.push("webhook_url = ?"); params.push(webhook_url);
+    }
     if (secret !== undefined) { sets.push("secret = ?"); params.push(secret); }
     if (notify_severities !== undefined) { sets.push("notify_severities = ?"); params.push(notify_severities); }
     if (is_active !== undefined) { sets.push("is_active = ?"); params.push(is_active ? 1 : 0); }

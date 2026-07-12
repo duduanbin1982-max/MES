@@ -1,12 +1,13 @@
-'use strict';
+"use strict";
 // services/feishuNotify.js
 // 批次 3 重构：从 server.js 抽出（无 db 依赖）
 // 2026-06-22：brooks-lint R2 Critical 修复 — 接飞书机器人 webhook
 // 2026-06-23：settings 化 — 优先从 system_settings 表读，fallback 到 process.env
-//            5s cache 避免高频 DB 读
+// 2026-07-11: brooks-lint P0-1 修复 (R3 Knowledge Duplication)
+//   - 删 4 处重复的 parseUrl + 协议检查 + prefix 拼接
+//   - 改用 buildWebhookUrl() 统一构造, sendWebhook() 统一发送
 
-const https = require('https');
-const { URL } = require('url');
+const { buildWebhookUrl, sendWebhook } = require('./webhookValidator');
 
 // 延迟 require 避免循环依赖（systemSettings.js require feishuNotify）
 let _settings = null;
@@ -30,7 +31,7 @@ function settings() {
  * @param {string} content  消息正文
  * @returns {Promise<{ok: boolean, status?: number, body?: string, error?: string, skipped?: boolean}>}
  */
-function feishuNotify(title, content) {
+async function feishuNotify(title, content) {
   const s = settings();
   let hook, timeoutMs, enabled, receiver;
   if (s && typeof s.getFeishuConfig === 'function') {
@@ -40,7 +41,6 @@ function feishuNotify(title, content) {
     enabled = cfg.enabled;
     receiver = cfg.receiver_open_id;
   } else {
-    // fallback: process.env
     hook = process.env.FEISHU_WEBHOOK_TOKEN || '';
     timeoutMs = parseInt(process.env.FEISHU_WEBHOOK_TIMEOUT_MS || '3000', 10);
     enabled = !!hook;
@@ -60,12 +60,20 @@ function feishuNotify(title, content) {
       fs2.appendFileSync('/home/dubin/factory-mes/data/feishu_queue.log',
         '[NO_HOOK] ' + auditLine + '\n');
     } catch (e) {}
-    return Promise.resolve({ ok: false, skipped: true, error: '飞书未启用或 webhook 未配置' });
+    return { ok: false, skipped: true, error: '飞书未启用或 webhook 未配置' };
   }
 
-  const url = /^https?:\/\//.test(hook)
-    ? hook
-    : 'https://open.feishu.cn/open-apis/bot/v2/hook/' + hook;
+  // P0-1: 统一 webhook URL 构造 (SSRF 校验在 buildWebhookUrl 内部)
+  const { url, error: urlError } = buildWebhookUrl(hook, { platform: 'feishu' });
+  if (urlError) {
+    console.warn('[feishuNotify] URL 构造失败:', urlError);
+    try {
+      const fs2 = require('fs');
+      fs2.appendFileSync('/home/dubin/factory-mes/data/feishu_queue.log',
+        '[BAD_URL] ' + auditLine + ' | ' + urlError + '\n');
+    } catch (e) {}
+    return { ok: false, error: 'webhook URL 校验失败: ' + urlError };
+  }
 
   const payload = JSON.stringify({
     msg_type: 'interactive',
@@ -75,48 +83,18 @@ function feishuNotify(title, content) {
     }
   });
 
-  return new Promise((resolve) => {
-    let parsed;
-    try { parsed = new URL(url); }
-    catch (e) { return resolve({ ok: false, error: 'invalid hook url: ' + e.message }); }
+  // P0-1: 统一发送
+  const result = await sendWebhook(url, payload, { timeout: timeoutMs });
 
-    const req = https.request({
-      method: 'POST',
-      hostname: parsed.hostname,
-      path: parsed.pathname + (parsed.search || ''),
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Length': Buffer.byteLength(payload)
-      },
-      timeout: timeoutMs
-    }, (res) => {
-      let body = '';
-      res.on('data', (chunk) => body += chunk);
-      res.on('end', () => {
-        const ok = res.statusCode >= 200 && res.statusCode < 300;
-        try {
-          const fs2 = require('fs');
-          fs2.appendFileSync('/home/dubin/factory-mes/data/feishu_queue.log',
-            '[' + (ok ? 'OK' : 'FAIL_' + res.statusCode) + '] ' + auditLine +
-            (ok ? '' : ' | resp=' + body.slice(0, 200)) + '\n');
-        } catch (e) {}
-        resolve({ ok, status: res.statusCode, body });
-      });
-    });
+  // 审计日志
+  try {
+    const fs2 = require('fs');
+    const tag = result.ok ? 'OK' : (result.error === 'timeout' ? 'TIMEOUT' : 'FAIL_' + result.status);
+    fs2.appendFileSync('/home/dubin/factory-mes/data/feishu_queue.log',
+      '[' + tag + '] ' + auditLine + (result.ok ? '' : ' | ' + (result.error || 'http ' + result.status)) + '\n');
+  } catch (e) {}
 
-    req.on('timeout', () => { req.destroy(new Error('timeout ' + timeoutMs + 'ms')); });
-    req.on('error', (e) => {
-      try {
-        const fs2 = require('fs');
-        fs2.appendFileSync('/home/dubin/factory-mes/data/feishu_queue.log',
-          '[ERR] ' + auditLine + ' | ' + e.message + '\n');
-      } catch (e2) {}
-      resolve({ ok: false, error: e.message });
-    });
-
-    req.write(payload);
-    req.end();
-  });
+  return result;
 }
 
 module.exports = { feishuNotify };

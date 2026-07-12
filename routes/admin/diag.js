@@ -1,16 +1,22 @@
 "use strict";
 // routes/admin/diag.js
 // 2026-07-10 R3 审计新增：飞书 / Andon 通知链路诊断
-// 提供 4 个端点（admin only），让运维能在一处诊断整个通知链路：
-//   GET  /api/admin/diag/feishu      查看当前飞书配置（脱敏）+ 队列最近 5 条
-//   POST /api/admin/diag/feishu/test 用当前配置发送一条测试消息（不调用飞书，用 echo 模式）
-//   POST /api/admin/diag/feishu/probe 真正尝试调用 webhook（不管 enabled），返回完整状态
-//   GET  /api/admin/diag/andon       Andon 渠道 + 升级规则 + 最近告警统计
-//   POST /api/admin/diag/andon/scan  触发一次 andon scan (产生告警 + 走渠道)
+// 2026-07-11 OWASP 审计 P0 修复: 加 RBAC 守卫
+//   之前所有端点都裸奔, 任何登录用户可访问 (A01 漏洞)
+//   现在统一 requirePermission('settings:read') 或 'feishu:notify'
 //
-// Author: Hermes R3 follow-up | 2026-07-10
+// 提供 5 个端点 (admin only)，让运维能在一处诊断整个通知链路：
+//   GET  /api/admin/diag/feishu      查看当前飞书配置（脱敏）+ 队列最近 5 条  [settings:read]
+//   POST /api/admin/diag/feishu/test 用当前配置发送一条测试消息                  [feishu:notify]
+//   POST /api/admin/diag/feishu/probe 真正尝试调用 webhook（SSRF 校验）           [settings:read]
+//   GET  /api/admin/diag/andon       Andon 渠道 + 升级规则 + 最近告警统计        [settings:read]
+//   POST /api/admin/diag/andon/scan  触发一次 andon scan                          [settings:write]
+//
+// Author: Hermes R3 follow-up | 2026-07-10; OWASP fixes 2026-07-11
 
 const { wrap } = require('../../middleware/asyncHandler');
+const { requirePermission } = require('../../middleware/auth');
+const { buildWebhookUrl } = require('../../services/webhookValidator');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
@@ -81,7 +87,8 @@ function probeFeishuWebhook(rawUrl) {
 
 function register(app, db) {
   // ---- 飞书诊断 ----
-  app.get('/api/admin/diag/feishu', wrap((req, res) => {
+  // P0-1 OWASP 修复: 加 settings:read 守卫
+  app.get('/api/admin/diag/feishu', requirePermission('settings:read'), wrap((req, res) => {
     const sys = require('../../services/systemSettings');
     sys.setDb(db);
     const cfg = sys.getFeishuConfig();
@@ -103,7 +110,8 @@ function register(app, db) {
     });
   }));
 
-  app.post('/api/admin/diag/feishu/test', wrap(async (req, res) => {
+  // P0-1 OWASP 修复: feishu:notify 守卫 (能调真实飞书)
+  app.post('/api/admin/diag/feishu/test', requirePermission('feishu:notify'), wrap(async (req, res) => {
     // 不真正发送,只走 feishuNotify 让它走完整逻辑 (skip / NO_HOOK / 真实发送 三种结果)
     const { feishuNotify } = require('../../services/feishuNotify');
     const title = (req.body && req.body.title) || '🔔 Hermes 诊断测试';
@@ -121,7 +129,8 @@ function register(app, db) {
     });
   }));
 
-  app.post('/api/admin/diag/feishu/probe', wrap(async (req, res) => {
+  // P0-1+P0-3+P1-3 OWASP 修复: settings:read 守卫 + SSRF 校验 (复用 validateWebhookUrl)
+  app.post('/api/admin/diag/feishu/probe', requirePermission('settings:read'), wrap(async (req, res) => {
     // 真正尝试调一次 webhook (跳过 enabled 检查, 用于"我的 token 到底对不对")
     const sys = require('../../services/systemSettings');
     sys.setDb(db);
@@ -133,6 +142,17 @@ function register(app, db) {
     const fullUrl = /^https?:\/\//.test(rawUrl)
       ? rawUrl
       : 'https://open.feishu.cn/open-apis/bot/v2/hook/' + rawUrl;
+
+    // P0-1 brooks-lint: 用 buildWebhookUrl 统一构造 + SSRF 校验 (R3 dup 收编)
+    const v = buildWebhookUrl(rawUrl, { platform: 'feishu' });
+    if (v.error) {
+      return res.json({
+        ok: false, stage: 'ssrf_blocked',
+        error: 'URL 被 SSRF 防护拦截: ' + v.error,
+        webhook_preview: maskToken(rawUrl),
+      });
+    }
+
     const result = await probeFeishuWebhook(fullUrl);
     res.json({
       called_at: new Date().toISOString(),
@@ -145,7 +165,8 @@ function register(app, db) {
   }));
 
   // ---- Andon 诊断 ----
-  app.get('/api/admin/diag/andon', wrap((_req, res) => {
+  // P0-1 OWASP 修复: settings:read 守卫
+  app.get('/api/admin/diag/andon', requirePermission('settings:read'), wrap((_req, res) => {
     const all = (sql, p = []) => db.prepare(sql).all(p);
     const get = (sql, p = []) => db.prepare(sql).get(p);
     const channels = all('SELECT id, channel_type, channel_name, notify_severities, is_active, created_at FROM andon_notify_channels ORDER BY id');
@@ -170,9 +191,9 @@ function register(app, db) {
     });
   }));
 
-  app.post('/api/admin/diag/andon/scan', wrap(async (_req, res) => {
+  // P0-1 OWASP 修复: settings:write 守卫 (触发 andon scan 是写操作)
+  app.post('/api/admin/diag/andon/scan', requirePermission('settings:write'), wrap(async (_req, res) => {
     // 复用 andonService 的 scan 实现 (直接调用其端点逻辑)
-    const { spawn } = require('child_process');
     res.json({ ok: true, message: '请直接 POST /api/andon/scan (这是 andonService 自身提供的端点)' });
   }));
 }
