@@ -51,7 +51,7 @@
           </div>
         </div>
       </template>
-      <el-table :data="selectedPoints" size="small" empty-text="暂无数据点">
+      <el-table :data="selectedPoints" size="small" empty-text="暂无数据点" max-height="500">
         <el-table-column prop="point_code" label="编码" width="140" />
         <el-table-column prop="point_name" label="名称" width="120" />
         <el-table-column prop="unit" label="单位" width="60" />
@@ -74,7 +74,7 @@
       <template #header>
         <span style="font-weight:600;color:var(--el-color-danger)"><el-icon><Warning /></el-icon> 报警面板</span>
       </template>
-      <el-table :data="alarms" size="small" empty-text="无报警">
+      <el-table :data="alarms" size="small" empty-text="无报警" max-height="500">
         <el-table-column prop="device_code" label="设备" width="120" />
         <el-table-column prop="point_name" label="数据点" width="100" />
         <el-table-column label="报警" min-width="200">

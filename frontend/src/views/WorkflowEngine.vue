@@ -45,7 +45,7 @@
         <el-button @click="loadInstances">刷新</el-button>
       </div>
 
-      <el-table :data="instances" stripe size="small">
+      <el-table :data="instances" stripe size="small" max-height="500">
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column label="流程" width="120">
           <template #default="{ row }"><el-tag size="small">{{ row.definition_name }}</el-tag></template>

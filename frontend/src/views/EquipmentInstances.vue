@@ -33,7 +33,7 @@
     </el-card>
 
     <el-card>
-      <el-table :data="rows" stripe v-loading="loading" @row-click="goDetail" style="cursor: pointer">
+      <el-table :data="rows" stripe v-loading="loading" @row-click="goDetail" style="cursor: pointer" max-height="500">
         <el-table-column prop="instance_code" label="实例编码" width="170" />
         <el-table-column prop="project_no" label="项目号" width="130">
           <template #default="{ row }">{{ row.project_no || '-' }}</template>
