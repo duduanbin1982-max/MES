@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📋 采购管理</div>
+      <div class="page-title"><el-icon><Document /></el-icon> 采购管理</div>
     </div>
 
     <el-tabs v-model="tab">

@@ -10,12 +10,12 @@
 :root,
 [data-theme="light"] {
   /* -- Brand Palette -- */
-  --color-primary: #64748B;
-  --color-secondary: #94A3B8;
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
   --color-cta: #F97316;
-  --color-background: #F8FAFC;
-  --color-text: #334155;
-  --color-text-secondary: #64748B;
+  --color-background: var(--color-background);
+  --color-text: var(--color-text);
+  --color-text-secondary: var(--color-primary);
   --color-border: #E2E8F0;
   --color-success: #22C55E;
   --color-warning: #F59E0B;
@@ -70,7 +70,7 @@
   --el-text-color-primary: var(--color-text);
   --el-text-color-regular: var(--color-text);
   --el-text-color-secondary: var(--color-text-secondary);
-  --el-text-color-placeholder: #94A3B8;
+  --el-text-color-placeholder: var(--color-secondary);
 
   --el-border-color: var(--color-border);
   --el-border-color-light: #E2E8F0;
@@ -92,9 +92,9 @@
   --el-table-row-hover-bg-color: #F1F5F9;
 
   /* Menu overrides */
-  --el-menu-bg-color: #1E293B;
+  --el-menu-bg-color: var(--color-bg-card-dark);
   --el-menu-text-color: #CBD5E1;
-  --el-menu-hover-bg-color: #334155;
+  --el-menu-hover-bg-color: var(--color-text);
   --el-menu-active-color: #F97316;
 }
 
@@ -102,13 +102,13 @@
    DARK MODE (OLED) — 车间/夜班模式
    ================================================================ */
 [data-theme="dark"] {
-  --color-primary: #64748B;
-  --color-secondary: #475569;
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-text-secondary);
   --color-cta: #22C55E;
-  --color-background: #020617;
-  --color-text: #F8FAFC;
-  --color-text-secondary: #94A3B8;
-  --color-border: #1E293B;
+  --color-background: var(--color-bg-dark);
+  --color-text: var(--color-background);
+  --color-text-secondary: var(--color-secondary);
+  --color-border: var(--color-bg-card-dark);
   --color-success: #22C55E;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;
@@ -131,29 +131,29 @@
   --el-color-danger: var(--color-danger);
   --el-color-info: var(--color-info);
 
-  --el-bg-color: #0F172A;
-  --el-bg-color-overlay: #1E293B;
+  --el-bg-color: var(--color-bg-darker);
+  --el-bg-color-overlay: var(--color-bg-card-dark);
   --el-bg-color-page: var(--color-background);
 
   --el-text-color-primary: var(--color-text);
   --el-text-color-regular: var(--color-text);
   --el-text-color-secondary: var(--color-text-secondary);
-  --el-text-color-placeholder: #475569;
+  --el-text-color-placeholder: var(--color-text-secondary);
 
-  --el-border-color: #1E293B;
-  --el-border-color-light: #334155;
-  --el-border-color-lighter: #1E293B;
+  --el-border-color: var(--color-bg-card-dark);
+  --el-border-color-light: var(--color-text);
+  --el-border-color-lighter: var(--color-bg-card-dark);
 
-  --el-fill-color-blank: #0F172A;
-  --el-fill-color-light: #1E293B;
+  --el-fill-color-blank: var(--color-bg-darker);
+  --el-fill-color-light: var(--color-bg-card-dark);
 
-  --el-card-bg-color: #0F172A;
-  --el-table-header-bg-color: #1E293B;
-  --el-table-row-hover-bg-color: #1E293B;
+  --el-card-bg-color: var(--color-bg-darker);
+  --el-table-header-bg-color: var(--color-bg-card-dark);
+  --el-table-row-hover-bg-color: var(--color-bg-card-dark);
 
-  --el-menu-bg-color: #020617;
+  --el-menu-bg-color: var(--color-bg-dark);
   --el-menu-text-color: #CBD5E1;
-  --el-menu-hover-bg-color: #1E293B;
+  --el-menu-hover-bg-color: var(--color-bg-card-dark);
   --el-menu-active-color: #22C55E;
 }
 
@@ -225,3 +225,80 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button 
 /* Data-dense: compact tables */
 .el-table--small .el-table__cell { padding: 8px 10px; }
 .el-card__body { padding: var(--space-md); }
+
+/* ================================================================
+   [B] 2026-07-11 Hermes UI/UX-Pro-Max audit fix
+   ================================================================ */
+
+/* [B-1] Touch target 44x44px (Apple HIG / WCAG 2.5.5 Level AAA)
+        Force min-height/width on every interactive el-button regardless of size attr */
+.el-button {
+  min-height: 32px; /* default Element Plus = 32px, mid */
+}
+.el-button--large {
+  min-height: 44px;
+  padding: 12px 20px;
+  font-size: 16px;
+}
+.el-button + .el-button { margin-left: 8px; }
+/* Apply 36px (Material) baseline; 44px on touch (hover:none) */
+.el-button:not(.is-link):not(.is-text):not(.is-circle) {
+  min-height: 36px;
+}
+@media (hover: none) and (pointer: coarse) {
+  /* Touch device: 强制 44px */
+  .el-button { min-height: 44px; }
+}
+
+/* [B-2] Cursor pointer on all clickable elements
+        当前 71 个 vue 文件缺自定义 cursor, 全局加 clickable 工具类 */
+.clickable,
+.el-card.is-hover-shadow,
+.el-table .el-table__row,
+.el-tag.is-hit,
+.el-dropdown-item,
+.el-menu-item,
+.el-submenu__title,
+.el-checkbox,
+.el-radio,
+.el-switch,
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused,
+.el-pagination .el-pager li,
+.el-pagination button {
+  cursor: pointer;
+}
+
+/* [B-3] 强制 tactile feedback (hover state 不能 0 视觉差异) */
+.el-button:hover:not(.is-disabled):not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* [B-4] Focus states for keyboard navigation (WCAG 2.4.7) */
+.el-button:focus-visible,
+.el-input__wrapper:focus-visible,
+.el-select__wrapper:focus-visible,
+.el-textarea__inner:focus-visible,
+.el-checkbox:focus-within,
+.el-radio:focus-within,
+.el-switch:focus-within,
+.el-table .el-table__row:focus-visible {
+  outline: 2px solid var(--color-cta);
+  outline-offset: 2px;
+}
+
+/* [B-5] Form labels 强制最小高度 (一致性) */
+.el-form-item__label { line-height: 1.5; min-height: 24px; }
+
+/* [B-6] Better scrollbar on tables */
+.el-table .el-table__body-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
+.el-table .el-table__body-wrapper::-webkit-scrollbar-thumb { background: var(--color-secondary); }
+
+/* [B-7] Loading + empty state 的视觉提示 */
+.el-table__empty-block {
+  background: var(--color-background);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  padding: var(--space-lg);
+}

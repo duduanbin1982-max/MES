@@ -5,7 +5,7 @@
 
     <!-- Overlay Panel -->
     <div class="dt-overlay">
-      <div class="dt-title">🌐 数字孪生 · {{ selectedInstance?.instance_name || 'TBM 盾构机' }}</div>
+      <div class="dt-title"><el-icon><Promotion /></el-icon> 数字孪生 · {{ selectedInstance?.instance_name || 'TBM 盾构机' }}</div>
       <el-select v-model="selectedId" placeholder="选择装备" style="width:260px" @change="onInstanceChange" size="small">
         <el-option v-for="inst in instances" :key="inst.id" :label="inst.instance_name" :value="inst.id" />
       </el-select>
@@ -363,11 +363,11 @@ function focusPart(part: any) {
 }
 
 function metricColor(m: any) {
-  if (!m) return "#fff"
+  if (!m) return "var(--el-color-white)"
   const v = m.metric_value
-  if (m.metric_name?.includes("temp")) return v > 80 ? "#f56c6c" : v > 60 ? "#e6a23c" : "#67c23a"
-  if (m.metric_name?.includes("vibration")) return v > 7 ? "#f56c6c" : "#67c23a"
-  return "#409eff"
+  if (m.metric_name?.includes("temp")) return v > 80 ? "var(--el-color-danger)" : v > 60 ? "var(--el-color-warning)" : "var(--el-color-success)"
+  if (m.metric_name?.includes("vibration")) return v > 7 ? "var(--el-color-danger)" : "var(--el-color-success)"
+  return "var(--el-color-primary)"
 }
 
 async function onInstanceChange() {
@@ -440,13 +440,13 @@ onBeforeUnmount(() => {
 .dt-page { position: relative; width: 100%; height: calc(100vh - 60px); overflow: hidden; background: #1a1a2e; }
 .dt-canvas { width: 100%; height: 100%; }
 .dt-overlay { position: absolute; top: 16px; left: 16px; display: flex; align-items: center; gap: 12px; z-index: 10; }
-.dt-title { color: #fff; font-size: 18px; font-weight: 700; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
-.dt-info-panel { position: absolute; top: 80px; right: 16px; background: rgba(20,20,40,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 12px 16px; color: #fff; z-index: 10; min-width: 180px; backdrop-filter: blur(8px); }
+.dt-title { color: var(--el-color-white); font-size: 18px; font-weight: 700; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+.dt-info-panel { position: absolute; top: 80px; right: 16px; background: rgba(20,20,40,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 12px 16px; color: var(--el-color-white); z-index: 10; min-width: 180px; backdrop-filter: blur(8px); }
 .dt-info-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
 .dt-info-row { font-size: 13px; color: #ccc; margin: 2px 0; }
-.dt-legend { position: absolute; bottom: 80px; left: 16px; background: rgba(20,20,40,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 14px; color: #fff; z-index: 10; backdrop-filter: blur(8px); }
+.dt-legend { position: absolute; bottom: 80px; left: 16px; background: rgba(20,20,40,0.9); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 10px 14px; color: var(--el-color-white); z-index: 10; backdrop-filter: blur(8px); }
 .dt-legend-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; color: #aaa; }
 .dt-legend-item { font-size: 12px; padding: 2px 0; cursor: pointer; border-left: 2px solid; padding-left: 8px; margin: 2px 0; color: #ccc; }
-.dt-legend-item:hover { color: #fff; }
+.dt-legend-item:hover { color: var(--el-color-white); }
 .dt-controls { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 10; }
 </style>

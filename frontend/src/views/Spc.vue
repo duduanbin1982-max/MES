@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="page">
-    <div class="page-header"><div class="page-title">📊 SPC 统计过程控制</div></div>
+    <div class="page-header"><div class="page-title"><el-icon><DataAnalysis /></el-icon> SPC 统计过程控制</div></div>
 
     <el-tabs v-model="activeTab" type="border-card">
       <!-- Tab 1: SPC 分析 (existing) -->

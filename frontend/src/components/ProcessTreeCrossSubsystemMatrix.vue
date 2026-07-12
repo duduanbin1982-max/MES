@@ -90,7 +90,7 @@
           <!-- Coupling lists -->
           <div class="xsub-coupling">
             <div class="xsub-coupling-block">
-              <div class="xsub-coupling-title">🔗 最强耦合</div>
+              <div class="xsub-coupling-title"><el-icon><Link /></el-icon> 最强耦合</div>
               <div v-if="data.summary.strongest_coupling.length === 0" class="xsub-coupling-empty">
                 无跨子系统依赖（所有依赖均位于同一子系统内部）
               </div>
@@ -102,7 +102,7 @@
               </ol>
             </div>
             <div class="xsub-coupling-block">
-              <div class="xsub-coupling-title">🕳️ 最弱耦合（无边的子系统对）</div>
+              <div class="xsub-coupling-title"><el-icon><Warning /></el-icon> 最弱耦合（无边的子系统对）</div>
               <ul v-if="data.summary.weakest_coupling.length > 0" class="xsub-coupling-list">
                 <li v-for="(c, i) in data.summary.weakest_coupling" :key="i">
                   <span class="xsub-coupling-pair">{{ subName(c.from) }} ⇢ {{ subName(c.to) }}</span>
@@ -115,7 +115,7 @@
 
           <div class="xsub-foot">
             <span class="xsub-foot-tip">
-              💡 颜色深浅 = 权重（节点对数 × 依赖类型系数）。
+              <el-icon><Sunny /></el-icon> 颜色深浅 = 权重（节点对数 × 依赖类型系数）。
               对角线 = 子系统内部依赖；非对角线 = 跨子系统集成边界。
               强耦合对 = 拆分风险点；最弱耦合对 = 潜在子系统拆分候选。
             </span>

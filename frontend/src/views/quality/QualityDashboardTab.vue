@@ -4,7 +4,7 @@
       <el-col :span="6"><el-card shadow="never"><el-statistic title="30天合格率" :value="`${dash.pass_rate_30d || 0}%`" /></el-card></el-col>
       <el-col :span="6"><el-card shadow="never"><el-statistic title="未关闭NCR" :value="dash.ncr_open || 0"><template #suffix><span class="danger-suffix">个</span></template></el-statistic></el-card></el-col>
       <el-col :span="6"><el-card shadow="never"><el-statistic title="CAPA开放" :value="dash.capa_open || 0" /></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never"><el-statistic title="CAPA逾期" :value="dash.capa_overdue || 0"><template #suffix><span class="warning-suffix">⚠</span></template></el-statistic></el-card></el-col>
+      <el-col :span="6"><el-card shadow="never"><el-statistic title="CAPA逾期" :value="dash.capa_overdue || 0"><template #suffix><span class="warning-suffix"><el-icon><Warning /></el-icon></span></template></el-statistic></el-card></el-col>
     </el-row>
 
     <el-row :gutter="12">
@@ -29,7 +29,7 @@
           </el-table>
           <div class="spc-summary">
             监控节点: {{ spcDash.monitored_nodes_24h || 0 }} | 未确认报警:
-            <span :style="{color:(spcDash.unacknowledged || 0)>0?'#f56c6c':'#67c23a'}">{{ spcDash.unacknowledged || 0 }}</span>
+            <span :style="{color:(spcDash.unacknowledged || 0)>0?'var(--el-color-danger)':'var(--el-color-success)'}">{{ spcDash.unacknowledged || 0 }}</span>
           </div>
         </el-card>
       </el-col>
@@ -46,7 +46,7 @@ defineProps<{
 
 <style scoped>
 .dashboard-row{margin-bottom:12px}
-.danger-suffix{color:#f56c6c;font-size:14px}
-.warning-suffix{color:#e6a23c;font-size:14px}
-.spc-summary{margin-top:8px;color:#909399;font-size:12px}
+.danger-suffix{color:var(--el-color-danger);font-size:14px}
+.warning-suffix{color:var(--el-color-warning);font-size:14px}
+.spc-summary{margin-top:8px;color:var(--el-color-info);font-size:12px}
 </style>

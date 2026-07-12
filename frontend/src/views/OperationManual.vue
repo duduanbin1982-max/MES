@@ -236,7 +236,7 @@ onMounted(loadManual)
   padding: 20px;
   background:
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 32%),
-    linear-gradient(135deg, #f8fafc 0%, #eff6ff 52%, #f8fafc 100%);
+    linear-gradient(135deg, var(--color-background) 0%, #eff6ff 52%, var(--color-background) 100%);
 }
 
 .manual-hero {
@@ -248,7 +248,7 @@ onMounted(loadManual)
   padding: 24px;
   border-radius: 22px;
   color: white;
-  background: linear-gradient(120deg, #0f172a, #1e40af);
+  background: linear-gradient(120deg, var(--color-bg-darker), #1e40af);
   box-shadow: 0 18px 45px rgba(30, 64, 175, 0.16);
 }
 
@@ -269,7 +269,7 @@ onMounted(loadManual)
 .manual-hero p {
   max-width: 760px;
   margin: 0;
-  color: #dbeafe;
+  color: var(--color-info-bg);
   line-height: 1.7;
 }
 
@@ -297,7 +297,7 @@ onMounted(loadManual)
   max-height: calc(100vh - 96px);
   overflow: auto;
   padding: 14px;
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--color-info-bg);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
@@ -305,7 +305,7 @@ onMounted(loadManual)
 
 .toc-title {
   margin-bottom: 10px;
-  color: #0f172a;
+  color: var(--color-bg-darker);
   font-weight: 900;
 }
 
@@ -315,7 +315,7 @@ onMounted(loadManual)
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: #334155;
+  color: var(--color-text);
   cursor: pointer;
   padding: 7px 8px;
   text-align: left;
@@ -341,12 +341,12 @@ onMounted(loadManual)
 
 .toc-level-3 {
   padding-left: 28px;
-  color: #64748b;
+  color: var(--color-primary);
   font-size: 12px;
 }
 
 .manual-card {
-  border: 1px solid #dbeafe;
+  border: 1px solid var(--color-info-bg);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
@@ -357,14 +357,14 @@ onMounted(loadManual)
   justify-content: space-between;
   gap: 16px;
   padding: 14px 20px;
-  border-bottom: 1px solid #e2e8f0;
-  color: #475569;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
   font-size: 13px;
 }
 
 .manual-content {
   padding: 12px 24px 32px;
-  color: #0f172a;
+  color: var(--color-bg-darker);
   line-height: 1.78;
 }
 
@@ -373,13 +373,13 @@ onMounted(loadManual)
 .manual-content :deep(h3),
 .manual-content :deep(h4) {
   scroll-margin-top: 18px;
-  color: #0f172a;
+  color: var(--color-bg-darker);
   letter-spacing: -0.02em;
 }
 
 .manual-content :deep(h1) {
   font-size: 30px;
-  border-bottom: 1px solid #dbeafe;
+  border-bottom: 1px solid var(--color-info-bg);
   padding-bottom: 12px;
 }
 
@@ -395,7 +395,7 @@ onMounted(loadManual)
 
 .manual-content :deep(p),
 .manual-content :deep(li) {
-  color: #334155;
+  color: var(--color-text);
 }
 
 .manual-content :deep(code) {
@@ -409,8 +409,8 @@ onMounted(loadManual)
 .manual-content :deep(pre) {
   overflow: auto;
   border-radius: 14px;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--color-bg-darker);
+  color: var(--color-border);
   padding: 14px;
 }
 
@@ -422,8 +422,8 @@ onMounted(loadManual)
 
 .manual-content :deep(blockquote) {
   margin: 12px 0;
-  border-left: 4px solid #f97316;
-  background: #fff7ed;
+  border-left: 4px solid var(--color-cta);
+  background: var(--el-color-white)7ed;
   color: #9a3412;
   padding: 10px 12px;
 }
@@ -431,7 +431,7 @@ onMounted(loadManual)
 .manual-content :deep(.table-wrap) {
   overflow-x: auto;
   margin: 14px 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
 }
 
@@ -449,7 +449,7 @@ onMounted(loadManual)
 
 .manual-content :deep(th),
 .manual-content :deep(td) {
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--color-border);
   padding: 9px 10px;
   text-align: left;
   vertical-align: top;

@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">🔧 现场服务</div>
+      <div class="page-title"><el-icon><Tools /></el-icon> 现场服务</div>
     </div>
 
     <!-- Overdue Alert Card -->
@@ -10,10 +10,10 @@
         <el-card shadow="hover" :body-style="{ padding: '16px' }">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div>
-              <div style="font-size:13px;color:#909399">逾期维保</div>
-              <div style="font-size:28px;font-weight:700;color:#f56c6c">{{ overdueCount }}</div>
+              <div style="font-size:13px;color:var(--el-color-info)">逾期维保</div>
+              <div style="font-size:28px;font-weight:700;color:var(--el-color-danger)">{{ overdueCount }}</div>
             </div>
-            <el-icon :size="36" color="#f56c6c"><svg viewBox="0 0 1024 1024"><path d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896zm0 64a384 384 0 1 0 0 768 384 384 0 0 0 0-768zm0 512a64 64 0 1 1 0 128 64 64 0 0 1 0-128zm0-384a64 64 0 0 1 64 64v192a64 64 0 0 1-128 0V320a64 64 0 0 1 64-64z" fill="currentColor"/></svg></el-icon>
+            <el-icon :size="36" color="var(--el-color-danger)"><svg viewBox="0 0 1024 1024"><path d="M512 64a448 448 0 1 1 0 896 448 448 0 0 1 0-896zm0 64a384 384 0 1 0 0 768 384 384 0 0 0 0-768zm0 512a64 64 0 1 1 0 128 64 64 0 0 1 0-128zm0-384a64 64 0 0 1 64 64v192a64 64 0 0 1-128 0V320a64 64 0 0 1 64-64z" fill="currentColor"/></svg></el-icon>
           </div>
         </el-card>
       </el-col>
@@ -44,7 +44,7 @@
           <el-table-column prop="last_done" label="上次执行" width="110" />
           <el-table-column prop="next_due" label="下次到期" width="110">
             <template #default="{ row }">
-              <span :style="{ color: isOverdue(row.next_due) ? '#f56c6c' : '', fontWeight: isOverdue(row.next_due) ? '600' : '' }">
+              <span :style="{ color: isOverdue(row.next_due) ? 'var(--el-color-danger)' : '', fontWeight: isOverdue(row.next_due) ? '600' : '' }">
                 {{ row.next_due }}
               </span>
             </template>
@@ -156,7 +156,7 @@
           <el-table-column prop="material_name" label="物料名称" min-width="160" />
           <el-table-column label="当前库存" width="110" align="center">
             <template #default="{ row }">
-              <span :style="{ color: row.current_stock <= row.min_stock ? '#f56c6c' : '', fontWeight: row.current_stock <= row.min_stock ? '700' : '' }">
+              <span :style="{ color: row.current_stock <= row.min_stock ? 'var(--el-color-danger)' : '', fontWeight: row.current_stock <= row.min_stock ? '700' : '' }">
                 {{ row.current_stock }}
               </span>
             </template>
@@ -165,7 +165,7 @@
           <el-table-column label="预警" width="70" align="center">
             <template #default="{ row }">
               <el-badge v-if="row.current_stock <= row.min_stock" value="!" type="danger" />
-              <span v-else style="color:#67c23a">正常</span>
+              <span v-else style="color:var(--el-color-success)">正常</span>
             </template>
           </el-table-column>
           <el-table-column prop="storage_location" label="库位" width="100" />

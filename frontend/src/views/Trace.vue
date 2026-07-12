@@ -1,5 +1,5 @@
 <template>
-  <div class="page"><div class="page-header"><div class="page-title">🔍 端到端追溯</div></div>
+  <div class="page"><div class="page-header"><div class="page-title"><el-icon><Search /></el-icon> 端到端追溯</div></div>
   <el-tabs v-model="tab">
     <!-- 正向追溯: 物料→工单→设备 -->
     <el-tab-pane label="正向追溯 (物料→设备)" name="forward">
@@ -72,11 +72,11 @@
       </div>
             <div v-if="bw.result?.materials_tree?.length" style="margin-top:12px">
         <b>物料树:</b>
-        <el-tree :data="bw.result.materials_tree" :props="{children:'children',label:'label'}" node-key="id" style="margin-top:8px;background:#fafafa;padding:8px;border-radius:4px">
+        <el-tree :data="bw.result.materials_tree" :props="{children:'children',label:'label'}" node-key="id" style="margin-top:8px;background:var(--el-bg-color);padding:8px;border-radius:4px">
           <template #default="{data}">
             <span style="display:flex;align-items:center;gap:8px">
               <span>{{ data.label }}</span>
-              <span v-if="data.lot_no" style="color:#909399;font-size:11px">{{ data.lot_no }}</span>
+              <span v-if="data.lot_no" style="color:var(--el-color-info);font-size:11px">{{ data.lot_no }}</span>
               <el-tag v-if="data.qc_result" :type="data.qc_result==='pass'?'success':'danger'" size="small">{{ data.qc_result==='pass'?'OK':'NG' }}</el-tag>
             </span>
           </template>
@@ -102,9 +102,9 @@
           <template #default="{node,data}">
             <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-weight:500">{{ data.name || data.label }}</span>
-              <span v-if="data.material_code" style="color:#909399;font-size:12px">{{ data.material_code }}</span>
-              <span v-if="data.lot_no" style="color:#606266;font-size:12px">批次:{{ data.lot_no }}</span>
-              <span v-if="data.supplier" style="color:#909399;font-size:11px">{{ data.supplier }}</span>
+              <span v-if="data.material_code" style="color:var(--el-color-info);font-size:12px">{{ data.material_code }}</span>
+              <span v-if="data.lot_no" style="color:var(--el-text-color-regular);font-size:12px">批次:{{ data.lot_no }}</span>
+              <span v-if="data.supplier" style="color:var(--el-color-info);font-size:11px">{{ data.supplier }}</span>
               <el-tag v-if="data.qc_result" :type="data.qc_result==='pass'?'success':data.qc_result==='fail'?'danger':'warning'" size="small">{{ data.qc_result==='pass'?'合格':data.qc_result==='fail'?'不合格':'待检' }}</el-tag>
             </span>
           </template>
@@ -139,10 +139,10 @@
         <el-button v-if="certData" @click="printCertificate" type="primary">打印证书</el-button>
       </div>
 
-      <div v-if="certData" id="certificate-print-area" style="background:#fff;border:2px solid #303133;padding:24px;max-width:800px">
+      <div v-if="certData" id="certificate-print-area" style="background:var(--el-color-white);border:2px solid var(--el-text-color-primary);padding:24px;max-width:800px">
         <div style="text-align:center;margin-bottom:20px">
           <h2 style="margin:0">产品质量追溯证书</h2>
-          <p style="color:#909399;margin:4px 0">Quality Traceability Certificate</p>
+          <p style="color:var(--el-color-info);margin:4px 0">Quality Traceability Certificate</p>
         </div>
         <el-descriptions :column="2" border size="small" style="margin-bottom:16px">
           <el-descriptions-item label="设备编码">{{ certData.instance_code }}</el-descriptions-item>
@@ -165,7 +165,7 @@
         </el-table>
 
         <h4 style="margin:16px 0 8px">质检总结</h4>
-        <p style="color:#606266;line-height:1.6">{{ certData.qc_summary || '所有关键物料已通过入厂检验，生产过程符合工艺规范。' }}</p>
+        <p style="color:var(--el-text-color-regular);line-height:1.6">{{ certData.qc_summary || '所有关键物料已通过入厂检验，生产过程符合工艺规范。' }}</p>
 
         <div style="margin-top:20px;display:flex;justify-content:space-between">
           <div><b>质检员:</b> {{ (certData.inspectors || []).join(', ') || '-' }}</div>

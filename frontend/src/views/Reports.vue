@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📊 报表中心</div>
+      <div class="page-title"><el-icon><DataAnalysis /></el-icon> 报表中心</div>
     </div>
 
     <el-tabs v-model="tab">
@@ -146,7 +146,7 @@
               <el-table v-if="histDetail.output_data.rows" :data="histDetail.output_data.rows" stripe size="small" max-height="350" style="margin-top:8px">
                 <el-table-column v-for="col in (histDetail.output_data.columns||[])" :key="col" :prop="col" :label="col" min-width="120" show-overflow-tooltip />
               </el-table>
-              <pre v-else style="max-height:300px;overflow:auto;background:#f5f7fa;padding:10px;border-radius:4px">{{ JSON.stringify(histDetail.output_data, null, 2) }}</pre>
+              <pre v-else style="max-height:300px;overflow:auto;background:var(--el-fill-color-light);padding:10px;border-radius:4px">{{ JSON.stringify(histDetail.output_data, null, 2) }}</pre>
             </div>
           </div>
         </el-dialog>
@@ -324,7 +324,7 @@ onMounted(async () => {
 .page-header{margin-bottom:16px}
 .page-title{font-size:20px;font-weight:600}
 .tb{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
-.mini-stat{background:#f5f7fa;border-radius:6px;padding:8px 14px;text-align:center;min-width:80px}
-.mini-stat-label{display:block;font-size:12px;color:#909399}
-.mini-stat-value{display:block;font-size:18px;font-weight:600;color:#303133;margin-top:2px}
+.mini-stat{background:var(--el-fill-color-light);border-radius:6px;padding:8px 14px;text-align:center;min-width:80px}
+.mini-stat-label{display:block;font-size:12px;color:var(--el-color-info)}
+.mini-stat-value{display:block;font-size:18px;font-weight:600;color:var(--el-text-color-primary);margin-top:2px}
 </style>

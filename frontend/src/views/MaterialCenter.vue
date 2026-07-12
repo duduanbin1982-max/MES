@@ -1,38 +1,38 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📦 物料中心</div>
+      <div class="page-title"><el-icon><Box /></el-icon> 物料中心</div>
       <el-button @click="refresh">刷新</el-button>
     </div>
     <el-alert v-if="data.alerts.value.length" type="error" :closable="false" style="margin-bottom: 12px" show-icon>
-      ⚠ {{ data.alerts.value.length }} 项物料低于安全库存: {{ data.alerts.value.slice(0, 3).map(a => a.material_code).join('、') }}{{ data.alerts.value.length > 3 ? ` 等 ${data.alerts.value.length} 项` : '' }}
+      <el-icon><Warning /></el-icon> {{ data.alerts.value.length }} 项物料低于安全库存: {{ data.alerts.value.slice(0, 3).map(a => a.material_code).join('、') }}{{ data.alerts.value.length > 3 ? ` 等 ${data.alerts.value.length} 项` : '' }}
     </el-alert>
 
     <el-tabs v-model="activeTab" type="border-card">
-      <el-tab-pane name="materials"><template #label><span>📋 物料主数据</span></template>
+      <el-tab-pane name="materials"><template #label><span><el-icon><Document /></el-icon> 物料主数据</span></template>
         <TabMaterials v-if="activeTab === 'materials'" :tab="activeTab" />
       </el-tab-pane>
       <el-tab-pane name="key"><template #label><span>⭐ 关键外购件</span></template>
         <TabKey v-if="activeTab === 'key'" :tab="activeTab" />
       </el-tab-pane>
-      <el-tab-pane name="long"><template #label><span>⚠️ 长交期预警 (≥12 周)</span></template>
+      <el-tab-pane name="long"><template #label><span><el-icon><Warning /></el-icon> 长交期预警 (≥12 周)</span></template>
         <TabLong v-if="activeTab === 'long'" :tab="activeTab" />
       </el-tab-pane>
       <el-tab-pane name="inv">
         <template #label>
-          <span>🗄️ 库存清单</span>
+          <span><el-icon><Files(orCoin) /></el-icon> 库存清单</span>
           <el-badge v-if="data.alerts.value.length" :value="data.alerts.value.length" type="danger" :max="99" style="margin-left: 6px" />
         </template>
         <TabInv v-if="activeTab === 'inv' || activeTab === 'mov' || activeTab === 'ops'" :inv="data.inv.value" @open-receive="dlgReceive = true" @open-allocate="dlgAllocate = true" @open-release="dlgRelease = true" @open-batch="dlgBatch = true" @open-detail="onDetail" @open-split="onSplit" @open-merge="onMerge" />
       </el-tab-pane>
       <el-tab-pane :name="'mov'">
-        <template #label><span>📊 移动记录{{ data.movTotal.value > 0 ? ` (${data.movTotal.value})` : '' }}</span></template>
+        <template #label><span><el-icon><DataAnalysis /></el-icon> 移动记录{{ data.movTotal.value > 0 ? ` (${data.movTotal.value})` : '' }}</span></template>
         <TabMov v-if="activeTab === 'mov'" :tab="activeTab" />
       </el-tab-pane>
-      <el-tab-pane name="ops"><template #label><span>✍️ 操作</span></template>
+      <el-tab-pane name="ops"><template #label><span><el-icon><Edit /></el-icon> 操作</span></template>
         <TabOps v-if="activeTab === 'ops'" :tab="activeTab" @refresh="refresh" />
       </el-tab-pane>
-      <el-tab-pane name="import"><template #label><span>📥 导入校验</span></template>
+      <el-tab-pane name="import"><template #label><span><el-icon><Download /></el-icon> 导入校验</span></template>
         <TabImport v-if="activeTab === 'import'" :tab="activeTab" />
       </el-tab-pane>
     </el-tabs>

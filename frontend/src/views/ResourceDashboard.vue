@@ -136,7 +136,7 @@
             </el-table-column>
             <el-table-column label="占用" width="105">
               <template #default="{ row }">
-                <el-progress :percentage="row.utilization || 0" :stroke-width="6" :color="row.utilization >= 100 ? '#f56c6c' : '#67c23a'">
+                <el-progress :percentage="row.utilization || 0" :stroke-width="6" :color="row.utilization >= 100 ? 'var(--el-color-danger)' : 'var(--el-color-success)'">
                   <span style="font-size: 11px">{{ row.assigned_count ?? 0 }}/{{ row.max_workers }}</span>
                 </el-progress>
               </template>
@@ -403,8 +403,8 @@ function stageTagType(stage: string) {
   return map[stage] || 'info'
 }
 function progressColor(stage: string) {
-  const map: Record<string, string> = { manufacturing: '#409eff', assembly: '#409eff', commissioning: '#e6a23c', delivered: '#67c23a', delayed: '#f56c6c' }
-  return map[stage] || '#409eff'
+  const map: Record<string, string> = { manufacturing: 'var(--el-color-primary)', assembly: 'var(--el-color-primary)', commissioning: 'var(--el-color-warning)', delivered: 'var(--el-color-success)', delayed: 'var(--el-color-danger)' }
+  return map[stage] || 'var(--el-color-primary)'
 }
 
 function openWorkerDialog(row: any) {
@@ -501,20 +501,20 @@ onMounted(loadAll)
 .page-subtitle { color: var(--el-text-color-secondary); font-size: 13px; margin-top: 4px; }
 .card-header { display: flex; align-items: center; justify-content: space-between; }
 .stat-card { text-align: center; padding: 8px 0; }
-.stat-label, .type-title { font-size: 13px; color: #909399; margin-bottom: 6px; }
+.stat-label, .type-title { font-size: 13px; color: var(--el-color-info); margin-bottom: 6px; }
 .stat-value, .type-value { font-size: 28px; font-weight: bold; line-height: 1.3; }
-.stat-sub, .type-sub { font-size: 11px; color: #c0c4cc; margin-top: 4px; }
+.stat-sub, .type-sub { font-size: 11px; color: var(--el-text-color-placeholder); margin-top: 4px; }
 .kpi-card, .type-card { border-top: 3px solid; }
-.kpi-green { border-top-color: #67c23a; }
-.kpi-orange { border-top-color: #e6a23c; }
-.kpi-blue { border-top-color: #409eff; }
-.kpi-purple { border-top-color: #9b59b6; }
-.type-card { border-top-color: #409eff; text-align: center; }
+.kpi-green { border-top-color: var(--el-color-success); }
+.kpi-orange { border-top-color: var(--el-color-warning); }
+.kpi-blue { border-top-color: var(--el-color-primary); }
+.kpi-purple { border-top-color: var(--color-purple); }
+.type-card { border-top-color: var(--el-color-primary); text-align: center; }
 .equipment-grid { display: grid; grid-template-columns: 1fr; gap: 10px; max-height: 520px; overflow-y: auto; }
 .equipment-card { cursor: default; }
 .eq-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .eq-code { font-weight: 600; font-size: 14px; }
-.eq-name { font-size: 12px; color: #909399; }
+.eq-name { font-size: 12px; color: var(--el-color-info); }
 .section-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
-.text-muted { color: #c0c4cc; }
+.text-muted { color: var(--el-text-color-placeholder); }
 </style>

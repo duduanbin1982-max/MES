@@ -11,9 +11,9 @@
         <el-descriptions-item label="炉号">{{ lotDetail.heat_no || '-' }}</el-descriptions-item>
         <el-descriptions-item label="证书号">{{ lotDetail.certificate_no || '-' }}</el-descriptions-item>
         <el-descriptions-item label="到货日期">{{ lotDetail.received_date || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="总库存"><strong style="color: #409eff">{{ lotDetail.inventory_total }}</strong></el-descriptions-item>
+        <el-descriptions-item label="总库存"><strong style="color: var(--el-color-primary)">{{ lotDetail.inventory_total }}</strong></el-descriptions-item>
       </el-descriptions>
-      <h4 style="margin-top: 16px">📍 各库位库存</h4>
+      <h4 style="margin-top: 16px"><el-icon><Location /></el-icon> 各库位库存</h4>
       <el-table :data="lotDetail.inventory" size="small" border>
         <el-table-column prop="location" label="库位" />
         <el-table-column prop="quantity" label="数量" align="right" />
@@ -25,7 +25,7 @@
         </el-table-column>
         <el-table-column prop="last_updated" label="更新" width="170" />
       </el-table>
-      <h4 style="margin-top: 16px">📊 移动汇总</h4>
+      <h4 style="margin-top: 16px"><el-icon><DataAnalysis /></el-icon> 移动汇总</h4>
       <el-table :data="movStatRows" size="small" border>
         <el-table-column prop="type_label" label="类型" />
         <el-table-column prop="qty" label="累计数量" align="right" />

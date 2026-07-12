@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <div class="page-title">🔑 关键件管理</div>
+        <div class="page-title"><el-icon><Key /></el-icon> 关键件管理</div>
         <div class="page-subtitle">主轴承、刀盘、液压系统等关键件的监造过程、资质证书与追溯</div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -14,17 +14,17 @@
     </div>
 
     <el-row :gutter="12" style="margin-bottom:12px">
-      <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num" style="color:#f56c6c">{{ data.overview.high_risk }}</div><div class="stat-label">高风险件</div></el-card></el-col>
+      <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num" style="color:var(--el-color-danger)">{{ data.overview.high_risk }}</div><div class="stat-label">高风险件</div></el-card></el-col>
       <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num">{{ data.overview.total_parts }}</div><div class="stat-label">关键件总数</div></el-card></el-col>
-      <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num" style="color:#409eff">{{ data.overview.total_certs }}</div><div class="stat-label">资质证书</div></el-card></el-col>
+      <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num" style="color:var(--el-color-primary)">{{ data.overview.total_certs }}</div><div class="stat-label">资质证书</div></el-card></el-col>
       <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num">{{ data.overview.total_logs }}</div><div class="stat-label">监造记录</div></el-card></el-col>
-      <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num" :style="{color: data.overview.pending_checklists?'#e6a23c':''}">{{ data.overview.pending_checklists }}</div><div class="stat-label">待验收</div></el-card></el-col>
+      <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num" :style="{color: data.overview.pending_checklists?'var(--el-color-warning)':''}">{{ data.overview.pending_checklists }}</div><div class="stat-label">待验收</div></el-card></el-col>
     </el-row>
 
     <el-tabs v-model="tab" type="border-card">
       <!-- Parts List -->
       <el-tab-pane name="parts">
-        <template #label>📦 关键件清单</template>
+        <template #label><el-icon><Box /></el-icon> 关键件清单</template>
         <el-table :data="data.parts" size="small" stripe max-height="450">
           <el-table-column prop="component_type" label="部件类型" width="140" />
           <el-table-column prop="material_name" label="物料名称" min-width="140" />
@@ -48,7 +48,7 @@
 
       <!-- Certificates -->
       <el-tab-pane name="certs">
-        <template #label>📜 资质证书</template>
+        <template #label><el-icon><Memo /></el-icon> 资质证书</template>
         <div style="margin-bottom:10px"><el-button type="primary" @click="openCertDialog">绑定已签发证书</el-button></div>
         <el-table :data="data.certs" size="small" stripe max-height="450">
           <el-table-column prop="component_type" label="部件" width="120" />
@@ -56,13 +56,13 @@
           <el-table-column prop="cert_no" label="证书编号" width="160" />
           <el-table-column prop="issued_by" label="签发机构" width="130" />
           <el-table-column prop="issue_date" label="签发日期" width="110" />
-          <el-table-column prop="expiry_date" label="到期日" width="110"><template #default="{row}"><span :style="{color: isExpired(row.expiry_date)?'#f56c6c':''}">{{ row.expiry_date||'永久' }}</span></template></el-table-column>
+          <el-table-column prop="expiry_date" label="到期日" width="110"><template #default="{row}"><span :style="{color: isExpired(row.expiry_date)?'var(--el-color-danger)':''}">{{ row.expiry_date||'永久' }}</span></template></el-table-column>
         </el-table>
       </el-tab-pane>
 
       <!-- Supervision Logs -->
       <el-tab-pane name="supervision">
-        <template #label>🔍 监造日志</template>
+        <template #label><el-icon><Search /></el-icon> 监造日志</template>
         <el-table :data="data.logs" size="small" stripe max-height="450">
           <el-table-column prop="instance_name" label="装备" width="150" />
           <el-table-column prop="component_type" label="部件" width="100" />
@@ -76,7 +76,7 @@
 
       <!-- Acceptance Checklists -->
       <el-tab-pane name="acceptance">
-        <template #label>✅ 验收清单</template>
+        <template #label><el-icon><CircleCheck /></el-icon> 验收清单</template>
         <el-table :data="data.checklists" size="small" stripe max-height="450">
           <el-table-column prop="instance_name" label="装备" width="150" />
           <el-table-column prop="checklist_name" label="名称" min-width="180" />
@@ -153,8 +153,8 @@ onMounted(loadAll)
 .page { padding: 16px; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .page-title { font-size: 20px; font-weight: 700; }
-.page-subtitle { color: #667085; margin-top: 4px; font-size: 13px; }
+.page-subtitle { color: var(--color-text-muted); margin-top: 4px; font-size: 13px; }
 .stat-card { text-align: center; }
-.stat-num { font-size: 28px; font-weight: 700; color: #303133; }
-.stat-label { font-size: 13px; color: #909399; margin-top: 4px; }
+.stat-num { font-size: 28px; font-weight: 700; color: var(--el-text-color-primary); }
+.stat-label { font-size: 13px; color: var(--el-color-info); margin-top: 4px; }
 </style>

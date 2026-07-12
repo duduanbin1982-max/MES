@@ -2,7 +2,7 @@
   <el-card shadow="never">
     <template #header>
       <div class="head">
-        <strong>📥 Excel/CSV 导入与一物一码校验</strong>
+        <strong><el-icon><Download /></el-icon> Excel/CSV 导入与一物一码校验</strong>
         <div>
           <el-button size="small" @click="downloadTemplate">下载 CSV 模板</el-button>
           <el-button size="small" @click="loadDuplicates">一物一码查重</el-button>
@@ -33,8 +33,8 @@
     <el-row :gutter="12" style="margin-bottom: 12px">
       <el-col :span="6"><el-card shadow="never"><el-statistic title="总行数" :value="summary.total || 0" /></el-card></el-col>
       <el-col :span="6"><el-card shadow="never"><el-statistic title="可导入" :value="summary.valid || 0" /></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never"><el-statistic title="错误" :value="summary.invalid || 0"><template #suffix><span style="color:#f56c6c">项</span></template></el-statistic></el-card></el-col>
-      <el-col :span="6"><el-card shadow="never"><el-statistic title="警告" :value="summary.warnings || 0"><template #suffix><span style="color:#e6a23c">项</span></template></el-statistic></el-card></el-col>
+      <el-col :span="6"><el-card shadow="never"><el-statistic title="错误" :value="summary.invalid || 0"><template #suffix><span style="color:var(--el-color-danger)">项</span></template></el-statistic></el-card></el-col>
+      <el-col :span="6"><el-card shadow="never"><el-statistic title="警告" :value="summary.warnings || 0"><template #suffix><span style="color:var(--el-color-warning)">项</span></template></el-statistic></el-card></el-col>
     </el-row>
 
     <el-table v-if="items.length" :data="items" size="small" max-height="360" stripe>

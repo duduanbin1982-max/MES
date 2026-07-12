@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">🔀 多项目资源排程</div>
+      <div class="page-title"><el-icon><Switch /></el-icon> 多项目资源排程</div>
       <div>
         <el-input-number v-model="days" :min="7" :max="90" :step="7" size="small" style="width: 120px; margin-right: 8px" @change="load" />
         <el-button @click="load" type="primary" :loading="loading">刷新</el-button>
@@ -12,11 +12,11 @@
       <el-col :span="6"><div class="stat-card"><div class="stat-label">项目</div><div class="stat-value">{{ summary.instance_count || 0 }}</div></div></el-col>
       <el-col :span="6"><div class="stat-card"><div class="stat-label">总工时</div><div class="stat-value">{{ summary.total_hours || 0 }}h</div></div></el-col>
       <el-col :span="6"><div class="stat-card"><div class="stat-label">工位数</div><div class="stat-value">{{ summary.workstation_count || 0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">冲突</div><div class="stat-value" :style="{color: (summary.conflict_count||0) > 0 ? '#f56c6c' : '#67c23a'}">{{ summary.conflict_count || 0 }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">冲突</div><div class="stat-value" :style="{color: (summary.conflict_count||0) > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)'}">{{ summary.conflict_count || 0 }}</div></div></el-col>
     </el-row>
 
     <el-card style="margin-bottom: 12px">
-      <template #header><span style="font-weight: 500">📊 工位利用率 (TOP 10)</span></template>
+      <template #header><span style="font-weight: 500"><el-icon><DataAnalysis /></el-icon> 工位利用率 (TOP 10)</span></template>
       <el-table :data="workstationUtil.slice(0, 10)" stripe size="small" empty-text="加载中">
         <el-table-column prop="name" label="工位" width="180" />
         <el-table-column prop="total_busy_hours" label="已用工时" width="120" sortable />
@@ -37,7 +37,7 @@
     </el-card>
 
     <el-card style="margin-bottom: 12px">
-      <template #header><span style="font-weight: 500">🏭 各项目占用工位</span></template>
+      <template #header><span style="font-weight: 500"><el-icon><OfficeBuilding /></el-icon> 各项目占用工位</span></template>
       <el-table :data="instanceBreakdown" stripe size="small" empty-text="加载中">
         <el-table-column prop="instance_code" label="项目" width="120" />
         <el-table-column prop="instance_name" label="名称" min-width="160" />
@@ -55,11 +55,11 @@
     <el-card>
       <template #header>
         <div style="display: flex; justify-content: space-between; align-items: center">
-          <span style="font-weight: 500">⚠️ 跨项目冲突 ({{ conflicts.length }})</span>
+          <span style="font-weight: 500"><el-icon><Warning /></el-icon> 跨项目冲突 ({{ conflicts.length }})</span>
           <el-tag v-if="conflicts.length === 0" type="success" size="small">无冲突</el-tag>
         </div>
       </template>
-      <el-table :data="conflicts" stripe size="small" empty-text="✅ 无跨项目冲突">
+      <el-table :data="conflicts" stripe size="small" empty-text="<el-icon><CircleCheck /></el-icon> 无跨项目冲突">
         <el-table-column label="类型" width="140">
           <template #default="{ row }">
             <el-tag :type="row.type === 'cross_instance' ? 'danger' : 'warning'" size="small">
@@ -112,20 +112,20 @@ onMounted(load)
 
 <style scoped>
 .stat-card {
-  background: #fff;
+  background: var(--el-color-white);
   padding: 16px;
   border-radius: 6px;
   text-align: center;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--el-border-color-lighter);
 }
 .stat-label {
   font-size: 12px;
-  color: #909399;
+  color: var(--el-color-info);
   margin-bottom: 6px;
 }
 .stat-value {
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 </style>

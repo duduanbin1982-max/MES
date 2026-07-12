@@ -2,7 +2,7 @@
   <div class="mindmap">
     <div class="mindmap-header" @click="expanded = !expanded">
       <span class="mindmap-toggle">{{ expanded ? '▼' : '▶' }}</span>
-      <span class="mindmap-title">🧠 思维导图视图</span>
+      <span class="mindmap-title"><el-icon><MagicStick /></el-icon> 思维导图视图</span>
       <span class="mindmap-hint">{{ hint }}</span>
       <el-button
         v-if="expanded"

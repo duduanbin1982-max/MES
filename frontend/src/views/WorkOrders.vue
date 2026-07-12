@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📑 工单管理</div>
+      <div class="page-title"><el-icon><Files /></el-icon> 工单管理</div>
       <el-button @click="load">刷新</el-button>
     </div>
 
@@ -60,7 +60,7 @@
             </el-table-column>
             <el-table-column label="操作" width="120" align="center" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" type="primary" link @click="checkKit(row)">📦 齐套</el-button>
+                <el-button size="small" type="primary" link @click="checkKit(row)"><el-icon><Box /></el-icon> 齐套</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -117,7 +117,7 @@
           <el-table-column prop="required_qty" label="需求量" width="80" align="right" />
           <el-table-column prop="available_qty" label="库存" width="80" align="right" />
           <el-table-column prop="shortage" label="缺料" width="80" align="right">
-            <template #default="{row}"><span :style="{color: row.shortage > 0 ? '#f56c6c' : '#67c23a', fontWeight: 'bold'}">{{ row.shortage }}</span></template>
+            <template #default="{row}"><span :style="{color: row.shortage > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)', fontWeight: 'bold'}">{{ row.shortage }}</span></template>
           </el-table-column>
           <el-table-column label="状态" width="80" align="center">
             <template #default="{row}"><el-tag :type="row.shortage > 0 ? 'danger' : 'success'" size="small">{{ row.shortage > 0 ? '缺料' : '充足' }}</el-tag></template>

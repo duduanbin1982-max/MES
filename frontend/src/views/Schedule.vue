@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📅 调度看板</div>
+      <div class="page-title"><el-icon><Calendar /></el-icon> 调度看板</div>
       <el-button @click="load">刷新</el-button>
     </div>
 
@@ -46,7 +46,7 @@
               <template #title>
                 <div style="display: flex; align-items: center; gap: 16px; width: 100%">
                   <span style="font-weight: bold">[{{ eq.instance_code }}] {{ eq.instance_name }}</span>
-                  <span style="font-size: 13px; color: #909399">进度 {{ eq.progress_pct }}%</span>
+                  <span style="font-size: 13px; color: var(--el-color-info)">进度 {{ eq.progress_pct }}%</span>
                   <el-progress :percentage="eq.progress_pct" style="flex: 1; max-width: 300px" :status="eq.progress_pct === 100 ? 'success' : ''" />
                 </div>
               </template>
@@ -79,8 +79,8 @@
                 <el-table-column label="快速操作" width="260" fixed="right">
                   <template #default="{ row }">
                     <el-button size="small" type="primary" @click.stop="nodeAction(row, 'in_progress')" :disabled="row.status === 'completed' || row.status === 'in_progress'">▶ 开始</el-button>
-                    <el-button size="small" type="success" @click.stop="nodeAction(row, 'completed')" :disabled="row.status === 'completed'">✓ 完成</el-button>
-                    <el-button size="small" type="danger" @click.stop="nodeAction(row, 'blocked')" :disabled="row.status === 'blocked'">🚫 阻塞</el-button>
+                    <el-button size="small" type="success" @click.stop="nodeAction(row, 'completed')" :disabled="row.status === 'completed'"><el-icon><Select /></el-icon> 完成</el-button>
+                    <el-button size="small" type="danger" @click.stop="nodeAction(row, 'blocked')" :disabled="row.status === 'blocked'"><el-icon><CircleClose /></el-icon> 阻塞</el-button>
                     <el-button size="small" type="warning" @click.stop="nodeAction(row, 'pending')" :disabled="row.status === 'pending'">⏸ 暂停</el-button>
                   </template>
                 </el-table-column>
@@ -125,7 +125,7 @@
               </el-table-column>
               <el-table-column label="操作" width="160">
                 <template #default="{ row }">
-                  <el-button v-if="row.status !== 'completed'" size="small" type="success" @click="markComplete(row)">✓ 完成</el-button>
+                  <el-button v-if="row.status !== 'completed'" size="small" type="success" @click="markComplete(row)"><el-icon><Select /></el-icon> 完成</el-button>
                   <el-button v-if="row.status === 'pending'" size="small" type="primary" @click="markActive(row)">开始</el-button>
                 </template>
               </el-table-column>
@@ -308,7 +308,7 @@ onMounted(() => {
 
 <style scoped>
 .row-in-progress {
-  background-color: #dbeafe !important;
+  background-color: var(--color-info-bg) !important;
 }
 .row-delayed {
   background-color: #fee2e2 !important;

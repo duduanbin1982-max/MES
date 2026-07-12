@@ -52,5 +52,5 @@ defineEmits<{
 .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .status-select{width:120px}
 .assignee-select{width:150px}
-:deep(.capa-overdue-row){background-color:#fef0f0!important}
+:deep(.capa-overdue-row){background-color:var(--el-color-danger-light-9)!important}
 </style>

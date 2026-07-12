@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📡 IoT 设备监控</div>
+      <div class="page-title"><el-icon><Cellphone /></el-icon> IoT 设备监控</div>
       <div style="display:flex;gap: 8px">
         <el-button type="primary" @click="showAddDevice=true">+ 添加设备</el-button>
         <el-button @click="refreshAll" :loading="loading">刷新</el-button>
@@ -10,10 +10,10 @@
 
     <!-- Dashboard Stats -->
     <el-row :gutter="12" style="margin-bottom:12px">
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">在线设备</div><div class="stat-value" style="color:#67c23a">{{ dash.devices?.online||0 }}</div><div class="stat-sub">/ {{ dash.devices?.total||0 }} 总设备</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">24h读数</div><div class="stat-value" style="color:#409eff">{{ dash.readings_24h||0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">未确认报警</div><div class="stat-value" :style="{color: (dash.unack_alarms||0)>0?'#f56c6c':'#67c23a'}">{{ dash.unack_alarms||0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">配置就绪</div><div class="stat-value" style="color:#909399">{{ dash.configured_devices||0 }}</div><div class="stat-sub">{{ dash.mode==='production'?'生产模式':'模拟模式' }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">在线设备</div><div class="stat-value" style="color:var(--el-color-success)">{{ dash.devices?.online||0 }}</div><div class="stat-sub">/ {{ dash.devices?.total||0 }} 总设备</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">24h读数</div><div class="stat-value" style="color:var(--el-color-primary)">{{ dash.readings_24h||0 }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">未确认报警</div><div class="stat-value" :style="{color: (dash.unack_alarms||0)>0?'var(--el-color-danger)':'var(--el-color-success)'}">{{ dash.unack_alarms||0 }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">配置就绪</div><div class="stat-value" style="color:var(--el-color-info)">{{ dash.configured_devices||0 }}</div><div class="stat-sub">{{ dash.mode==='production'?'生产模式':'模拟模式' }}</div></div></el-col>
     </el-row>
 
     <!-- Device Cards -->
@@ -27,7 +27,7 @@
               <el-tag :type="dev.readiness?.configured?'success':'warning'" size="small">{{ dev.readiness?.configured?'已配置':'待配置' }}</el-tag>
             </div>
           </template>
-          <div style="font-size:12px;color:#909399">
+          <div style="font-size:12px;color:var(--el-color-info)">
             <div>编码: {{ dev.device_code }}</div>
             <div>协议: {{ dev.protocol?.toUpperCase() }} {{ dev.ip_address }}:{{ dev.port }}</div>
             <div>位置: {{ dev.location||'-' }}</div>
@@ -44,7 +44,7 @@
     <el-card v-if="selected" style="margin-bottom:12px">
       <template #header>
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-weight:600">🔍 {{ selected.device_name }} — 数据点与读数</span>
+          <span style="font-weight:600"><el-icon><Search /></el-icon> {{ selected.device_name }} — 数据点与读数</span>
           <div style="display:flex;gap:8px">
             <el-button size="small" @click="showAddPoint=true">+ 添加数据点</el-button>
             <el-button v-if="dash.mode==='simulator'" size="small" type="success" @click="showPushReading=true">模拟采集</el-button>
@@ -60,7 +60,7 @@
         </el-table-column>
         <el-table-column label="最新读数" width="120">
           <template #default="{row}">
-            <span :style="{color:(row.alarm_high&&latestReadings[row.point_code]?.value>row.alarm_high)?'#f56c6c':''}">
+            <span :style="{color:(row.alarm_high&&latestReadings[row.point_code]?.value>row.alarm_high)?'var(--el-color-danger)':''}">
               {{ latestReadings[row.point_code]?.value||'-' }} {{ row.unit }}
             </span>
           </template>
@@ -72,7 +72,7 @@
     <!-- Alarms Panel -->
     <el-card>
       <template #header>
-        <span style="font-weight:600;color:#f56c6c">🚨 报警面板</span>
+        <span style="font-weight:600;color:var(--el-color-danger)"><el-icon><Warning /></el-icon> 报警面板</span>
       </template>
       <el-table :data="alarms" size="small" empty-text="无报警">
         <el-table-column prop="device_code" label="设备" width="120" />
@@ -87,7 +87,7 @@
         <el-table-column label="操作" width="80">
           <template #default="{row}">
             <el-button v-if="!row.acknowledged" size="small" type="primary" @click="ackAlarm(row.id)">确认</el-button>
-            <span v-else style="color:#67c23a;font-size:12px">已确认</span>
+            <span v-else style="color:var(--el-color-success);font-size:12px">已确认</span>
           </template>
         </el-table-column>
       </el-table>
@@ -247,11 +247,11 @@ onMounted(() => {
 .page { padding: 16px }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px }
 .page-title { font-size: 20px; font-weight: 700 }
-.stat-card { background: #f5f7fa; border-radius: 8px; padding: 16px; text-align: center }
-.stat-label { font-size: 12px; color: #909399 }
+.stat-card { background: var(--el-fill-color-light); border-radius: 8px; padding: 16px; text-align: center }
+.stat-label { font-size: 12px; color: var(--el-color-info) }
 .stat-value { font-size: 28px; font-weight: 700; margin: 4px 0 }
-.stat-sub { font-size: 11px; color: #c0c4cc }
-.device-card { cursor: pointer; border-left: 3px solid #dcdfe6 }
-.device-card.online { border-left-color: #67c23a }
-.device-card.offline { border-left-color: #c0c4cc }
+.stat-sub { font-size: 11px; color: var(--el-text-color-placeholder) }
+.device-card { cursor: pointer; border-left: 3px solid var(--el-border-color) }
+.device-card.online { border-left-color: var(--el-color-success) }
+.device-card.offline { border-left-color: var(--el-text-color-placeholder) }
 </style>

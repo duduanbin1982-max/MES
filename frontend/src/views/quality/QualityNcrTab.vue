@@ -70,5 +70,5 @@ defineEmits<{
 <style scoped>
 .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .filter-select{width:120px}
-.muted{color:#909399}
+.muted{color:var(--el-color-info)}
 </style>

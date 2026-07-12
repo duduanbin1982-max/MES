@@ -1,5 +1,5 @@
 <template>
-  <div class="page"><div class="page-header"><div class="page-title">🏗 TBM 非标装备增强</div></div>
+  <div class="page"><div class="page-header"><div class="page-title"><el-icon><Tools /></el-icon> TBM 非标装备增强</div></div>
   <el-tabs v-model="tab" @tab-change="onTab">
     <!-- ===== Tab 1: 关键件管理 ===== -->
     <el-tab-pane label="关键件管理" name="critical">
@@ -22,7 +22,7 @@
             <el-descriptions-item label="供应商">{{cpDetail.part.supplier||'-'}}</el-descriptions-item><el-descriptions-item label="制造标准">{{cpDetail.part.manufacturing_standard||'-'}}</el-descriptions-item>
           </el-descriptions>
           <h4 style="margin:12px 0 8px">资质证书</h4>
-          <el-table :data="cpDetail.certs||[]" size="small" border><el-table-column prop="cert_type" label="类型" width="100"/><el-table-column prop="cert_no" label="编号"/><el-table-column prop="issued_by" label="签发机构" width="120"/><el-table-column prop="issue_date" label="签发日" width="100"/><el-table-column prop="expiry_date" label="到期日" width="100"><template #default="{r}"><span :style="{color:r.expiry_date&&r.expiry_date<today?'#f56c6c':''}">{{r.expiry_date||'-'}}</span></template></el-table-column><el-table-column label="操作" width="60"><template #default="{r}"><el-button size="small" type="danger" link @click="delCert(r)">删</el-button></template></el-table-column></el-table>
+          <el-table :data="cpDetail.certs||[]" size="small" border><el-table-column prop="cert_type" label="类型" width="100"/><el-table-column prop="cert_no" label="编号"/><el-table-column prop="issued_by" label="签发机构" width="120"/><el-table-column prop="issue_date" label="签发日" width="100"/><el-table-column prop="expiry_date" label="到期日" width="100"><template #default="{r}"><span :style="{color:r.expiry_date&&r.expiry_date<today?'var(--el-color-danger)':''}">{{r.expiry_date||'-'}}</span></template></el-table-column><el-table-column label="操作" width="60"><template #default="{r}"><el-button size="small" type="danger" link @click="delCert(r)">删</el-button></template></el-table-column></el-table>
           <el-button size="small" @click="showCertForm=true" style="margin-top:8px">+ 添加证书</el-button>
           <h4 style="margin:12px 0 8px">监造日志</h4>
           <el-table :data="cpDetail.logs||[]" size="small" border max-height="200"><el-table-column prop="log_date" label="日期" width="100"/><el-table-column prop="inspector" label="监造员" width="80"/><el-table-column prop="location" label="地点" width="80"/><el-table-column prop="content" label="内容" min-width="200"/><el-table-column label="状态" width="70"><template #default="{r}"><el-tag :type="r.status==='issue'?'danger':'success'" size="small">{{r.status==='issue'?'异常':'正常'}}</el-tag></template></el-table-column></el-table>
@@ -41,9 +41,9 @@
       <div class="tb"><el-select v-model="ptf.status" placeholder="状态" clearable @change="loadPT" style="width:120px"><el-option label="待交货" value="pending"/><el-option label="已交货" value="delivered"/><el-option label="已取消" value="cancelled"/></el-select><el-button :type="ptf.overdue?'danger':''" @click="ptf.overdue=!ptf.overdue;loadPT()">⏰ 逾期</el-button><el-button type="primary" @click="showPTDlg=true">+ 新增</el-button></div>
       <el-table :data="ptracks" v-loading="ptLoading" size="small" max-height="400">
         <el-table-column prop="item_name" label="物料" min-width="140"/><el-table-column prop="supplier" label="供应商" width="100"/>
-        <el-table-column prop="planned_delivery" label="计划交期" width="110"><template #default="{r}"><span :style="{color:r.planned_delivery&&r.planned_delivery<today&&r.status!=='delivered'?'#f56c6c':''}">{{r.planned_delivery||'-'}}</span></template></el-table-column>
+        <el-table-column prop="planned_delivery" label="计划交期" width="110"><template #default="{r}"><span :style="{color:r.planned_delivery&&r.planned_delivery<today&&r.status!=='delivered'?'var(--el-color-danger)':''}">{{r.planned_delivery||'-'}}</span></template></el-table-column>
         <el-table-column prop="actual_delivery" label="实际交期" width="110"/>
-        <el-table-column label="延期(天)" width="80"><template #default="{r}"><el-tag v-if="r.delay_days>0" type="danger" size="small">{{r.delay_days}}天</el-tag><span v-else style="color:#67c23a">0</span></template></el-table-column>
+        <el-table-column label="延期(天)" width="80"><template #default="{r}"><el-tag v-if="r.delay_days>0" type="danger" size="small">{{r.delay_days}}天</el-tag><span v-else style="color:var(--el-color-success)">0</span></template></el-table-column>
         <el-table-column label="状态" width="80"><template #default="{r}"><el-tag :type="r.status==='delivered'?'success':r.status==='cancelled'?'info':r.delay_days>0?'danger':'warning'" size="small">{{{pending:'待交货',delivered:'已交货',cancelled:'已取消'}[r.status]||r.status}}</el-tag></template></el-table-column>
         <el-table-column label="操作" width="100"><template #default="{r}"><el-button size="small" v-if="r.status!=='delivered'" type="success" @click="markDelivered(r)">交货</el-button></template></el-table-column>
       </el-table>

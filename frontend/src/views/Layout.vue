@@ -11,7 +11,7 @@
         :collapse-transition="false"
         background-color="#001529"
         text-color="#cfd3dc"
-        active-text-color="#409eff"
+        active-text-color="var(--el-color-primary)"
         router
       >
         <el-sub-menu v-for="section in visibleSections" :key="section.key" :index="section.key">
@@ -31,14 +31,14 @@
       <el-header class="top-header">
         <div style="font-size: 16px; font-weight: 500">{{ $route.meta?.title || 'TBM-MES' }}</div>
         <div style="display: flex; align-items: center; gap: 16px">
-          <span :title="`WebSocket: ${wsStatus}`" :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: wsStatus === 'open' ? '#67c23a' : wsStatus === 'connecting' ? '#e6a23c' : '#f56c6c' }"></span>
+          <span :title="`WebSocket: ${wsStatus}`" :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: wsStatus === 'open' ? 'var(--el-color-success)' : wsStatus === 'connecting' ? 'var(--el-color-warning)' : 'var(--el-color-danger)' }"></span>
           <el-button :icon="isDark ? Sunny : Moon" circle size="small" @click="toggleTheme" :title="isDark ? '切换亮色' : '切换暗色'" />
           <router-link to="/help/manual" class="manual-link">操作手册</router-link>
           <router-link to="/scan" class="scan-link">扫码报工</router-link>
           <span class="clock">{{ now }}</span>
           <el-dropdown @command="onCmd" trigger="click">
             <span style="cursor: pointer; display: flex; align-items: center; gap: 6px">
-              <el-avatar :size="28" style="background: #409eff">{{ auth.user?.full_name?.[0] || '?' }}</el-avatar>
+              <el-avatar :size="28" style="background: var(--el-color-primary)">{{ auth.user?.full_name?.[0] || '?' }}</el-avatar>
               <span style="font-size: 13px">{{ auth.user?.full_name || '未登录' }}</span>
               <el-tag size="small">{{ auth.user?.role || '-' }}</el-tag>
             </span>

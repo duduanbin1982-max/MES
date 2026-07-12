@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">💰 成本归集</div>
+      <div class="page-title"><el-icon><Money /></el-icon> 成本归集</div>
       <div>
         <el-select v-model="selectedInstance" placeholder="选择装备实例" style="width: 280px; margin-right: 8px" @change="load">
           <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
@@ -42,15 +42,15 @@
       <!-- 关键件 -->
       <el-card style="margin-bottom: 16px">
         <template #header>
-          <span style="font-weight: 500">🔧 关键件成本 ({{ data.key_components?.count || 0 }} 项)</span>
+          <span style="font-weight: 500"><el-icon><Tools /></el-icon> 关键件成本 ({{ data.key_components?.count || 0 }} 项)</span>
           <el-tag size="small" style="margin-left: 8px" :type="data.project_status==='over_budget'?'danger':data.project_status==='partial'?'warning':'success'">
             {{ {over_budget:'超预算', partial:'部分签约', fully_contracted:'全部签约', no_key_components:'无关键件'}[data.project_status] || data.project_status }}
           </el-tag>
         </template>
         <el-row :gutter="16" style="margin-bottom: 8px">
           <el-col :span="4"><div class="stat-mini"><span class="stat-val">{{ data.key_components?.contract_signed_count || 0 }}</span><span class="stat-lbl">已签约</span></div></el-col>
-          <el-col :span="4"><div class="stat-mini"><span class="stat-val" style="color:#e6a23c">{{ data.key_components?.pending_count || 0 }}</span><span class="stat-lbl">待签约</span></div></el-col>
-          <el-col :span="4"><div class="stat-mini"><span class="stat-val" style="color:#f56c6c">{{ data.key_components?.over_budget_count || 0 }}</span><span class="stat-lbl">超预算</span></div></el-col>
+          <el-col :span="4"><div class="stat-mini"><span class="stat-val" style="color:var(--el-color-warning)">{{ data.key_components?.pending_count || 0 }}</span><span class="stat-lbl">待签约</span></div></el-col>
+          <el-col :span="4"><div class="stat-mini"><span class="stat-val" style="color:var(--el-color-danger)">{{ data.key_components?.over_budget_count || 0 }}</span><span class="stat-lbl">超预算</span></div></el-col>
           <el-col :span="6"><div class="stat-mini"><span class="stat-val">{{ fmtMoney(data.key_components?.estimated_total) }}</span><span class="stat-lbl">估算合计</span></div></el-col>
           <el-col :span="6"><div class="stat-mini"><span class="stat-val">{{ fmtMoney(data.key_components?.actual_total) }}</span><span class="stat-lbl">实际合计</span></div></el-col>
         </el-row>
@@ -58,7 +58,7 @@
 
       <!-- 物料成本 -->
       <el-card style="margin-bottom: 16px">
-        <template #header><span style="font-weight: 500">📦 普通物料成本 ({{ data.materials?.count || 0 }} 项)</span></template>
+        <template #header><span style="font-weight: 500"><el-icon><Box /></el-icon> 普通物料成本 ({{ data.materials?.count || 0 }} 项)</span></template>
         <el-row :gutter="16">
           <el-col :span="8"><div class="stat-mini"><span class="stat-val">{{ fmtMoney(data.materials?.estimated_total) }}</span><span class="stat-lbl">估算合计</span></div></el-col>
           <el-col :span="8"><div class="stat-mini"><span class="stat-val">{{ fmtMoney(data.materials?.actual_total) }}</span><span class="stat-lbl">实际合计</span></div></el-col>
@@ -70,16 +70,16 @@
         <template #header><span style="font-weight: 500">⏱️ 工时成本</span></template>
         <el-row :gutter="16">
           <el-col :span="4"><div class="stat-mini"><span class="stat-val">{{ data.labor?.work_order_count || 0 }}</span><span class="stat-lbl">工单数</span></div></el-col>
-          <el-col :span="4"><div class="stat-mini"><span class="stat-val" style="color:#67c23a">{{ data.labor?.completed_count || 0 }}</span><span class="stat-lbl">已完成</span></div></el-col>
+          <el-col :span="4"><div class="stat-mini"><span class="stat-val" style="color:var(--el-color-success)">{{ data.labor?.completed_count || 0 }}</span><span class="stat-lbl">已完成</span></div></el-col>
           <el-col :span="4"><div class="stat-mini"><span class="stat-val">{{ data.labor?.estimated_hours || 0 }}h</span><span class="stat-lbl">估算工时</span></div></el-col>
           <el-col :span="4"><div class="stat-mini"><span class="stat-val">{{ data.labor?.actual_hours || 0 }}h</span><span class="stat-lbl">实际工时</span></div></el-col>
-          <el-col :span="4"><div class="stat-mini"><span class="stat-val" :style="{color: (data.labor?.hours_diff||0) > 0 ? '#f56c6c' : '#67c23a'}">{{ (data.labor?.hours_diff||0) > 0 ? '+' : '' }}{{ data.labor?.hours_diff || 0 }}h</span><span class="stat-lbl">工时偏差</span></div></el-col>
+          <el-col :span="4"><div class="stat-mini"><span class="stat-val" :style="{color: (data.labor?.hours_diff||0) > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)'}">{{ (data.labor?.hours_diff||0) > 0 ? '+' : '' }}{{ data.labor?.hours_diff || 0 }}h</span><span class="stat-lbl">工时偏差</span></div></el-col>
         </el-row>
       </el-card>
 
       <!-- 合同信息 -->
       <el-card v-if="data.equipment_instance?.contract_no">
-        <template #header><span style="font-weight: 500">📋 合同信息</span></template>
+        <template #header><span style="font-weight: 500"><el-icon><Document /></el-icon> 合同信息</span></template>
         <el-descriptions :column="3" border size="small">
           <el-descriptions-item label="合同号">{{ data.equipment_instance.contract_no }}</el-descriptions-item>
           <el-descriptions-item label="客户">{{ data.equipment_instance.customer_name }}</el-descriptions-item>
@@ -130,5 +130,5 @@ onMounted(loadInstances)
 .page-title{font-size:20px;font-weight:600}
 .stat-mini{text-align:center;padding:8px}
 .stat-val{display:block;font-size:22px;font-weight:600}
-.stat-lbl{display:block;font-size:12px;color:#909399;margin-top:2px}
+.stat-lbl{display:block;font-size:12px;color:var(--el-color-info);margin-top:2px}
 </style>

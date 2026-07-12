@@ -1,7 +1,7 @@
 <template>
   <div class="scan-page">
     <div class="scan-header">
-      <h2 style="margin: 0 0 12px 0">📱 PDA 扫码报工</h2>
+      <h2 style="margin: 0 0 12px 0"><el-icon><Iphone /></el-icon> PDA 扫码报工</h2>
       <el-input
         v-model="code"
         size="large"
@@ -20,9 +20,9 @@
     <!-- 类型提示 -->
     <div v-if="target" class="type-bar">
       <el-tag :type="target.type === 'work_order' ? 'primary' : 'success'" size="large">
-        {{ target.type === 'work_order' ? '📋 工单' : '🔧 工艺节点' }}
+        <template v-if="target.type === 'work_order'"><el-icon><Document /></el-icon> 工单</template><template v-else><el-icon><Tools /></el-icon> 工艺节点</template>
       </el-tag>
-      <span style="margin-left: 12px; color: #606266">{{ target.data?.wo_code || 'PN-' + target.data?.id }}</span>
+      <span style="margin-left: 12px; color: var(--el-text-color-regular)">{{ target.data?.wo_code || 'PN-' + target.data?.id }}</span>
     </div>
 
     <!-- 工单详情 -->
@@ -31,7 +31,7 @@
         <div class="wo-title">
           <div>
             <div style="font-size: 18px; font-weight: 600">{{ target.data.wo_code }}</div>
-            <div style="color: #606266; font-size: 14px; margin-top: 4px">{{ target.data.title }}</div>
+            <div style="color: var(--el-text-color-regular); font-size: 14px; margin-top: 4px">{{ target.data.title }}</div>
           </div>
           <el-tag :type="woTagType(target.data.status)" size="large">{{ target.data.status }}</el-tag>
         </div>
@@ -43,8 +43,8 @@
         </el-descriptions>
 
         <!-- 报工输入区 -->
-        <el-card shadow="never" style="margin-top: 12px; background: #fafafa">
-          <template #header><span style="font-weight: 600">📝 报工信息</span></template>
+        <el-card shadow="never" style="margin-top: 12px; background: var(--el-bg-color)">
+          <template #header><span style="font-weight: 600"><el-icon><Edit /></el-icon> 报工信息</span></template>
           <el-form :model="reportForm" label-width="100px" size="default">
             <el-form-item label="操作员">
               <el-input :model-value="currentUserName" disabled />
@@ -67,8 +67,8 @@
         <div class="action-grid">
           <el-button type="primary" size="large" :disabled="target.data.status === 'in_progress' || target.data.status === 'completed'" @click="doAction('start')">▶ 开始</el-button>
           <el-button type="warning" size="large" :disabled="target.data.status !== 'in_progress'" @click="doAction('pause')">⏸ 暂停</el-button>
-          <el-button type="success" size="large" :disabled="target.data.status === 'completed'" @click="doAction('complete')">✓ 完成</el-button>
-          <el-button type="danger" size="large" @click="showIssue = true">⚠ 异常</el-button>
+          <el-button type="success" size="large" :disabled="target.data.status === 'completed'" @click="doAction('complete')"><el-icon><Select /></el-icon> 完成</el-button>
+          <el-button type="danger" size="large" @click="showIssue = true"><el-icon><Warning /></el-icon> 异常</el-button>
         </div>
       </el-card>
     </div>
@@ -79,7 +79,7 @@
         <div class="wo-title">
           <div>
             <div style="font-size: 18px; font-weight: 600">PN-{{ target.data.id }} · {{ target.data.operation_name }}</div>
-            <div style="color: #606266; font-size: 14px; margin-top: 4px">{{ target.data.material_name || '(总装/上级工序)' }}</div>
+            <div style="color: var(--el-text-color-regular); font-size: 14px; margin-top: 4px">{{ target.data.material_name || '(总装/上级工序)' }}</div>
           </div>
           <el-tag :type="pnTagType(target.data.status)" size="large">{{ target.data.status }}</el-tag>
         </div>
@@ -93,8 +93,8 @@
         </el-descriptions>
 
         <!-- 报工输入区 -->
-        <el-card shadow="never" style="margin-top: 12px; background: #fafafa">
-          <template #header><span style="font-weight: 600">📝 报工信息</span></template>
+        <el-card shadow="never" style="margin-top: 12px; background: var(--el-bg-color)">
+          <template #header><span style="font-weight: 600"><el-icon><Edit /></el-icon> 报工信息</span></template>
           <el-form :model="reportForm" label-width="100px" size="default">
             <el-form-item label="操作员">
               <el-input :model-value="currentUserName" disabled />
@@ -116,9 +116,9 @@
 
         <div class="action-grid">
           <el-button type="primary" size="large" :disabled="target.data.status === 'in_progress' || target.data.status === 'completed'" @click="doAction('start')">▶ 开始</el-button>
-          <el-button type="success" size="large" :disabled="target.data.status === 'completed'" @click="doAction('complete')">✓ 完成</el-button>
-          <el-button type="danger" size="large" @click="doAction('block')">⚠ 卡住</el-button>
-          <el-button type="warning" size="large" @click="showIssue = true">📝 备注</el-button>
+          <el-button type="success" size="large" :disabled="target.data.status === 'completed'" @click="doAction('complete')"><el-icon><Select /></el-icon> 完成</el-button>
+          <el-button type="danger" size="large" @click="doAction('block')"><el-icon><Warning /></el-icon> 卡住</el-button>
+          <el-button type="warning" size="large" @click="showIssue = true"><el-icon><Edit /></el-icon> 备注</el-button>
         </div>
       </el-card>
     </div>
@@ -143,7 +143,7 @@
 
     <el-empty v-else-if="!loading && searched" description="未找到该码" :image-size="80" />
 
-    <el-dialog v-model="showIssue" :title="target?.type === 'work_order' ? '⚠ 上报异常' : '📝 添加备注'" width="90%" max-width="500px">
+    <el-dialog v-model="showIssue" :title="target?.type === 'work_order' ? '<el-icon><Warning /></el-icon> 上报异常' : '<el-icon><Edit /></el-icon> 添加备注'" width="90%" max-width="500px">
       <el-form :model="issueForm" label-width="80px">
         <el-form-item :label="target?.type === 'work_order' ? '问题描述' : '备注内容'" required>
           <el-input v-model="issueForm.notes" type="textarea" :rows="3" />
@@ -238,13 +238,13 @@ const doAction = async (action: string) => {
     ElMessage.success(res.message)
 
     // Show result summary
-    const colorMap: Record<string, string> = { complete: '#67c23a', start: '#409eff', pause: '#e6a23c' }
-    const iconMap: Record<string, string> = { complete: '✅', start: '▶️', pause: '⏸️' }
+    const colorMap: Record<string, string> = { complete: 'var(--el-color-success)', start: 'var(--el-color-primary)', pause: 'var(--el-color-warning)' }
+    const iconMap: Record<string, string> = { complete: '<el-icon><CircleCheck /></el-icon>', start: '▶️', pause: '⏸️' }
     const actionLabelMap: Record<string, string> = { complete: '完成', start: '开始', pause: '暂停' }
     resultSummary.value = {
       title: res.message || '操作成功',
-      icon: iconMap[action] || '📋',
-      color: colorMap[action] || '#409eff',
+      icon: iconMap[action] || '<el-icon><Document /></el-icon>',
+      color: colorMap[action] || 'var(--el-color-primary)',
       action: actionLabelMap[action] || action,
       target_type: target.value.type === 'work_order' ? '工单' : '工艺节点',
       hours: reportForm.hours_worked,
@@ -282,8 +282,8 @@ const submitNote = async () => {
 
 <style scoped>
 .scan-page { padding: 12px; max-width: 600px; margin: 0 auto; }
-.scan-header { background: #fff; padding: 16px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-.type-bar { background: #fff; padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.scan-header { background: var(--el-color-white); padding: 16px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.type-bar { background: var(--el-color-white); padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .wo-card { margin-bottom: 12px; }
 .wo-title { display: flex; justify-content: space-between; align-items: flex-start; }
 .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }

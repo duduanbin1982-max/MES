@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">⚙️ 工艺参数监控 (MESA #8)</div>
+      <div class="page-title"><el-icon><Setting /></el-icon> 工艺参数监控 (MESA #8)</div>
       <div>
         <el-select v-model="selectedInstance" placeholder="选择装备实例" style="width: 240px; margin-right: 8px" @change="loadNodes">
           <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
@@ -40,9 +40,9 @@
           </el-select>
           <el-button size="small" type="primary" @click="runSpc" :loading="spcLoading">运行 SPC 分析</el-button>
           <span v-if="spcResult" style="font-size:13px">
-            Cpk: <b :style="{color:spcResult.capability?.cpk >= 1.33 ? '#67c23a' : spcResult.capability?.cpk >= 1.0 ? '#e6a23c' : '#f56c6c'}">{{ spcResult.capability?.cpk?.toFixed(2) || '—' }}</b>
+            Cpk: <b :style="{color:spcResult.capability?.cpk >= 1.33 ? 'var(--el-color-success)' : spcResult.capability?.cpk >= 1.0 ? 'var(--el-color-warning)' : 'var(--el-color-danger)'}">{{ spcResult.capability?.cpk?.toFixed(2) || '—' }}</b>
             | PpK: <b>{{ spcResult.capability?.ppk?.toFixed(2) || '—' }}</b>
-            | WECO: <b :style="{color:spcResult.weco_alerts?.length ? '#f56c6c' : '#67c23a'}">{{ spcResult.weco_alerts?.length || 0 }} 条</b>
+            | WECO: <b :style="{color:spcResult.weco_alerts?.length ? 'var(--el-color-danger)' : 'var(--el-color-success)'}">{{ spcResult.weco_alerts?.length || 0 }} 条</b>
           </span>
         </div>
       </el-card>
@@ -61,7 +61,7 @@
         </el-table-column>
         <el-table-column label="温度(°C)" width="100" align="right">
           <template #default="{row}">
-            <span :style="{color: row.temperature_c != null && row.temperature_c > 300 ? '#f56c6c' : ''}">{{ row.temperature_c != null ? row.temperature_c : '-' }}</span>
+            <span :style="{color: row.temperature_c != null && row.temperature_c > 300 ? 'var(--el-color-danger)' : ''}">{{ row.temperature_c != null ? row.temperature_c : '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="压力(MPa)" width="100" align="right">
@@ -151,12 +151,12 @@ async function renderTrends() {
           type: "line",
           smooth: true,
           symbol: "none",
-          lineStyle: { width: 1.5, color: "#409eff" },
+          lineStyle: { width: 1.5, color: "var(--el-color-primary)" },
           areaStyle: { color: "rgba(64,158,255,0.1)" },
           markLine: {
             silent: true,
             data: [
-              { type: "average", name: "均值", lineStyle: { color: "#67c23a", type: "dashed" } },
+              { type: "average", name: "均值", lineStyle: { color: "var(--el-color-success)", type: "dashed" } },
             ],
           },
         }],

@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <div class="page-title">🚀 系统初始化向导</div>
+        <div class="page-title"><el-icon><Promotion /></el-icon> 系统初始化向导</div>
         <div class="sub">空白 MES 首日落地：按 8 步把人、机、料、法、图纸、工单准备好。</div>
       </div>
       <div class="header-actions">
@@ -129,9 +129,9 @@ const selectedStep = ref<any | null>(null)
 
 const progressColor = computed(() => {
   const value = status.value.overall || 0
-  if (value >= 85) return '#67c23a'
-  if (value >= 60) return '#e6a23c'
-  return '#f56c6c'
+  if (value >= 85) return 'var(--el-color-success)'
+  if (value >= 60) return 'var(--el-color-warning)'
+  return 'var(--el-color-danger)'
 })
 
 const tagType = (value: string) => ({ done: 'success', partial: 'warning', blocked: 'danger', empty: 'info' } as any)[value] || 'info'
@@ -203,7 +203,7 @@ onMounted(loadStatus)
 .page { padding: 16px 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .page-title { font-size: 20px; font-weight: 700; }
-.sub { color: #667085; margin: 4px 0; font-size: 13px; }
+.sub { color: var(--color-text-muted); margin: 4px 0; font-size: 13px; }
 .header-actions { display: flex; gap: 8px; }
 .summary-card, .flow-card { margin-bottom: 16px; }
 .summary-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }

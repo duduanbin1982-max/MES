@@ -77,7 +77,7 @@
 
     <!-- 校验对话框 -->
     <el-dialog v-model="dlgValidateModel" title="校验结果" width="700px">
-      <el-alert v-if="validateResult?.ok" type="success" :closable="false">✅ 校验通过 ({{ validateResult?.total || 0 }} 节点)</el-alert>
+      <el-alert v-if="validateResult?.ok" type="success" :closable="false"><el-icon><CircleCheck /></el-icon> 校验通过 ({{ validateResult?.total || 0 }} 节点)</el-alert>
       <el-alert v-else type="error" :closable="false">{{ (validateResult?.errors || []).length }} 项错误</el-alert>
       <el-row :gutter="12" style="margin-top: 12px">
         <el-col :span="8"><el-statistic title="健康度" :value="validateResult?.health?.score || 0" /></el-col>
@@ -104,9 +104,9 @@
         <el-button type="primary" @click="emit('compare')" :loading="comparing">对比</el-button>
       </el-form>
       <el-row :gutter="12" v-if="compareResult" style="margin-top: 16px">
-        <el-col :span="8"><el-statistic title="新增" :value="compareResult.added.length" :value-style="{ color: '#67c23a' }" /></el-col>
-        <el-col :span="8"><el-statistic title="删除" :value="compareResult.removed.length" :value-style="{ color: '#f56c6c' }" /></el-col>
-        <el-col :span="8"><el-statistic title="修改" :value="compareResult.changed.length" :value-style="{ color: '#e6a23c' }" /></el-col>
+        <el-col :span="8"><el-statistic title="新增" :value="compareResult.added.length" :value-style="{ color: 'var(--el-color-success)' }" /></el-col>
+        <el-col :span="8"><el-statistic title="删除" :value="compareResult.removed.length" :value-style="{ color: 'var(--el-color-danger)' }" /></el-col>
+        <el-col :span="8"><el-statistic title="修改" :value="compareResult.changed.length" :value-style="{ color: 'var(--el-color-warning)' }" /></el-col>
       </el-row>
     </el-dialog>
 
@@ -279,7 +279,7 @@ function riskOwnerLabel(row: any) {
 </script>
 
 <style scoped>
-.health-title { font-size: 13px; color: #606266; margin-bottom: 8px; }
+.health-title { font-size: 13px; color: var(--el-text-color-regular); margin-bottom: 8px; }
 .health-metric { font-size: 18px; font-weight: 600; line-height: 1.4; }
-.health-sub { font-size: 12px; color: #909399; margin-top: 8px; min-height: 32px; }
+.health-sub { font-size: 12px; color: var(--el-color-info); margin-top: 8px; min-height: 32px; }
 </style>

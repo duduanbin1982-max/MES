@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">🔍 质检管理</div>
+      <div class="page-title"><el-icon><Search /></el-icon> 质检管理</div>
     </div>
 
     <el-tabs v-model="activeTab" type="border-card">
@@ -60,7 +60,7 @@
         />
       </el-tab-pane>
 
-      <el-tab-pane label="📊 质量仪表板" name="dashboard">
+      <el-tab-pane label="<el-icon><DataAnalysis /></el-icon> 质量仪表板" name="dashboard">
         <QualityDashboardTab :dash="dash" :spc-dash="spcDash" />
       </el-tab-pane>
     </el-tabs>

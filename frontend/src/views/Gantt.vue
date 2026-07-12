@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📅 甘特图 + 资源平衡</div>
+      <div class="page-title"><el-icon><Calendar /></el-icon> 甘特图 + 资源平衡</div>
       <div>
         <el-select v-model="selectedInstance" placeholder="选实例" style="width: 240px; margin-right: 8px" @change="loadGantt">
           <el-option v-for="i in instances" :key="i.id" :label="i.instance_code" :value="i.id" />
@@ -19,13 +19,13 @@
         <el-col :span="6"><div class="stat-card" style="text-align:center"><div class="stat-label">项目</div><div class="stat-value" style="font-size: 16px">{{ gantt.instance?.code }}</div></div></el-col>
         <el-col :span="6"><div class="stat-card" style="text-align:center"><div class="stat-label">总工期</div><div class="stat-value">{{ gantt.total_weeks }} 周</div><div class="stat-label" style="font-size: 12px">{{ gantt.total_days }} 天 / {{ gantt.total_hours }}h</div></div></el-col>
         <el-col :span="6"><div class="stat-card" style="text-align:center"><div class="stat-label">开始</div><div class="stat-value" style="font-size: 14px">{{ gantt.project_start }}</div></div></el-col>
-        <el-col :span="6"><div class="stat-card" style="text-align:center"><div class="stat-label">告警</div><div class="stat-value" style="color: #e6a23c">{{ alerts.by_severity?.warning || 0 }}</div><div class="stat-label" style="font-size: 12px">warning</div></div></el-col>
+        <el-col :span="6"><div class="stat-card" style="text-align:center"><div class="stat-label">告警</div><div class="stat-value" style="color: var(--el-color-warning)">{{ alerts.by_severity?.warning || 0 }}</div><div class="stat-label" style="font-size: 12px">warning</div></div></el-col>
       </el-row>
 
       <!-- 甘特图 -->
       <el-card style="margin-bottom: 16px">
         <template #header>
-          <span style="font-weight: 500">📊 嵌套甘特 (按 subsystem 分组, 颜色编码状态)</span>
+          <span style="font-weight: 500"><el-icon><DataAnalysis /></el-icon> 嵌套甘特 (按 subsystem 分组, 颜色编码状态)</span>
         </template>
         <div class="gantt-container">
           <div class="gantt-header">
@@ -57,12 +57,12 @@
       <!-- 告警面板 -->
       <el-card>
         <template #header>
-          <span style="font-weight: 500">🔔 系统告警</span>
+          <span style="font-weight: 500"><el-icon><Bell /></el-icon> 系统告警</span>
         </template>
         <el-row :gutter="16" style="margin-bottom: 12px">
-          <el-col :span="8"><div class="stat-card" style="text-align:center"><div class="stat-label">紧急</div><div class="stat-value" style="color: #f56c6c">{{ alerts.by_severity?.danger || 0 }}</div></div></el-col>
-          <el-col :span="8"><div class="stat-card" style="text-align:center"><div class="stat-label">警告</div><div class="stat-value" style="color: #e6a23c">{{ alerts.by_severity?.warning || 0 }}</div></div></el-col>
-          <el-col :span="8"><div class="stat-card" style="text-align:center"><div class="stat-label">信息</div><div class="stat-value" style="color: #909399">{{ alerts.by_severity?.info || 0 }}</div></div></el-col>
+          <el-col :span="8"><div class="stat-card" style="text-align:center"><div class="stat-label">紧急</div><div class="stat-value" style="color: var(--el-color-danger)">{{ alerts.by_severity?.danger || 0 }}</div></div></el-col>
+          <el-col :span="8"><div class="stat-card" style="text-align:center"><div class="stat-label">警告</div><div class="stat-value" style="color: var(--el-color-warning)">{{ alerts.by_severity?.warning || 0 }}</div></div></el-col>
+          <el-col :span="8"><div class="stat-card" style="text-align:center"><div class="stat-label">信息</div><div class="stat-value" style="color: var(--el-color-info)">{{ alerts.by_severity?.info || 0 }}</div></div></el-col>
         </el-row>
         <el-table :data="alerts.alerts || []" stripe size="small">
           <el-table-column label="级别" width="80">
@@ -125,7 +125,7 @@ const barStyle = (bar: any) => {
     height: (rowHeight - 4) + 'px',
     background: barColor(bar.status),
     borderRadius: '3px',
-    color: '#fff',
+    color: 'var(--el-color-white)',
     fontSize: '11px',
     padding: '0 4px',
     overflow: 'hidden',
@@ -136,10 +136,10 @@ const barStyle = (bar: any) => {
 
 const barColor = (status: string) => {
   const colors: any = {
-    pending: '#909399', ready: '#409eff', in_progress: '#67c23a',
-    completed: '#67c23a', blocked: '#f56c6c', paused: '#e6a23c'
+    pending: 'var(--el-color-info)', ready: 'var(--el-color-primary)', in_progress: 'var(--el-color-success)',
+    completed: 'var(--el-color-success)', blocked: 'var(--el-color-danger)', paused: 'var(--el-color-warning)'
   }
-  return colors[status] || '#909399'
+  return colors[status] || 'var(--el-color-info)'
 }
 
 const loadGantt = async () => {
@@ -182,13 +182,13 @@ onMounted(loadAll)
 <style scoped>
 .gantt-container {
   overflow-x: auto;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 4px;
 }
 .gantt-header {
   display: flex;
-  background: #f5f7fa;
-  border-bottom: 1px solid #ebeef5;
+  background: var(--el-fill-color-light);
+  border-bottom: 1px solid var(--el-border-color-lighter);
   height: 32px;
   position: sticky;
   top: 0;
@@ -197,18 +197,18 @@ onMounted(loadAll)
 .gantt-row-label {
   padding: 6px 8px;
   font-size: 12px;
-  border-right: 1px solid #ebeef5;
+  border-right: 1px solid var(--el-border-color-lighter);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 }
 .gantt-month {
   padding: 6px;
   font-size: 11px;
-  border-right: 1px solid #ebeef5;
+  border-right: 1px solid var(--el-border-color-lighter);
   text-align: center;
-  color: #606266;
+  color: var(--el-text-color-regular);
 }
 .gantt-body {
   max-height: 600px;
@@ -220,7 +220,7 @@ onMounted(loadAll)
 }
 .gantt-timeline-header {
   display: flex;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
 }
 .gantt-bar {
   display: flex;

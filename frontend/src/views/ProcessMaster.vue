@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <div class="page-title">⚙️ 工序 / 岗位配置</div>
+        <div class="page-title"><el-icon><Setting /></el-icon> 工序 / 岗位配置</div>
         <div class="page-subtitle">工序库管“怎么做”，岗位库管“谁能做”，工艺路线引用这里的标准模板。</div>
       </div>
       <el-button @click="loadAll" :loading="loading">刷新</el-button>
@@ -25,7 +25,7 @@
 
     <el-tabs v-model="tab" type="border-card">
       <el-tab-pane label="工序库" name="operations">
-        <template #label>🔧 工序库</template>
+        <template #label><el-icon><Tools /></el-icon> 工序库</template>
         <div class="toolbar">
           <el-input v-model="opKeyword" placeholder="搜索工序编码/名称/分类" clearable style="width: 260px" />
           <el-button type="primary" @click="openOperation()">+ 新建工序</el-button>
@@ -69,7 +69,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="岗位库" name="positions">
-        <template #label>👷 岗位库</template>
+        <template #label><el-icon><UserFilled /></el-icon> 岗位库</template>
         <div class="toolbar">
           <el-input v-model="posKeyword" placeholder="搜索岗位编码/名称/部门" clearable style="width: 260px" />
           <el-button type="primary" @click="openPosition()">+ 新建岗位</el-button>
@@ -99,7 +99,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="派工校验" name="validate">
-        <template #label>✅ 派工校验</template>
+        <template #label><el-icon><CircleCheck /></el-icon> 派工校验</template>
         <el-form :model="validationForm" label-width="100px" style="max-width:680px">
           <el-form-item label="工艺节点ID"><el-input-number v-model="validationForm.process_node_id" :min="1" /></el-form-item>
           <el-form-item label="人员ID"><el-input-number v-model="validationForm.user_id" :min="1" /></el-form-item>
@@ -327,6 +327,6 @@ onMounted(loadAll)
 .page { padding: 16px; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .page-title { font-size: 20px; font-weight: 700; }
-.page-subtitle { color: #667085; margin-top: 4px; }
+.page-subtitle { color: var(--color-text-muted); margin-top: 4px; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
 </style>

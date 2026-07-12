@@ -74,7 +74,7 @@ const filters = reactive({ domain: '', severity: 'all' })
 const severityOptions = [{ label: '全部', value: 'all' }, { label: '严重', value: 'critical' }, { label: '高', value: 'high' }, { label: '预警', value: 'warning' }]
 const domainMap = computed(() => Object.fromEntries(domains.value.map((d) => [d.domain, d.label])))
 
-function scoreColor(score: number) { return score >= 85 ? '#67c23a' : score >= 65 ? '#e6a23c' : '#f56c6c' }
+function scoreColor(score: number) { return score >= 85 ? 'var(--el-color-success)' : score >= 65 ? 'var(--el-color-warning)' : 'var(--el-color-danger)' }
 function severityTag(severity: string) { return severity === 'critical' || severity === 'high' ? 'danger' : severity === 'warning' ? 'warning' : 'info' }
 function severityLabel(severity: string) { return ({ critical: '严重', high: '高', warning: '中', info: '低' } as any)[severity] || severity }
 function domainLabel(domain: string) { return domainMap.value[domain] || domain }

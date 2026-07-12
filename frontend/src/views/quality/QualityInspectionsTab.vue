@@ -2,9 +2,9 @@
   <div>
     <el-row :gutter="16" class="quality-stat-row">
       <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label">总检数</div><div class="stat-value">{{ stats.total || 0 }}</div></div></el-card></el-col>
-      <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label">✓ 通过</div><div class="stat-value pass">{{ stats.pass || 0 }}</div></div></el-card></el-col>
-      <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label">✗ 不通过</div><div class="stat-value fail">{{ stats.fail || 0 }}</div></div></el-card></el-col>
-      <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label">合格率</div><div class="stat-value" :style="{color: (stats.pass_rate||0) >= 95 ? '#67c23a' : '#e6a23c'}">{{ stats.pass_rate || 0 }}%</div></div></el-card></el-col>
+      <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label"><el-icon><Select /></el-icon> 通过</div><div class="stat-value pass">{{ stats.pass || 0 }}</div></div></el-card></el-col>
+      <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label"><el-icon><Close /></el-icon> 不通过</div><div class="stat-value fail">{{ stats.fail || 0 }}</div></div></el-card></el-col>
+      <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label">合格率</div><div class="stat-value" :style="{color: (stats.pass_rate||0) >= 95 ? 'var(--el-color-success)' : 'var(--el-color-warning)'}">{{ stats.pass_rate || 0 }}%</div></div></el-card></el-col>
     </el-row>
     <el-card>
       <div class="toolbar">
@@ -38,7 +38,7 @@
           <template #default="{ row }"><el-tag size="small" :type="typeColor(row.inspection_type)">{{ typeLabel(row.inspection_type) }}</el-tag></template>
         </el-table-column>
         <el-table-column label="结果" width="100">
-          <template #default="{ row }"><el-tag :type="row.result === 'pass' ? 'success' : 'danger'" size="small">{{ row.result === 'pass' ? '✓ 通过' : '✗ 不通过' }}</el-tag></template>
+          <template #default="{ row }"><el-tag :type="row.result === 'pass' ? 'success' : 'danger'" size="small"><template v-if="row.result === 'pass'"><el-icon><Select /></el-icon> 通过</template><template v-else><el-icon><Close /></el-icon> 不通过</template></el-tag></template>
         </el-table-column>
         <el-table-column prop="inspector_name" label="检验员" width="100" />
         <el-table-column prop="inspection_date" label="日期" width="170" />
@@ -74,8 +74,8 @@ defineEmits<{
 .result-select{width:100px}
 .table-card{margin-top:12px}
 .stat-card{text-align:center}
-.stat-label{font-size:13px;color:#909399;margin-bottom:6px}
+.stat-label{font-size:13px;color:var(--el-color-info);margin-bottom:6px}
 .stat-value{font-size:26px;font-weight:700}
-.stat-value.pass{color:#67c23a}
-.stat-value.fail{color:#f56c6c}
+.stat-value.pass{color:var(--el-color-success)}
+.stat-value.fail{color:var(--el-color-danger)}
 </style>

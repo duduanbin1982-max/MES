@@ -133,7 +133,7 @@
                   <span v-if="data.material_id" style="flex: 1">{{ data.material_name || '(未命名物料)' }}</span>
                   <span v-else style="flex: 1; font-weight: 500">{{ data.notes || data.part_number || data.code || '(未命名)' }}</span>
                   <el-tag v-if="data.is_key_component" type="danger" size="small">关键</el-tag>
-                  <span style="color: #909399; font-size: 12px">qty={{ data.quantity }}</span>
+                  <span style="color: var(--el-color-info); font-size: 12px">qty={{ data.quantity }}</span>
                 </span>
               </template>
             </el-tree>
@@ -217,14 +217,14 @@ const riskItems = computed(() => overview.value?.cards?.risks?.items || [])
 const overviewCards = computed(() => {
   const c = overview.value?.cards || {}
   return [
-    { title: 'BOM / 关键件', value: c.bom?.total || 0, sub: `关键件 ${c.bom?.key_components || 0}`, color: '#409eff' },
+    { title: 'BOM / 关键件', value: c.bom?.total || 0, sub: `关键件 ${c.bom?.key_components || 0}`, color: 'var(--el-color-primary)' },
     { title: '图纸文档', value: c.documents?.total || 0, sub: `目录 ${c.documents?.folders || 0}`, color: '#626aef' },
-    { title: '采购 / 缺料', value: c.purchase?.open || 0, sub: `缺料 ${c.kit?.open || 0}`, color: (c.kit?.open || 0) ? '#f56c6c' : '#67c23a' },
-    { title: '工单进度', value: c.work_orders?.completed || 0, sub: `进行中 ${c.work_orders?.in_progress || 0} / 总 ${c.work_orders?.total || 0}`, color: '#67c23a' },
-    { title: '质检 / NCR', value: c.quality?.inspections?.total || 0, sub: `NCR 未闭环 ${c.quality?.ncr?.open || 0}`, color: (c.quality?.ncr?.open || 0) ? '#f56c6c' : '#67c23a' },
-    { title: '成本归集', value: Math.round(c.cost?.total || 0), sub: `材料估算 ${Math.round(c.cost?.material_estimate || 0)}`, color: '#e6a23c' },
-    { title: '交付风险', value: c.risks?.total || 0, sub: (c.risks?.total || 0) ? '需要主管处理' : '无阻塞', color: (c.risks?.total || 0) ? '#f56c6c' : '#67c23a' },
-    { title: '冻结状态', value: overview.value?.freeze?.archive_status || 'active', sub: overview.value?.freeze?.frozen_at || '未冻结', color: isFrozen.value ? '#e6a23c' : '#67c23a' },
+    { title: '采购 / 缺料', value: c.purchase?.open || 0, sub: `缺料 ${c.kit?.open || 0}`, color: (c.kit?.open || 0) ? 'var(--el-color-danger)' : 'var(--el-color-success)' },
+    { title: '工单进度', value: c.work_orders?.completed || 0, sub: `进行中 ${c.work_orders?.in_progress || 0} / 总 ${c.work_orders?.total || 0}`, color: 'var(--el-color-success)' },
+    { title: '质检 / NCR', value: c.quality?.inspections?.total || 0, sub: `NCR 未闭环 ${c.quality?.ncr?.open || 0}`, color: (c.quality?.ncr?.open || 0) ? 'var(--el-color-danger)' : 'var(--el-color-success)' },
+    { title: '成本归集', value: Math.round(c.cost?.total || 0), sub: `材料估算 ${Math.round(c.cost?.material_estimate || 0)}`, color: 'var(--el-color-warning)' },
+    { title: '交付风险', value: c.risks?.total || 0, sub: (c.risks?.total || 0) ? '需要主管处理' : '无阻塞', color: (c.risks?.total || 0) ? 'var(--el-color-danger)' : 'var(--el-color-success)' },
+    { title: '冻结状态', value: overview.value?.freeze?.archive_status || 'active', sub: overview.value?.freeze?.frozen_at || '未冻结', color: isFrozen.value ? 'var(--el-color-warning)' : 'var(--el-color-success)' },
   ]
 })
 

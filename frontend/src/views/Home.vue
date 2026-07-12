@@ -1,7 +1,7 @@
 <template>
   <div style="display: flex; justify-content: center; align-items: center; height: 60vh; flex-direction: column; gap: 16px">
     <el-icon :size="40" class="is-loading"><Loading /></el-icon>
-    <span style="color: #909399">{{ msg }}</span>
+    <span style="color: var(--el-color-info)">{{ msg }}</span>
   </div>
 </template>
 

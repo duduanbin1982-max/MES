@@ -118,7 +118,7 @@
         </div>
 
         <el-row :gutter="12" style="margin-bottom:12px" v-if="perfSummary.avg_efficiency">
-          <el-col :span="8"><div class="stat-card"><div class="stat-label">平均效率</div><div class="stat-value" style="color:#67c23a">{{ perfSummary.avg_efficiency }}%</div></div></el-col>
+          <el-col :span="8"><div class="stat-card"><div class="stat-label">平均效率</div><div class="stat-value" style="color:var(--el-color-success)">{{ perfSummary.avg_efficiency }}%</div></div></el-col>
           <el-col :span="8"><div class="stat-card"><div class="stat-label">总工时</div><div class="stat-value">{{ perfSummary.total_hours_sum }}h</div></div></el-col>
           <el-col :span="8"><div class="stat-card"><div class="stat-label">总任务数</div><div class="stat-value">{{ perfSummary.total_tasks }}</div></div></el-col>
         </el-row>
@@ -157,7 +157,7 @@
           <el-table-column prop="total_hours" label="总工时(h)" width="100" align="right" />
           <el-table-column prop="overtime_hours" label="加班工时(h)" width="110" align="right" sortable>
             <template #default="{row}">
-              <span :style="{color:row.overtime_hours>3?'#f56c6c':row.overtime_hours>0?'#e6a23c':'#909399',fontWeight:'600'}">{{ row.overtime_hours }}</span>
+              <span :style="{color:row.overtime_hours>3?'var(--el-color-danger)':row.overtime_hours>0?'var(--el-color-warning)':'var(--el-color-info)',fontWeight:'600'}">{{ row.overtime_hours }}</span>
             </template>
           </el-table-column>
         </el-table>
@@ -448,9 +448,9 @@ onMounted(() => {
 .tab-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 .progress-cards { margin-top: 8px; }
 
-.stat-card { background:#fff; padding:16px; border-radius:6px; text-align:center; border:1px solid #ebeef5; }
-.stat-label { font-size:12px; color:#909399; margin-bottom:6px; }
-.stat-value { font-size:24px; font-weight:600; color:#303133; line-height:1.2; }
+.stat-card { background:var(--el-color-white); padding:16px; border-radius:6px; text-align:center; border:1px solid var(--el-border-color-lighter); }
+.stat-label { font-size:12px; color:var(--el-color-info); margin-bottom:6px; }
+.stat-value { font-size:24px; font-weight:600; color:var(--el-text-color-primary); line-height:1.2; }
 </style>
 
 

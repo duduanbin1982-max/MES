@@ -2,8 +2,8 @@
   <div class="login-page">
     <el-card class="login-card" shadow="always">
       <div class="login-header">
-        <h2 style="margin: 0">🛠️ TBM-MES</h2>
-        <div style="color: #909399; font-size: 13px; margin-top: 4px">成套装备生产管理系统 v2.1</div>
+        <h2 style="margin: 0"><el-icon><Tools /></el-icon> TBM-MES</h2>
+        <div style="color: var(--el-color-info); font-size: 13px; margin-top: 4px">成套装备生产管理系统 v2.1</div>
       </div>
       <el-form :model="form" @submit.prevent="login" label-width="80px" style="margin-top: 24px">
         <el-form-item label="用户名">
@@ -18,7 +18,7 @@
           </el-button>
         </el-form-item>
       </el-form>
-      <div style="margin-top: 16px; padding: 12px; background: #f5f7fa; border-radius: 4px; font-size: 12px; color: #606266">
+      <div style="margin-top: 16px; padding: 12px; background: var(--el-fill-color-light); border-radius: 4px; font-size: 12px; color: var(--el-text-color-regular)">
         <div style="font-weight: 500; margin-bottom: 6px">演示账号（密码 = 用户名）：</div>
         <div>• <strong>admin</strong> (系统管理员)</div>
         <div>• <strong>warehouse01</strong> (仓库员, 密码 warehouse123)</div>

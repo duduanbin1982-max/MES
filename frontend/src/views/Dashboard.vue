@@ -271,7 +271,7 @@ const updatedAt = ref('')
 let typeChart: echarts.ECharts | null = null
 let statusChart: echarts.ECharts | null = null
 
-const chartPalette = ['#2563eb', '#f97316', '#0f766e', '#64748b', '#f59e0b', '#ef4444']
+const chartPalette = ['#2563eb', 'var(--color-cta)', '#0f766e', 'var(--color-primary)', 'var(--color-warning)', 'var(--color-danger)']
 
 const numberText = (value: any) => Number(value || 0).toLocaleString('zh-CN')
 const pctText = (value: any) => `${Math.round(Number(value || 0))}%`
@@ -317,10 +317,10 @@ const statusTagType = (status: string) => ({
   accepted: 'success',
 }[status] || 'info')
 const progressColor = (level: string) => ({
-  overload: '#ef4444',
-  busy: '#f97316',
+  overload: 'var(--color-danger)',
+  busy: 'var(--color-cta)',
   normal: '#0f766e',
-  idle: '#64748b',
+  idle: 'var(--color-primary)',
 }[level] || '#2563eb')
 
 const goInstance = (row: any) => router.push(`/instances/${row.id}`)
@@ -331,13 +331,13 @@ const drawTypeChart = () => {
   typeChart.setOption({
     color: chartPalette,
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0, textStyle: { color: '#475569' } },
+    legend: { bottom: 0, textStyle: { color: 'var(--color-text-secondary)' } },
     series: [{
       type: 'pie',
       radius: ['48%', '72%'],
       center: ['50%', '44%'],
       avoidLabelOverlap: true,
-      label: { color: '#334155' },
+      label: { color: 'var(--color-text)' },
       data: stats.value.instances.by_type.map((type: any) => ({ name: type.type, value: type.c })),
     }],
   })
@@ -352,12 +352,12 @@ const drawStatusChart = () => {
   statusChart.setOption({
     color: chartPalette,
     tooltip: { trigger: 'item' },
-    legend: { bottom: 0, textStyle: { color: '#475569' } },
+    legend: { bottom: 0, textStyle: { color: 'var(--color-text-secondary)' } },
     series: [{
       type: 'pie',
       radius: ['0%', '68%'],
       center: ['50%', '44%'],
-      label: { color: '#334155' },
+      label: { color: 'var(--color-text)' },
       data,
     }],
   })
@@ -414,17 +414,17 @@ onUnmounted(() => {
 <style scoped>
 .dashboard-page {
   --dash-primary: #2563eb;
-  --dash-secondary: #64748b;
-  --dash-accent: #f97316;
+  --dash-secondary: var(--color-primary);
+  --dash-accent: var(--color-cta);
   --dash-bg: #eff6ff;
-  --dash-text: #0f172a;
-  --dash-muted: #475569;
-  --dash-border: #dbeafe;
+  --dash-text: var(--color-bg-darker);
+  --dash-muted: var(--color-text-secondary);
+  --dash-border: var(--color-info-bg);
   min-height: 100%;
   padding: 20px;
   background:
     radial-gradient(circle at top left, rgba(37, 99, 235, 0.14), transparent 34%),
-    linear-gradient(135deg, #f8fafc 0%, #eff6ff 46%, #f8fafc 100%);
+    linear-gradient(135deg, var(--color-background) 0%, #eff6ff 46%, var(--color-background) 100%);
   color: var(--dash-text);
   font-family: "Fira Sans", "Plus Jakarta Sans", "Microsoft YaHei", system-ui, sans-serif;
 }
@@ -441,7 +441,7 @@ onUnmounted(() => {
   background:
     linear-gradient(120deg, rgba(15, 23, 42, 0.96), rgba(30, 64, 175, 0.9)),
     radial-gradient(circle at right, rgba(249, 115, 22, 0.2), transparent 28%);
-  color: #fff;
+  color: var(--el-color-white);
   box-shadow: 0 18px 45px rgba(30, 64, 175, 0.18);
 }
 
@@ -480,7 +480,7 @@ onUnmounted(() => {
 .dashboard-hero p {
   max-width: 760px;
   margin: 12px 0 0;
-  color: #dbeafe;
+  color: var(--color-info-bg);
   font-size: 15px;
   line-height: 1.7;
 }
@@ -502,7 +502,7 @@ onUnmounted(() => {
 }
 
 .refresh-meta strong {
-  color: #fff;
+  color: var(--el-color-white);
   font-size: 13px;
 }
 
@@ -538,13 +538,13 @@ onUnmounted(() => {
   width: 42px;
   height: 42px;
   border-radius: 14px;
-  color: #fff;
+  color: var(--el-color-white);
   font-size: 20px;
 }
 
 .kpi-card--blue .kpi-icon { background: #2563eb; }
-.kpi-card--slate .kpi-icon { background: #475569; }
-.kpi-card--orange .kpi-icon { background: #f97316; }
+.kpi-card--slate .kpi-icon { background: var(--color-text-secondary); }
+.kpi-card--orange .kpi-icon { background: var(--color-cta); }
 .kpi-card--green .kpi-icon { background: #0f766e; }
 
 .kpi-body {
@@ -592,7 +592,7 @@ onUnmounted(() => {
 
 .panel :deep(.el-card__header) {
   padding: 16px 18px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .panel :deep(.el-card__body) {
@@ -631,9 +631,9 @@ onUnmounted(() => {
 }
 
 .chart-box {
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 16px;
-  background: #f8fafc;
+  background: var(--color-background);
   padding: 12px;
 }
 
@@ -653,12 +653,12 @@ onUnmounted(() => {
   margin-bottom: 14px;
   padding: 18px;
   border-radius: 18px;
-  color: #fff;
+  color: var(--el-color-white);
 }
 
 .risk-score--success { background: linear-gradient(135deg, #0f766e, #14b8a6); }
-.risk-score--warning { background: linear-gradient(135deg, #f97316, #f59e0b); }
-.risk-score--danger { background: linear-gradient(135deg, #b91c1c, #ef4444); }
+.risk-score--warning { background: linear-gradient(135deg, var(--color-cta), var(--color-warning)); }
+.risk-score--danger { background: linear-gradient(135deg, #b91c1c, var(--color-danger)); }
 
 .risk-score span,
 .risk-score small {
@@ -682,9 +682,9 @@ onUnmounted(() => {
   gap: 12px;
   align-items: center;
   padding: 11px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: #f8fafc;
+  background: var(--color-background);
 }
 
 .risk-row div {
@@ -732,9 +732,9 @@ onUnmounted(() => {
   display: grid;
   gap: 4px;
   padding: 13px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: #f8fafc;
+  background: var(--color-background);
 }
 
 .live-metric span {
@@ -755,7 +755,7 @@ onUnmounted(() => {
 
 .dense-table :deep(.el-table__header th) {
   color: var(--dash-muted);
-  background: #f8fafc;
+  background: var(--color-background);
   font-weight: 800;
 }
 

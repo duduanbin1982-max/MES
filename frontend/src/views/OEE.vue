@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">⚙️ 设备综合效率 (OEE)</div>
+      <div class="page-title"><el-icon><Setting /></el-icon> 设备综合效率 (OEE)</div>
     </div>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
@@ -16,27 +16,27 @@
         <el-row :gutter="12" style="margin-bottom:12px" v-loading="loading">
           <el-col :span="6"><div class="stat-card"><div class="stat-label">车队利用率</div><div class="stat-value" :style="{color:utilColor(summary.fleet_utilization_pct)}">{{ summary.fleet_utilization_pct || 0 }}%</div><div class="stat-label" style="font-size:11px">{{ summary.fleet_busy_hours }}h / {{ summary.fleet_available_hours }}h</div></div></el-col>
           <el-col :span="6"><div class="stat-card"><div class="stat-label">工位</div><div class="stat-value">{{ summary.workstation_count || 0 }}</div><div class="stat-label" style="font-size:11px">总工位</div></div></el-col>
-          <el-col :span="6"><div class="stat-card"><div class="stat-label">过载</div><div class="stat-value" :style="{color:(summary.overloaded_count||0)>0?'#f56c6c':'#67c23a'}">{{ summary.overloaded_count || 0 }}</div><div class="stat-label" style="font-size:11px">&ge;90% 利用率</div></div></el-col>
-          <el-col :span="6"><div class="stat-card"><div class="stat-label">闲置</div><div class="stat-value" style="color:#909399">{{ summary.idle_count || 0 }}</div><div class="stat-label" style="font-size:11px">&lt;30% 利用率</div></div></el-col>
+          <el-col :span="6"><div class="stat-card"><div class="stat-label">过载</div><div class="stat-value" :style="{color:(summary.overloaded_count||0)>0?'var(--el-color-danger)':'var(--el-color-success)'}">{{ summary.overloaded_count || 0 }}</div><div class="stat-label" style="font-size:11px">&ge;90% 利用率</div></div></el-col>
+          <el-col :span="6"><div class="stat-card"><div class="stat-label">闲置</div><div class="stat-value" style="color:var(--el-color-info)">{{ summary.idle_count || 0 }}</div><div class="stat-label" style="font-size:11px">&lt;30% 利用率</div></div></el-col>
         </el-row>
 
         <el-row :gutter="12" style="margin-bottom:12px">
           <el-col :span="12">
-            <el-card><template #header><span style="color:#f56c6c;font-weight:500">🔥 瓶颈工位</span></template>
+            <el-card><template #header><span style="color:var(--el-color-danger);font-weight:500"><el-icon><Sunny /></el-icon> 瓶颈工位</span></template>
               <div v-if="summary.bottleneck">
                 <div style="font-size:18px;font-weight:600">{{ summary.bottleneck.name }}</div>
                 <el-progress :percentage="summary.bottleneck.utilization_pct" :status="summary.bottleneck.utilization_pct>=90?'exception':'warning'" style="margin-top:8px" />
-                <div style="font-size:12px;color:#909399;margin-top:4px">利用率最高，建议优先调度</div>
+                <div style="font-size:12px;color:var(--el-color-info);margin-top:4px">利用率最高，建议优先调度</div>
               </div>
               <el-empty v-else description="暂无数据" :image-size="60" />
             </el-card>
           </el-col>
           <el-col :span="12">
-            <el-card><template #header><span style="color:#67c23a;font-weight:500">💤 闲置工位</span></template>
+            <el-card><template #header><span style="color:var(--el-color-success);font-weight:500"><el-icon><Moon /></el-icon> 闲置工位</span></template>
               <div v-if="summary.least_busy">
                 <div style="font-size:18px;font-weight:600">{{ summary.least_busy.name }}</div>
                 <el-progress :percentage="summary.least_busy.utilization_pct" :status="summary.least_busy.utilization_pct<30?'success':'warning'" style="margin-top:8px" />
-                <div style="font-size:12px;color:#909399;margin-top:4px">利用率最低，可承接更多任务</div>
+                <div style="font-size:12px;color:var(--el-color-info);margin-top:4px">利用率最低，可承接更多任务</div>
               </div>
               <el-empty v-else description="暂无数据" :image-size="60" />
             </el-card>
@@ -44,7 +44,7 @@
         </el-row>
 
         <el-card>
-          <template #header><span style="font-weight:500">🏭 各工位利用率（按利用率降序）</span></template>
+          <template #header><span style="font-weight:500"><el-icon><OfficeBuilding /></el-icon> 各工位利用率（按利用率降序）</span></template>
           <el-table :data="workstations" stripe size="small" empty-text="加载中">
             <el-table-column type="index" width="50" />
             <el-table-column prop="name" label="工位" width="160" />
@@ -132,7 +132,7 @@
         <el-table :data="shiftData" v-loading="shiftLoading" border stripe size="small" empty-text="请选择设备实例" max-height="350">
           <el-table-column prop="shift_name" label="班组" width="120" />
           <el-table-column prop="oee" label="OEE" width="80" align="right">
-            <template #default="{row}"><span style="font-weight:600" :style="{color:row.oee>=85?'#67c23a':row.oee>=60?'#e6a23c':'#f56c6c'}">{{ row.oee }}%</span></template>
+            <template #default="{row}"><span style="font-weight:600" :style="{color:row.oee>=85?'var(--el-color-success)':row.oee>=60?'var(--el-color-warning)':'var(--el-color-danger)'}">{{ row.oee }}%</span></template>
           </el-table-column>
           <el-table-column prop="availability" label="可用性" width="80" align="right" />
           <el-table-column prop="performance" label="性能" width="80" align="right" />
@@ -175,7 +175,7 @@ const summary = ref<any>({})
 const workstations = ref<any[]>([])
 const oeeNote = ref<string>('')
 
-const utilColor = (p: number) => p >= 90 ? '#f56c6c' : p >= 70 ? '#e6a23c' : p >= 30 ? '#67c23a' : '#909399'
+const utilColor = (p: number) => p >= 90 ? 'var(--el-color-danger)' : p >= 70 ? 'var(--el-color-warning)' : p >= 30 ? 'var(--el-color-success)' : 'var(--el-color-info)'
 const utilStatus = (level: string) => ({ overload: 'exception', busy: 'warning', normal: 'success', idle: '' }[level] || '')
 const levelTag = (level: string) => ({ overload: 'danger', busy: 'warning', normal: 'success', idle: 'info' }[level] || 'info')
 const levelLabel = (level: string) => ({ overload: '过载', busy: '繁忙', normal: '正常', idle: '闲置' }[level] || level)
@@ -287,7 +287,7 @@ const renderLossCharts = async () => {
         tooltip: { trigger: 'axis' },
         xAxis: { type: 'category', data: cats, axisLabel: { rotate: 20, fontSize: 10 } },
         yAxis: { type: 'value', name: '分钟' },
-        series: [{ type: 'bar', data: vals, itemStyle: { color: '#f56c6c' } }]
+        series: [{ type: 'bar', data: vals, itemStyle: { color: 'var(--el-color-danger)' } }]
       }, true)
     } catch (_) {}
   }
@@ -410,8 +410,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.stat-card { background:#fff; padding:16px; border-radius:6px; text-align:center; border:1px solid #ebeef5; }
-.stat-label { font-size:12px; color:#909399; margin-bottom:6px; }
-.stat-value { font-size:28px; font-weight:600; color:#303133; line-height:1.2; }
+.stat-card { background:var(--el-color-white); padding:16px; border-radius:6px; text-align:center; border:1px solid var(--el-border-color-lighter); }
+.stat-label { font-size:12px; color:var(--el-color-info); margin-bottom:6px; }
+.stat-value { font-size:28px; font-weight:600; color:var(--el-text-color-primary); line-height:1.2; }
 .tab-toolbar { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
 </style>

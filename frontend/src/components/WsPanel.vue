@@ -11,8 +11,8 @@
     <transition name="ws-slide">
       <div v-if="open" class="ws-panel">
         <div class="ws-panel-header">
-          <span>🔗 实时事件</span>
-          <el-button size="small" text @click="open = false">✕</el-button>
+          <span><el-icon><Link /></el-icon> 实时事件</span>
+          <el-button size="small" text @click="open = false"><el-icon><CloseBold /></el-icon></el-button>
         </div>
 
         <div class="ws-stats">
@@ -118,28 +118,28 @@ onUnmounted(() => clearInterval(timer))
 .ws-trigger {
   display: flex; align-items: center; gap: 6px;
   padding: 8px 14px; border-radius: 20px;
-  background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.12);
+  background: var(--el-color-white); box-shadow: 0 2px 12px rgba(0,0,0,.12);
   cursor: pointer; user-select: none; font-size: 13px;
   transition: box-shadow .2s;
 }
 .ws-trigger:hover { box-shadow: 0 4px 16px rgba(0,0,0,.18); }
 
 .ws-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.ws-dot.ws-open { background: #67c23a; }
-.ws-dot.ws-connecting { background: #e6a23c; animation: ws-pulse 1s infinite; }
-.ws-dot.ws-closed { background: #f56c6c; }
+.ws-dot.ws-open { background: var(--el-color-success); }
+.ws-dot.ws-connecting { background: var(--el-color-warning); animation: ws-pulse 1s infinite; }
+.ws-dot.ws-closed { background: var(--el-color-danger); }
 
-.ws-label { color: #606266; font-weight: 500; }
+.ws-label { color: var(--el-text-color-regular); font-weight: 500; }
 
 .ws-badge {
-  background: #409eff; color: #fff; font-size: 11px;
+  background: var(--el-color-primary); color: var(--el-color-white); font-size: 11px;
   border-radius: 10px; padding: 1px 7px; min-width: 18px; text-align: center;
 }
 
 .ws-panel {
   position: absolute; bottom: 52px; right: 0;
   width: 360px; max-height: 520px;
-  background: #fff; border-radius: 12px;
+  background: var(--el-color-white); border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,.15);
   display: flex; flex-direction: column;
   overflow: hidden;
@@ -147,46 +147,46 @@ onUnmounted(() => clearInterval(timer))
 
 .ws-panel-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 16px; border-bottom: 1px solid #ebeef5;
+  padding: 12px 16px; border-bottom: 1px solid var(--el-border-color-lighter);
   font-size: 14px; font-weight: 600;
 }
 
 .ws-stats { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ws-stat-row { display: flex; flex-direction: column; gap: 2px; }
-.ws-stat-label { font-size: 11px; color: #909399; }
-.ws-stat-val { font-size: 13px; font-weight: 500; color: #303133; }
-.ws-stat-val.ws-open { color: #67c23a; }
-.ws-stat-val.ws-connecting { color: #e6a23c; }
-.ws-stat-val.ws-closed, .ws-stat-val.ws-error { color: #f56c6c; }
+.ws-stat-label { font-size: 11px; color: var(--el-color-info); }
+.ws-stat-val { font-size: 13px; font-weight: 500; color: var(--el-text-color-primary); }
+.ws-stat-val.ws-open { color: var(--el-color-success); }
+.ws-stat-val.ws-connecting { color: var(--el-color-warning); }
+.ws-stat-val.ws-closed, .ws-stat-val.ws-error { color: var(--el-color-danger); }
 
-.ws-divider { height: 1px; background: #ebeef5; margin: 0 16px; }
+.ws-divider { height: 1px; background: var(--el-border-color-lighter); margin: 0 16px; }
 
 .ws-events {
   flex: 1; overflow-y: auto; padding: 8px 16px;
   max-height: 260px;
 }
-.ws-empty { text-align: center; color: #c0c4cc; padding: 24px 0; font-size: 13px; }
+.ws-empty { text-align: center; color: var(--el-text-color-placeholder); padding: 24px 0; font-size: 13px; }
 
 .ws-event {
   display: flex; align-items: flex-start; gap: 8px; padding: 5px 0;
   border-bottom: 1px solid #f2f3f5; font-size: 12px;
 }
-.ws-event-time { color: #909399; white-space: nowrap; min-width: 52px; }
+.ws-event-time { color: var(--el-color-info); white-space: nowrap; min-width: 52px; }
 .ws-event-tag {
   padding: 0 5px; border-radius: 3px; font-size: 11px;
   white-space: nowrap; font-weight: 500; line-height: 18px;
 }
-.ws-tag-doc { background: #e1f3d8; color: #67c23a; }
-.ws-tag-bom { background: #d9ecff; color: #409eff; }
-.ws-tag-inv { background: #fdf6ec; color: #e6a23c; }
-.ws-tag-wo { background: #f4e8ff; color: #9b59b6; }
-.ws-tag-sys { background: #fef0f0; color: #f56c6c; }
+.ws-tag-doc { background: var(--el-color-success-light-8); color: var(--el-color-success); }
+.ws-tag-bom { background: var(--color-info-soft); color: var(--el-color-primary); }
+.ws-tag-inv { background: var(--el-color-warning-light-9); color: var(--el-color-warning); }
+.ws-tag-wo { background: var(--color-cta-soft); color: var(--color-purple); }
+.ws-tag-sys { background: var(--el-color-danger-light-9); color: var(--el-color-danger); }
 
-.ws-event-payload { color: #606266; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-event-payload { color: var(--el-text-color-regular); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .ws-panel-footer {
   display: flex; justify-content: flex-end; gap: 4px;
-  padding: 8px 16px; border-top: 1px solid #ebeef5;
+  padding: 8px 16px; border-top: 1px solid var(--el-border-color-lighter);
 }
 
 /* transitions */

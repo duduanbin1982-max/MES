@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <div class="page-title">🔧 设备维护看板</div>
+        <div class="page-title"><el-icon><Tools /></el-icon> 设备维护看板</div>
         <div class="page-subtitle">维保计划 · 故障报修 · 备件库存 · 点检记录 · 现场服务</div>
       </div>
       <div style="display:flex;gap:8px;">
@@ -19,27 +19,27 @@
         <el-card shadow="hover" class="stat-card">
           <div class="stat-num">{{ data.overview.total_plans }}</div>
           <div class="stat-label">维保计划</div>
-          <div class="stat-sub" v-if="data.overview.overdue_plans" style="color:#e6a23c">{{ data.overview.overdue_plans }} 逾期</div>
+          <div class="stat-sub" v-if="data.overview.overdue_plans" style="color:var(--el-color-warning)">{{ data.overview.overdue_plans }} 逾期</div>
         </el-card>
       </el-col>
       <el-col :span="4">
         <el-card shadow="hover" class="stat-card">
-          <div class="stat-num" style="color:#409eff">{{ data.overview.due_soon_plans }}</div>
+          <div class="stat-num" style="color:var(--el-color-primary)">{{ data.overview.due_soon_plans }}</div>
           <div class="stat-label">7天内到期</div>
         </el-card>
       </el-col>
       <el-col :span="4">
         <el-card shadow="hover" class="stat-card">
-          <div class="stat-num" :style="{color: data.overview.open_breakdowns?'#f56c6c':''}">{{ data.overview.total_breakdowns }}</div>
+          <div class="stat-num" :style="{color: data.overview.open_breakdowns?'var(--el-color-danger)':''}">{{ data.overview.total_breakdowns }}</div>
           <div class="stat-label">故障报修</div>
-          <div class="stat-sub" v-if="data.overview.open_breakdowns" style="color:#f56c6c">{{ data.overview.open_breakdowns }} 待处理</div>
+          <div class="stat-sub" v-if="data.overview.open_breakdowns" style="color:var(--el-color-danger)">{{ data.overview.open_breakdowns }} 待处理</div>
         </el-card>
       </el-col>
       <el-col :span="4">
         <el-card shadow="hover" class="stat-card">
           <div class="stat-num">{{ data.overview.total_spare_parts }}</div>
           <div class="stat-label">备件库存</div>
-          <div class="stat-sub" v-if="data.overview.low_stock_parts" style="color:#e6a23c">{{ data.overview.low_stock_parts }} 低库存</div>
+          <div class="stat-sub" v-if="data.overview.low_stock_parts" style="color:var(--el-color-warning)">{{ data.overview.low_stock_parts }} 低库存</div>
         </el-card>
       </el-col>
       <el-col :span="4">
@@ -50,7 +50,7 @@
       </el-col>
       <el-col :span="4">
         <el-card shadow="hover" class="stat-card">
-          <div class="stat-num" :style="{color: data.overview.active_field_services?'#409eff':''}">{{ data.overview.active_field_services }}</div>
+          <div class="stat-num" :style="{color: data.overview.active_field_services?'var(--el-color-primary)':''}">{{ data.overview.active_field_services }}</div>
           <div class="stat-label">现场服务中</div>
         </el-card>
       </el-col>
@@ -59,7 +59,7 @@
     <el-tabs v-model="tab" type="border-card">
       <!-- Plans -->
       <el-tab-pane name="plans">
-        <template #label>📋 维保计划 <el-badge v-if="data.overview.overdue_plans" :value="data.overview.overdue_plans" type="danger" /></template>
+        <template #label><el-icon><Document /></el-icon> 维保计划 <el-badge v-if="data.overview.overdue_plans" :value="data.overview.overdue_plans" type="danger" /></template>
         <el-table :data="data.plans" size="small" stripe max-height="400">
           <el-table-column prop="plan_code" label="编号" width="100" />
           <el-table-column prop="plan_name" label="名称" min-width="160" />
@@ -78,7 +78,7 @@
           <el-table-column label="操作" width="120" fixed="right">
             <template #default="{row}">
               <el-button v-if="row.status!=='completed'" size="small" type="primary" @click="completePlan(row)">完成</el-button>
-              <span v-else style="color:#67c23a">✓</span>
+              <span v-else style="color:var(--el-color-success)"><el-icon><Select /></el-icon></span>
             </template>
           </el-table-column>
         </el-table>
@@ -86,7 +86,7 @@
 
       <!-- Breakdowns -->
       <el-tab-pane name="breakdowns">
-        <template #label>⚠️ 故障报修 <el-badge v-if="data.overview.open_breakdowns" :value="data.overview.open_breakdowns" type="danger" /></template>
+        <template #label><el-icon><Warning /></el-icon> 故障报修 <el-badge v-if="data.overview.open_breakdowns" :value="data.overview.open_breakdowns" type="danger" /></template>
         <el-table :data="data.breakdowns" size="small" stripe max-height="400">
           <el-table-column prop="report_code" label="编号" width="110" />
           <el-table-column prop="fault_type" label="故障类型" width="100"><template #default="{row}"><el-tag size="small">{{ row.fault_type }}</el-tag></template></el-table-column>
@@ -104,7 +104,7 @@
 
       <!-- Spare Parts -->
       <el-tab-pane name="spares">
-        <template #label>🔩 备件库存 <el-badge v-if="data.overview.low_stock_parts" :value="data.overview.low_stock_parts" type="warning" /></template>
+        <template #label><el-icon><Tools /></el-icon> 备件库存 <el-badge v-if="data.overview.low_stock_parts" :value="data.overview.low_stock_parts" type="warning" /></template>
         <el-alert v-if="data.low_stock.length" :title="'低库存预警：' + data.low_stock.map(function(s){return s.part_name}).join('、')" type="warning" show-icon :closable="false" style="margin-bottom:12px" />
         <el-table :data="data.spare_parts" size="small" stripe max-height="400">
           <el-table-column prop="part_code" label="编码" width="110" />
@@ -112,8 +112,8 @@
           <el-table-column prop="part_type" label="类型" width="90" />
           <el-table-column label="库存" width="160">
             <template #default="{row}">
-              <span :style="{color: row.quantity<=row.min_stock?'#f56c6c':''}">{{ row.quantity }} / {{ row.min_stock }}</span>
-              <el-progress :percentage="calcStockPct(row)" :color="row.quantity<=row.min_stock?'#f56c6c':'#67c23a'" :show-text="false" style="width:60px;display:inline-block;margin-left:6px" />
+              <span :style="{color: row.quantity<=row.min_stock?'var(--el-color-danger)':''}">{{ row.quantity }} / {{ row.min_stock }}</span>
+              <el-progress :percentage="calcStockPct(row)" :color="row.quantity<=row.min_stock?'var(--el-color-danger)':'var(--el-color-success)'" :show-text="false" style="width:60px;display:inline-block;margin-left:6px" />
             </template>
           </el-table-column>
           <el-table-column prop="location" label="库位" width="90" />
@@ -123,7 +123,7 @@
 
       <!-- Logs -->
       <el-tab-pane name="logs">
-        <template #label>📝 维保记录</template>
+        <template #label><el-icon><Edit /></el-icon> 维保记录</template>
         <el-table :data="data.logs" size="small" stripe max-height="400">
           <el-table-column prop="instance_name" label="装备" width="160" />
           <el-table-column prop="performed_at" label="执行时间" width="160" />
@@ -136,7 +136,7 @@
 
       <!-- Field Service -->
       <el-tab-pane name="field">
-        <template #label>🚐 现场服务</template>
+        <template #label><el-icon><Van /></el-icon> 现场服务</template>
         <el-table :data="data.field_services" size="small" stripe max-height="400">
           <el-table-column prop="title" label="标题" min-width="160" />
           <el-table-column prop="service_type" label="类型" width="100"><template #default="{row}"><el-tag size="small">{{ svcTypeLabel(row.service_type) }}</el-tag></template></el-table-column>
@@ -217,9 +217,9 @@ onMounted(loadAll)
 .page { padding: 16px; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .page-title { font-size: 20px; font-weight: 700; }
-.page-subtitle { color: #667085; margin-top: 4px; font-size: 13px; }
+.page-subtitle { color: var(--color-text-muted); margin-top: 4px; font-size: 13px; }
 .stat-card { text-align: center; }
-.stat-num { font-size: 28px; font-weight: 700; color: #303133; }
-.stat-label { font-size: 13px; color: #909399; margin-top: 4px; }
+.stat-num { font-size: 28px; font-weight: 700; color: var(--el-text-color-primary); }
+.stat-label { font-size: 13px; color: var(--el-color-info); margin-top: 4px; }
 .stat-sub { font-size: 12px; margin-top: 2px; }
 </style>

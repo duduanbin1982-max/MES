@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <div class="page-title">📦 装备实例</div>
+        <div class="page-title"><el-icon><Box /></el-icon> 装备实例</div>
         <div class="page-subtitle">项目号、合同号、序列号统一编码；从第一天就把 TBM 交付主线立住。</div>
       </div>
       <el-button type="primary" @click="openCreate">

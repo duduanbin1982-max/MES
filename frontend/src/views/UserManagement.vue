@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <div class="page-title">👥 用户与权限管理</div>
+        <div class="page-title"><el-icon><User /></el-icon> 用户与权限管理</div>
         <div class="sub">用户 → 角色组/部门 → 角色 → 权限矩阵；角色组负责批量归属和默认首页，角色负责具体权限。</div>
       </div>
       <el-button type="primary" @click="openCreate">+ 新建用户</el-button>
@@ -45,7 +45,7 @@
         <el-card>
           <template #header>
             <div class="card-head">
-              <span>🏷️ 角色组/部门</span>
+              <span><el-icon><PriceTag /></el-icon> 角色组/部门</span>
               <el-button type="primary" size="small" @click="openGroupDialog()">+ 新建角色组</el-button>
             </div>
           </template>
@@ -67,7 +67,7 @@
         <el-card style="margin-bottom: 16px">
           <template #header>
             <div class="card-head">
-              <span>🔑 角色管理 / 权限矩阵</span>
+              <span><el-icon><Key /></el-icon> 角色管理 / 权限矩阵</span>
               <el-button type="primary" size="small" @click="openRoleDialog()">+ 新建角色</el-button>
             </div>
           </template>
@@ -99,7 +99,7 @@
         </el-card>
 
         <el-card>
-          <template #header><span>📚 权限目录</span></template>
+          <template #header><span><el-icon><Reading /></el-icon> 权限目录</span></template>
           <el-table :data="permissionCatalog" size="small" stripe>
             <el-table-column prop="label" label="模块" width="140" />
             <el-table-column label="权限码">
@@ -466,7 +466,7 @@ onMounted(async () => {
 .page { padding: 16px 24px; }
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 16px; }
 .page-title { font-size: 20px; font-weight: 700; }
-.sub { color: #667085; margin-top: 4px; }
+.sub { color: var(--color-text-muted); margin-top: 4px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; }
-.perm-code { color: #909399; font-size: 12px; }
+.perm-code { color: var(--el-color-info); font-size: 12px; }
 </style>

@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">⚠️ 物料预警 + MRP + 齐套分析</div>
+      <div class="page-title"><el-icon><Warning /></el-icon> 物料预警 + MRP + 齐套分析</div>
       <div>
         <el-select v-model="selectedInstance" placeholder="选实例" style="width: 240px; margin-right: 8px" @change="loadAlerts">
           <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
@@ -21,7 +21,7 @@
         <div v-if="selectedInstance" v-loading="loading">
           <el-card style="margin-bottom: 16px">
             <template #header>
-              <span style="font-weight: 500">📦 物料预警 (长交期件倒推)</span>
+              <span style="font-weight: 500"><el-icon><Box /></el-icon> 物料预警 (长交期件倒推)</span>
             </template>
             <el-row :gutter="16" style="margin-bottom: 12px">
               <el-col :span="6">
@@ -33,19 +33,19 @@
               <el-col :span="6">
                 <div class="stat-card" style="text-align: center">
                   <div class="stat-label">已备齐</div>
-                  <div class="stat-value" style="color: #67c23a">{{ alerts.summary?.by_status?.ready || 0 }}</div>
+                  <div class="stat-value" style="color: var(--el-color-success)">{{ alerts.summary?.by_status?.ready || 0 }}</div>
                 </div>
               </el-col>
               <el-col :span="6">
                 <div class="stat-card" style="text-align: center">
                   <div class="stat-label">紧急 (≤14天)</div>
-                  <div class="stat-value" style="color: #f56c6c">{{ alerts.summary?.by_status?.urgent || 0 }}</div>
+                  <div class="stat-value" style="color: var(--el-color-danger)">{{ alerts.summary?.by_status?.urgent || 0 }}</div>
                 </div>
               </el-col>
               <el-col :span="6">
                 <div class="stat-card" style="text-align: center">
                   <div class="stat-label">已逾期</div>
-                  <div class="stat-value" style="color: #e6a23c">{{ alerts.summary?.by_status?.overdue || 0 }}</div>
+                  <div class="stat-value" style="color: var(--el-color-warning)">{{ alerts.summary?.by_status?.overdue || 0 }}</div>
                 </div>
               </el-col>
             </el-row>
@@ -64,7 +64,7 @@
               <el-table-column prop="order_deadline" label="下单截止" width="110" />
               <el-table-column prop="days_to_deadline" label="剩(天)" width="80" align="right">
                 <template #default="{ row }">
-                  <span :style="{color: row.days_to_deadline < 0 ? '#f56c6c' : row.days_to_deadline < 14 ? '#e6a23c' : '#67c23a'}">{{ row.days_to_deadline }}</span>
+                  <span :style="{color: row.days_to_deadline < 0 ? 'var(--el-color-danger)' : row.days_to_deadline < 14 ? 'var(--el-color-warning)' : 'var(--el-color-success)'}">{{ row.days_to_deadline }}</span>
                 </template>
               </el-table-column>
               <el-table-column prop="alert_message" label="建议" min-width="200" />
@@ -73,7 +73,7 @@
 
           <el-card>
             <template #header>
-              <span style="font-weight: 500">🔧 齐套分析 (工单开工检查)</span>
+              <span style="font-weight: 500"><el-icon><Tools /></el-icon> 齐套分析 (工单开工检查)</span>
             </template>
             <el-row :gutter="16" style="margin-bottom: 12px">
               <el-col :span="6">
@@ -85,19 +85,19 @@
               <el-col :span="6">
                 <div class="stat-card" style="text-align: center">
                   <div class="stat-label">可开工</div>
-                  <div class="stat-value" style="color: #67c23a">{{ kit.stats?.ready || 0 }}</div>
+                  <div class="stat-value" style="color: var(--el-color-success)">{{ kit.stats?.ready || 0 }}</div>
                 </div>
               </el-col>
               <el-col :span="6">
                 <div class="stat-card" style="text-align: center">
                   <div class="stat-label">部分齐套</div>
-                  <div class="stat-value" style="color: #e6a23c">{{ kit.stats?.partial || 0 }}</div>
+                  <div class="stat-value" style="color: var(--el-color-warning)">{{ kit.stats?.partial || 0 }}</div>
                 </div>
               </el-col>
               <el-col :span="6">
                 <div class="stat-card" style="text-align: center">
                   <div class="stat-label">被卡 (缺关键件)</div>
-                  <div class="stat-value" style="color: #f56c6c">{{ kit.stats?.blocked || 0 }}</div>
+                  <div class="stat-value" style="color: var(--el-color-danger)">{{ kit.stats?.blocked || 0 }}</div>
                 </div>
               </el-col>
             </el-row>
@@ -107,7 +107,7 @@
                   <span>
                     <el-tag :type="kitTagType(w.kit_status)" size="small" style="margin-right: 8px">{{ w.kit_status }}</el-tag>
                     <strong>{{ w.work_order.code }}</strong> · {{ w.work_order.title }}
-                    <span style="color: #909399; margin-left: 12px">缺 {{ w.total_shortage }} 项 (关键 {{ w.critical_shortage }})</span>
+                    <span style="color: var(--el-color-info); margin-left: 12px">缺 {{ w.total_shortage }} 项 (关键 {{ w.critical_shortage }})</span>
                   </span>
                 </template>
                 <el-table :data="w.items" stripe size="small">
@@ -118,7 +118,7 @@
                   </el-table-column>
                   <el-table-column label="缺料" width="80" align="center">
                     <template #default="{ row }">
-                      <span :style="{color: row.shortage > 0 ? '#f56c6c' : '#67c23a', fontWeight: 600}">{{ row.shortage }}</span>
+                      <span :style="{color: row.shortage > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)', fontWeight: 600}">{{ row.shortage }}</span>
                     </template>
                   </el-table-column>
                   <el-table-column label="关键" width="60" align="center">
@@ -156,7 +156,7 @@
           <el-table-column prop="allocated" label="已分配" width="90" align="center" />
           <el-table-column prop="net_required" label="净需求" width="90" align="center">
             <template #default="{row}">
-              <span :style="{color: row.net_required > 0 ? '#f56c6c' : '#67c23a', fontWeight: 600}">{{ row.net_required }}</span>
+              <span :style="{color: row.net_required > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)', fontWeight: 600}">{{ row.net_required }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="suggested_order" label="建议订货量" width="110" align="center" />
@@ -191,7 +191,7 @@
           <el-table-column prop="current_stock" label="当前库存" width="100" align="center" />
           <el-table-column prop="projected_balance" label="预计结余" width="100" align="center">
             <template #default="{row}">
-              <span :style="{color: row.projected_balance < 0 ? '#f56c6c' : row.projected_balance < 10 ? '#e6a23c' : '#67c23a', fontWeight: 600}">{{ row.projected_balance }}</span>
+              <span :style="{color: row.projected_balance < 0 ? 'var(--el-color-danger)' : row.projected_balance < 10 ? 'var(--el-color-warning)' : 'var(--el-color-success)', fontWeight: 600}">{{ row.projected_balance }}</span>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="90">
@@ -406,6 +406,6 @@ onUnmounted(() => {
 .page-title{font-size:20px;font-weight:600}
 .tb{display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
 .stat-card{padding:8px}
-.stat-label{font-size:12px;color:#909399;margin-bottom:4px}
-.stat-value{font-size:24px;font-weight:700;color:#303133}
+.stat-label{font-size:12px;color:var(--el-color-info);margin-bottom:4px}
+.stat-value{font-size:24px;font-weight:700;color:var(--el-text-color-primary)}
 </style>

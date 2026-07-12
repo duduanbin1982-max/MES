@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">🌳 工艺树</div>
+      <div class="page-title"><el-icon><Connection(orShare) /></el-icon> 工艺树</div>
       <div>
         <el-select v-model="selectedInstance" placeholder="选实例" style="width: 240px; margin-right: 8px" @change="reloadAll">
           <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
@@ -39,7 +39,7 @@
           <el-table-column label="部件" min-width="180">
             <template #default="{ row }">
               <strong>{{ row.component.name }}</strong>
-              <div style="color:#909399;font-size:12px">{{ row.component.part_number || row.component.material_code || '-' }}</div>
+              <div style="color:var(--el-color-info);font-size:12px">{{ row.component.part_number || row.component.material_code || '-' }}</div>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="100">
@@ -54,12 +54,12 @@
           <el-table-column label="缺口" min-width="220">
             <template #default="{ row }">
               <el-tag v-for="m in row.missing" :key="m" size="small" type="warning" style="margin:1px">{{ m }}</el-tag>
-              <span v-if="!row.missing.length" style="color:#67c23a">已配置工序/工时/工位</span>
+              <span v-if="!row.missing.length" style="color:var(--el-color-success)">已配置工序/工时/工位</span>
             </template>
           </el-table-column>
           <el-table-column label="工序路线" min-width="260">
             <template #default="{ row }">
-              <span v-if="!row.operations.length" style="color:#909399">-</span>
+              <span v-if="!row.operations.length" style="color:var(--el-color-info)">-</span>
               <template v-else>
                 <el-tag v-for="op in row.operations" :key="op.id" size="small" style="margin:1px">
                   {{ op.sequence }}.{{ op.operation_name }} / {{ op.estimated_hours || 0 }}h / {{ op.workstation_name || '未设工位' }}
@@ -114,7 +114,7 @@
         v-for="u in uncategorized"
         :key="'uncategorized'"
         :ref="'card_uncategorized'"
-        :subsystem="{ id: null, name_zh: u.name_zh, name_en: '', sequence: 0, color: '#909399', nodes: u.nodes, ...u }"
+        :subsystem="{ id: null, name_zh: u.name_zh, name_en: '', sequence: 0, color: 'var(--el-color-info)', nodes: u.nodes, ...u }"
         :critical-set="criticalSet"
         :search-key="filters.searchKey"
         :only-critical="filters.onlyCritical"
@@ -282,7 +282,7 @@ const scrollToCard = (subId) => {
     const seqEl = c.querySelector('.seq')
     if (seqEl && seqEl.textContent.includes('#' + (subId == null ? '0' : subId))) {
       c.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      c.style.outline = '2px solid #409eff'
+      c.style.outline = '2px solid var(--el-color-primary)'
       setTimeout(() => c.style.outline = '', 1200)
       break
     }
@@ -453,12 +453,12 @@ onMounted(async () => {
 .page { padding: 16px; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .page-title { font-size: 18px; font-weight: 600; }
-.empty-tip { text-align: center; color: #c0c4cc; padding: 40px; }
+.empty-tip { text-align: center; color: var(--el-text-color-placeholder); padding: 40px; }
 .subsystem-bars { display: flex; flex-direction: column; gap: 6px; }
 .sub-bar { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 6px; border-radius: 4px; }
-.sub-bar:hover { background: #f5f7fa; }
+.sub-bar:hover { background: var(--el-fill-color-light); }
 .sub-bar-color { width: 4px; height: 18px; border-radius: 2px; }
 .sub-bar-name { font-size: 13px; min-width: 70px; }
-.sub-bar-count { color: #909399; font-size: 12px; min-width: 50px; text-align: right; }
-.sub-bar-pct { color: #909399; font-size: 12px; min-width: 35px; }
+.sub-bar-count { color: var(--el-color-info); font-size: 12px; min-width: 50px; text-align: right; }
+.sub-bar-pct { color: var(--el-color-info); font-size: 12px; min-width: 35px; }
 </style>

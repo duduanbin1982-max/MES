@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">⚙️ 系统设置</div>
+      <div class="page-title"><el-icon><Setting /></el-icon> 系统设置</div>
       <div>
         <el-button @click="load" :loading="loading">刷新</el-button>
         <el-button @click="showTestFeishu = true" type="primary">测试飞书</el-button>
@@ -10,9 +10,9 @@
 
     <el-row :gutter="12" style="margin-bottom: 12px" v-loading="loading">
       <el-col :span="6"><div class="stat-card"><div class="stat-label">总设置</div><div class="stat-value">{{ stats.total }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">已设置</div><div class="stat-value" style="color: #67c23a">{{ stats.set }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">未设置</div><div class="stat-value" style="color: #e6a23c">{{ stats.unset }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">敏感项</div><div class="stat-value" style="color: #909399">{{ stats.secret }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">已设置</div><div class="stat-value" style="color: var(--el-color-success)">{{ stats.set }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">未设置</div><div class="stat-value" style="color: var(--el-color-warning)">{{ stats.unset }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">敏感项</div><div class="stat-value" style="color: var(--el-color-info)">{{ stats.secret }}</div></div></el-col>
     </el-row>
 
     <el-card>
@@ -21,7 +21,7 @@
           <el-select v-model="category" placeholder="全部分类" clearable style="width: 160px" @change="load">
             <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
           </el-select>
-          <span style="flex: 1; color: #909399; font-size: 12px">修改后即时生效（5s 缓存）</span>
+          <span style="flex: 1; color: var(--el-color-info); font-size: 12px">修改后即时生效（5s 缓存）</span>
         </div>
       </template>
       <el-table :data="filtered" stripe size="small" empty-text="加载中">
@@ -34,7 +34,7 @@
         <el-table-column prop="value_type" label="类型" width="80" />
         <el-table-column label="值" min-width="200">
           <template #default="{ row }">
-            <span v-if="row.is_secret" style="color: #909399; font-style: italic">**** (敏感) — {{ row.is_set ? '已设置' : '未设置' }}</span>
+            <span v-if="row.is_secret" style="color: var(--el-color-info); font-style: italic">**** (敏感) — {{ row.is_set ? '已设置' : '未设置' }}</span>
             <span v-else style="font-family: monospace">{{ row.value === null ? '(空)' : row.value }}</span>
           </template>
         </el-table-column>
@@ -92,7 +92,7 @@ const category = ref<string>('')
 const showEdit = ref(false)
 const showTestFeishu = ref(false)
 const editing = ref<any>({ key: '', value: '', value_type: 'string', description: '', is_secret: false })
-const testFeishu = ref({ title: '🔔 MES 测试消息', content: '这是一条来自 Settings.vue 的测试消息' })
+const testFeishu = ref({ title: '<el-icon><Bell /></el-icon> MES 测试消息', content: '这是一条来自 Settings.vue 的测试消息' })
 
 const categories = computed(() => [...new Set(items.value.map((i: any) => i.category).filter(Boolean))])
 const filtered = computed(() => category.value ? items.value.filter((i: any) => i.category === category.value) : items.value)
@@ -141,7 +141,7 @@ onMounted(load)
 </script>
 
 <style scoped>
-.stat-card { background: #fff; padding: 16px; border-radius: 6px; text-align: center; border: 1px solid #ebeef5; }
-.stat-label { font-size: 12px; color: #909399; margin-bottom: 6px; }
-.stat-value { font-size: 24px; font-weight: 600; color: #303133; }
+.stat-card { background: var(--el-color-white); padding: 16px; border-radius: 6px; text-align: center; border: 1px solid var(--el-border-color-lighter); }
+.stat-label { font-size: 12px; color: var(--el-color-info); margin-bottom: 6px; }
+.stat-value { font-size: 24px; font-weight: 600; color: var(--el-text-color-primary); }
 </style>

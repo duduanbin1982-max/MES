@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">🔄 工作流引擎</div>
+      <div class="page-title"><el-icon><Refresh /></el-icon> 工作流引擎</div>
       <div>
         <el-radio-group v-model="viewMode" size="small" style="margin-right: 12px">
           <el-radio-button value="defs">流程定义</el-radio-button>
@@ -20,12 +20,12 @@
               <span style="font-weight: 600">{{ d.display_name }}</span>
               <el-tag size="small" style="margin-left: 8px">{{ d.entity_type }}</el-tag>
             </template>
-            <p style="color: #909399; font-size: 13px; margin-bottom: 8px">{{ d.description }}</p>
+            <p style="color: var(--el-color-info); font-size: 13px; margin-bottom: 8px">{{ d.description }}</p>
             <div style="margin-bottom: 8px">
-              <span style="font-size: 12px; color: #909399">状态流转: </span>
+              <span style="font-size: 12px; color: var(--el-color-info)">状态流转: </span>
               <el-tag v-for="(s,i) in d.states" :key="s" size="small" style="margin: 2px" :type="i===0?'':i===d.states.length-1?'success':''">{{ s }}</el-tag>
             </div>
-            <div><span style="font-size: 12px; color: #909399">迁移数: {{ d.transitions_count }}</span></div>
+            <div><span style="font-size: 12px; color: var(--el-color-info)">迁移数: {{ d.transitions_count }}</span></div>
           </el-card>
         </el-col>
       </el-row>
@@ -124,7 +124,7 @@
         <div style="font-weight: 500; margin-bottom: 8px">流转记录</div>
         <el-timeline>
           <el-timeline-item v-for="h in detailDlg.data.history" :key="h.id" :timestamp="h.created_at" placement="top">
-            {{ h.from_state }} → {{ h.to_state }} ({{ h.action }}) <span v-if="h.comment" style="color:#909399">— {{ h.comment }}</span>
+            {{ h.from_state }} → {{ h.to_state }} ({{ h.action }}) <span v-if="h.comment" style="color:var(--el-color-info)">— {{ h.comment }}</span>
           </el-timeline-item>
         </el-timeline>
       </div>

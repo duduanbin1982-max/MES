@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="page">
-    <div class="page-header"><div class="page-title">🚨 ANDON 安灯报警</div></div>
+    <div class="page-header"><div class="page-title"><el-icon><Warning /></el-icon> ANDON 安灯报警</div></div>
 
     <el-tabs v-model="activeTab" type="border-card">
       <!-- Tab 1: 报警列表 (existing) -->
@@ -16,7 +16,7 @@
           <el-select v-model="f.status" placeholder="状态" clearable @change="load" style="width:110px"><el-option label="未处理" value="open"/><el-option label="已确认" value="acknowledged"/><el-option label="已解决" value="resolved"/></el-select>
           <el-select v-model="f.type" placeholder="类型" clearable @change="load" style="width:120px"><el-option label="库存低" value="inventory_low"/><el-option label="工单逾期" value="wo_overdue"/><el-option label="设备故障" value="equipment_down"/><el-option label="质检不合格" value="qc_fail"/></el-select>
           <el-button type="primary" @click="load" :loading="loading">刷新</el-button>
-          <el-button @click="doScan" :loading="scanning">🔍 扫描触发</el-button>
+          <el-button @click="doScan" :loading="scanning"><el-icon><Search /></el-icon> 扫描触发</el-button>
         </div>
         <el-table :data="alerts" stripe v-loading="loading" size="small" max-height="500">
           <el-table-column label="级别" width="80"><template #default="{row}"><el-tag :type="row.level" size="small">{{ {danger:'严重',warning:'警告',info:'提示'}[row.level]||row.level }}</el-tag></template></el-table-column>

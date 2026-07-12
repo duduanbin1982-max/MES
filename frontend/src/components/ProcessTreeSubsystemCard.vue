@@ -152,7 +152,7 @@ const progressPct = computed(() => props.subsystem.progress_pct || 0)
 <style scoped>
 .subsystem-card {
   margin-bottom: 12px;
-  border-left: 4px solid var(--card-border, #409eff);
+  border-left: 4px solid var(--card-border, var(--el-color-primary));
 }
 .subsystem-card .card-header {
   display: flex;
@@ -177,42 +177,42 @@ const progressPct = computed(() => props.subsystem.progress_pct || 0)
   gap: 8px;
 }
 .title .seq {
-  color: #909399;
+  color: var(--el-color-info);
   font-weight: 400;
   font-size: 12px;
 }
 .title .name-en {
-  color: #909399;
+  color: var(--el-color-info);
   font-size: 12px;
   font-weight: 400;
 }
 .subtitle {
-  color: #909399;
+  color: var(--el-color-info);
   font-size: 12px;
   margin-top: 4px;
 }
-.subtitle .ok { color: #67c23a; }
-.subtitle .bad { color: #f56c6c; }
-.subtitle .warn { color: #e6a23c; }
+.subtitle .ok { color: var(--el-color-success); }
+.subtitle .bad { color: var(--el-color-danger); }
+.subtitle .warn { color: var(--el-color-warning); }
 .collapse-icon {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   font-size: 16px;
 }
 .card-body { padding-top: 12px; }
 .subsystem-card.drop-active {
-  outline: 2px dashed #67c23a;
+  outline: 2px dashed var(--el-color-success);
   outline-offset: -2px;
-  background: #f0f9eb;
+  background: var(--el-color-success-light-9);
   transition: background 0.1s ease;
 }
 .subsystem-card.drop-same {
-  outline: 2px dashed #c0c4cc;
+  outline: 2px dashed var(--el-text-color-placeholder);
   outline-offset: -2px;
   cursor: not-allowed;
 }
 .empty-tip {
   text-align: center;
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   padding: 16px;
   font-size: 13px;
 }

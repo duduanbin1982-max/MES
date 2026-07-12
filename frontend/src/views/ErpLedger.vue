@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">💰 ERP 成本台账</div>
+      <div class="page-title"><el-icon><Money /></el-icon> ERP 成本台账</div>
       <div style="display:flex;gap:8px">
         <el-button type="success" @click="doRollup" :loading="rolling">成本归集</el-button>
         <el-button @click="exportLedger" :loading="exporting">导出台账</el-button>
@@ -11,7 +11,7 @@
 
     <el-tabs v-model="activeTab">
       <!-- Tab: 成本台账 -->
-      <el-tab-pane label="📒 成本台账" name="ledger">
+      <el-tab-pane label="<el-icon><Notebook /></el-icon> 成本台账" name="ledger">
         <el-form :inline="true" size="small" style="margin-bottom:8px">
           <el-form-item label="实例"><el-select v-model="filterInstance" clearable style="width:180px" @change="loadLedger"><el-option v-for="i in instances" :key="i.id" :label="i.instance_code" :value="i.id"/></el-select></el-form-item>
           <el-form-item label="状态"><el-select v-model="filterStatus" clearable style="width:120px" @change="loadLedger"><el-option label="待导出" value="pending"/><el-option label="已导出" value="exported"/></el-select></el-form-item>
@@ -21,15 +21,15 @@
           <el-table-column prop="entry_date" label="日期" width="100" />
           <el-table-column prop="gl_account_code" label="科目" width="80" />
           <el-table-column prop="description" label="摘要" min-width="250" />
-          <el-table-column label="借方" width="120"><template #default="{row}"><span style="color:#f56c6c">{{ row.debit_amount?.toFixed(2) }}</span></template></el-table-column>
-          <el-table-column label="贷方" width="120"><template #default="{row}"><span style="color:#67c23a">{{ row.credit_amount?.toFixed(2) }}</span></template></el-table-column>
+          <el-table-column label="借方" width="120"><template #default="{row}"><span style="color:var(--el-color-danger)">{{ row.debit_amount?.toFixed(2) }}</span></template></el-table-column>
+          <el-table-column label="贷方" width="120"><template #default="{row}"><span style="color:var(--el-color-success)">{{ row.credit_amount?.toFixed(2) }}</span></template></el-table-column>
           <el-table-column prop="source_type" label="来源" width="110" />
           <el-table-column label="状态" width="80"><template #default="{row}"><el-tag :type="row.status==='pending'?'warning':'success'" size="small">{{row.status}}</el-tag></template></el-table-column>
         </el-table>
       </el-tab-pane>
 
       <!-- Tab: 汇总 -->
-      <el-tab-pane label="📊 科目汇总" name="summary">
+      <el-tab-pane label="<el-icon><DataAnalysis /></el-icon> 科目汇总" name="summary">
         <el-form :inline="true" size="small" style="margin-bottom:8px">
           <el-form-item label="实例"><el-select v-model="sumInstance" clearable style="width:180px" @change="loadSummary"><el-option v-for="i in instances" :key="i.id" :label="i.instance_code" :value="i.id"/></el-select></el-form-item>
           <el-form-item><el-button type="primary" size="small" @click="loadSummary">查询</el-button></el-form-item>
@@ -41,14 +41,14 @@
           <el-table-column prop="entry_count" label="笔数" width="80" />
         </el-table>
         <div v-if="summaryTotal" style="margin-top:8px;font-weight:600">
-          借方合计: <span style="color:#f56c6c">{{ summaryTotal.total_debit?.toFixed(2) }}</span> &nbsp;
-          贷方合计: <span style="color:#67c23a">{{ summaryTotal.total_credit?.toFixed(2) }}</span> &nbsp;
+          借方合计: <span style="color:var(--el-color-danger)">{{ summaryTotal.total_debit?.toFixed(2) }}</span> &nbsp;
+          贷方合计: <span style="color:var(--el-color-success)">{{ summaryTotal.total_credit?.toFixed(2) }}</span> &nbsp;
           净额: {{ summaryTotal.net?.toFixed(2) }}
         </div>
       </el-tab-pane>
 
       <!-- Tab: GL 科目 -->
-      <el-tab-pane label="📋 GL 科目表" name="gl">
+      <el-tab-pane label="<el-icon><Document /></el-icon> GL 科目表" name="gl">
         <el-button type="primary" size="small" style="margin-bottom:8px" @click="showAddGl=true">+ 添加科目</el-button>
         <el-table :data="glAccounts" size="small">
           <el-table-column prop="account_code" label="编码" width="100" />
@@ -60,7 +60,7 @@
       </el-tab-pane>
 
       <!-- Tab: 导出日志 -->
-      <el-tab-pane label="📤 导出日志" name="export">
+      <el-tab-pane label="<el-icon><Upload /></el-icon> 导出日志" name="export">
         <el-table :data="exportLogs" size="small" empty-text="无导出记录">
           <el-table-column prop="export_type" label="类型" width="140" />
           <el-table-column prop="record_count" label="记录数" width="80" />

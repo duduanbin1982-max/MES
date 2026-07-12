@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📜 审计日志</div>
+      <div class="page-title"><el-icon><Memo /></el-icon> 审计日志</div>
       <el-button @click="load">刷新</el-button>
     </div>
     <el-card>
@@ -44,7 +44,7 @@
         <el-table-column label="资源" width="180">
           <template #default="{ row }">
             <span v-if="row.resource_type">{{ row.resource_type }}#{{ row.resource_id || '-' }}</span>
-            <span v-else style="color: #909399">-</span>
+            <span v-else style="color: var(--el-color-info)">-</span>
           </template>
         </el-table-column>
         <el-table-column prop="diff_summary" label="变更摘要" min-width="240" />
@@ -78,7 +78,7 @@
 
     <!-- 详情对话框 -->
     <el-dialog v-model="dlgDetail" title="审计日志详情" width="720px">
-      <pre v-if="current" style="background: #f5f7fa; padding: 12px; border-radius: 4px; font-size: 12px; max-height: 500px; overflow: auto">{{ JSON.stringify(current, null, 2) }}</pre>
+      <pre v-if="current" style="background: var(--el-fill-color-light); padding: 12px; border-radius: 4px; font-size: 12px; max-height: 500px; overflow: auto">{{ JSON.stringify(current, null, 2) }}</pre>
     </el-dialog>
   </div>
 </template>

@@ -1,6 +1,6 @@
 .mindmap {
-  background: #fff;
-  border: 1px solid #ebeef5;
+  background: var(--el-color-white);
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 6px;
   padding: 0;
   margin-bottom: 16px;
@@ -13,13 +13,13 @@
   padding: 10px 14px;
   cursor: pointer;
   user-select: none;
-  background: #fafbfc;
-  border-bottom: 1px solid #ebeef5;
+  background: var(--el-bg-color-overlay);
+  border-bottom: 1px solid var(--el-border-color-lighter);
   border-radius: 6px 6px 0 0;
 }
 
 .mindmap-toggle {
-  color: #909399;
+  color: var(--el-color-info);
   font-size: 12px;
   width: 14px;
   display: inline-block;
@@ -28,13 +28,13 @@
 .mindmap-title {
   font-weight: 600;
   font-size: 14px;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .mindmap-hint {
   margin-left: auto;
   font-size: 12px;
-  color: #909399;
+  color: var(--el-color-info);
 }
 
 .mindmap-body {
@@ -58,7 +58,7 @@
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 4px;
   margin-bottom: 12px;
   font-size: 13px;
@@ -71,7 +71,7 @@
   padding: 4px 8px;
   border-radius: 3px;
   cursor: pointer;
-  color: #409eff;
+  color: var(--el-color-primary);
   transition: background 0.15s ease;
 }
 
@@ -80,14 +80,14 @@
 }
 
 .mindmap-crumb-current {
-  color: #303133;
+  color: var(--el-text-color-primary);
   cursor: default;
-  background: #fff;
+  background: var(--el-color-white);
   font-weight: 600;
 }
 
 .mindmap-crumb-current:hover {
-  background: #fff;
+  background: var(--el-color-white);
 }
 
 .mindmap-crumb-icon {
@@ -95,7 +95,7 @@
 }
 
 .mindmap-crumb-sep {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   margin-left: 4px;
 }
 
@@ -113,25 +113,25 @@
   flex-direction: column;
   align-items: center;
   padding: 10px 14px;
-  background: #f5f7fa;
+  background: var(--el-fill-color-light);
   border-radius: 4px;
-  border-left: 3px solid #dcdfe6;
+  border-left: 3px solid var(--el-border-color);
 }
 
 .mindmap-stat-value {
   font-size: 20px;
   font-weight: 700;
-  color: #303133;
+  color: var(--el-text-color-primary);
   line-height: 1.2;
 }
 
-.mindmap-stat-done { color: #67c23a; }
-.mindmap-stat-doing { color: #e6a23c; }
-.mindmap-stat-pct { color: #409eff; }
+.mindmap-stat-done { color: var(--el-color-success); }
+.mindmap-stat-doing { color: var(--el-color-warning); }
+.mindmap-stat-pct { color: var(--el-color-primary); }
 
 .mindmap-stat-label {
   font-size: 11px;
-  color: #909399;
+  color: var(--el-color-info);
   margin-top: 2px;
 }
 
@@ -139,8 +139,8 @@
 .mindmap-chart {
   width: 100%;
   height: 420px;
-  background: #fafbfc;
-  border: 1px solid #ebeef5;
+  background: var(--el-bg-color-overlay);
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 4px;
   margin-bottom: 12px;
 }
@@ -154,13 +154,13 @@
 
 /* 子节点卡片网格 */
 .mindmap-children {
-  border-top: 1px dashed #ebeef5;
+  border-top: 1px dashed var(--el-border-color-lighter);
   padding-top: 12px;
 }
 
 .mindmap-children-title {
   font-size: 12px;
-  color: #606266;
+  color: var(--el-text-color-regular);
   font-weight: 600;
   margin-bottom: 8px;
 }
@@ -176,15 +176,15 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #ebeef5;
+  background: var(--el-color-white);
+  border: 1px solid var(--el-border-color-lighter);
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .mindmap-child-card:hover {
-  border-color: #409eff;
+  border-color: var(--el-color-primary);
   background: #ecf5ff;
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(64, 158, 255, 0.15);
@@ -205,7 +205,7 @@
 .mindmap-child-name {
   font-size: 13px;
   font-weight: 500;
-  color: #303133;
+  color: var(--el-text-color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -224,34 +224,34 @@
   font-size: 10px;
   border-radius: 2px;
   background: #f0f2f5;
-  color: #606266;
+  color: var(--el-text-color-regular);
 }
 
-.mindmap-child-tag-op { background: #fdf6ec; color: #e6a23c; }
-.mindmap-child-tag-done { background: #f0f9eb; color: #67c23a; }
-.mindmap-child-tag-doing { background: #fdf6ec; color: #e6a23c; }
-.mindmap-child-tag-pending { background: #f4f4f5; color: #909399; }
+.mindmap-child-tag-op { background: var(--el-color-warning-light-9); color: var(--el-color-warning); }
+.mindmap-child-tag-done { background: var(--el-color-success-light-9); color: var(--el-color-success); }
+.mindmap-child-tag-doing { background: var(--el-color-warning-light-9); color: var(--el-color-warning); }
+.mindmap-child-tag-pending { background: #f4f4f5; color: var(--el-color-info); }
 
-.mindmap-child-status-pending { background: #f4f4f5; color: #909399; }
-.mindmap-child-status-ready { background: #ecf5ff; color: #409eff; }
-.mindmap-child-status-in_progress { background: #fdf6ec; color: #e6a23c; }
-.mindmap-child-status-completed { background: #f0f9eb; color: #67c23a; }
-.mindmap-child-status-blocked { background: #fef0f0; color: #f56c6c; }
+.mindmap-child-status-pending { background: #f4f4f5; color: var(--el-color-info); }
+.mindmap-child-status-ready { background: #ecf5ff; color: var(--el-color-primary); }
+.mindmap-child-status-in_progress { background: var(--el-color-warning-light-9); color: var(--el-color-warning); }
+.mindmap-child-status-completed { background: var(--el-color-success-light-9); color: var(--el-color-success); }
+.mindmap-child-status-blocked { background: var(--el-color-danger-light-9); color: var(--el-color-danger); }
 
 .mindmap-child-arrow {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   font-size: 18px;
   flex-shrink: 0;
 }
 
 .mindmap-child-card:hover .mindmap-child-arrow {
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 
 .mindmap-hint-tiny {
   margin-left: 6px;
   font-size: 11px;
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   font-weight: normal;
 }
 
@@ -277,12 +277,12 @@
 
 .mindmap-tooltip-name {
   font-weight: 600;
-  color: #fff;
+  color: var(--el-color-white);
   font-size: 13px;
 }
 
 .mindmap-tooltip-en {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   font-size: 11px;
   font-style: italic;
 }
@@ -295,12 +295,12 @@
 }
 
 .mindmap-tooltip-key {
-  color: #c0c4cc;
+  color: var(--el-text-color-placeholder);
   flex-shrink: 0;
 }
 
 .mindmap-tooltip-val {
-  color: #fff;
+  color: var(--el-color-white);
   text-align: right;
   word-break: break-word;
 }
@@ -314,20 +314,20 @@
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.15);
-  color: #409eff;
+  color: var(--el-color-primary);
   font-size: 11px;
   text-align: center;
 }
 
 /* Element Plus tooltip popper 全局样式（scoped 不生效） */
 .mindmap-tooltip-pop.el-popper {
-  background: #303133 !important;
-  color: #fff !important;
+  background: var(--el-text-color-primary) !important;
+  color: var(--el-color-white) !important;
   border: none !important;
   padding: 8px 10px !important;
   max-width: 360px;
 }
 .mindmap-tooltip-pop.el-popper .el-popper__arrow::before {
-  background: #303133 !important;
-  border-color: #303133 !important;
+  background: var(--el-text-color-primary) !important;
+  border-color: var(--el-text-color-primary) !important;
 }

@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📐 PLM 图纸管理</div>
+      <div class="page-title"><el-icon><TrendCharts /></el-icon> PLM 图纸管理</div>
       <div style="display:flex;gap:8px">
         <el-button type="primary" @click="showAddDwg=true">+ 新建图纸</el-button>
         <el-button type="success" @click="showAddEco=true" :disabled="!currentDwg">+ ECO 变更</el-button>
@@ -12,14 +12,14 @@
     <!-- Dashboard -->
     <el-row :gutter="12" style="margin-bottom:12px">
       <el-col :span="6"><div class="stat-card"><div class="stat-label">图纸总数</div><div class="stat-value">{{ dash.drawings?.total||0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">已签发</div><div class="stat-value" style="color:#67c23a">{{ dash.drawings?.issued||0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">待审批 ECO</div><div class="stat-value" style="color:#e6a23c">{{ dash.eco?.pending||0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">按状态</div><div class="stat-value" style="font-size:12px;color:#909399" v-for="s in dash.by_status||[]" :key="s.status">{{s.status}}:{{s.cnt}}&nbsp;</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">已签发</div><div class="stat-value" style="color:var(--el-color-success)">{{ dash.drawings?.issued||0 }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">待审批 ECO</div><div class="stat-value" style="color:var(--el-color-warning)">{{ dash.eco?.pending||0 }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">按状态</div><div class="stat-value" style="font-size:12px;color:var(--el-color-info)" v-for="s in dash.by_status||[]" :key="s.status">{{s.status}}:{{s.cnt}}&nbsp;</div></div></el-col>
     </el-row>
 
     <!-- Drawings Table -->
     <el-card style="margin-bottom:12px">
-      <template #header><span style="font-weight:600">📋 图纸列表</span></template>
+      <template #header><span style="font-weight:600"><el-icon><Document /></el-icon> 图纸列表</span></template>
       <el-table :data="drawings" stripe size="small" @row-click="selectDwg" highlight-current-row empty-text="暂无图纸">
         <el-table-column prop="drawing_no" label="图号" width="160" />
         <el-table-column prop="title" label="标题" min-width="180" />
@@ -41,7 +41,7 @@
 
     <!-- Drawing Detail -->
     <el-card v-if="currentDwg" style="margin-bottom:12px">
-      <template #header><span style="font-weight:600">🔍 {{ currentDwg.drawing_no }} 详情</span></template>
+      <template #header><span style="font-weight:600"><el-icon><Search /></el-icon> {{ currentDwg.drawing_no }} 详情</span></template>
       <el-descriptions :column="3" size="small" border>
         <el-descriptions-item label="图号">{{ currentDwg.drawing_no }}</el-descriptions-item>
         <el-descriptions-item label="版本">{{ currentDwg.revision }}</el-descriptions-item>
@@ -55,7 +55,7 @@
       </el-descriptions>
       <div v-if="currentDwg.cad_meta" style="margin-top:8px">
         <el-tag size="small" type="info">CAD BOM: {{ currentDwg.cad_meta.part_count }} 个零件</el-tag>
-        <div style="font-size:12px;color:#909399;margin-top:4px">{{ currentDwg.cad_meta.extracted_bom_json?.substring(0,200) }}</div>
+        <div style="font-size:12px;color:var(--el-color-info);margin-top:4px">{{ currentDwg.cad_meta.extracted_bom_json?.substring(0,200) }}</div>
       </div>
       <div v-if="currentDwg.versions?.length>1" style="margin-top:8px">
         <div style="font-weight:600;margin-bottom:4px">历史版本</div>
@@ -65,7 +65,7 @@
 
     <!-- ECO Panel -->
     <el-card>
-      <template #header><span style="font-weight:600;color:#e6a23c">🔄 工程变更 (ECO)</span></template>
+      <template #header><span style="font-weight:600;color:var(--el-color-warning)"><el-icon><Refresh /></el-icon> 工程变更 (ECO)</span></template>
       <el-table :data="ecos" size="small" empty-text="暂无变更">
         <el-table-column prop="eco_no" label="编号" width="110" />
         <el-table-column prop="title" label="标题" min-width="180" />
@@ -214,7 +214,7 @@ onMounted(refresh)
 .page { padding: 16px }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px }
 .page-title { font-size: 20px; font-weight: 700 }
-.stat-card { background: #f5f7fa; border-radius: 8px; padding: 16px; text-align: center }
-.stat-label { font-size: 12px; color: #909399 }
+.stat-card { background: var(--el-fill-color-light); border-radius: 8px; padding: 16px; text-align: center }
+.stat-label { font-size: 12px; color: var(--el-color-info) }
 .stat-value { font-size: 28px; font-weight: 700; margin: 4px 0 }
 </style>

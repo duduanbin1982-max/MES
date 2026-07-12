@@ -13,7 +13,7 @@
       <el-table-column v-if="tier > 0" label="物料" min-width="180">
         <template #default="{ row }">
           <span style="font-weight: 500">{{ row.material_name || row.part_number || '(无)' }}</span>
-          <span style="color: #909399; font-size: 11px; margin-left: 4px">{{ row.material_code || '' }}</span>
+          <span style="color: var(--el-color-info); font-size: 11px; margin-left: 4px">{{ row.material_code || '' }}</span>
         </template>
       </el-table-column>
       <el-table-column v-else label="整机" min-width="180">

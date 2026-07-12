@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <span class="page-title">🌳 BOM 管理</span>
+        <span class="page-title"><el-icon><Connection(orShare) /></el-icon> BOM 管理</span>
         <el-tag size="small" type="info" style="margin-left: 12px">4 级拆分法 · 12 字段 · ECO 追溯</el-tag>
       </div>
       <div>
@@ -17,28 +17,28 @@
       <!-- 顶部 4 级统计卡 -->
       <el-col :span="6">
         <el-card class="level-card" :class="{ active: activeLevel === 0 }" @click="setLevel(0)" shadow="hover">
-          <div class="level-num" style="color: #f56c6c">{{ summary[0] || 0 }}</div>
+          <div class="level-num" style="color: var(--el-color-danger)">{{ summary[0] || 0 }}</div>
           <div class="level-label">0 级 · 总装</div>
           <div class="level-tip">整台设备 (1 个根)</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card class="level-card" :class="{ active: activeLevel === 1 }" @click="setLevel(1)" shadow="hover">
-          <div class="level-num" style="color: #e6a23c">{{ summary[1] || 0 }}</div>
+          <div class="level-num" style="color: var(--el-color-warning)">{{ summary[1] || 0 }}</div>
           <div class="level-label">1 级 · 部件/模组</div>
           <div class="level-tip">装配班组按部件领料</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card class="level-card" :class="{ active: activeLevel === 2 }" @click="setLevel(2)" shadow="hover">
-          <div class="level-num" style="color: #409eff">{{ summary[2] || 0 }}</div>
+          <div class="level-num" style="color: var(--el-color-primary)">{{ summary[2] || 0 }}</div>
           <div class="level-label">2 级 · 零件与外购件</div>
           <div class="level-tip">采购下单 / 加工领料</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card class="level-card" :class="{ active: activeLevel === 3 }" @click="setLevel(3)" shadow="hover">
-          <div class="level-num" style="color: #67c23a">{{ summary[3] || 0 }}</div>
+          <div class="level-num" style="color: var(--el-color-success)">{{ summary[3] || 0 }}</div>
           <div class="level-label">3 级 · 原材料毛坯</div>
           <div class="level-tip">生产下料</div>
         </el-card>
@@ -47,14 +47,14 @@
 
     <el-tabs v-model="mainTab" v-if="instanceId" style="margin-top: 12px">
       <!-- Tab 1: 总览 (树状) -->
-      <el-tab-pane label="🌲 总览 (树状)" name="tree">
+      <el-tab-pane label="<el-icon><Share /></el-icon> 总览 (树状)" name="tree">
         <div style="display: flex; gap: 12px; margin-bottom: 8px">
           <el-button size="small" type="primary" @click="dlgAdd = true; editingNode = null">+ 新增根节点</el-button>
-          <el-button size="small" type="success" :disabled="summary.total > 0" @click="initMinimumBom">🧱 生成最低三级骨架</el-button>
-          <el-button size="small" @click="dlgImport = true">📥 CSV 导入</el-button>
-          <el-button size="small" @click="loadTemplate">📋 工业模板</el-button>
-          <el-button size="small" type="warning" @click="doValidate">🔍 校验</el-button>
-          <el-button size="small" type="success" @click="dlgCompare = true">🔄 ECO 对比</el-button>
+          <el-button size="small" type="success" :disabled="summary.total > 0" @click="initMinimumBom"><el-icon><Histogram /></el-icon> 生成最低三级骨架</el-button>
+          <el-button size="small" @click="dlgImport = true"><el-icon><Download /></el-icon> CSV 导入</el-button>
+          <el-button size="small" @click="loadTemplate"><el-icon><Document /></el-icon> 工业模板</el-button>
+          <el-button size="small" type="warning" @click="doValidate"><el-icon><Search /></el-icon> 校验</el-button>
+          <el-button size="small" type="success" @click="dlgCompare = true"><el-icon><Refresh /></el-icon> ECO 对比</el-button>
           <el-input v-model="treeFilter" placeholder="搜索零件/图号/物料名" size="small" style="width: 240px; margin-left: auto" clearable />
         </div>
         <el-alert
@@ -69,7 +69,7 @@
           <el-col :span="6">
             <el-card shadow="hover">
               <div class="health-title">BOM 健康度</div>
-              <div class="health-score" :style="{ color: health.score >= 85 ? '#67c23a' : health.score >= 60 ? '#e6a23c' : '#f56c6c' }">{{ health.score || 0 }}</div>
+              <div class="health-score" :style="{ color: health.score >= 85 ? 'var(--el-color-success)' : health.score >= 60 ? 'var(--el-color-warning)' : 'var(--el-color-danger)' }">{{ health.score || 0 }}</div>
               <div class="health-sub">建议先把 80 分以上再流转采购/工艺</div>
             </el-card>
           </el-col>
@@ -118,7 +118,7 @@
                     <el-tag v-if="data.is_wear_part" size="small" type="warning">易损</el-tag>
                     <el-tag v-if="data.is_key_component" size="small" type="danger">关键</el-tag>
                     <span style="font-weight: 500">{{ data.material_name || data.part_number || '(未命名)' }}</span>
-                    <span style="color: #909399; font-size: 12px">×{{ data.quantity }}{{ data.unit }}</span>
+                    <span style="color: var(--el-color-info); font-size: 12px">×{{ data.quantity }}{{ data.unit }}</span>
                     <el-button size="small" type="primary" link @click.stop="openAddChild(data)">+子</el-button>
                   </span>
                 </template>
@@ -130,17 +130,17 @@
             <el-card style="margin-bottom: 12px">
               <template #header>
                 <div style="display: flex; align-items: center; justify-content: space-between">
-                  <span>💰 成本汇总 (MRP 自底向上)</span>
+                  <span><el-icon><Money /></el-icon> 成本汇总 (MRP 自底向上)</span>
                   <el-tag :type="totalCost > 0 ? 'success' : 'info'" size="default">总成本: ¥{{ totalCost.toFixed(2) }}</el-tag>
                 </div>
               </template>
               <el-table :data="costs" size="small" max-height="200" empty-text="该 BOM 无 unit_price, 成本全为 0">
                 <el-table-column prop="id" label="ID" width="50" />
                 <el-table-column label="物料" min-width="160">
-                  <template #default="{ row }">{{ row.material_name || '(无)' }} <span style="color: #909399; font-size: 11px">{{ row.material_code }}</span></template>
+                  <template #default="{ row }">{{ row.material_name || '(无)' }} <span style="color: var(--el-color-info); font-size: 11px">{{ row.material_code }}</span></template>
                 </el-table-column>
                 <el-table-column prop="is_phantom" label="虚项" width="50">
-                  <template #default="{ row }">{{ row.is_phantom ? '✓' : '' }}</template>
+                  <template #default="{ row }"><template v-if="row.is_phantom"><el-icon><Select /></el-icon></template><template v-else></template></template>
                 </el-table-column>
                 <el-table-column prop="self" label="自身" width="80" :formatter="(r) => r.self.toFixed(2)" />
                 <el-table-column prop="cost" label="累计" width="80" :formatter="(r) => r.cost.toFixed(2)" />
@@ -149,7 +149,7 @@
             <el-card v-if="selected">
               <template #header>
                 <div style="display: flex; align-items: center; justify-content: space-between">
-                  <span>🔍 节点详情 #{{ selected.id }} ({{ tierName(selected.tier) }})</span>
+                  <span><el-icon><Search /></el-icon> 节点详情 #{{ selected.id }} ({{ tierName(selected.tier) }})</span>
                   <div>
                     <el-button size="small" @click="openEdit">编辑</el-button>
                     <el-button size="small" type="danger" @click="doDelete(selected)">删除</el-button>
@@ -195,7 +195,7 @@
         <el-card v-if="drillNode" style="margin-top: 12px">
           <template #header>
             <div style="display: flex; align-items: center; justify-content: space-between">
-              <span>🔍 部件 "{{ drillNode.material_name || drillNode.part_number }}" 下子件 ({{ drillChildren.length }} 项)</span>
+              <span><el-icon><Search /></el-icon> 部件 "{{ drillNode.material_name || drillNode.part_number }}" 下子件 ({{ drillChildren.length }} 项)</span>
               <el-button size="small" @click="drillNode = null">收起</el-button>
             </div>
           </template>
@@ -370,13 +370,13 @@ const {
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .page-title { font-size: 18px; font-weight: 600; }
 .level-card { cursor: pointer; text-align: center; transition: all .2s; }
-.level-card.active { box-shadow: 0 0 0 2px #409eff inset; }
+.level-card.active { box-shadow: 0 0 0 2px var(--el-color-primary) inset; }
 .level-num { font-size: 28px; font-weight: 600; }
 .level-label { font-size: 14px; font-weight: 500; margin-top: 4px; }
-.level-tip { font-size: 12px; color: #909399; margin-top: 2px; }
-.health-title { font-size: 13px; color: #606266; margin-bottom: 8px; }
+.level-tip { font-size: 12px; color: var(--el-color-info); margin-top: 2px; }
+.health-title { font-size: 13px; color: var(--el-text-color-regular); margin-bottom: 8px; }
 .health-score { font-size: 32px; font-weight: 700; line-height: 1; }
 .health-metric { font-size: 18px; font-weight: 600; line-height: 1.4; }
-.health-sub { font-size: 12px; color: #909399; margin-top: 8px; min-height: 32px; }
+.health-sub { font-size: 12px; color: var(--el-color-info); margin-top: 8px; min-height: 32px; }
 :deep(.el-tree-node__content) { height: 32px; }
 </style>

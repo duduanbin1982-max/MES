@@ -1,14 +1,14 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">👷 劳动力管理 (资质·技能·工时)</div>
+      <div class="page-title"><el-icon><UserFilled /></el-icon> 劳动力管理 (资质·技能·工时)</div>
       <el-button @click="refresh" :icon="Refresh" :loading="loading">刷新</el-button>
     </div>
 
     <!-- 统计卡片 -->
     <el-row :gutter="12" style="margin-bottom:12px">
       <el-col :span="4"><el-card shadow="never"><el-statistic title="在册工人" :value="dash.workers?.length || 0" /></el-card></el-col>
-      <el-col :span="5"><el-card shadow="never"><el-statistic title="证书临期(30天)" :value="dash.expiring_certs?.length || 0"><template #suffix><span style="color:#e6a23c;font-size:14px">⚠️</span></template></el-statistic></el-card></el-col>
+      <el-col :span="5"><el-card shadow="never"><el-statistic title="证书临期(30天)" :value="dash.expiring_certs?.length || 0"><template #suffix><span style="color:var(--el-color-warning);font-size:14px"><el-icon><Warning /></el-icon></span></template></el-statistic></el-card></el-col>
       <el-col :span="5"><el-card shadow="never"><el-statistic title="技能项数" :value="totalSkills" /></el-card></el-col>
       <el-col :span="5"><el-card shadow="never"><el-statistic title="培训通过率" :value="dash.training?.rate + '%' || '—'" /></el-card></el-col>
       <el-col :span="5"><el-card shadow="never"><el-statistic title="本周工时Top1" :value="topWorkerName" /></el-card></el-col>
@@ -16,7 +16,7 @@
 
     <el-tabs v-model="activeTab" type="border-card">
       <!-- Tab 1: 工人列表 -->
-      <el-tab-pane label="👥 工人名录" name="workers">
+      <el-tab-pane label="<el-icon><User /></el-icon> 工人名录" name="workers">
         <el-table :data="dash.workers" size="small" max-height="400">
           <el-table-column prop="full_name" label="姓名" width="100" />
           <el-table-column prop="role_code" label="角色" width="80">
@@ -35,7 +35,7 @@
       </el-tab-pane>
 
       <!-- Tab 2: 证书 -->
-      <el-tab-pane label="📜 资质证书" name="certs">
+      <el-tab-pane label="<el-icon><Memo /></el-icon> 资质证书" name="certs">
         <div style="margin-bottom:8px">
           <el-button size="small" type="primary" @click="showAddCert=true">添加证书</el-button>
           <el-checkbox v-model="showExpiringOnly" style="margin-left:12px">仅看临期</el-checkbox>
@@ -47,7 +47,7 @@
           <el-table-column prop="cert_level" label="等级" width="60" />
           <el-table-column prop="expiry_date" label="到期日" width="100">
             <template #default="{row}">
-              <span :style="{color: isExpiringSoon(row.expiry_date)?'#f56c6c':''}">{{ row.expiry_date || '永久' }}</span>
+              <span :style="{color: isExpiringSoon(row.expiry_date)?'var(--el-color-danger)':''}">{{ row.expiry_date || '永久' }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="status" label="状态" width="70">
@@ -62,7 +62,7 @@
       </el-tab-pane>
 
       <!-- Tab 3: 技能矩阵 -->
-      <el-tab-pane label="🎯 技能矩阵" name="skills">
+      <el-tab-pane label="<el-icon><Aim /></el-icon> 技能矩阵" name="skills">
         <div style="margin-bottom:8px">
           <el-select v-model="skillCategory" placeholder="技能分类" clearable size="small" style="width:160px">
             <el-option v-for="c in skillCategories" :key="c" :label="c" :value="c" />
@@ -80,13 +80,13 @@
           </el-table-column>
           <el-table-column prop="years_experience" label="年限" width="60" />
           <el-table-column label="持证" width="60">
-            <template #default="{row}"><span :style="{color:row.certified?'#67c23a':'#909399'}">{{ row.certified ? '✅' : '—' }}</span></template>
+            <template #default="{row}"><span :style="{color:row.certified?'var(--el-color-success)':'var(--el-color-info)'}"><template v-if="row.certified"><el-icon><CircleCheck /></el-icon></template><template v-else>—</template></span></template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
 
       <!-- Tab 4: 培训记录 -->
-      <el-tab-pane label="📚 培训记录" name="training">
+      <el-tab-pane label="<el-icon><Reading /></el-icon> 培训记录" name="training">
         <el-table :data="trainings" size="small" max-height="400" @row-click="(r:any)=>{}">
           <el-table-column prop="full_name" label="姓名" width="80" />
           <el-table-column prop="training_name" label="培训名称" min-width="180" />

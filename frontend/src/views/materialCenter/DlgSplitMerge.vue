@@ -4,7 +4,7 @@
       <el-form-item label="源批次"><el-input :value="f1.src_lot_no" disabled /></el-form-item>
       <el-form-item label="拆出数量" required>
         <el-input-number v-model="f1.quantity" :min="0.01" :step="1" :max="f1.src_max" />
-        <span style="margin-left: 8px; color: #909399">/ 可用 {{ f1.src_max }}</span>
+        <span style="margin-left: 8px; color: var(--el-color-info)">/ 可用 {{ f1.src_max }}</span>
       </el-form-item>
       <el-form-item label="新批次号" required><el-input v-model="f1.new_lot_no" /></el-form-item>
       <el-form-item label="库位"><el-input v-model="f1.location" /></el-form-item>

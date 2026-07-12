@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title">📑 文档/图纸管理 (PLM 基础)</div>
+      <div class="page-title"><el-icon><Files /></el-icon> 文档/图纸管理 (PLM 基础)</div>
       <div style="display:flex; gap:8px; align-items:center">
         <el-button @click="refresh" :icon="Refresh">刷新</el-button>
         <el-button type="primary" @click="dlgUpload = true" :icon="UploadFilled">上传新文档</el-button>
@@ -16,15 +16,15 @@
       </el-card>
       <el-card shadow="never" class="stat-card">
         <div class="stat-label">已签发</div>
-        <div class="stat-value" style="color:#67c23a">{{ countByStatus('issued') }}</div>
+        <div class="stat-value" style="color:var(--el-color-success)">{{ countByStatus('issued') }}</div>
       </el-card>
       <el-card shadow="never" class="stat-card">
         <div class="stat-label">草稿</div>
-        <div class="stat-value" style="color:#909399">{{ countByStatus('draft') }}</div>
+        <div class="stat-value" style="color:var(--el-color-info)">{{ countByStatus('draft') }}</div>
       </el-card>
       <el-card shadow="never" class="stat-card">
         <div class="stat-label">已收回</div>
-        <div class="stat-value" style="color:#e6a23c">{{ countByStatus('revoked') }}</div>
+        <div class="stat-value" style="color:var(--el-color-warning)">{{ countByStatus('revoked') }}</div>
       </el-card>
       <el-card shadow="never" class="stat-card">
         <div class="stat-label">存储占用</div>
@@ -66,9 +66,9 @@
       </el-form>
     </el-card>
 
-      <el-card shadow="never" class="stat-card" style="cursor:pointer;border-left:3px solid #f56c6c" @click="loadPendingAck">
-        <div class="stat-label">待签收 <span style="color:#f56c6c">NEW</span></div>
-        <div class="stat-value" style="color:#f56c6c">{{ pendingCount }}</div>
+      <el-card shadow="never" class="stat-card" style="cursor:pointer;border-left:3px solid var(--el-color-danger)" @click="loadPendingAck">
+        <div class="stat-label">待签收 <span style="color:var(--el-color-danger)">NEW</span></div>
+        <div class="stat-value" style="color:var(--el-color-danger)">{{ pendingCount }}</div>
       </el-card>
 
     <!-- 列表 -->
@@ -94,14 +94,14 @@
         <el-table-column label="签发目标" width="100">
           <template #default="{ row }">
             <span v-if="row.issued_to">{{ ISSUE_TARGET_LABEL[row.issued_to] || row.issued_to }}</span>
-            <span v-else style="color:#c0c4cc">—</span>
+            <span v-else style="color:var(--el-text-color-placeholder)">—</span>
           </template>
         </el-table-column>
         <el-table-column label="关联" width="180" show-overflow-tooltip>
           <template #default="{ row }">
-            <span v-if="row.instance_name" style="color:#409eff">📦 {{ row.instance_name }}</span>
-            <span v-if="row.bom_part_number" style="margin-left:6px; color:#67c23a">🔧 {{ row.bom_part_number }}</span>
-            <span v-if="!row.instance_name && !row.bom_part_number" style="color:#c0c4cc">—</span>
+            <span v-if="row.instance_name" style="color:var(--el-color-primary)"><el-icon><Box /></el-icon> {{ row.instance_name }}</span>
+            <span v-if="row.bom_part_number" style="margin-left:6px; color:var(--el-color-success)"><el-icon><Tools /></el-icon> {{ row.bom_part_number }}</span>
+            <span v-if="!row.instance_name && !row.bom_part_number" style="color:var(--el-text-color-placeholder)">—</span>
           </template>
         </el-table-column>
         <el-table-column prop="created_at_alias" label="上传时间" width="160" />
@@ -138,10 +138,10 @@
             :on-exceed="() => ElMessage.warning('只能选择 1 个文件')"
             drag
           >
-            <el-icon style="font-size:48px; color:#409eff"><UploadFilled /></el-icon>
+            <el-icon style="font-size:48px; color:var(--el-color-primary)"><UploadFilled /></el-icon>
             <div class="el-upload__text">拖拽文件到此处，或<em>点击选择</em></div>
             <template #tip>
-              <div style="color:#909399; font-size:12px">支持 PDF / Word / Excel / 图片 / DWG / STEP, 最大 50MB</div>
+              <div style="color:var(--el-color-info); font-size:12px">支持 PDF / Word / Excel / 图片 / DWG / STEP, 最大 50MB</div>
             </template>
           </el-upload>
         </el-form-item>
@@ -217,7 +217,7 @@
     <el-drawer v-model="dlgVersions" title="版本历史" size="640px" :with-header="true">
       <div v-if="versionsLoading" v-loading="true" style="height:100%"></div>
       <div v-else>
-        <div style="margin-bottom:12px; color:#909399">文档: <b>{{ versionsCurrent?.title }}</b> ({{ versionsCurrent?.doc_code }})</div>
+        <div style="margin-bottom:12px; color:var(--el-color-info)">文档: <b>{{ versionsCurrent?.title }}</b> ({{ versionsCurrent?.doc_code }})</div>
         <el-timeline>
           <el-timeline-item
             v-for="v in versions"
@@ -231,9 +231,9 @@
                 <el-tag :type="v.id === versionsCurrent?.id ? 'primary' : 'info'" size="small">v{{ v.version }}</el-tag>
                 <el-tag :type="STATUS_TAG[v.status]" size="small">{{ STATUS_LABEL[v.status] }}</el-tag>
                 <span>{{ v.file_name }}</span>
-                <span style="color:#909399; margin-left:auto">{{ v.human_size }}</span>
+                <span style="color:var(--el-color-info); margin-left:auto">{{ v.human_size }}</span>
               </div>
-              <div style="color:#909399; font-size:12px; margin-top:4px">
+              <div style="color:var(--el-color-info); font-size:12px; margin-top:4px">
                 点击下载 · 哈希: {{ (v.file_hash || '').slice(0, 12) }}…
               </div>
             </el-card>
@@ -267,13 +267,13 @@ import api from '../api'
 
 // 常量 (与后端 services/documentService.js 一致)
 const DOC_TYPES = [
-  { value: 'drawing',  label: '📐 图纸' },
-  { value: 'sop',      label: '📋 SOP 作业指导' },
-  { value: 'process',  label: '⚙️ 工艺文件' },
-  { value: 'qc_std',   label: '✅ 质检标准' },
-  { value: 'contract', label: '📄 合同/技术协议' },
-  { value: 'report',   label: '📊 试验报告' },
-  { value: 'other',    label: '📎 其他' }
+  { value: 'drawing',  label: '<el-icon><TrendCharts /></el-icon> 图纸' },
+  { value: 'sop',      label: '<el-icon><Document /></el-icon> SOP 作业指导' },
+  { value: 'process',  label: '<el-icon><Setting /></el-icon> 工艺文件' },
+  { value: 'qc_std',   label: '<el-icon><CircleCheck /></el-icon> 质检标准' },
+  { value: 'contract', label: '<el-icon><Document /></el-icon> 合同/技术协议' },
+  { value: 'report',   label: '<el-icon><DataAnalysis /></el-icon> 试验报告' },
+  { value: 'other',    label: '<el-icon><Paperclip /></el-icon> 其他' }
 ]
 const DOC_TYPE_LABEL: Record<string, string> = Object.fromEntries(DOC_TYPES.map(t => [t.value, t.label]))
 const STATUSES = ['draft', 'issued', 'revoked', 'archived']
@@ -538,6 +538,6 @@ onMounted(async () => {
 .page-title { font-size: 18px; font-weight: 600; margin-right: auto }
 .stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 12px }
 .stat-card { text-align: center; padding: 8px }
-.stat-label { font-size: 12px; color: #909399; margin-bottom: 4px }
-.stat-value { font-size: 22px; font-weight: 600; color: #303133 }
+.stat-label { font-size: 12px; color: var(--el-color-info); margin-bottom: 4px }
+.stat-value { font-size: 22px; font-weight: 600; color: var(--el-text-color-primary) }
 </style>

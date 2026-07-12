@@ -17,10 +17,10 @@
     <span v-if="data.bom_is_key" class="key-marker">⭐</span>
     <span class="qty">qty={{ data.bom_quantity || 1 }}</span>
     <span class="hours">{{ data.estimated_hours || 0 }}h</span>
-    <span v-if="data.assigned_to" class="assignee">👷#{{ data.assigned_to }}</span>
+    <span v-if="data.assigned_to" class="assignee"><el-icon><UserFilled /></el-icon>#{{ data.assigned_to }}</span>
     <!-- 子进度聚合徽章（只在非叶子节点显示） -->
     <span v-if="hasChildren && data.progress && data.progress.total > 1" class="child-progress" :title="progressTooltip">
-      {{ data.progress.completed }}/{{ data.progress.total }} ✓
+      {{ data.progress.completed }}/{{ data.progress.total }} <el-icon><Select /></el-icon>
     </span>
     <el-button v-if="effectiveStatus === 'ready'" size="small" type="primary" class="ml-1" @click.stop="$emit('start', data)">开始</el-button>
     <el-button v-else-if="effectiveStatus === 'in_progress'" size="small" type="success" class="ml-1" @click.stop="$emit('complete', data)">完成</el-button>
@@ -28,12 +28,12 @@
       <el-button size="small" text class="ml-1" @click.stop>⋯</el-button>
       <template #dropdown>
         <el-dropdown-menu>
-          <el-dropdown-item command="edit">✏️ 编辑</el-dropdown-item>
-          <el-dropdown-item command="assign">👷 分配</el-dropdown-item>
-          <el-dropdown-item command="addchild">➕ 加子节点</el-dropdown-item>
+          <el-dropdown-item command="edit"><el-icon><EditPen /></el-icon> 编辑</el-dropdown-item>
+          <el-dropdown-item command="assign"><el-icon><UserFilled /></el-icon> 分配</el-dropdown-item>
+          <el-dropdown-item command="addchild"><el-icon><Plus /></el-icon> 加子节点</el-dropdown-item>
           <el-dropdown-item command="hours">⏱ 工时定额</el-dropdown-item>
-          <el-dropdown-item command="adddep">🔗 加依赖</el-dropdown-item>
-          <el-dropdown-item command="delete" divided><span style="color: #f56c6c">🗑 删除</span></el-dropdown-item>
+          <el-dropdown-item command="adddep"><el-icon><Link /></el-icon> 加依赖</el-dropdown-item>
+          <el-dropdown-item command="delete" divided><span style="color: var(--el-color-danger)"><el-icon><Delete /></el-icon> 删除</span></el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
@@ -109,10 +109,10 @@ const progressTooltip = computed(() => {
   line-height: 24px;
 }
 .node-row.is-critical {
-  background: #fef0f0;
+  background: var(--el-color-danger-light-9);
 }
 .node-row.is-leaf {
-  background: #fafbfc;
+  background: var(--el-bg-color-overlay);
 }
 .node-row.is-dragging {
   opacity: 0.4;
@@ -142,15 +142,15 @@ const progressTooltip = computed(() => {
   font-size: 12px;
 }
 .material-name { font-weight: 500; min-width: 0; }
-.op-name { color: #909399; font-size: 12px; }
-.key-marker { color: #f56c6c; font-size: 12px; }
-.qty, .hours { color: #909399; font-size: 12px; }
-.assignee { color: #67c23a; font-size: 12px; }
+.op-name { color: var(--el-color-info); font-size: 12px; }
+.key-marker { color: var(--el-color-danger); font-size: 12px; }
+.qty, .hours { color: var(--el-color-info); font-size: 12px; }
+.assignee { color: var(--el-color-success); font-size: 12px; }
 .child-progress {
   display: inline-block;
-  background: #f0f9ff;
-  color: #409eff;
-  border: 1px solid #d9ecff;
+  background: var(--color-info-bg);
+  color: var(--el-color-primary);
+  border: 1px solid var(--color-info-soft);
   border-radius: 10px;
   padding: 0 8px;
   font-size: 11px;
