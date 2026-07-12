@@ -13,6 +13,7 @@ const { attachWebSocket } = require('./app/ws/manager');
 const db = require('./db');
 const { authMiddleware } = require('./middleware/auth');
 const { apiPermissionMiddleware } = require('./middleware/apiPermissions');
+const { requirePermission } = require('./middleware/auth');  // P0-2 OWASP: db-stats 加权限
 const { onlyForemanOrAdmin, onlyWelder } = require('./routes/guards');
 
 const app = createApp();
@@ -33,7 +34,9 @@ loadRolePermissions(db);
 require('./routes/root').register(app);
 
 // P1-2: 查询性能统计
-app.get("/api/debug/db-stats", (_req, res) => {
+// P0-2 OWASP A04 修复: db-stats 加 admin gate (之前在 publicPaths 白名单里)
+//     2026-07-11 OWASP 审计: /api/debug/db-stats 公开泄露 db uptime/QPS/调用次数
+app.get("/api/debug/db-stats", requirePermission('settings:read'), (_req, res) => {
   try { const { profileStats } = require("./db"); res.json(profileStats()); }
   catch(e) { res.json({ error: e.message }); }
 });
