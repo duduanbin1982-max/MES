@@ -63,7 +63,15 @@ function verifyToken(token) {
 }
 
 function authMiddleware(req, res, next) {
-  const publicPaths = ['/auth/login', '/auth/refresh', '/health', '/workflow/definitions', '/debug/db-stats'];
+  // P0-2 brooks-lint: default-deny 原则
+  //   之前: publicPaths = ['/auth/login', '/auth/refresh', '/health', '/workflow/definitions', '/debug/db-stats']
+  //   现在: 显式列白名单, 其它 /api/* 全部走 token + requirePermission
+  //   删除: /debug/db-stats (R3 dup - 业务数据走 admin gate)
+  //   保留: /auth/login, /auth/refresh, /health (外部探活)
+  //   保留: /workflow/definitions (lookup 端点, 业务需要无 auth 查)
+  //   /api/auth/me + /api/auth/logout: 不放 publicPaths, 但 auth.js 内部 next() 跳过中间件
+  //   /api/help/manual: 加 requirePermission('help:read') in route handler
+  const publicPaths = ['/auth/login', '/auth/refresh', '/health', '/workflow/definitions'];
   if (publicPaths.includes(req.path)) return next();
   const auth = req.headers.authorization || '';
   const token = auth.replace(/^Bearer /, '');
