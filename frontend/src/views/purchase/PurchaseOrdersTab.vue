@@ -41,7 +41,7 @@
               <el-select v-model="item.material_id" filterable placeholder="物料" style="flex:2">
                 <el-option v-for="m in materials" :key="m.id" :label="m.material_code + ' ' + m.material_name" :value="m.id" />
               </el-select>
-              <el-input-number aria-label="数量" v-model="item.quantity" :min="1" placeholder="数量" style="width:90px" />
+              <el-input-number aria-label="购买数量" v-model="item.quantity" :min="1" placeholder="数量" style="width:90px" />
               <el-input-number v-model="item.unit_price" :min="0" :precision="2" placeholder="单价" style="width:110px" />
               <span style="width:70px;text-align:right;font-weight:600">¥{{ ((item.quantity || 0) * (item.unit_price || 0)).toLocaleString() }}</span>
               <el-button size="small" type="danger" circle @click="orderForm.items.splice(idx, 1)">×</el-button>
