@@ -27,7 +27,7 @@
       <el-tab-pane label="工序库" name="operations">
         <template #label><el-icon><Tools /></el-icon> 工序库</template>
         <div class="toolbar">
-          <el-input v-model="opKeyword" placeholder="搜索工序编码/名称/分类" clearable style="width: 260px" />
+          <el-input aria-label="搜索工序编码/名称/分类" v-model="opKeyword" placeholder="搜索工序编码/名称/分类" clearable style="width: 260px" />
           <el-button type="primary" @click="openOperation()">+ 新建工序</el-button>
         </div>
         <el-table :data="filteredOperations" size="small" stripe>

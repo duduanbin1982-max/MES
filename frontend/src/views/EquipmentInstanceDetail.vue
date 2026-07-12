@@ -33,7 +33,7 @@
             <el-select v-model="nextStage" placeholder="流转到..." size="small" style="width: 150px">
               <el-option v-for="s in lifecycleOptions" :key="s.value" :label="s.label" :value="s.value" />
             </el-select>
-            <el-input v-model="transitionReason" size="small" placeholder="流转原因" style="width: 220px" />
+            <el-input aria-label="流转原因" v-model="transitionReason" size="small" placeholder="流转原因" style="width: 220px" />
             <el-button size="small" type="primary" :disabled="isFrozen" @click="changeLifecycle">确认流转</el-button>
             <el-button size="small" type="warning" :disabled="isFrozen" @click="freezeInstance">冻结基线</el-button>
             <el-button size="small" type="danger" :disabled="overview?.freeze?.archive_status === 'archived'" @click="archiveInstance">归档</el-button>

@@ -41,7 +41,7 @@
         <el-select v-model="filter.status" placeholder="状态" clearable @change="loadInstances" style="width: 120px">
           <el-option label="运行中" value="active" /><el-option label="已完成" value="completed" /><el-option label="已取消" value="cancelled" />
         </el-select>
-        <el-input v-model="filter.entityId" placeholder="实体ID" clearable @change="loadInstances" style="width: 120px" />
+        <el-input aria-label="实体ID" v-model="filter.entityId" placeholder="实体ID" clearable @change="loadInstances" style="width: 120px" />
         <el-button @click="loadInstances">刷新</el-button>
       </div>
 

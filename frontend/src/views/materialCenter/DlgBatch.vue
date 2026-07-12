@@ -35,7 +35,7 @@
           </el-table-column>
           <el-table-column label="目标库位" width="120">
             <template #default="{ row }">
-              <el-input v-model="row.to_location" size="small" placeholder="receive 必填" />
+              <el-input aria-label="receive 必填" v-model="row.to_location" size="small" placeholder="receive 必填" />
             </template>
           </el-table-column>
           <el-table-column label="操作" width="60">

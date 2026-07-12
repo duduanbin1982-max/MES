@@ -3,7 +3,7 @@
     <div class="scan-header">
       <h2 style="margin: 0 0 12px 0"><el-icon><Iphone /></el-icon> PDA 扫码报工</h2>
       <el-input
-        v-model="code"
+        aria-label="工单号 WO-xxx 或 工艺节点 PN-xxx" v-model="code"
         size="large"
         placeholder="工单号 WO-xxx 或 工艺节点 PN-xxx"
         @keyup.enter="lookup"

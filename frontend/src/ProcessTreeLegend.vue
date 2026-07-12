@@ -9,7 +9,7 @@
 
     <el-divider direction="vertical" />
 
-    <el-input v-model="searchKeyLocal" placeholder="搜索 操作/物料/备注" clearable size="small" style="width: 220px" @input="emitChange" />
+    <el-input aria-label="搜索 操作/物料/备注" v-model="searchKeyLocal" placeholder="搜索 操作/物料/备注" clearable size="small" style="width: 220px" @input="emitChange" />
 
     <el-select v-model="workstationLocal" placeholder="工位筛选" clearable size="small" style="width: 140px" @change="emitChange">
       <el-option v-for="w in workstations" :key="w.id" :label="w.name" :value="w.id" />

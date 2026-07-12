@@ -23,7 +23,7 @@
     </div>
 
     <el-input
-      v-model="csvText"
+      aria-label="也可以直接粘贴 CSV 内容..." v-model="csvText"
       type="textarea"
       :rows="8"
       placeholder="也可以直接粘贴 CSV 内容..."

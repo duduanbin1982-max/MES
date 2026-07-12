@@ -123,7 +123,7 @@
         <div class="tb">
           <el-date-picker v-model="logFilter.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期"
             style="width:280px" @change="loadLogs" value-format="YYYY-MM-DD" />
-          <el-input v-model="logFilter.instance" placeholder="装备实例ID" clearable style="width:160px" @change="loadLogs" />
+          <el-input aria-label="装备实例ID" v-model="logFilter.instance" placeholder="装备实例ID" clearable style="width:160px" @change="loadLogs" />
           <el-select v-model="logFilter.status" placeholder="状态" clearable style="width:130px" @change="loadLogs">
             <el-option label="正常完成" value="completed" />
             <el-option label="发现问题" value="issues_found" />

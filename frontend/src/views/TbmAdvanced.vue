@@ -94,7 +94,7 @@
         <template v-if="acDetail.data">
           <div v-for="(item,i) in acDetail.items" :key="i" style="margin-bottom:8px">
             <el-checkbox v-model="item.checked" @change="saveACItems">{{item.label}}</el-checkbox>
-            <el-input v-if="item.checked===false" v-model="item.note" placeholder="不合格说明" size="small" style="width:200px;margin-left:8px"/>
+            <el-input aria-label="不合格说明" v-if="item.checked===false" v-model="item.note" placeholder="不合格说明" size="small" style="width:200px;margin-left:8px"/>
           </div>
           <div v-if="acDetail.debugTotal>0" style="margin-top:8px"><el-tag>累计调试工时: {{acDetail.debugTotal}}h</el-tag></div>
           <el-divider/>

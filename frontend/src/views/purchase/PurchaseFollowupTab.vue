@@ -43,7 +43,7 @@
             <el-option label="采购订单" value="purchase_order" />
             <el-option label="BOM风险催办" value="shortage" />
           </el-select>
-          <el-input v-model="followUpFilter.purchaseRequestNo" clearable placeholder="采购申请号 / PR" style="width: 180px" @change="emit('load-purchase-follow-up')" />
+          <el-input aria-label="采购申请号 / PR" v-model="followUpFilter.purchaseRequestNo" clearable placeholder="采购申请号 / PR" style="width: 180px" @change="emit('load-purchase-follow-up')" />
           <el-switch v-model="followUpFilter.onlyOverdue" inline-prompt active-text="仅延期" inactive-text="全部" @change="emit('load-purchase-follow-up')" />
         </div>
 

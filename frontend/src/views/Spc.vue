@@ -12,7 +12,7 @@
           <el-select v-model="sel.param" placeholder="选择参数" @change="analyze" style="width:160px">
             <el-option v-for="p in params" :key="p.code" :label="p.label" :value="p.code" />
           </el-select>
-          <el-input-number v-model="sel.ss" :min="2" :max="20" style="width:100px" placeholder="子组大小" />
+          <el-input-number aria-label="子组大小" v-model="sel.ss" :min="2" :max="20" style="width:100px" placeholder="子组大小" />
           <el-button type="primary" @click="analyze" :loading="loading">分析</el-button>
         </div>
 

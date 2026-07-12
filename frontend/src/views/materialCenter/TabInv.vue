@@ -1,6 +1,6 @@
 <template>
   <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center">
-    <el-input v-model="filter" placeholder="搜索物料/批次/位置" size="small" style="width: 300px" clearable />
+    <el-input aria-label="搜索物料/批次/位置" v-model="filter" placeholder="搜索物料/批次/位置" size="small" style="width: 300px" clearable />
     <el-button type="success" size="small" @click="emit('open-receive')"><el-icon><Download /></el-icon> 一键入库</el-button>
     <el-button v-if="auth.hasPerm('material:admin')" type="warning" size="small" @click="emit('open-allocate')"><el-icon><Refresh /></el-icon> 调拨/预留</el-button>
     <el-button v-if="auth.hasPerm('material:admin')" type="info" size="small" @click="emit('open-release')"><el-icon><Unlock /></el-icon> 释放预留</el-button>

@@ -4,7 +4,7 @@
     <!-- 正向追溯: 物料→工单→设备 -->
     <el-tab-pane label="正向追溯 (物料→设备)" name="forward">
       <div class="toolbar">
-        <el-input v-model="fw.lot_no" placeholder="批次号/物料编码" @keyup.enter="doForward" style="width:240px" clearable />
+        <el-input aria-label="批次号/物料编码" v-model="fw.lot_no" placeholder="批次号/物料编码" @keyup.enter="doForward" style="width:240px" clearable />
         <el-button type="primary" @click="doForward" :loading="fw.loading">追溯</el-button>
       </div>
       <div v-if="fw.result">

@@ -23,7 +23,7 @@
       </template>
       <el-tabs v-model="activeTab" stretch>
         <el-tab-pane label="扫码报工" name="scan">
-          <el-input v-model="scanCode" size="large" placeholder="扫描或输入工单号 / PN节点号" clearable @keyup.enter="lookupScan">
+          <el-input aria-label="扫描或输入工单号 / PN节点号" v-model="scanCode" size="large" placeholder="扫描或输入工单号 / PN节点号" clearable @keyup.enter="lookupScan">
             <template #append><el-button type="primary" @click="lookupScan">识别</el-button></template>
           </el-input>
           <div v-if="scanResult" class="scan-result">

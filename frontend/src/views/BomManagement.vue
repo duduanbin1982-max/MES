@@ -55,7 +55,7 @@
           <el-button size="small" @click="loadTemplate"><el-icon><Document /></el-icon> 工业模板</el-button>
           <el-button size="small" type="warning" @click="doValidate"><el-icon><Search /></el-icon> 校验</el-button>
           <el-button size="small" type="success" @click="dlgCompare = true"><el-icon><Refresh /></el-icon> ECO 对比</el-button>
-          <el-input v-model="treeFilter" placeholder="搜索零件/图号/物料名" size="small" style="width: 240px; margin-left: auto" clearable />
+          <el-input aria-label="搜索零件/图号/物料名" v-model="treeFilter" placeholder="搜索零件/图号/物料名" size="small" style="width: 240px; margin-left: auto" clearable />
         </div>
         <el-alert
           v-if="minimumStructureMissing"
