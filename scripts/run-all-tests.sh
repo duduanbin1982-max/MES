@@ -4,6 +4,14 @@
 set -e
 export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
 export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
+
+# 2026-07-11 Hermes brooks-test T5 修复: JWT_SECRET 全局可用
+# 所有加载 app/jwt 的测试都需要 JWT_SECRET (>= 32 字符)
+# .env 应该已经提供, 但 .env 缺失时 fallback 到 dev key
+if [ -z "${JWT_SECRET:-}" ]; then
+  export JWT_SECRET=$(node -e 'console.log(require("crypto").randomBytes(48).toString("hex"))')
+fi
+
 cd /home/dubin/factory-mes
 
 echo "=== 0) 检查重复 API 路由 ==="
@@ -82,6 +90,7 @@ run "migrate"                  tests/migrate.test.js                  ""
 run "pragmas"                  tests/pragmas.test.js                  ""
 run "workflow"                  tests/workflow.test.js               ""
 run "errorResponse"         tests/errorResponse.test.js         ""
+run "errorPaths"            tests/errorPaths.test.js            ""
 run "rbac"                        tests/rbac.test.js                  ""
 run "roles"                  tests/roles.test.js                  ""
 run "bomService"              tests/bomService.test.js              ""
