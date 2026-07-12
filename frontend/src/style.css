@@ -70,7 +70,7 @@
   --el-text-color-primary: var(--color-text);
   --el-text-color-regular: var(--color-text);
   --el-text-color-secondary: var(--color-text-secondary);
-  --el-text-color-placeholder: var(--color-secondary);
+  --el-text-color-placeholder: #64748B; /* K1-K fix WCAG */
 
   --el-border-color: var(--color-border);
   --el-border-color-light: #E2E8F0;
@@ -138,7 +138,7 @@
   --el-text-color-primary: var(--color-text);
   --el-text-color-regular: var(--color-text);
   --el-text-color-secondary: var(--color-text-secondary);
-  --el-text-color-placeholder: var(--color-text-secondary);
+  --el-text-color-placeholder: #CBD5E1; /* K1-K fix WCAG (dark) */
 
   --el-border-color: var(--color-bg-card-dark);
   --el-border-color-light: var(--color-text);
@@ -357,4 +357,38 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button 
   color: var(--color-text-secondary);
   font-style: italic;
   padding: var(--space-lg);
+}
+
+/* [B-8] 2026-07-12 Hermes K1-K: WCAG + 空数据占位符友好
+   解决截图里 "-"/"" 占位符与背景几乎同色问题 */
+.el-table .el-table__cell,
+.el-table .cell {
+  /* 默认 regular #334155 (10:1) 但空值需要柔和 */
+  color: var(--color-text);
+}
+
+/* 空值/占位符淡灰色显示 (italic + 浅一些 + 视觉可区分) */
+.el-table .cell.is-placeholder,
+.el-table .cell .placeholder,
+td .empty-value {
+  color: var(--color-secondary);  /* #94A3B8 */
+  font-style: italic;
+  font-size: 0.95em;
+  letter-spacing: 0.05em;
+}
+/* Element Plus placeholder 文本已通过 el-text-color-placeholder 提升 */
+
+/* [B-9] 表格 row hover: 加深色提示 */
+.el-table__row:hover > td.el-table__cell {
+  background-color: #E0E7EF !important;  /* 比默认 #f5f7fa 更明显 */
+}
+
+/* [B-10] 状态色背景对比度增强 (tag bg dark → 文字加粗) */
+.el-tag.is-hit,
+.el-tag.el-tag--primary,
+.el-tag.el-tag--success,
+.el-tag.el-tag--warning,
+.el-tag.el-tag--danger,
+.el-tag.el-tag--info {
+  font-weight: 500;
 }
