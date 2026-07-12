@@ -118,8 +118,7 @@ watch(() => route.path, (path) => {
 const toggleTheme = () => {
   isDark.value = !isDark.value
   localStorage.setItem('tbm-theme', isDark.value ? 'dark' : 'light')
-  if (isDark.value) document.documentElement.setAttribute('data-theme', 'dark')
-  else document.documentElement.removeAttribute('data-theme')
+  applyTheme()
 }
 
 const update = () => {
@@ -130,12 +129,31 @@ const { status: wsStatus } = useShellNotifications()
 
 onMounted(() => {
   const saved = localStorage.getItem('tbm-theme')
-  isDark.value = saved === 'dark'
-  if (isDark.value) document.documentElement.setAttribute('data-theme', 'dark')
-  else document.documentElement.removeAttribute('data-theme')
+  if (saved === 'light' || saved === 'dark') {
+    // 用户已显式选择, 尊重
+    isDark.value = saved === 'dark'
+  } else {
+    // 跟随系统偏好 (P1-3 Hermes ui-ux-pro-max)
+    isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+  }
+  applyTheme()
   update()
   timer = setInterval(update, 1000)
+
+  // 监听系统偏好变化 (用户没显式设置过)
+  const mq = window.matchMedia('(prefers-color-scheme: dark)')
+  mq.addEventListener('change', e => {
+    if (!localStorage.getItem('tbm-theme')) {
+      isDark.value = e.matches
+      applyTheme()
+    }
+  })
 })
+
+function applyTheme() {
+  if (isDark.value) document.documentElement.setAttribute('data-theme', 'dark')
+  else document.documentElement.removeAttribute('data-theme')
+}
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)

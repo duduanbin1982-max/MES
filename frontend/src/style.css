@@ -212,7 +212,63 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ================================================================
+   [G] 2026-07-12 Hermes UI/UX-Pro-Max P-G: 系统偏好 + 无障碍增强
+   ================================================================ */
+
+/* [G-1] prefers-color-scheme: dark 自动背景兜底 (在没有 JS 切换前页面不闪白) */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+  }
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+  }
+}
+
+/* [G-2] prefers-contrast: more - 提升高对比度 (辅助技术偏好) */
+@media (prefers-contrast: more) {
+  :root {
+    --color-border: #000000;
+    --color-text: #000000;
+  }
+  [data-theme="dark"] {
+    --color-border: #ffffff;
+    --color-text: #ffffff;
+  }
+  .el-button {
+    border: 2px solid currentColor !important;
+  }
+}
+
+/* [G-3] 高对比模式: 错误状态不仅靠颜色 (色盲辅助) */
+.el-button.is-danger,
+.el-tag.is-danger,
+.el-notification.is-danger {
+  text-decoration: underline;
+  text-decoration-style: double;
+}
+
+/* [G-4] 打印模式: 隐藏非必要元素 */
+@media print {
+  .el-header,
+  .el-aside,
+  .el-pagination,
+  .el-dialog__header,
+  .no-print {
+    display: none !important;
+  }
+  .el-card {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
   }
 }
 
