@@ -266,25 +266,37 @@ const load = async () => {
 }
 
 const changeLifecycle = async () => {
-  if (!nextStage.value) return
-  await Api.updateInstanceLifecycle(id.value, { lifecycle_stage: nextStage.value, reason: transitionReason.value })
-  ElMessage.success('生命周期已流转')
-  transitionReason.value = ''
-  await load()
+  try {
+    if (!nextStage.value) return
+    await Api.updateInstanceLifecycle(id.value, { lifecycle_stage: nextStage.value, reason: transitionReason.value })
+    ElMessage.success('生命周期已流转')
+    transitionReason.value = ''
+    await load()
+  } catch (e: any) {
+    ElMessage.error('生命周期流转失败: ' + (e?.message || e))
+  }
 }
 
 const freezeInstance = async () => {
-  await ElMessageBox.confirm('冻结后 BOM、图纸、工艺、成本基线不再允许修改，确认冻结？', '冻结基线', { type: 'warning' })
-  await Api.freezeInstance(id.value, { reason: '交付基线冻结' })
-  ElMessage.success('已冻结基线')
-  await load()
+  try {
+    await ElMessageBox.confirm('冻结后 BOM、图纸、工艺、成本基线不再允许修改，确认冻结？', '冻结基线', { type: 'warning' })
+    await Api.freezeInstance(id.value, { reason: '交付基线冻结' })
+    ElMessage.success('已冻结基线')
+    await load()
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error('冻结失败: ' + (e?.message || e))
+  }
 }
 
 const archiveInstance = async () => {
-  await ElMessageBox.confirm('归档会把实例转为历史状态，并自动冻结基线。确认归档？', '归档实例', { type: 'warning' })
-  await Api.archiveInstance(id.value, { reason: '交付归档' })
-  ElMessage.success('已归档')
-  await load()
+  try {
+    await ElMessageBox.confirm('归档会把实例转为历史状态，并自动冻结基线。确认归档？', '归档实例', { type: 'warning' })
+    await Api.archiveInstance(id.value, { reason: '交付归档' })
+    ElMessage.success('已归档')
+    await load()
+  } catch (e: any) {
+    if (e !== 'cancel' && e !== 'close') ElMessage.error('归档失败: ' + (e?.message || e))
+  }
 }
 
 watch(bomFilter, (val) => treeRef.value?.filter(val))

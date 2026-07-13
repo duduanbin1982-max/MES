@@ -25,7 +25,10 @@ function register(app, db) {
     return tableCache.get(name);
   }
 
+  const MDM_ALLOWED_TABLES = new Set(["mdm_issue_waivers", "mdm_audit_log", "materials", "documents", "instance_bom", "purchase_orders", "work_orders", "inventory", "suppliers", "erp_cost_ledger", "equipment_instances", "workstations", "users"]);
+
   function columns(table) {
+    if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
     if (!columnCache.has(table)) {
       columnCache.set(table, tableExists(table) ? new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name)) : new Set());
     }
@@ -79,6 +82,7 @@ function register(app, db) {
   }
 
   function countRows(table) {
+    if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
     const row = tableExists(table) ? get(`SELECT COUNT(*) AS c FROM ${table}`) : null;
     return row ? Number(row.c || 0) : 0;
   }
@@ -125,11 +129,13 @@ function register(app, db) {
     if (!parentCol) issue(issues, "bom", "missing_parent", "high", "BOM 缺少父子关系字段", `${table} 未发现 parent_id 字段`, table, null, "/bom");
     if (!versionCol) issue(issues, "bom", "missing_version", "warning", "BOM 缺少版本字段", `${table} 未发现 version/revision 字段`, table, null, "/bom");
     if (qtyCol) {
+      if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
       for (const r of all(`SELECT ${idCol} AS id, ${qtyCol} AS qty FROM ${table} WHERE COALESCE(${qtyCol}, 0) <= 0 LIMIT 100`)) {
         issue(issues, "bom", "invalid_qty", "high", "BOM 用量异常", `节点 ${r.id} 的数量为 ${r.qty || 0}`, table, r.id, "/bom");
       }
     }
     if (partCol) {
+      if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
       for (const r of all(`SELECT ${idCol} AS id FROM ${table} WHERE ${partCol} IS NULL OR trim(${partCol}) = '' LIMIT 100`)) {
         issue(issues, "bom", "missing_part", "high", "BOM 节点缺少物料/图号", `节点 ${r.id} 未填写物料编码或图号`, table, r.id, "/bom");
       }
@@ -164,6 +170,7 @@ function register(app, db) {
     const nameCol = ["supplier_name", "name", "vendor_name"].find((c) => has(table, c));
     const codeCol = ["supplier_code", "code", "vendor_code"].find((c) => has(table, c));
     if (nameCol) {
+      if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
       for (const r of all(`SELECT rowid AS id FROM ${table} WHERE ${nameCol} IS NULL OR trim(${nameCol}) = '' LIMIT 100`)) {
         issue(issues, "suppliers", "missing_name", "high", "供应商缺少名称", `供应商记录 ${r.id} 未填写名称`, table, r.id, "/purchase");
       }

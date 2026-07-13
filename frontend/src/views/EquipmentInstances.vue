@@ -214,13 +214,17 @@ const load = async () => {
   }
 }
 
-const loadTypes = async () => { types.value = await Api.equipmentTypes() }
+const loadTypes = async () => { try { types.value = await Api.equipmentTypes() } catch (e: any) { ElMessage.error('加载产品类型失败: ' + (e?.message || e)) } }
 const loadLifecycle = async () => {
   try { lifecycleOptions.value = await Api.instanceLifecycleOptions() } catch { lifecycleOptions.value = fallbackLifecycle }
 }
 const loadModels = async () => {
-  if (!newInst.equipment_type_id) { models.value = []; return }
-  models.value = await Api.equipmentModels(newInst.equipment_type_id)
+  try {
+    if (!newInst.equipment_type_id) { models.value = []; return }
+    models.value = await Api.equipmentModels(newInst.equipment_type_id)
+  } catch (e: any) {
+    ElMessage.error('加载型号失败: ' + (e?.message || e))
+  }
 }
 
 const showCreate = ref(false)
@@ -257,10 +261,14 @@ const openCreate = async () => {
 }
 
 const refreshCode = async () => {
-  const r: any = await Api.instanceCodePreview({ customer: newInst.customer_name, year: codeYear.value })
-  newInst.instance_code = r.code
-  if (!newInst.project_no) newInst.project_no = `PRJ-${codeYear.value}-${r.code.split('-').pop()}`
-  if (!newInst.serial_no) newInst.serial_no = `SN-${codeYear.value}-${r.code.split('-').pop()}`
+  try {
+    const r: any = await Api.instanceCodePreview({ customer: newInst.customer_name, year: codeYear.value })
+    newInst.instance_code = r.code
+    if (!newInst.project_no) newInst.project_no = `PRJ-${codeYear.value}-${r.code.split('-').pop()}`
+    if (!newInst.serial_no) newInst.serial_no = `SN-${codeYear.value}-${r.code.split('-').pop()}`
+  } catch (e: any) {
+    ElMessage.error('生成编码失败: ' + (e?.message || e))
+  }
 }
 
 const nextStep = () => {

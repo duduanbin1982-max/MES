@@ -7,10 +7,10 @@
       </div>
       <el-form :model="form" @submit.prevent="login" label-width="80px" style="margin-top: 24px">
         <el-form-item label="用户名">
-          <el-input v-model="form.username" placeholder="admin / warehouse01 / foreman01 / engineer01 / worker01 / qc01 / welder01" size="large" />
+          <el-input v-model="form.username" placeholder="请输入用户名" size="large" />
         </el-form-item>
         <el-form-item label="密码">
-          <el-input v-model="form.password" type="password" placeholder="默认密码 = 用户名" size="large" show-password @keyup.enter="login" />
+          <el-input v-model="form.password" type="password" placeholder="请输入密码" size="large" show-password @keyup.enter="login" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" size="large" :loading="loading" @click="login" style="width: 100%">
@@ -18,16 +18,6 @@
           </el-button>
         </el-form-item>
       </el-form>
-      <div style="margin-top: 16px; padding: 12px; background: var(--el-fill-color-light); border-radius: 4px; font-size: 12px; color: var(--el-text-color-regular)">
-        <div style="font-weight: 500; margin-bottom: 6px">演示账号（密码 = 用户名）：</div>
-        <div>• <strong>admin</strong> (系统管理员)</div>
-        <div>• <strong>warehouse01</strong> (仓库员, 密码 warehouse123)</div>
-        <div>• <strong>foreman01</strong> (张主任, 车间主任)</div>
-        <div>• <strong>engineer01</strong> (李工, 工程师)</div>
-        <div>• <strong>worker01</strong> (王师傅, 工人)</div>
-        <div>• <strong>qc01</strong> (赵质检, 质检员)</div>
-        <div>• <strong>welder01</strong> (孙焊工, 焊工)</div>
-      </div>
     </el-card>
   </div>
 </template>
@@ -41,7 +31,7 @@ import { useAuthStore } from '../stores/auth'
 const router = useRouter()
 const auth = useAuthStore()
 const loading = ref(false)
-const form = reactive({ username: 'admin', password: 'admin' })
+const form = reactive({ username: '', password: '' })
 
 const defaultRouteByRole: Record<string, string> = {
   warehouse: '/shopfloor?tab=pick',

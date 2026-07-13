@@ -199,9 +199,9 @@ async function loadAll() {
 
 async function completePlan(row: any) {
   try {
-    await ElMessageBox.prompt("处理措施", "完成维保 " + row.plan_name, { inputType: "textarea" })
+    const { value: actions } = await ElMessageBox.prompt("处理措施", "完成维保 " + row.plan_name, { inputType: "textarea" })
     await Api.post("/maintenance/plans/" + row.id + "/complete", {
-      performed_by: 1, hours_spent: 1, actions_taken: "维保完成"
+      performed_by: 1, hours_spent: 1, actions_taken: actions || "维保完成"
     })
     ElMessage.success("维保已完成")
     await loadAll()

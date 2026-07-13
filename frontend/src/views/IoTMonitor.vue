@@ -137,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import Api from '../api'
 import { ElMessage } from 'element-plus'
 
@@ -240,6 +240,11 @@ function connectWS() {
 onMounted(() => {
   refreshAll()
   connectWS()
+})
+
+onBeforeUnmount(() => {
+  if (ws) { ws.close(); ws = null }
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
 })
 </script>
 

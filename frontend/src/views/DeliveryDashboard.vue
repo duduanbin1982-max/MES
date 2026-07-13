@@ -400,7 +400,12 @@ async function openRiskDrawer(row: any) {
   riskDrawerVisible.value = true
   riskData.value = null
   riskTab.value = 'exceptions'
-  riskData.value = await Api.deliveryProjectRisks(row.id)
+  try {
+    riskData.value = await Api.deliveryProjectRisks(row.id)
+  } catch (e: any) {
+    ElMessage.error('加载风险数据失败: ' + (e?.message || e))
+    riskDrawerVisible.value = false
+  }
 }
 
 async function loadAll() {

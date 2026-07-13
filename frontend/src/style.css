@@ -1,28 +1,31 @@
 /* ===== TBM-MES Design System · Data-Dense Dashboard ===== */
-/* Generated: 2026-06-26 | Source: UI-UX-Pro-Max skill */
-
-/* ----- Google Fonts ----- */
-/* Fira Code + Fira Sans imported in index.html */
+/* Source: UI-UX-Pro-Max skill | Updated: 2026-07-12 */
 
 /* ================================================================
-   LIGHT MODE (default)
+   LIGHT MODE (default) — Industrial Grey + Safety Orange
    ================================================================ */
 :root,
 [data-theme="light"] {
   /* -- Brand Palette -- */
-  --color-primary: var(--color-primary);
-  --color-secondary: var(--color-secondary);
-  --color-cta: #F97316;
-  --color-background: var(--color-background);
-  --color-text: var(--color-text);
-  --color-text-secondary: var(--color-primary);
-  --color-border: #E2E8F0;
-  --color-success: #22C55E;
-  --color-warning: #F59E0B;
-  --color-danger: #EF4444;
-  --color-info: #3B82F6;
+  --color-primary: #64748B;
+  --color-primary-light: #94A3B8;
+  --color-secondary: #94A3B8;
+  --color-cta: #D99045;
+  --color-background: #F5F7FA;
+  --color-surface: #FFFFFF;
+  --color-text: #3F4B5A;
+  --color-text-secondary: #6B7788;
+  --color-border: #DDE5EE;
+  --color-success: #3A9F73;
+  --color-warning: #D79A45;
+  --color-danger: #D16666;
+  --color-info: #4F86B8;
 
-  /* -- Spacing -- */
+  --color-sidebar-bg: #3E4A59;
+  --color-sidebar-text: #E2E8F0;
+  --color-sidebar-hover: #4C5A6A;
+  --color-sidebar-active: #F2B36D;
+
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 16px;
@@ -30,27 +33,21 @@
   --space-xl: 32px;
   --space-2xl: 48px;
 
-  /* -- Shadow -- */
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
   --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
   --shadow-lg: 0 10px 15px rgba(0,0,0,0.08);
   --shadow-xl: 0 20px 25px rgba(0,0,0,0.10);
 
-  /* -- Border Radius -- */
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
 
-  /* -- Transitions -- */
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
 
-  /* ================================================================
-     Element Plus Variable Overrides
-     ================================================================ */
-  --el-color-primary: var(--color-primary);
+  --el-color-primary: #64748B;
   --el-color-primary-light-3: #8193A0;
   --el-color-primary-light-5: #9AADB8;
   --el-color-primary-light-7: #B3C2CA;
@@ -58,67 +55,70 @@
   --el-color-primary-light-9: #D8E0E5;
   --el-color-primary-dark-2: #4B5A6E;
 
-  --el-color-success: var(--color-success);
-  --el-color-warning: var(--color-warning);
-  --el-color-danger: var(--color-danger);
-  --el-color-info: var(--color-info);
+  --el-color-success: #3A9F73;
+  --el-color-warning: #D79A45;
+  --el-color-danger: #D16666;
+  --el-color-info: #4F86B8;
 
-  --el-bg-color: var(--color-background);
+  --el-bg-color: #F5F7FA;
   --el-bg-color-overlay: #FFFFFF;
-  --el-bg-color-page: var(--color-background);
+  --el-bg-color-page: #F5F7FA;
 
-  --el-text-color-primary: var(--color-text);
-  --el-text-color-regular: var(--color-text);
-  --el-text-color-secondary: var(--color-text-secondary);
-  --el-text-color-placeholder: #64748B; /* K1-K fix WCAG */
+  --el-text-color-primary: #3F4B5A;
+  --el-text-color-regular: #3F4B5A;
+  --el-text-color-secondary: #6B7788;
+  --el-text-color-placeholder: #9AA6B5;
 
-  --el-border-color: var(--color-border);
-  --el-border-color-light: #E2E8F0;
-  --el-border-color-lighter: #F1F5F9;
+  --el-border-color: #DDE5EE;
+  --el-border-color-light: #E6ECF3;
+  --el-border-color-lighter: #EEF2F6;
 
-  --el-border-radius-base: var(--radius-md);
-  --el-border-radius-small: var(--radius-sm);
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 4px;
   --el-border-radius-round: 20px;
 
-  --el-font-family: 'Fira Sans', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  --el-font-family: "Plus Jakarta Sans", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --el-font-size-base: 14px;
 
-  /* Card overrides */
-  --el-card-border-radius: var(--radius-lg);
+  --el-card-border-radius: 12px;
   --el-card-bg-color: #FFFFFF;
 
-  /* Table overrides */
-  --el-table-header-bg-color: #F1F5F9;
-  --el-table-row-hover-bg-color: #F1F5F9;
+  --el-table-header-bg-color: #EEF2F6;
+  --el-table-row-hover-bg-color: #F3F6FA;
 
-  /* Menu overrides */
-  --el-menu-bg-color: var(--color-bg-card-dark);
-  --el-menu-text-color: #CBD5E1;
-  --el-menu-hover-bg-color: var(--color-text);
-  --el-menu-active-color: #F97316;
+  --el-menu-bg-color: #3E4A59;
+  --el-menu-text-color: #E2E8F0;
+  --el-menu-hover-bg-color: #4C5A6A;
+  --el-menu-active-color: #F2B36D;
 }
 
 /* ================================================================
-   DARK MODE (OLED) — 车间/夜班模式
+   DARK MODE — shop floor / night shift
    ================================================================ */
 [data-theme="dark"] {
-  --color-primary: var(--color-primary);
-  --color-secondary: var(--color-text-secondary);
-  --color-cta: #22C55E;
-  --color-background: var(--color-bg-dark);
-  --color-text: var(--color-background);
-  --color-text-secondary: var(--color-secondary);
-  --color-border: var(--color-bg-card-dark);
-  --color-success: #22C55E;
-  --color-warning: #F59E0B;
-  --color-danger: #EF4444;
-  --color-info: #3B82F6;
+  --color-primary: #94A3B8;
+  --color-secondary: #64748B;
+  --color-cta: #AFCB9B;
+  --color-background: #18212F;
+  --color-surface: #243044;
+  --color-text: #DDE6F0;
+  --color-text-secondary: #AAB7C7;
+  --color-border: #3A4656;
+  --color-success: #6FB98D;
+  --color-warning: #D6A45B;
+  --color-danger: #D17A7A;
+  --color-info: #7EA7CF;
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
-  --shadow-lg: 0 10px 15px rgba(0,0,0,0.5);
+  --color-sidebar-bg: #202A38;
+  --color-sidebar-text: #DDE6F0;
+  --color-sidebar-hover: #2B3747;
+  --color-sidebar-active: #E5B36D;
 
-  --el-color-primary: var(--color-primary);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.18);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.22);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.26);
+
+  --el-color-primary: #94A3B8;
   --el-color-primary-light-3: #8193A0;
   --el-color-primary-light-5: #9AADB8;
   --el-color-primary-light-7: #B3C2CA;
@@ -126,35 +126,35 @@
   --el-color-primary-light-9: #D8E0E5;
   --el-color-primary-dark-2: #4B5A6E;
 
-  --el-color-success: var(--color-success);
-  --el-color-warning: var(--color-warning);
-  --el-color-danger: var(--color-danger);
-  --el-color-info: var(--color-info);
+  --el-color-success: #6FB98D;
+  --el-color-warning: #D6A45B;
+  --el-color-danger: #D17A7A;
+  --el-color-info: #7EA7CF;
 
-  --el-bg-color: var(--color-bg-darker);
-  --el-bg-color-overlay: var(--color-bg-card-dark);
-  --el-bg-color-page: var(--color-background);
+  --el-bg-color: #18212F;
+  --el-bg-color-overlay: #243044;
+  --el-bg-color-page: #18212F;
 
-  --el-text-color-primary: var(--color-text);
-  --el-text-color-regular: var(--color-text);
-  --el-text-color-secondary: var(--color-text-secondary);
-  --el-text-color-placeholder: #CBD5E1; /* K1-K fix WCAG (dark) */
+  --el-text-color-primary: #DDE6F0;
+  --el-text-color-regular: #DDE6F0;
+  --el-text-color-secondary: #AAB7C7;
+  --el-text-color-placeholder: #8390A1;
 
-  --el-border-color: var(--color-bg-card-dark);
-  --el-border-color-light: var(--color-text);
-  --el-border-color-lighter: var(--color-bg-card-dark);
+  --el-border-color: #3A4656;
+  --el-border-color-light: #465365;
+  --el-border-color-lighter: #2B3747;
 
-  --el-fill-color-blank: var(--color-bg-darker);
-  --el-fill-color-light: var(--color-bg-card-dark);
+  --el-fill-color-blank: #18212F;
+  --el-fill-color-light: #243044;
 
-  --el-card-bg-color: var(--color-bg-darker);
-  --el-table-header-bg-color: var(--color-bg-card-dark);
-  --el-table-row-hover-bg-color: var(--color-bg-card-dark);
+  --el-card-bg-color: #243044;
+  --el-table-header-bg-color: #243044;
+  --el-table-row-hover-bg-color: #2B3747;
 
-  --el-menu-bg-color: var(--color-bg-dark);
-  --el-menu-text-color: #CBD5E1;
-  --el-menu-hover-bg-color: var(--color-bg-card-dark);
-  --el-menu-active-color: #22C55E;
+  --el-menu-bg-color: #202A38;
+  --el-menu-text-color: #DDE6F0;
+  --el-menu-hover-bg-color: #2B3747;
+  --el-menu-active-color: #E5B36D;
 }
 
 /* ================================================================
@@ -183,32 +183,27 @@ body {
   min-height: 100vh;
 }
 
-/* Fira Code for code/numbers/monospace elements */
 code, pre, .mono, .font-mono,
 .el-table td.num,
 .el-statistic__number {
-  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-feature-settings: 'tnum';
+  font-family: "Fira Code", "Cascadia Code", "Consolas", monospace;
+  font-feature-settings: "tnum";
 }
 
-/* Smooth transitions on theme change */
 body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button {
-  transition: background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal);
+  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-secondary); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
 
-/* Focus visible for a11y */
 :focus-visible {
   outline: 2px solid var(--color-cta);
   outline-offset: 2px;
 }
 
-/* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -218,58 +213,29 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button 
   }
 }
 
-/* ================================================================
-   [G] 2026-07-12 Hermes UI/UX-Pro-Max P-G: 系统偏好 + 无障碍增强
-   ================================================================ */
-
-/* [G-1] prefers-color-scheme: dark 自动背景兜底 (在没有 JS 切换前页面不闪白) */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-  }
+  :root:not([data-theme="light"]) { color-scheme: dark; }
 }
 @media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    color-scheme: light;
-  }
+  :root:not([data-theme="dark"]) { color-scheme: light; }
 }
 
-/* [G-2] prefers-contrast: more - 提升高对比度 (辅助技术偏好) */
 @media (prefers-contrast: more) {
-  :root {
-    --color-border: #000000;
-    --color-text: #000000;
-  }
-  [data-theme="dark"] {
-    --color-border: #ffffff;
-    --color-text: #ffffff;
-  }
-  .el-button {
-    border: 2px solid currentColor !important;
-  }
+  :root { --color-border: #000; --color-text: #000; }
+  [data-theme="dark"] { --color-border: #fff; --color-text: #fff; }
+  .el-button { border: 2px solid currentColor !important; }
 }
 
-/* [G-3] 高对比模式: 错误状态不仅靠颜色 (色盲辅助) */
-.el-button.is-danger,
-.el-tag.is-danger,
-.el-notification.is-danger {
+.el-tag.is-danger, .el-tag.is-warning {
   text-decoration: underline;
   text-decoration-style: double;
 }
 
-/* [G-4] 打印模式: 隐藏非必要元素 */
 @media print {
-  .el-header,
-  .el-aside,
-  .el-pagination,
-  .el-dialog__header,
-  .no-print {
+  .el-header, .el-aside, .el-pagination, .el-dialog__header, .no-print {
     display: none !important;
   }
-  .el-card {
-    box-shadow: none !important;
-    border: 1px solid #ccc !important;
-  }
+  .el-card { box-shadow: none !important; border: 1px solid #ccc !important; }
 }
 
 /* Utility classes */
@@ -278,36 +244,18 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button 
 .page-title { font-size: 20px; font-weight: 600; color: var(--el-text-color-primary); }
 .toolbar { display: flex; gap: var(--space-sm); align-items: center; margin-bottom: var(--space-md); flex-wrap: wrap; }
 
-/* Data-dense: compact tables */
 .el-table--small .el-table__cell { padding: 8px 10px; }
 .el-card__body { padding: var(--space-md); }
 
-/* ================================================================
-   [B] 2026-07-11 Hermes UI/UX-Pro-Max audit fix
-   ================================================================ */
-
-/* [B-1] Touch target 44x44px (Apple HIG / WCAG 2.5.5 Level AAA)
-        Force min-height/width on every interactive el-button regardless of size attr */
-.el-button {
-  min-height: 32px; /* default Element Plus = 32px, mid */
-}
-.el-button--large {
-  min-height: 44px;
-  padding: 12px 20px;
-  font-size: 16px;
-}
+/* Interaction & Accessibility */
+.el-button { min-height: 32px; }
+.el-button--large { min-height: 44px; padding: 12px 20px; font-size: 16px; }
 .el-button + .el-button { margin-left: 8px; }
-/* Apply 36px (Material) baseline; 44px on touch (hover:none) */
-.el-button:not(.is-link):not(.is-text):not(.is-circle) {
-  min-height: 36px;
-}
+.el-button:not(.is-link):not(.is-text):not(.is-circle) { min-height: 36px; }
 @media (hover: none) and (pointer: coarse) {
-  /* Touch device: 强制 44px */
   .el-button { min-height: 44px; }
 }
 
-/* [B-2] Cursor pointer on all clickable elements
-        当前 71 个 vue 文件缺自定义 cursor, 全局加 clickable 工具类 */
 .clickable,
 .el-card.is-hover-shadow,
 .el-table .el-table__row,
@@ -325,13 +273,11 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button 
   cursor: pointer;
 }
 
-/* [B-3] 强制 tactile feedback (hover state 不能 0 视觉差异) */
 .el-button:hover:not(.is-disabled):not(:disabled) {
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
 
-/* [B-4] Focus states for keyboard navigation (WCAG 2.4.7) */
 .el-button:focus-visible,
 .el-input__wrapper:focus-visible,
 .el-select__wrapper:focus-visible,
@@ -344,14 +290,11 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button 
   outline-offset: 2px;
 }
 
-/* [B-5] Form labels 强制最小高度 (一致性) */
 .el-form-item__label { line-height: 1.5; min-height: 24px; }
 
-/* [B-6] Better scrollbar on tables */
 .el-table .el-table__body-wrapper::-webkit-scrollbar { width: 8px; height: 8px; }
 .el-table .el-table__body-wrapper::-webkit-scrollbar-thumb { background: var(--color-secondary); }
 
-/* [B-7] Loading + empty state 的视觉提示 */
 .el-table__empty-block {
   background: var(--color-background);
   color: var(--color-text-secondary);
@@ -359,36 +302,62 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-input__wrapper, .el-button 
   padding: var(--space-lg);
 }
 
-/* [B-8] 2026-07-12 Hermes K1-K: WCAG + 空数据占位符友好
-   解决截图里 "-"/"" 占位符与背景几乎同色问题 */
-.el-table .el-table__cell,
-.el-table .cell {
-  /* 默认 regular #334155 (10:1) 但空值需要柔和 */
-  color: var(--color-text);
-}
-
-/* 空值/占位符淡灰色显示 (italic + 浅一些 + 视觉可区分) */
 .el-table .cell.is-placeholder,
 .el-table .cell .placeholder,
 td .empty-value {
-  color: var(--color-secondary);  /* #94A3B8 */
+  color: var(--color-secondary);
   font-style: italic;
   font-size: 0.95em;
-  letter-spacing: 0.05em;
 }
-/* Element Plus placeholder 文本已通过 el-text-color-placeholder 提升 */
 
-/* [B-9] 表格 row hover: 加深色提示 */
 .el-table__row:hover > td.el-table__cell {
-  background-color: #E0E7EF !important;  /* 比默认 #f5f7fa 更明显 */
+  background-color: #EEF3F8 !important;
 }
 
-/* [B-10] 状态色背景对比度增强 (tag bg dark → 文字加粗) */
-.el-tag.is-hit,
-.el-tag.el-tag--primary,
-.el-tag.el-tag--success,
-.el-tag.el-tag--warning,
-.el-tag.el-tag--danger,
-.el-tag.el-tag--info {
+.el-tag--primary, .el-tag--success, .el-tag--warning, .el-tag--danger, .el-tag--info {
   font-weight: 500;
+}
+
+/* Sidebar */
+.sidebar {
+  background: var(--color-sidebar-bg) !important;
+  border-right: 1px solid var(--color-border) !important;
+}
+
+.logo {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.logo-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #F1F5F9;
+}
+
+.logo-sub {
+  font-size: 11px;
+  color: #C2CCD8;
+  margin-top: 4px;
+}
+
+.top-header {
+  background: var(--el-bg-color-overlay);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-lg);
+  height: 56px;
+}
+
+.manual-link, .scan-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.clock {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }

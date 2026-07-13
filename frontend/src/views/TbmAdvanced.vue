@@ -157,9 +157,9 @@ const certF = reactive({cert_type:'material',cert_no:'',issued_by:'',issue_date:
 const logF = reactive({log_date:today,inspector:'',location:'',content:'',status:'normal'})
 const loadCP = async () => { cpLoading.value=true; try { const p={}; if(cf.inst)p.equipment_instance_id=cf.inst; if(cf.risk)p.risk_level=cf.risk; cparts.value=await Api.get('/critical-parts',{params:p}) } catch(_){ cparts.value=[]; ElMessage.error('加载关键件失败') } finally {cpLoading.value=false} }
 const showCPDetail = async (r) => { cpDetail.part=r; cpDetail.show=true; try { const d=await Api.get('/critical-parts/'+r.id); Object.assign(cpDetail,{part:d,certs:d.certificates||[],logs:d.logs||[]}) } catch(_) { ElMessage.error('加载关键件详情失败') } }
-const saveCert = async () => { await Api.post('/critical-parts/'+cpDetail.part.id+'/certificates',certF); ElMessage.success('证书已添加'); showCertForm.value=false; showCPDetail(cpDetail.part) }
-const delCert = async (r) => { await Api.del('/critical-parts/'+cpDetail.part.id+'/certificates/'+r.id); ElMessage.success('已删除'); showCPDetail(cpDetail.part) }
-const saveLog = async () => { await Api.post('/supervision-logs',{...logF,part_id:cpDetail.part.id}); ElMessage.success('日志已添加'); showLogForm.value=false; showCPDetail(cpDetail.part) }
+const saveCert = async () => { try { await Api.post('/critical-parts/'+cpDetail.part.id+'/certificates',certF); ElMessage.success('证书已添加'); showCertForm.value=false; showCPDetail(cpDetail.part) } catch (e: any) { ElMessage.error('保存证书失败: '+(e?.message||e)) } }
+const delCert = async (r) => { try { await Api.del('/critical-parts/'+cpDetail.part.id+'/certificates/'+r.id); ElMessage.success('已删除'); showCPDetail(cpDetail.part) } catch (e: any) { ElMessage.error('删除证书失败: '+(e?.message||e)) } }
+const saveLog = async () => { try { await Api.post('/supervision-logs',{...logF,part_id:cpDetail.part.id}); ElMessage.success('日志已添加'); showLogForm.value=false; showCPDetail(cpDetail.part) } catch (e: any) { ElMessage.error('保存日志失败: '+(e?.message||e)) } }
 
 // ===== Tab 2: 采购跟催 =====
 const ptracks = ref([]); const ptLoading = ref(false)
@@ -168,7 +168,7 @@ const ptForm = reactive({item_name:'',supplier:'',planned_delivery:'',remarks:''
 const ptStats = computed(()=>{const p=ptracks.value;return[{l:'总计',v:p.length,s:'项',t:'info'},{l:'逾期',v:p.filter(x=>x.delay_days>0&&x.status!=='delivered').length,s:'项',t:'danger'},{l:'待交货',v:p.filter(x=>x.status==='pending').length,s:'项',t:'warning'},{l:'已交货',v:p.filter(x=>x.status==='delivered').length,s:'项',t:'success'}]})
 
 const loadPT = async () => { ptLoading.value=true; try { const p={}; if(ptf.status)p.status=ptf.status; if(ptf.overdue)p.overdue='1'; ptracks.value=await Api.get('/purchase-tracking',{params:p}) } catch(_){ ptracks.value=[]; ElMessage.error('加载采购跟踪失败') } finally {ptLoading.value=false} }
-const savePT = async () => { await Api.post('/purchase-tracking',ptForm); ElMessage.success('已添加'); showPTDlg.value=false; Object.assign(ptForm,{item_name:'',supplier:'',planned_delivery:'',remarks:''}); loadPT() }
+const savePT = async () => { try { await Api.post('/purchase-tracking',ptForm); ElMessage.success('已添加'); showPTDlg.value=false; Object.assign(ptForm,{item_name:'',supplier:'',planned_delivery:'',remarks:''}); loadPT() } catch (e: any) { ElMessage.error('保存采购跟踪失败: '+(e?.message||e)) } }
 const markDelivered = async (r) => { await Api.put('/purchase-tracking/'+r.id,{status:'delivered',actual_delivery:today}); ElMessage.success('已标记交货'); loadPT() }
 
 // ===== Tab 3: 项目看板 =====
@@ -177,12 +177,14 @@ const showMSDlg = ref(false); const showPayDlg = ref(false)
 const msForm = reactive({milestone_name:'',planned_date:'',payment_pct:0,payment_amount:0,editing_id:null})
 const payForm = reactive({amount:0,received_date:today,payment_method:'',voucher_no:'',milestone_id:null})
 const loadProject = async () => { if(!prj.inst)return; try { prj.summary=await Api.get('/project-summary/'+prj.inst); prj.milestones=await Api.get('/contract-milestones',{params:{equipment_instance_id:prj.inst}}) } catch(_) { ElMessage.error('加载项目数据失败') } }
-const autoGenMile = async () => { if(!prj.inst)return; await Api.post('/equipment_instances/'+prj.inst+'/milestones/auto-generate'); ElMessage.success('S1-S10 已生成'); loadProject() }
+const autoGenMile = async () => { try { if(!prj.inst)return; await Api.post('/equipment_instances/'+prj.inst+'/milestones/auto-generate'); ElMessage.success('S1-S10 已生成'); loadProject() } catch (e: any) { ElMessage.error('生成里程碑失败: '+(e?.message||e)) } }
 const openMilestoneEdit = (r) => { Object.assign(msForm,{milestone_name:r.milestone_name,planned_date:r.planned_date,payment_pct:r.payment_pct,payment_amount:r.payment_amount,editing_id:r.id}); showMSDlg.value=true }
 const saveMS = async () => {
-  if(msForm.editing_id) await Api.put('/contract-milestones/'+msForm.editing_id,msForm)
-  else await Api.post('/contract-milestones',{...msForm,equipment_instance_id:prj.inst,sequence:prj.milestones.length+1})
-  ElMessage.success('已保存'); showMSDlg.value=false; loadProject()
+  try {
+    if(msForm.editing_id) await Api.put('/contract-milestones/'+msForm.editing_id,msForm)
+    else await Api.post('/contract-milestones',{...msForm,equipment_instance_id:prj.inst,sequence:prj.milestones.length+1})
+    ElMessage.success('已保存'); showMSDlg.value=false; loadProject()
+  } catch (e: any) { ElMessage.error('保存里程碑失败: '+(e?.message||e)) }
 }
 const openPayment = (r) => { payForm.milestone_id=r.id; showPayDlg.value=true }
 const savePay = async () => { await Api.post('/project-payments',{...payForm,equipment_instance_id:prj.inst}); ElMessage.success('收款已记录'); showPayDlg.value=false; loadProject() }
@@ -202,16 +204,20 @@ const saveAC = async () => {
 const showACDetail = async (r) => {
   try { const d=await Api.get('/acceptance-checklists/'+r.id); acDetail.data=r; acDetail.items=d.items_parsed||[]; acDetail.debugTotal=acDetail.items.find(i=>i.type==='debug_hours')?.records?.reduce((s,x)=>s+(x.hours||0),0)||0; acDetail.show=true } catch(_) { ElMessage.error('加载验收详情失败') }
 }
-const saveACItems = async () => { await Api.put('/acceptance-checklists/'+acDetail.data.id,{items:acDetail.items}) }
+const saveACItems = async () => { try { await Api.put('/acceptance-checklists/'+acDetail.data.id,{items:acDetail.items}) } catch (e: any) { ElMessage.error('保存验收项失败: '+(e?.message||e)) } }
 const addDebugHours = async () => {
-  await Api.post('/acceptance-checklists/'+acDetail.data.id+'/debug-hours',{hours:debugH.value,worker:debugW.value,date:today,notes:''})
-  ElMessage.success('已记录'); debugH.value=0; debugW.value=''; showACDetail(acDetail.data)
+  try {
+    await Api.post('/acceptance-checklists/'+acDetail.data.id+'/debug-hours',{hours:debugH.value,worker:debugW.value,date:today,notes:''})
+    ElMessage.success('已记录'); debugH.value=0; debugW.value=''; showACDetail(acDetail.data)
+  } catch (e: any) { ElMessage.error('记录调试工时失败: '+(e?.message||e)) }
 }
 const signAC = async () => {
-  const allChecked = acDetail.items.filter(i=>i.type!=='debug_hours').every(i=>i.checked)
-  const result = allChecked?'pass':'fail'
-  await Api.put('/acceptance-checklists/'+acDetail.data.id,{...acDetail.data,items:acDetail.items,status:'signed',result,sign_date:acDetail.data.sign_date||today})
-  ElMessage.success('已签章'); acDetail.show=false; loadAC()
+  try {
+    const allChecked = acDetail.items.filter(i=>i.type!=='debug_hours').every(i=>i.checked)
+    const result = allChecked?'pass':'fail'
+    await Api.put('/acceptance-checklists/'+acDetail.data.id,{...acDetail.data,items:acDetail.items,status:'signed',result,sign_date:acDetail.data.sign_date||today})
+    ElMessage.success('已签章'); acDetail.show=false; loadAC()
+  } catch (e: any) { ElMessage.error('签章失败: '+(e?.message||e)) }
 }
 
 // ===== Tab 5: 故障知识库 =====

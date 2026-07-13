@@ -199,6 +199,7 @@ const generateReport = async () => {
     }
     lastResult.value = await Api.post('/reports/generate', { type: instant.type, filters })
   } catch (e: any) {
+    ElMessage.error('报表生成失败: ' + (e?.message || e))
     console.error('[Reports] generate failed:', e)
   } finally { genLoading.value = false }
 }
@@ -219,6 +220,7 @@ const exportCSV = async () => {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e: any) {
+    ElMessage.error('报表导出失败: ' + (e?.message || e))
     console.error('[Reports] export failed:', e)
   }
 }
@@ -234,7 +236,7 @@ const schForm = reactive({ report_name: '', report_type: 'daily_production', sch
 const loadScheduled = async () => {
   schLoading.value = true
   try { scheduledList.value = await Api.get('/reports/scheduled') }
-  catch { scheduledList.value = [] }
+  catch (e: any) { ElMessage.error('加载定时报表失败: ' + (e?.message || e)); scheduledList.value = [] }
   finally { schLoading.value = false }
 }
 
@@ -265,26 +267,26 @@ const saveScheduled = async () => {
     }
     schDlgVisible.value = false
     loadScheduled()
-  } catch (e: any) { console.error('[Reports] save scheduled failed:', e) }
+  } catch (e: any) { ElMessage.error('保存定时报表失败: ' + (e?.message || e)); console.error('[Reports] save scheduled failed:', e) }
   finally { schSaving.value = false }
 }
 
 const toggleScheduled = async (row: any) => {
   try {
     await Api.put('/reports/scheduled/' + row.id, { is_active: row.is_active })
-  } catch { row.is_active = !row.is_active }
+  } catch (e: any) { ElMessage.error('切换状态失败: ' + (e?.message || e)); row.is_active = !row.is_active }
 }
 
 const deleteScheduled = async (row: any) => {
   try {
     await Api.del('/reports/scheduled/' + row.id)
     loadScheduled()
-  } catch {}
+  } catch (e: any) { ElMessage.error('删除失败: ' + (e?.message || e)) }
 }
 
 const runScheduled = async (row: any) => {
   try { await Api.post('/reports/scheduled/' + row.id + '/run-now'); await Promise.all([loadScheduled(), loadHistory()]) }
-  catch {}
+  catch (e: any) { ElMessage.error('执行失败: ' + (e?.message || e)) }
 }
 
 // Tab 3: History
@@ -303,7 +305,7 @@ const loadHistory = async () => {
     if (histFilter.status) params.status = histFilter.status
     historyList.value = await Api.get('/reports/history', { params })
     histReportNames.value = [...new Set(historyList.value.map((r: any) => r.report_name))]
-  } catch { historyList.value = [] }
+  } catch (e: any) { ElMessage.error('加载历史失败: ' + (e?.message || e)); historyList.value = [] }
   finally { histLoading.value = false }
 }
 
@@ -313,7 +315,7 @@ const viewHistoryDetail = async (row: any) => {
 }
 
 onMounted(async () => {
-  try { instances.value = await Api.instances() } catch {}
+  try { instances.value = await Api.instances() } catch (e: any) { ElMessage.error('加载实例失败: ' + (e?.message || e)) }
   loadScheduled()
   loadHistory()
 })

@@ -8,7 +8,10 @@ function tableExists(db, name) {
   return !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name);
 }
 
+const SETUP_ALLOWED_TABLES = new Set(["workstations", "users", "equipment_instances", "shift_schedules", "skill_matrices", "work_orders", "materials", "material_lots", "inventory", "production_orders", "iot_devices", "iot_data_points", "iot_readings", "iot_alarms", "documents", "quality_check_records", "resource_allocations", "mdm_issue_waivers", "instance_bom"]);
+
 function columns(db, table) {
+  if (!SETUP_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
   if (!tableExists(db, table)) return new Set();
   return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((row) => row.name));
 }
@@ -18,6 +21,7 @@ function has(db, table, column) {
 }
 
 function count(db, table, where = "1=1", params = []) {
+  if (!SETUP_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
   if (!tableExists(db, table)) return 0;
   try {
     return db.prepare(`SELECT COUNT(*) AS c FROM ${table} WHERE ${where}`).get(params).c || 0;

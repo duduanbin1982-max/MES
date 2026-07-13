@@ -8,11 +8,15 @@ const { wrap } = require('../middleware/asyncHandler');
 const { emit, Events } = require('../app/ws/EventBus');
 const path = require("path");
 
+const ALLOWED_TABLES = new Set(["iot_devices", "iot_data_points", "iot_readings", "iot_alarms"]);
+
 function columnNames(db, table) {
+  if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
   return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
 }
 
 function addColumn(db, table, name, definition) {
+  if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
   if (!columnNames(db, table).has(name)) db.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition}`).run();
 }
 
@@ -371,7 +375,7 @@ function register(app, db) {
     
     // Check alarm thresholds
     var alarm = db.prepare(
-      "SELECT * FROM iot_alarm_rules WHERE device_id = ? AND point_code = ? AND is_active = 1 AND min_value IS NOT NULL AND max_value IS NOT NULL"
+      "SELECT * FROM iot_data_points WHERE device_id = ? AND point_code = ? AND is_active = 1 AND min_value IS NOT NULL AND max_value IS NOT NULL"
     ).get(reading.device_id || 0, reading.point_code || 'manual');
     if (alarm) {
       var v = parseFloat(reading.value);

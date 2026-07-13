@@ -167,9 +167,13 @@ async function openImpact(row: any) {
 }
 
 async function transit(row: any, action: string) {
-  await Api.post(`/instance_eco/${row.id}/transit`, { action, comment: `ECO ${action}` })
-  ElMessage.success('状态已更新')
-  await loadAll()
+  try {
+    await Api.post(`/instance_eco/${row.id}/transit`, { action, comment: `ECO ${action}` })
+    ElMessage.success('状态已更新')
+    await loadAll()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error || e?.message || '状态更新失败')
+  }
 }
 
 onMounted(loadAll)

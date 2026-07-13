@@ -90,7 +90,7 @@ function runMigration(db) {
   addColumn("resource_allocations", "work_order_id", "work_order_id INTEGER");
 
   db.prepare("UPDATE workstations SET station_type = NULL WHERE code LIKE 'WS-SMOKE-%'").run();
-  db.prepare("DELETE FROM workstations WHERE code LIKE 'WS-SMOKE-%'").run();
+  if (process.env.NODE_ENV !== "production") db.prepare("DELETE FROM workstations WHERE code LIKE 'WS-SMOKE-%'").run();
 
   const rows = db.prepare("SELECT * FROM workstations").all();
   const update = db.prepare("UPDATE workstations SET station_type = ?, status = COALESCE(status, 'available'), max_workers = COALESCE(max_workers, capacity_per_day, 1), required_skills = COALESCE(required_skills, ?), capability_tags = COALESCE(capability_tags, ?), shift = COALESCE(shift, 'day') WHERE id = ?");

@@ -60,6 +60,7 @@ function register(app, db) {
     `, [instanceId, eco.id, scopeLike, scopeLike, scopeLike, scopeLike, scopeLike]);
 
     const bomIds = bom.map((b) => b.id);
+    if (bomIds.length === 0) return { impact: [], score: 0, summary: '无关联 BOM 节点' };
     const bomMarks = bomIds.map(() => "?").join(",");
     const purchaseByBom = bomIds.length
       ? safeAll(`

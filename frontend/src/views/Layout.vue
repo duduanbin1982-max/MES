@@ -9,9 +9,9 @@
         :default-active="activeMenuIndex"
         :default-openeds="openedSections"
         :collapse-transition="false"
-        background-color="#001529"
-        text-color="#cfd3dc"
-        active-text-color="var(--el-color-primary)"
+        background-color="var(--color-sidebar-bg)"
+        text-color="var(--color-sidebar-text)"
+        active-text-color="var(--color-sidebar-active)"
         router
       >
         <el-sub-menu v-for="section in visibleSections" :key="section.key" :index="section.key">
@@ -53,7 +53,7 @@
         </div>
       </el-header>
 
-      <el-main style="padding: 0; background: #f0f2f5">
+      <el-main style="padding: 0; background: var(--el-bg-color-page)">
         <router-view />
       </el-main>
     </el-container>
@@ -130,17 +130,14 @@ const { status: wsStatus } = useShellNotifications()
 onMounted(() => {
   const saved = localStorage.getItem('tbm-theme')
   if (saved === 'light' || saved === 'dark') {
-    // 用户已显式选择, 尊重
     isDark.value = saved === 'dark'
   } else {
-    // 跟随系统偏好 (P1-3 Hermes ui-ux-pro-max)
     isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
   }
   applyTheme()
   update()
   timer = setInterval(update, 1000)
 
-  // 监听系统偏好变化 (用户没显式设置过)
   const mq = window.matchMedia('(prefers-color-scheme: dark)')
   mq.addEventListener('change', e => {
     if (!localStorage.getItem('tbm-theme')) {
@@ -164,25 +161,25 @@ onUnmounted(() => {
 .el-menu { border-right: 0; }
 
 .sidebar {
-  background: var(--el-menu-bg-color);
-  color: var(--el-menu-text-color);
+  background: var(--color-sidebar-bg);
+  color: var(--color-sidebar-text);
   border-right: 1px solid var(--el-border-color);
 }
 
 .logo {
   padding: 20px 16px 12px;
-  border-bottom: 1px solid var(--el-border-color-light);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 
 .logo-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--el-menu-text-color);
+  color: #F1F5F9;
 }
 
 .logo-sub {
   font-size: 11px;
-  color: var(--el-text-color-secondary);
+  color: #C2CCD8;
   margin-top: 4px;
 }
 

@@ -121,7 +121,36 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+
+// P0: Access token refresh - 验证旧 access token（允许过期但有效签名）签发新 access token
+function handleRefresh(req, res, next) {
+  try {
+    const { access_token } = req.body || {};
+    if (!access_token) return res.status(400).json({ error: 'access_token 必填' });
+    const payload = jwt.verify(access_token);
+    if (!payload) return res.status(401).json({ error: 'access_token 无效' });
+    if (payload.typ !== 'access' && payload.typ !== undefined) {
+      return res.status(401).json({ error: 'token 类型错误 (需 access token)' });
+    }
+    // Allow expired tokens as long as signature is valid (jwt.verify returns payload with expired flag)
+    const uid = payload.sub || payload.uid;
+    if (!uid) return res.status(401).json({ error: 'token 缺少用户标识' });
+    // Re-fetch role permissions from cache (may have changed since token was issued)
+    const permissions = getRolePermissions(payload.role);
+    const access = jwt.signAccess({ sub: uid, role: payload.role, permissions, full_name: payload.full_name });
+    res.json({
+      access_token: access.token,
+      token_type: 'Bearer',
+      access_exp: access.exp,
+      permissions,
+    });
+  } catch (e) {
+    next(e);
+  }
+}
+
 module.exports = {
   authMiddleware, loginLimiter, requireRole, requirePermission,
   makeToken, verifyToken, loadRolePermissions, getRolePermissions,
+  handleRefresh,
 };

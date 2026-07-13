@@ -1,5 +1,5 @@
 <template>
-  <div class="page">
+  <div class="page" v-loading="loading">
     <div class="page-header">
       <div class="page-title"><el-icon><Calendar /></el-icon> 调度看板</div>
       <el-button @click="load">刷新</el-button>
@@ -177,6 +177,7 @@ const instances = ref<any[]>([])
 const selectedInstance = ref<any>(undefined)
 const milestones = ref<any[]>([])
 const filters = ref({})
+const loading = ref(false)
 
 const msTagType = (s: string) => ({ pending: 'info', active: 'primary', completed: 'success', delayed: 'danger' }[s] || 'info')
 const msProgress = (m: any) => {
@@ -187,22 +188,43 @@ const msProgress = (m: any) => {
 }
 
 const loadSchedule = async () => {
-  if (instances.value.length === 0) instances.value = await api.get('/equipment_instances')
-  if (selectedInstance.value) {
-    milestones.value = await api.get('/equipment_instances/' + selectedInstance.value + '/milestones')
+  loading.value = true
+  try {
+    if (instances.value.length === 0) instances.value = await api.get('/equipment_instances')
+    if (selectedInstance.value) {
+      milestones.value = await api.get('/equipment_instances/' + selectedInstance.value + '/milestones')
+    }
+  } catch (e: any) {
+    ElMessage.error('加载调度数据失败: ' + (e?.message || e))
+  } finally {
+    loading.value = false
   }
 }
 
 const markActive = async (m: any) => {
-  await api.put('/milestones/' + m.id, { status: 'active' })
-  ElMessage.success(m.phase_code + ' 已开始')
-  loadSchedule()
+  loading.value = true
+  try {
+    await api.put('/milestones/' + m.id, { status: 'active' })
+    ElMessage.success(m.phase_code + ' 已开始')
+    loadSchedule()
+  } catch (e: any) {
+    ElMessage.error('激活里程碑失败: ' + (e?.message || e))
+  } finally {
+    loading.value = false
+  }
 }
 
 const markComplete = async (m: any) => {
-  await api.put('/milestones/' + m.id, { status: 'completed', actual_end: new Date().toISOString().slice(0, 10) })
-  ElMessage.success(m.phase_code + ' 已完成')
-  loadSchedule()
+  loading.value = true
+  try {
+    await api.put('/milestones/' + m.id, { status: 'completed', actual_end: new Date().toISOString().slice(0, 10) })
+    ElMessage.success(m.phase_code + ' 已完成')
+    loadSchedule()
+  } catch (e: any) {
+    ElMessage.error('完成里程碑失败: ' + (e?.message || e))
+  } finally {
+    loading.value = false
+  }
 }
 
 // ---- New: Weekly tab ----
@@ -238,12 +260,19 @@ const rowClassName = ({ row }: { row: any }) => {
 }
 
 const loadWeekly = async () => {
-  const d = weeklyWeek.value
-  if (!d) return
-  const dateStr = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10)
-  weeklyData.value = await api.get('/schedule/weekly', { params: { week: dateStr } })
-  if (weeklyData.value && weeklyData.value.equipment_instances) {
-    activeEquipments.value = weeklyData.value.equipment_instances.map((e: any) => e.id)
+  loading.value = true
+  try {
+    const d = weeklyWeek.value
+    if (!d) return
+    const dateStr = d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10)
+    weeklyData.value = await api.get('/schedule/weekly', { params: { week: dateStr } })
+    if (weeklyData.value && weeklyData.value.equipment_instances) {
+      activeEquipments.value = weeklyData.value.equipment_instances.map((e: any) => e.id)
+    }
+  } catch (e: any) {
+    ElMessage.error('加载周调度失败: ' + (e?.message || e))
+  } finally {
+    loading.value = false
   }
 }
 
@@ -253,41 +282,62 @@ const goCurrentWeek = () => {
 }
 
 const nodeAction = async (row: any, status: string) => {
-  const payload: any = { status }
-  if (status === 'in_progress') {
-    payload.actual_start = new Date().toISOString()
+  loading.value = true
+  try {
+    const payload: any = { status }
+    if (status === 'in_progress') {
+      payload.actual_start = new Date().toISOString()
+    }
+    if (status === 'completed') {
+      payload.actual_end = new Date().toISOString()
+    }
+    await api.put('/api/schedule/process-nodes/' + row.id, payload)
+    ElMessage.success('工序状态已更新为：' + nodeStatusLabel(status))
+    loadWeekly()
+  } catch (e: any) {
+    ElMessage.error('更新工序状态失败: ' + (e?.message || e))
+  } finally {
+    loading.value = false
   }
-  if (status === 'completed') {
-    payload.actual_end = new Date().toISOString()
-  }
-  await api.put('/api/schedule/process-nodes/' + row.id, payload)
-  ElMessage.success('工序状态已更新为：' + nodeStatusLabel(status))
-  loadWeekly()
 }
 
 const openAssign = async (row: any, _column: any, _event: any) => {
-  assignRow.value = row
-  assignForm.value = {
-    assigned_id: row.assigned_id || null,
-    planned_start: row.planned_start || '',
-    planned_end: row.planned_end || '',
-    workstation_id: row.workstation_id || null
+  loading.value = true
+  try {
+    assignRow.value = row
+    assignForm.value = {
+      assigned_id: row.assigned_id || null,
+      planned_start: row.planned_start || '',
+      planned_end: row.planned_end || '',
+      workstation_id: row.workstation_id || null
+    }
+    const [w, ws] = await Promise.all([
+      api.get('/api/resources/workers', { params: { available: 1 } }),
+      api.get('/workstations')
+    ])
+    workers.value = w || []
+    workstations.value = ws || []
+    assignDialogVisible.value = true
+  } catch (e: any) {
+    ElMessage.error('打开分配对话失败: ' + (e?.message || e))
+  } finally {
+    loading.value = false
   }
-  const [w, ws] = await Promise.all([
-    api.get('/api/resources/workers', { params: { available: 1 } }),
-    api.get('/workstations')
-  ])
-  workers.value = w || []
-  workstations.value = ws || []
-  assignDialogVisible.value = true
 }
 
 const submitAssign = async () => {
-  if (!assignRow.value) return
-  await api.put('/api/schedule/process-nodes/' + assignRow.value.id + '/assign', assignForm.value)
-  ElMessage.success('分配成功')
-  assignDialogVisible.value = false
-  loadWeekly()
+  loading.value = true
+  try {
+    if (!assignRow.value) return
+    await api.put('/api/schedule/process-nodes/' + assignRow.value.id + '/assign', assignForm.value)
+    ElMessage.success('分配成功')
+    assignDialogVisible.value = false
+    loadWeekly()
+  } catch (e: any) {
+    ElMessage.error('提交分配失败: ' + (e?.message || e))
+  } finally {
+    loading.value = false
+  }
 }
 
 const onTabChange = (tabName: string) => {

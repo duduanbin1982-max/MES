@@ -8,7 +8,7 @@
 // Author: 三狗子 | Date: 2026-06-25 (P0-2 升级 access/refresh 双 token)
 
 const bcrypt = require('bcryptjs');
-const { makeToken, loginLimiter, getRolePermissions } = require('../middleware/auth');
+const { makeToken, loginLimiter, getRolePermissions, handleRefresh } = require('../middleware/auth');
 const jwt = require('../app/jwt');
 const { ApiError } = require('../app/errors');
 
@@ -58,26 +58,33 @@ function register(app, db) {
     } catch (e) { next(e); }
   });
 
-  // P0-2: refresh — 用 refresh_token 换新 access
+  // P0-2: refresh — 用 refresh_token 或 access_token 换新 access
   app.post('/api/auth/refresh', (req, res, next) => {
     try {
-      const { refresh_token } = req.body || {};
-      if (!refresh_token) return next(ApiError.validation('refresh_token 必填'));
-      const p = jwt.verify(refresh_token);
-      if (!p) return next(ApiError.unauthorized('refresh_token 无效或已过期'));
-      if (p.typ !== 'refresh') return next(ApiError.unauthorized('token 类型错误 (需 refresh)'));
-      if (p.expired) return next(ApiError.unauthorized('refresh_token 已过期'));
-      // 查 user 当前角色 + permissions (重新加载, 防止权限改了)
-      const user = get('SELECT u.id, u.full_name, u.is_active, r.role_code, r.role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?', p.sub);
-      if (!user || !user.is_active) return next(ApiError.unauthorized('用户不存在或已禁用'));
-      const permissions = getRolePermissions(user.role_code);
-      const access = jwt.signAccess({ sub: user.id, role: user.role_code, permissions, full_name: user.full_name });
-      res.json({
-        access_token: access.token,
-        token_type: 'Bearer',
-        access_exp: access.exp,
-        user: { id: user.id, username: null, full_name: user.full_name, role: user.role_code, permissions },
-      });
+      const { refresh_token, access_token } = req.body || {};
+
+      // 优先用 refresh_token
+      if (refresh_token) {
+        const p = jwt.verify(refresh_token);
+        if (!p) return next(ApiError.unauthorized('refresh_token 无效或已过期'));
+        if (p.typ !== 'refresh') return next(ApiError.unauthorized('token 类型错误 (需 refresh)'));
+        if (p.expired) return next(ApiError.unauthorized('refresh_token 已过期'));
+        const user = get('SELECT u.id, u.full_name, u.is_active, r.role_code, r.role_name FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?', p.sub);
+        if (!user || !user.is_active) return next(ApiError.unauthorized('用户不存在或已禁用'));
+        const permissions = getRolePermissions(user.role_code);
+        const access = jwt.signAccess({ sub: user.id, role: user.role_code, permissions, full_name: user.full_name });
+        return res.json({
+          access_token: access.token,
+          token_type: 'Bearer',
+          access_exp: access.exp,
+          user: { id: user.id, username: null, full_name: user.full_name, role: user.role_code, permissions },
+        });
+      }
+
+      // Fallback: 用 access_token 刷新 (允许过期但有效签名)
+      if (access_token) return handleRefresh(req, res, next);
+
+      return next(ApiError.validation('refresh_token 或 access_token 必填'));
     } catch (e) { next(e); }
   });
 
