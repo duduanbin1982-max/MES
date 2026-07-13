@@ -1,4 +1,6 @@
+// services/reportService/dashboard.js
 // 全局看板: 实例/工单/节点/BOM/长交期关键件 总览
+// 2026-07-12 Hermes K-1 扩展: 加 long-leadtime + live-status endpoints
 const { wrap } = require('../../middleware/asyncHandler');
 function register(app, db) {
   const { all, get } = require('./_helpers').makeHelpers(db)
@@ -17,5 +19,30 @@ function register(app, db) {
       open_field_service: get("SELECT count(*) c FROM field_service WHERE status='open'").c
     })
   }))
+
+  // Long-leadtime 材料明细
+  app.get('/api/dashboard/long-leadtime', wrap((req, res) => {
+    const items = all(
+      `SELECT m.material_code, m.material_name, kc.lead_time_weeks, kc.supplier, kc.unit_price
+       FROM key_components kc
+       JOIN materials m ON kc.material_id = m.id
+       WHERE kc.lead_time_weeks >= 12
+       ORDER BY kc.lead_time_weeks DESC
+       LIMIT 50`
+    );
+    res.json({ items });
+  }));
+
+  // 实例实时状态
+  app.get('/api/dashboard/live-status', wrap((req, res) => {
+    const items = all(
+      `SELECT ei.id, ei.instance_code, ei.instance_name, ei.status, ei.lifecycle_stage,
+              (SELECT COUNT(*) FROM work_orders wo WHERE wo.equipment_instance_id = ei.id AND wo.status='in_progress') AS active_orders,
+              (SELECT COUNT(*) FROM process_nodes pn WHERE pn.equipment_instance_id = ei.id AND pn.status='blocked') AS blocked_nodes
+       FROM equipment_instances ei
+       ORDER BY (CASE ei.status WHEN 'in_production' THEN 0 WHEN 'design' THEN 1 ELSE 2 END), ei.id`
+    );
+    res.json({ items, total: items.length, as_of: new Date().toISOString() });
+  }));
 }
 module.exports = { register }
