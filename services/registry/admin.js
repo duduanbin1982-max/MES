@@ -3,11 +3,11 @@
 const { authMiddleware } = require("../../middleware/auth");
 
 const ADMIN_SERVICES = [
-  { name: "masterDataService", module: "./masterDataService" },
-  { name: "projectMasterService", module: "./projectMasterService" },
-  { name: "setupWizardService", module: "./setupWizardService" },
-  { name: "userManagement", module: "./userManagement" },
-  { name: "workflowService", module: "./workflowService", deps: authMiddleware },
+  { name: "masterDataService", module: "./masterDataService", schemaVersion: 1 },
+  { name: "projectMasterService", module: "./projectMasterService", schemaVersion: 1 },
+  { name: "setupWizardService", module: "./setupWizardService", schemaVersion: 1 },
+  { name: "userManagement", module: "./userManagement", schemaVersion: 1 },
+  { name: "workflowService", module: "./workflowService", schemaVersion: 1, deps: authMiddleware },
 ];
 
 module.exports = { ADMIN_SERVICES };

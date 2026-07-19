@@ -5,6 +5,30 @@ const { wrap } = require("../../middleware/asyncHandler");
 
 function ensureTraceSchema(db) {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS serial_numbers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      serial_no TEXT NOT NULL UNIQUE,
+      lot_id INTEGER REFERENCES material_lots(id),
+      equipment_instance_id INTEGER REFERENCES equipment_instances(id),
+      status TEXT DEFAULT 'in_stock',
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS serial_movements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      serial_id INTEGER,
+      lot_id INTEGER,
+      work_order_id INTEGER,
+      equipment_instance_id INTEGER,
+      movement_type TEXT,
+      quantity REAL DEFAULT 1,
+      moved_by INTEGER,
+      moved_at TEXT DEFAULT (datetime('now')),
+      notes TEXT
+    );
+  `);
+  db.exec(`
     CREATE INDEX IF NOT EXISTS idx_serial_instance ON serial_numbers(equipment_instance_id, status);
     CREATE INDEX IF NOT EXISTS idx_serial_movements_serial ON serial_movements(serial_id, moved_at);
     CREATE INDEX IF NOT EXISTS idx_assembly_work_order ON assembly_records(work_order_id, step_no);

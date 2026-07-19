@@ -6,6 +6,7 @@ const TRACKING_TABLE_SQL = `
     service_name TEXT NOT NULL,
     schema_version INTEGER NOT NULL,
     ddl_statements INTEGER NOT NULL DEFAULT 0,
+    ddl_fingerprint TEXT,
     executed_at TEXT NOT NULL DEFAULT (datetime('now'))
   )
 `;
@@ -59,31 +60,66 @@ function createMigrationDb(db, state) {
 
 function ensureTrackingTable(db) {
   db.exec(TRACKING_TABLE_SQL);
+  const columns = new Set(db.prepare("PRAGMA table_info(service_schema_migrations)").all().map((column) => column.name));
+  if (!columns.has("ddl_fingerprint")) {
+    db.exec("ALTER TABLE service_schema_migrations ADD COLUMN ddl_fingerprint TEXT");
+  }
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_service_schema_migrations_service
+    ON service_schema_migrations(service_name, schema_version)
+  `);
 }
 
-function withServiceSchemaVersion(db, serviceName, schemaVersion, registerService) {
-  ensureTrackingTable(db);
-  const version = Number(schemaVersion || 1);
-  const id = `${serviceName}@${version}`;
-  const applied = Boolean(db.prepare("SELECT 1 FROM service_schema_migrations WHERE id = ?").get(id));
-  const state = { suppress: applied, ddlStatements: 0 };
-  const migrationDb = createMigrationDb(db, state);
-  const result = registerService(migrationDb);
+function assertSchemaVersion(serviceName, schemaVersion) {
+  if (!Number.isInteger(schemaVersion) || schemaVersion < 1) {
+    throw new Error(`[service-schema] ${serviceName} must declare a positive integer schemaVersion`);
+  }
+}
 
-  if (!applied && state.ddlStatements > 0) {
+function withServiceSchemaVersion(db, serviceName, schemaVersion, schemaFingerprint, registerService) {
+  if (!serviceName || typeof serviceName !== "string") {
+    throw new Error("[service-schema] serviceName is required");
+  }
+  assertSchemaVersion(serviceName, schemaVersion);
+  if (typeof registerService !== "function") {
+    throw new Error(`[service-schema] ${serviceName} registerService must be a function`);
+  }
+
+  ensureTrackingTable(db);
+  const id = `${serviceName}@${schemaVersion}`;
+  const existing = db.prepare(`
+    SELECT id, ddl_fingerprint
+    FROM service_schema_migrations
+    WHERE id = ?
+  `).get(id);
+
+  if (existing?.ddl_fingerprint && existing.ddl_fingerprint !== schemaFingerprint) {
+    throw new Error(
+      `[service-schema] ${serviceName}@${schemaVersion} DDL fingerprint changed; increment schemaVersion and regenerate the manifest`
+    );
+  }
+  if (existing && !existing.ddl_fingerprint && schemaFingerprint) {
+    db.prepare("UPDATE service_schema_migrations SET ddl_fingerprint = ? WHERE id = ?")
+      .run(schemaFingerprint, id);
+  }
+
+  const state = { suppress: Boolean(existing), ddlStatements: 0 };
+  const result = registerService(createMigrationDb(db, state));
+
+  if (!existing && state.ddlStatements > 0) {
     db.prepare(`
-      INSERT INTO service_schema_migrations (id, service_name, schema_version, ddl_statements)
-      VALUES (?, ?, ?, ?)
-    `).run(id, serviceName, version, state.ddlStatements);
-    state.suppress = true;
+      INSERT INTO service_schema_migrations
+        (id, service_name, schema_version, ddl_statements, ddl_fingerprint)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(id, serviceName, schemaVersion, state.ddlStatements, schemaFingerprint || null);
   }
 
   return {
     result,
-    status: applied ? "skipped" : state.ddlStatements > 0 ? "applied" : "none",
+    status: existing ? "skipped" : state.ddlStatements > 0 ? "applied" : "none",
     ddlStatements: state.ddlStatements,
     id,
   };
 }
 
-module.exports = { isDdl, withServiceSchemaVersion };
+module.exports = { assertSchemaVersion, isDdl, withServiceSchemaVersion };

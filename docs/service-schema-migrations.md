@@ -1,12 +1,21 @@
 # Service Schema Migrations
 
-Service-owned schema changes are versioned at the service composition root.
+Service-owned schema changes are guarded by an explicit version and a generated DDL fingerprint.
 
-- `services/registry/*.js` identifies a service by `name` and optional `schemaVersion`.
-- `services/register-all.js` runs registration through `db/serviceMigrations.js`.
-- The first registration of `serviceName@schemaVersion` may execute DDL and records it in `service_schema_migrations`.
-- Later starts still register routes and seed data, but repeated DDL for that version is suppressed.
-- Increase `schemaVersion` whenever a service adds or changes schema DDL.
-- Direct unit tests may register a service against an in-memory database without the production guard.
+- Every entry in `services/registry/*.js` must declare a positive integer `schemaVersion`.
+- `db/service-schema-manifest.json` records the static DDL fingerprint for every registered service.
+- `services/register-all.js` verifies the manifest before registering a service.
+- `db/serviceMigrations.js` stores the applied version and fingerprint in `service_schema_migrations`.
+- A previously applied service version is allowed to register routes and seed data, but its DDL is suppressed.
+- Reusing the same version with a different fingerprint stops startup instead of silently skipping schema changes.
 
-Route-level schema setup must run during route registration through `withServiceSchemaVersion`; it must not execute inside request handlers.
+When service-owned DDL changes:
+
+1. Increment that service's `schemaVersion` in `services/registry/*.js`.
+2. Run `npm run schema:write` to regenerate `db/service-schema-manifest.json`.
+3. Run `npm run schema:check` and the targeted upgrade test.
+4. Commit the service change, registry version and manifest together.
+
+CI compares the current manifest with the parent commit. A changed DDL fingerprint without a version increment fails the build.
+
+Direct unit tests may register a service against an in-memory database. Production route-level schema setup must execute during service registration through `withServiceSchemaVersion`; DDL must never run inside request handlers.

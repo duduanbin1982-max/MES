@@ -1,0 +1,250 @@
+{
+  "version": 1,
+  "services": {
+    "aiPredictionService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "4bce14e4e50567dc30f54f1bf3c67f183ba6bca5b5978c85ed51325c14413027",
+      "ddlStatements": 3
+    },
+    "andonService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "a9bae054f3e2d02dc8d6b41b472c61d4ac9d630909abf8853c7577e81a8e099b",
+      "ddlStatements": 2
+    },
+    "attendanceService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "eb16f8a022820046bf6f6c316649691e833645bc57b9b4bc31c4dbfdeb617073",
+      "ddlStatements": 3
+    },
+    "bomService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "a438e4158c68d1270233ae0713fc09bf43491ec2a81a71584177c9b044ffef8a",
+      "ddlStatements": 4
+    },
+    "cost": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "0a989cf37594654f8bce8e4f3a328308f42b9c89774709a04ee8fe2311640a24",
+      "ddlStatements": 3
+    },
+    "criticalPartsService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "9687dbbf8b13628b6c9dcee3b496bafd43fb7975e295421c6011156590ca140d",
+      "ddlStatements": 3
+    },
+    "dashboardAlerts": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "delayAlerts": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "deliveryService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "d97d0c58bfa248dcebae4830a21becdb8a7d0f235d23a1d9f121f3dd9c0d499b",
+      "ddlStatements": 4
+    },
+    "digitalTwinService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "3d348a7da1378643d581867d65f024aaa6f2024fc730e1b3764aaacd51366f60",
+      "ddlStatements": 2
+    },
+    "documentService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "5ffa6fb1b2488d0397ac38ba07361a09b9122c6c496578db0e8191eef891c378",
+      "ddlStatements": 2
+    },
+    "eco": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "equipment": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "29a703de586c75075fb57e06bf9edd279bd87989d387e22701fe2e20e6e63d38",
+      "ddlStatements": 11
+    },
+    "erpService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "4474c014f14f1838dadbcc7ac5ec847765870a49ff111fc33e18bbf6d16640f9",
+      "ddlStatements": 1
+    },
+    "fieldService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "fa58367a38369c7004cdeced7ddf8fbff35f79365b59d9c587ab8cf0b5722134",
+      "ddlStatements": 1
+    },
+    "iotLifecycleService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "540725c5542ee450eb461b14cdedf4dc7826191a908a6761b8efa5a98740ee2e",
+      "ddlStatements": 4
+    },
+    "iotService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "bbf83351ddc4a17c063e0a5d71832c2585516eaa5f2cd03799ea4462bddc3b21",
+      "ddlStatements": 3
+    },
+    "kitCheck": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "laborService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "d8044bb8a55a88ccd02f6462c7198598ea3f2e1e281f8ac595df31f7e7f29ac4",
+      "ddlStatements": 7
+    },
+    "maintenanceDashboardService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "masterDataService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "a0b499e7a32b8aa9dd2c5b0f93762688726ed051586562d0faa9b4a9c68a4157",
+      "ddlStatements": 2
+    },
+    "material": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "materialPlanner": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "85b077038346b369d70ad9272e08ede9dddb2e0a5773b5995e720100613efea9",
+      "ddlStatements": 1
+    },
+    "materialService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "oeeService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "6cd4ff29729bfcf2342bbde9f2a21e7dae4d7daf1782086a9573dcddcd3056b5",
+      "ddlStatements": 1
+    },
+    "pickService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "plmService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "fd0c8b68a15a0a45595db69edbcd7b71244da5add3101b633311e26386ce0df5",
+      "ddlStatements": 1
+    },
+    "process": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "a876903ca7ed14bc2580c0af32b5d30ca986e5489819a1eda0c644d4b24de1ba",
+      "ddlStatements": 6
+    },
+    "processHoursService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "ca2f77aced1151c0d68254f6d175f6a145f3f577137fd8601996281191562ca0",
+      "ddlStatements": 1
+    },
+    "processMasterService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "a876903ca7ed14bc2580c0af32b5d30ca986e5489819a1eda0c644d4b24de1ba",
+      "ddlStatements": 6
+    },
+    "processRouteService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "processTree": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "projectMasterService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "bf313c856f20374cff1bfb21e27dbfecae3c9a678ba6328db2a335294f6dc64a",
+      "ddlStatements": 4
+    },
+    "purchase": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "6256d2d96e235b401729753ad2839adfc7893be48fff010d9612f477ddfddf9a",
+      "ddlStatements": 21
+    },
+    "qcService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "a02bae73f03a38750f5414dc57b34f746015c808ab2557025df5399503b97969",
+      "ddlStatements": 4
+    },
+    "reportService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "fc0c77d4278cda59bbdbcd626f6689d65c95b5f9578e538a73844c0d231543ac",
+      "ddlStatements": 3
+    },
+    "resourceService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "ee4822c157e52e451e2beec54f9514b8e83a7ab87be240dda6eef05e2f5e5923",
+      "ddlStatements": 4
+    },
+    "scheduleService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "e420dab5f8d779ced19eecd3d0d50c54b826e1f24482ea302209c28cd51546fa",
+      "ddlStatements": 2
+    },
+    "setupWizardService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "shopfloorService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "shortageClosureService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "b2486a294bc34c4bbe2c17ba2f908d8f5180464d55cbaa4bdabf0565f9ad78a0",
+      "ddlStatements": 1
+    },
+    "spcService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "supplierCollaborationService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "fd71838f8bf096e3db5d4b8c542efb0cb4eb0a39c5fd6740e5a0e7bfec745349",
+      "ddlStatements": 3
+    },
+    "supplierDashboardService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "tbmAdvanced": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "03dca043359cfa138cd69100b5190366789bd1ae788dd30a04020a88e49f5873",
+      "ddlStatements": 15
+    },
+    "traceService": {
+      "schemaVersion": 2,
+      "ddlFingerprint": "c64159912bde85bd43f8fa7418c3fd735627fa9c451b50570462b1c106959f68",
+      "ddlStatements": 2
+    },
+    "userManagement": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "d41bcb6a24ca6130e2178b2ff334677623965b86140130bac6e8497d4a628d35",
+      "ddlStatements": 2
+    },
+    "workflowService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": null,
+      "ddlStatements": 0
+    },
+    "workOrderService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "b58181692d2313e379dcc46be7efe08ca5b80096137cfe0e0c383e1405c3583b",
+      "ddlStatements": 1
+    }
+  }
+}

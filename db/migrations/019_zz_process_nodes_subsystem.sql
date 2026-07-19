@@ -1,0 +1,3 @@
+-- Ensure the subsystem column exists before 020_perf_indexes.sql creates its index.
+-- The runner expands this directive to ALTER TABLE only when the column is absent.
+-- @ensure-column process_nodes subsystem_id INTEGER
