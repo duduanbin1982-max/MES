@@ -172,8 +172,8 @@
       "ddlStatements": 21
     },
     "qcService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "a02bae73f03a38750f5414dc57b34f746015c808ab2557025df5399503b97969",
+      "schemaVersion": 2,
+      "ddlFingerprint": "c2682d738e5179c9daaaecaa8cb8d3b7bc59bac5eda0c6cd410d398ad50b038e",
       "ddlStatements": 4
     },
     "reportService": {
