@@ -17,7 +17,7 @@
         <el-form-item><el-button type="primary" @click="$emit('load')">查询</el-button></el-form-item>
       </el-form>
     </div>
-    <el-table :data="rows" stripe v-loading="loading" size="small" :row-class-name="rowClass">
+    <el-table :data="rows" stripe v-loading="loading" size="small">
       <el-table-column prop="action_type" label="行动类型" width="120" />
       <el-table-column prop="action_desc" label="行动描述" min-width="200" show-overflow-tooltip />
       <el-table-column prop="assignee_name" label="负责人" width="100" />
@@ -39,7 +39,6 @@ defineProps<{
   users: any[]
   rows: any[]
   loading: boolean
-  rowClass: (scope: any) => string
 }>()
 
 defineEmits<{
@@ -52,5 +51,4 @@ defineEmits<{
 .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .status-select{width:120px}
 .assignee-select{width:150px}
-:deep(.capa-overdue-row){background-color:var(--el-color-danger-light-9)!important}
 </style>

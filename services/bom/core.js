@@ -20,7 +20,7 @@ const {
   collectDescendantIds,
   statusType,
 } = require("./core/utils");
-const { buildTree, tierSummary } = require("./core/tree");
+const { buildTree, tierSummary, structureSummary } = require("./core/tree");
 const {
   validateNode,
   validateTree,
@@ -66,6 +66,7 @@ module.exports = {
   compareVersions,
   buildTree,
   tierSummary,
+  structureSummary,
   parseCsv,
   normalizeInt,
   normalizeFloat,

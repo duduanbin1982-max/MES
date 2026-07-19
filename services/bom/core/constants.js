@@ -1,16 +1,26 @@
 "use strict";
 
+const BOM_VOCAB = require("../../../shared/bomVocabulary.json");
+
 const BOM_FIELDS = {
-  tier: { type: "int", label: "层级(0-3)", required: true },
+  tier: { type: "int", label: "层级(自动)", required: true },
+  node_type: {
+    type: "text",
+    label: "节点类型",
+    required: false,
+    enum: Object.keys(BOM_VOCAB.nodeTypes),
+  },
+  level_code: { type: "text", label: "层级号", required: false, max: 80 },
+  sort_order: { type: "int", label: "排序", required: false },
   material_id: { type: "int", label: "物料ID", required: false },
   part_number: { type: "text", label: "图号/型号", required: false, max: 200 },
   quantity: { type: "real", label: "单台数量", required: true, min: 0.0001 },
-  unit: { type: "text", label: "单位", required: true, enum: ["件", "个", "米", "千克", "套", "台", "根", "条", "升"] },
+  unit: { type: "text", label: "单位", required: true, enum: BOM_VOCAB.units },
   category: {
     type: "text",
     label: "物料分类",
     required: true,
-    enum: ["自制机加件", "自制钣金件", "标准紧固件", "气动元件", "电气元件", "外购成品", "辅助材料", "成品", "自制部件"],
+    enum: BOM_VOCAB.categories,
   },
   material_grade: { type: "text", label: "材质牌号", required: false, max: 100 },
   surface_treatment: { type: "text", label: "表面处理", required: false, max: 200 },
@@ -34,15 +44,18 @@ const BOM_FIELDS = {
   notes: { type: "text", label: "备注", required: false, max: 500 },
 };
 
-const SELF_MADE_CATEGORIES = new Set(["自制机加件", "自制钣金件"]);
-const PURCHASED_CATEGORIES = new Set(["标准紧固件", "气动元件", "电气元件", "外购成品"]);
-const COMPONENT_CATEGORIES = new Set(["自制部件", "外购成品"]);
+const SELF_MADE_CATEGORIES = new Set(BOM_VOCAB.selfMadeCategories);
+const PURCHASED_CATEGORIES = new Set(BOM_VOCAB.purchasedCategories);
+const COMPONENT_CATEGORIES = new Set(BOM_VOCAB.componentCategories);
+const NODE_TYPES = new Set(Object.keys(BOM_VOCAB.nodeTypes));
 const VERSION_RE = /^[A-Z][0-9]+$/;
 
 module.exports = {
+  BOM_VOCAB,
   BOM_FIELDS,
   SELF_MADE_CATEGORIES,
   PURCHASED_CATEGORIES,
   COMPONENT_CATEGORIES,
+  NODE_TYPES,
   VERSION_RE,
 };

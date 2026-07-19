@@ -2,7 +2,7 @@
   <el-card>
     <template #header>
       <div style="display: flex; align-items: center; justify-content: space-between">
-        <span>{{ tierName(tier) }} 清单 ({{ rows.length }} 项)</span>
+        <span>{{ tierLabel(tier) }} 清单 ({{ rows.length }} 项)</span>
         <div>
           <el-button v-if="tier >= 1 && tier <= 2" size="small" type="primary" @click="$emit('add')">+ 新增</el-button>
         </div>
@@ -10,14 +10,22 @@
     </template>
     <el-table :data="rows" size="small" max-height="550" stripe @row-click="onRow">
       <el-table-column prop="id" label="ID" width="50" />
+      <el-table-column prop="level_code" label="层级号" width="90">
+        <template #default="{ row }">{{ row.level_code || '-' }}</template>
+      </el-table-column>
+      <el-table-column label="节点类型" width="105">
+        <template #default="{ row }">
+          <el-tag size="small" effect="plain">{{ nodeTypeLabel(row.node_type) }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column v-if="tier > 0" label="物料" min-width="180">
         <template #default="{ row }">
           <span style="font-weight: 500">{{ row.material_name || row.part_number || '(无)' }}</span>
           <span style="color: var(--el-color-info); font-size: 11px; margin-left: 4px">{{ row.material_code || '' }}</span>
         </template>
       </el-table-column>
-      <el-table-column v-else label="整机" min-width="180">
-        <template #default="{ row }">{{ row.material_name || row.part_number || `设备 #${row.id}` }}</template>
+      <el-table-column v-else label="项目装备" min-width="180">
+        <template #default="{ row }">{{ row.material_name || row.part_number || `项目装备 #${row.id}` }}</template>
       </el-table-column>
       <el-table-column prop="part_number" label="图号/型号" min-width="120" />
       <el-table-column prop="quantity" label="数量" width="80" />
@@ -51,10 +59,9 @@
 </template>
 
 <script setup lang="ts">
+import { nodeTypeLabel, tierLabel } from './bomShared'
+
 defineProps<{ rows: any[]; tier: number; showActions?: boolean }>()
 const emit = defineEmits(['select', 'add', 'delete', 'drill'])
-function tierName(t: number) {
-  return ['0 总装', '1 部件', '2 零件', '3 毛坯'][t] || t
-}
 function onRow(row: any) { emit('select', row) }
 </script>

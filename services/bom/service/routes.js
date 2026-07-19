@@ -13,8 +13,11 @@ const {
   createMinimumBomSkeleton,
   insertBomNode,
   updateBomNode,
+  moveBomNode,
   deleteBomNodeCascade,
+  recomputeStructureMetadata,
 } = require("./mutations");
+const { ensureBomStructureColumns } = require("./schema");
 const { importBomCsv } = require("./importer");
 const {
   getActiveUsers,
@@ -24,6 +27,14 @@ const {
 } = require("./riskWorkflow");
 
 function registerBomRoutes(app, db) {
+  ensureBomStructureColumns(db);
+  try {
+    const ids = db.prepare("SELECT DISTINCT equipment_instance_id AS id FROM instance_bom").all();
+    for (const row of ids) recomputeStructureMetadata(db, row.id);
+  } catch (_error) {
+    // schema may be absent in isolated tests
+  }
+
   app.post("/api/equipment_instances/:id/bom/init-minimum", (req, res, next) => {
     try {
       const created = createMinimumBomSkeleton(db, req.params.id);
@@ -106,6 +117,14 @@ function registerBomRoutes(app, db) {
   app.put("/api/bom/:id", (req, res, next) => {
     try {
       res.json(updateBomNode(db, req.params.id, req.body || {}));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/bom/:id/move", (req, res, next) => {
+    try {
+      res.json(moveBomNode(db, req.params.id, req.body || {}));
     } catch (error) {
       next(error);
     }

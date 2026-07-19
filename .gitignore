@@ -21,6 +21,7 @@ data/mes.log
 
 # 数据库备份目录 (按时间戳命名, 一律不进库)
 backups/
+.codex-backups/
 
 # nginx 模板配置入库；SSL 私钥/证书不入库
 /nginx/*

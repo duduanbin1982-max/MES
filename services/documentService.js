@@ -28,6 +28,71 @@ const DOC_TYPES = ['drawing', 'sop', 'process', 'qc_std', 'contract', 'report', 
 const DOC_STATUS = ['draft', 'issued', 'revoked', 'archived'];
 const ISSUE_TARGETS = ['assembly', 'welding', 'qc', 'warehouse', 'field', 'design', 'procurement', 'management'];
 
+function ensureDocumentHistorySchema(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS document_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_id INTEGER NOT NULL,
+      action TEXT NOT NULL,
+      from_status TEXT,
+      to_status TEXT,
+      version TEXT,
+      issued_to TEXT,
+      reason TEXT,
+      operator_id INTEGER,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_document_events_doc ON document_events(doc_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_document_events_action ON document_events(action, created_at);
+  `);
+}
+
+function recordDocumentEvent(db, event) {
+  try {
+    db.prepare(`
+      INSERT INTO document_events (
+        doc_id, action, from_status, to_status, version, issued_to, reason, operator_id
+      ) VALUES (
+        @doc_id, @action, @from_status, @to_status, @version, @issued_to, @reason, @operator_id
+      )
+    `).run({
+      doc_id: event.doc_id,
+      action: event.action,
+      from_status: event.from_status || null,
+      to_status: event.to_status || null,
+      version: event.version || null,
+      issued_to: event.issued_to || null,
+      reason: event.reason || null,
+      operator_id: event.operator_id || null,
+    });
+  } catch (_error) {
+    // 历史流水不可阻断上传/签发/签收主动作。
+  }
+}
+
+function documentFamilyIds(db, current) {
+  if (!current) return [];
+  if (current.doc_code) {
+    return db.prepare('SELECT id FROM documents WHERE doc_code = ? ORDER BY id').all(current.doc_code).map(row => row.id);
+  }
+  if (current.file_hash) {
+    return db.prepare('SELECT id FROM documents WHERE file_hash = ? ORDER BY id').all(current.file_hash).map(row => row.id);
+  }
+  return [current.id];
+}
+
+function documentEvents(db, docIds) {
+  if (!docIds.length) return [];
+  const placeholders = docIds.map(() => '?').join(',');
+  return db.prepare(`
+    SELECT e.*, u.full_name, u.username
+    FROM document_events e
+    LEFT JOIN users u ON u.id = e.operator_id
+    WHERE e.doc_id IN (${placeholders})
+    ORDER BY e.created_at DESC, e.id DESC
+  `).all(...docIds);
+}
+
 function resolveStoredFile(filePath, uploadRoot = UPLOAD_ROOT) {
   if (!filePath) return null;
   const normalized = String(filePath).replace(/\\/g, "/").replace(/^uploads\//, "");
@@ -96,9 +161,12 @@ function humanSize(bytes) {
 }
 
 function register(app, db) {
+  ensureDocumentHistorySchema(db);
+  db.exec(`CREATE TABLE IF NOT EXISTS doc_acknowledgements (id INTEGER PRIMARY KEY AUTOINCREMENT, doc_id INTEGER NOT NULL, ack_by INTEGER NOT NULL, ack_at TEXT DEFAULT CURRENT_TIMESTAMP, ack_method TEXT DEFAULT 'web')`);
+
   // 列表 (P0-文档: 兼容老 schema uploaded_at 替 created_at, 读用 COALESCE)
   app.get('/api/documents', (req, res) => {
-    const { equipment_instance_id, bom_node_id, eco_id, doc_type, status, q } = req.query;
+    const { equipment_instance_id, bom_node_id, eco_id, doc_type, status, issued_to, q } = req.query;
     let sql = `SELECT d.*, u1.full_name AS created_by_name, u2.full_name AS issued_by_name,
                       b.part_number AS bom_part_number, b.tier AS bom_tier,
                       ei.instance_code, ei.instance_name,
@@ -115,6 +183,7 @@ function register(app, db) {
     if (eco_id) { sql += ' AND d.eco_id = ?'; params.push(eco_id); }
     if (doc_type) { sql += ' AND d.doc_type = ?'; params.push(doc_type); }
     if (status) { sql += ' AND d.status = ?'; params.push(status); }
+    if (issued_to) { sql += ' AND d.issued_to = ?'; params.push(issued_to); }
     if (q) { sql += ' AND (d.title LIKE ? OR d.doc_code LIKE ? OR d.file_name LIKE ?)'; params.push('%' + q + '%', '%' + q + '%', '%' + q + '%'); }
     sql += " ORDER BY COALESCE(d.uploaded_at, d.uploaded_at) DESC LIMIT 500";
     const rows = db.prepare(sql).all(...params);
@@ -147,6 +216,16 @@ function register(app, db) {
     var uid = req.user ? req.user.id : 1;
     if (db.prepare('SELECT id FROM doc_acknowledgements WHERE doc_id = ? AND ack_by = ?').get(req.params.id, uid)) { res.json({ ok: true, already: true }); return; }
     db.prepare('INSERT INTO doc_acknowledgements (doc_id, ack_by) VALUES (?, ?)').run(req.params.id, uid);
+    const acknowledgedDoc = db.prepare('SELECT id, status, version, issued_to FROM documents WHERE id = ?').get(req.params.id);
+    recordDocumentEvent(db, {
+      doc_id: Number(req.params.id),
+      action: 'acknowledge',
+      from_status: acknowledgedDoc?.status,
+      to_status: acknowledgedDoc?.status,
+      version: acknowledgedDoc?.version,
+      issued_to: acknowledgedDoc?.issued_to,
+      operator_id: uid,
+    });
     res.json({ ok: true });
   });
 
@@ -154,8 +233,6 @@ function register(app, db) {
     var acks = db.prepare('SELECT da.*, u.full_name, u.username FROM doc_acknowledgements da LEFT JOIN users u ON da.ack_by = u.id WHERE da.doc_id = ? ORDER BY da.ack_at DESC').all(req.params.id);
     res.json({ doc_id: parseInt(req.params.id), total: acks.length, acknowledgements: acks });
   });
-
-  db.exec(`CREATE TABLE IF NOT EXISTS doc_acknowledgements (id INTEGER PRIMARY KEY AUTOINCREMENT, doc_id INTEGER NOT NULL, ack_by INTEGER NOT NULL, ack_at TEXT DEFAULT CURRENT_TIMESTAMP, ack_method TEXT DEFAULT 'web')`);
   app.get('/api/documents/:id', (req, res, next) => {
     const id = req.params.id;
     const r = db.prepare(`
@@ -195,12 +272,19 @@ function register(app, db) {
     if (!cur) return res.json({ items: [], current: null });
     let items = [];
     if (cur.doc_code) {
-      items = db.prepare('SELECT id, version, file_name, file_size, status, COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by FROM documents WHERE doc_code = ? ORDER BY COALESCE(uploaded_at, uploaded_at) DESC').all(cur.doc_code);
+      items = db.prepare('SELECT id, version, file_name, file_size, file_hash, status, issued_to, issued_at, COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by FROM documents WHERE doc_code = ? ORDER BY COALESCE(uploaded_at, uploaded_at) DESC').all(cur.doc_code);
     } else if (cur.file_hash) {
-      items = db.prepare('SELECT id, version, file_name, file_size, status, COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by FROM documents WHERE file_hash = ? ORDER BY COALESCE(uploaded_at, uploaded_at) DESC').all(cur.file_hash);
+      items = db.prepare('SELECT id, version, file_name, file_size, file_hash, status, issued_to, issued_at, COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by FROM documents WHERE file_hash = ? ORDER BY COALESCE(uploaded_at, uploaded_at) DESC').all(cur.file_hash);
     }
     items.forEach(r => { r.human_size = humanSize(r.file_size); });
-    res.json({ items, current: id });
+    res.json({ items, current: id, events: documentEvents(db, documentFamilyIds(db, cur)) });
+  });
+
+  app.get('/api/documents/:id/history', (req, res, next) => {
+    const cur = db.prepare('SELECT * FROM documents WHERE id = ?').get(req.params.id);
+    if (!cur) return next(ApiError.notFound('文档不存在: ' + req.params.id));
+    const ids = documentFamilyIds(db, cur);
+    res.json({ doc_id: Number(req.params.id), document_ids: ids, events: documentEvents(db, ids) });
   });
 
   // 上传 (使用 server.js 提前挂的 multer-like raw body)
@@ -213,7 +297,8 @@ function register(app, db) {
       const v = validateMeta(meta);
       if (!v.ok) return next(ApiError.validation('文档元数据校验失败', v.errors));
 
-      const fileName = req.headers['x-file-name'] || (meta.title + '.bin');
+      let fileName = req.headers['x-file-name'] || (meta.title + '.bin');
+      try { fileName = decodeURIComponent(String(fileName)); } catch (_e) { fileName = String(fileName); }
       const mime = req.headers['x-file-mime'] || 'application/octet-stream';
       const buf = req.body;
       if (!buf || !Buffer.isBuffer(buf) || buf.length === 0) return next(ApiError.validation('请求体为空, 没收到文件数据'));
@@ -245,14 +330,14 @@ function register(app, db) {
         doc_type, doc_code, title, version,
         file_name, file_path, file_size, mime_type, file_hash,
         status, issued_to, issued_at, issued_by,
-        description, tags, uploaded_by,
+        description, tags,
         doc_name, doc_no, uploaded_by, uploaded_at
       ) VALUES (
         @equipment_instance_id, @bom_node_id, @eco_id,
         @doc_type, @doc_code, @title, @version,
         @file_name, @file_path, @file_size, @mime_type, @file_hash,
         @status, @issued_to, @issued_at, @issued_by,
-        @description, @tags, @uploaded_by,
+        @description, @tags,
         @title, @doc_code, @uploaded_by, datetime('now')
       )`);
       const r = stmt.run({
@@ -277,6 +362,14 @@ function register(app, db) {
         uploaded_by: userId,
       });
       const created = db.prepare('SELECT * FROM documents WHERE id = ?').get(r.lastInsertRowid);
+      recordDocumentEvent(db, {
+        doc_id: created.id,
+        action: 'upload',
+        to_status: created.status,
+        version: created.version,
+        issued_to: created.issued_to,
+        operator_id: userId,
+      });
       res.json(created);
     } catch (e) { next(e); }
   });
@@ -287,12 +380,21 @@ function register(app, db) {
       const id = req.params.id;
       const { issued_to } = req.body || {};
       if (!issued_to || !ISSUE_TARGETS.includes(issued_to)) return next(ApiError.validation('issued_to 必须是: ' + ISSUE_TARGETS.join('/')));
-      const exist = db.prepare('SELECT id, status, file_path, file_name FROM documents WHERE id = ?').get(id);
+      const exist = db.prepare('SELECT id, status, file_path, file_name, version FROM documents WHERE id = ?').get(id);
       if (!exist) return next(ApiError.notFound('文档不存在'));
       if (exist.status === 'revoked' || exist.status === 'archived') return next(ApiError.unprocessable('已收回/归档的文档不能签发'));
       if (!hasStoredFile(exist.file_path)) return next(ApiError.unprocessable('文件不存在，不能签发: ' + (exist.file_name || id)));
       db.prepare(`UPDATE documents SET status='issued', issued_to=?, issued_at=datetime('now'), issued_by=?, updated_at=datetime('now') WHERE id=?`)
         .run(issued_to, req.user?.uid || null, id);
+      recordDocumentEvent(db, {
+        doc_id: Number(id),
+        action: 'issue',
+        from_status: exist.status,
+        to_status: 'issued',
+        version: exist.version,
+        issued_to,
+        operator_id: req.user?.uid || null,
+      });
       res.json(db.prepare('SELECT * FROM documents WHERE id = ?').get(id));
     } catch (e) { next(e); }
   });
@@ -302,10 +404,20 @@ function register(app, db) {
     try {
       const id = req.params.id;
       const { reason } = req.body || {};
-      const exist = db.prepare('SELECT id FROM documents WHERE id = ?').get(id);
+      const exist = db.prepare('SELECT id, status, version, issued_to FROM documents WHERE id = ?').get(id);
       if (!exist) return next(ApiError.notFound('文档不存在'));
       db.prepare(`UPDATE documents SET status='revoked', revoke_reason=?, revoked_at=datetime('now'), updated_at=datetime('now') WHERE id=?`)
         .run(reason || '未指定原因', id);
+      recordDocumentEvent(db, {
+        doc_id: Number(id),
+        action: 'revoke',
+        from_status: exist.status,
+        to_status: 'revoked',
+        version: exist.version,
+        issued_to: exist.issued_to,
+        reason: reason || '未指定原因',
+        operator_id: req.user?.uid || null,
+      });
       res.json(db.prepare('SELECT * FROM documents WHERE id = ?').get(id));
     } catch (e) { next(e); }
   });
@@ -314,14 +426,22 @@ function register(app, db) {
   app.delete('/api/documents/:id', (req, res, next) => {
     try {
       const id = req.params.id;
-      const exist = db.prepare('SELECT id FROM documents WHERE id = ?').get(id);
+      const exist = db.prepare('SELECT id, status, version, issued_to FROM documents WHERE id = ?').get(id);
       if (!exist) return next(ApiError.notFound('文档不存在'));
       db.prepare(`UPDATE documents SET status='archived', updated_at=datetime('now') WHERE id=?`).run(id);
+      recordDocumentEvent(db, {
+        doc_id: Number(id),
+        action: 'archive',
+        from_status: exist.status,
+        to_status: 'archived',
+        version: exist.version,
+        issued_to: exist.issued_to,
+        operator_id: req.user?.uid || null,
+      });
       res.json({ id, status: 'archived' });
     } catch (e) { next(e); }
   });
 }
 
 // stats moved to before :id
-module.exports = { register, validateMeta, DOC_TYPES, DOC_STATUS, ISSUE_TARGETS, sha256, humanSize, mimeToIcon, buildStoragePath, resolveStoredFile, hasStoredFile };
-
+module.exports = { register, validateMeta, DOC_TYPES, DOC_STATUS, ISSUE_TARGETS, sha256, humanSize, mimeToIcon, buildStoragePath, resolveStoredFile, hasStoredFile, ensureDocumentHistorySchema, recordDocumentEvent, documentFamilyIds, documentEvents };

@@ -360,7 +360,7 @@ function register(app, db) {
     };
   }
 
-  const readModel = createReadModel({ db, tableExists, has, safeAll, safeGet, enrichEscalation });
+  const readModel = createReadModel({ db, tableExists, has, columns, safeAll, safeGet, enrichEscalation });
 
   registerDeliveryRoutes(app, {
     wrap,

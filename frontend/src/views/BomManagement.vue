@@ -2,11 +2,11 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <span class="page-title"><el-icon><Connection(orShare) /></el-icon> BOM 管理</span>
-        <el-tag size="small" type="info" style="margin-left: 12px">4 级拆分法 · 12 字段 · ECO 追溯</el-tag>
+        <span class="page-title"><el-icon><Connection(orShare) /></el-icon> 项目结构 / BOM 树</span>
+        <el-tag size="small" type="info" style="margin-left: 12px">树状多级结构 · 节点类型 · ECO 追溯</el-tag>
       </div>
       <div>
-        <el-select v-model="instanceId" placeholder="选择设备实例" filterable style="width: 280px; margin-right: 8px" @change="loadAll">
+        <el-select v-model="instanceId" placeholder="选择项目装备" filterable style="width: 280px; margin-right: 8px" @change="loadAll">
           <el-option v-for="i in instances" :key="i.id" :label="`${i.instance_code} · ${i.instance_name}`" :value="i.id" />
         </el-select>
         <el-button @click="loadAll" :disabled="!instanceId">刷新</el-button>
@@ -18,44 +18,45 @@
       <el-col :span="6">
         <el-card class="level-card" :class="{ active: activeLevel === 0 }" @click="setLevel(0)" shadow="hover">
           <div class="level-num" style="color: var(--el-color-danger)">{{ summary[0] || 0 }}</div>
-          <div class="level-label">0 级 · 总装</div>
-          <div class="level-tip">整台设备 (1 个根)</div>
+          <div class="level-label">0 级 · 项目装备</div>
+          <div class="level-tip">整台 TBM / 盾构机 (1 个根)</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card class="level-card" :class="{ active: activeLevel === 1 }" @click="setLevel(1)" shadow="hover">
           <div class="level-num" style="color: var(--el-color-warning)">{{ summary[1] || 0 }}</div>
-          <div class="level-label">1 级 · 部件/模组</div>
-          <div class="level-tip">装配班组按部件领料</div>
+          <div class="level-label">1 级 · 主要部件</div>
+          <div class="level-tip">刀盘、主驱动、盾体等</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card class="level-card" :class="{ active: activeLevel === 2 }" @click="setLevel(2)" shadow="hover">
           <div class="level-num" style="color: var(--el-color-primary)">{{ summary[2] || 0 }}</div>
-          <div class="level-label">2 级 · 零件与外购件</div>
-          <div class="level-tip">采购下单 / 加工领料</div>
+          <div class="level-label">2 级 · 子部件/组件</div>
+          <div class="level-tip">组件、装配体、功能单元</div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card class="level-card" :class="{ active: activeLevel === 3 }" @click="setLevel(3)" shadow="hover">
           <div class="level-num" style="color: var(--el-color-success)">{{ summary[3] || 0 }}</div>
-          <div class="level-label">3 级 · 原材料毛坯</div>
-          <div class="level-tip">生产下料</div>
+          <div class="level-label">3+ 级 · 基础件</div>
+          <div class="level-tip">3级 {{ summary[3] || 0 }} · 深层 {{ summary.deep || 0 }}</div>
         </el-card>
       </el-col>
     </el-row>
 
     <el-tabs v-model="mainTab" v-if="instanceId" style="margin-top: 12px">
-      <!-- Tab 1: 总览 (树状) -->
-      <el-tab-pane label="<el-icon><Share /></el-icon> 总览 (树状)" name="tree">
+      <!-- Tab 1: 项目结构树 -->
+      <el-tab-pane label="<el-icon><Share /></el-icon> 项目结构树" name="tree">
         <div style="display: flex; gap: 12px; margin-bottom: 8px">
-          <el-button size="small" type="primary" @click="dlgAdd = true; editingNode = null">+ 新增根节点</el-button>
+          <el-button size="small" type="primary" @click="prefillTier(0); dlgAdd = true; editingNode = null">+ 新增整机根节点</el-button>
+          <el-button size="small" type="primary" plain :disabled="!selected" @click="openAddChild(selected)">+ 新增子部件</el-button>
           <el-button size="small" type="success" :disabled="summary.total > 0" @click="initMinimumBom"><el-icon><Histogram /></el-icon> 生成最低三级骨架</el-button>
           <el-button size="small" @click="dlgImport = true"><el-icon><Download /></el-icon> CSV 导入</el-button>
           <el-button size="small" @click="loadTemplate"><el-icon><Document /></el-icon> 工业模板</el-button>
           <el-button size="small" type="warning" @click="doValidate"><el-icon><Search /></el-icon> 校验</el-button>
           <el-button size="small" type="success" @click="dlgCompare = true"><el-icon><Refresh /></el-icon> ECO 对比</el-button>
-          <el-input aria-label="搜索零件/图号/物料名" v-model="treeFilter" placeholder="搜索零件/图号/物料名" size="small" style="width: 240px; margin-left: auto" clearable />
+          <el-input aria-label="搜索层级号/零件/图号/物料名" v-model="treeFilter" placeholder="搜索层级号/零件/图号/物料名" size="small" style="width: 260px; margin-left: auto" clearable />
         </div>
         <el-alert
           v-if="minimumStructureMissing"
@@ -63,7 +64,7 @@
           show-icon
           :closable="false"
           style="margin-bottom: 10px"
-          title="BOM 最低合格结构要求：必须至少包含 0级整机、1级部件、2级零件/外购件。"
+          title="项目结构最低合格要求：必须至少包含 0级项目装备、1级主要部件、2级子部件/零件。"
         />
         <el-row :gutter="12" style="margin-bottom: 12px">
           <el-col :span="6">
@@ -104,16 +105,19 @@
                 :props="{ label: 'label', children: 'children' }"
                 node-key="id"
                 default-expand-all
-                highlight-current
+                draggable
                 @node-click="onNodeClick"
+                @node-drop="moveNode"
                 style="max-height: 700px; overflow: auto"
               >
                 <template #default="{ data }">
-                  <span style="display: inline-flex; align-items: center; gap: 6px; width: 100%">
-                    <el-tag v-if="data.tier === 0" size="small" type="danger">总装</el-tag>
-                    <el-tag v-else-if="data.tier === 1" size="small" type="warning">部件</el-tag>
-                    <el-tag v-else-if="data.tier === 2" size="small" type="info">零件</el-tag>
-                    <el-tag v-else size="small">毛坯</el-tag>
+                  <span class="bom-tree-node">
+                    <el-tag size="small" effect="plain">{{ data.level_code || '#' + data.id }}</el-tag>
+                    <el-tag v-if="data.tier === 0" size="small" type="danger">整机</el-tag>
+                    <el-tag v-else-if="data.tier === 1" size="small" type="warning">主要部件</el-tag>
+                    <el-tag v-else-if="data.tier === 2" size="small" type="info">子部件</el-tag>
+                    <el-tag v-else size="small">基础件</el-tag>
+                    <el-tag v-if="data.node_type" size="small">{{ nodeTypeLabel(data.node_type) }}</el-tag>
                     <el-tag v-if="data.is_phantom" size="small">虚</el-tag>
                     <el-tag v-if="data.is_wear_part" size="small" type="warning">易损</el-tag>
                     <el-tag v-if="data.is_key_component" size="small" type="danger">关键</el-tag>
@@ -123,7 +127,7 @@
                   </span>
                 </template>
               </el-tree>
-              <el-empty v-else description="该设备无 BOM 数据" />
+              <el-empty v-else description="该项目装备暂无结构树/BOM 数据" />
             </el-card>
           </el-col>
           <el-col :span="14">
@@ -149,7 +153,7 @@
             <el-card v-if="selected">
               <template #header>
                 <div style="display: flex; align-items: center; justify-content: space-between">
-                  <span><el-icon><Search /></el-icon> 节点详情 #{{ selected.id }} ({{ tierName(selected.tier) }})</span>
+                  <span><el-icon><Search /></el-icon> 节点详情 #{{ selected.id }} ({{ tierLabel(selected.tier) }})</span>
                   <div>
                     <el-button size="small" @click="openEdit">编辑</el-button>
                     <el-button size="small" type="danger" @click="doDelete(selected)">删除</el-button>
@@ -157,6 +161,8 @@
                 </div>
               </template>
               <el-descriptions :column="2" border size="small">
+                <el-descriptions-item label="层级号">{{ selected.level_code || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="节点类型">{{ nodeTypeLabel(selected.node_type) }}</el-descriptions-item>
                 <el-descriptions-item label="物料">{{ selected.material_name || '-' }} ({{ selected.material_code || '-' }})</el-descriptions-item>
                 <el-descriptions-item label="图号/型号">{{ selected.part_number || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="数量">{{ selected.quantity }} {{ selected.unit }}</el-descriptions-item>
@@ -225,7 +231,7 @@
         @risk-drill="openRiskDrill"
       />
     </el-tabs>
-    <el-empty v-else description="请先选择设备实例" />
+    <el-empty v-else description="请先选择项目装备" />
 
     <BomDialogs
       v-model:dlg-add="dlgAdd"
@@ -254,7 +260,8 @@
       :risk-owners="riskOwners"
       :risk-action-loading="riskActionLoading"
       @reset-add-form="resetAddForm"
-      @tier-change="onTierChange"
+      @parent-change="onParentChange"
+      @node-type-change="onNodeTypeChange"
       @save="doSave"
       @fill-template="fillTemplate"
       @fill-sample="fillSample"
@@ -276,6 +283,7 @@ import LevelTable from './bom/LevelTable.vue'
 import BomBusinessTabs from './bom/BomBusinessTabs.vue'
 import BomDialogs from './bom/BomDialogs.vue'
 import { useBomManagement } from './bom/useBomManagement'
+import { nodeTypeLabel, tierLabel } from './bom/bomShared'
 
 const {
   instances,
@@ -326,22 +334,20 @@ const {
   compareV2,
   compareResult,
   loadBomDocs,
-  loadRiskOwners,
   downloadBomDoc,
   rowsOfLevel,
   loadAll,
-  loadInstances,
   setLevel,
-  tierName,
   onNodeClick,
   onRowSelect,
   prefillTier,
-  onTierChange,
+  onParentChange,
+  onNodeTypeChange,
   drillPart,
-  defaultForm,
   resetAddForm,
   openAddChild,
   openEdit,
+  moveNode,
   doSave,
   doDelete,
   doImport,
@@ -352,13 +358,10 @@ const {
   fillTemplate,
   fillSample,
   copyTemplate,
-  templateDesc,
   openRiskDrill,
-  resetRiskActionForm,
   openRiskFollowup,
   openRiskAssign,
   openRiskEta,
-  refreshSelectedRiskComponent,
   submitRiskAction,
   openPurchasePage,
   openMaterialAlerts,
@@ -379,4 +382,5 @@ const {
 .health-metric { font-size: 18px; font-weight: 600; line-height: 1.4; }
 .health-sub { font-size: 12px; color: var(--el-color-info); margin-top: 8px; min-height: 32px; }
 :deep(.el-tree-node__content) { height: 32px; }
+.bom-tree-node { display: inline-flex; align-items: center; gap: 6px; width: 100%; }
 </style>

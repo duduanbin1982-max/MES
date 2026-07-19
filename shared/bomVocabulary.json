@@ -1,0 +1,70 @@
+{
+  "units": ["件", "个", "米", "千克", "套", "台", "根", "条", "升"],
+  "categories": [
+    "自制机加件",
+    "自制钣金件",
+    "标准紧固件",
+    "气动元件",
+    "电气元件",
+    "外购成品",
+    "辅助材料",
+    "成品",
+    "自制部件",
+    "虚拟件",
+    "原材料",
+    "外协件"
+  ],
+  "selfMadeCategories": ["自制机加件", "自制钣金件"],
+  "purchasedCategories": ["标准紧固件", "气动元件", "电气元件", "外购成品"],
+  "componentCategories": ["自制部件", "外购成品"],
+  "nodeTypes": {
+    "equipment": { "label": "整机/项目装备", "category": "成品", "unit": "台" },
+    "system": { "label": "主要系统/主要部件", "category": "自制部件", "unit": "套" },
+    "assembly": { "label": "组件/装配体", "category": "自制部件", "unit": "套" },
+    "component": { "label": "普通部件", "category": "自制部件", "unit": "件" },
+    "virtual": { "label": "虚拟件/分组", "category": "虚拟件", "unit": "套", "phantom": true },
+    "self_made": { "label": "自制件", "category": "自制机加件", "unit": "件" },
+    "purchased": { "label": "外购件", "category": "外购成品", "unit": "件" },
+    "standard": { "label": "标准件", "category": "标准紧固件", "unit": "件" },
+    "raw_material": { "label": "原材料/毛坯", "category": "原材料", "unit": "件" },
+    "consumable": { "label": "辅料/耗材", "category": "辅助材料", "unit": "件" }
+  },
+  "tierPresets": {
+    "0": { "category": "成品", "node_type": "equipment", "unit": "台" },
+    "1": { "category": "自制部件", "node_type": "system", "unit": "套" },
+    "2": { "category": "自制部件", "node_type": "assembly", "unit": "套" },
+    "3": { "category": "外购成品", "node_type": "purchased", "unit": "件" },
+    "default": { "category": "自制机加件", "node_type": "self_made", "unit": "件" }
+  },
+  "tierLabels": {
+    "0": "0 整机",
+    "1": "1 主要部件",
+    "2": "2 子部件",
+    "3": "3 基础件"
+  },
+  "docTypeLabels": {
+    "drawing": "📐 图纸",
+    "sop": "📋 SOP",
+    "process": "⚙️ 工艺",
+    "qc_std": "🔍 检验标准",
+    "contract": "📜 合同",
+    "report": "📊 报告",
+    "other": "📝 其他"
+  },
+  "processStatusLabels": {
+    "success": "完整",
+    "danger": "缺工序",
+    "warning": "待完善"
+  },
+  "contractDiffLabels": {
+    "on_or_under_budget": "预算内",
+    "over_20pct": "超 20%",
+    "over_budget": "超预算",
+    "no_contract": "待签合同"
+  },
+  "kitRiskLabels": {
+    "ready": "已齐套",
+    "incoming": "待到货",
+    "blocked": "阻塞"
+  }
+}

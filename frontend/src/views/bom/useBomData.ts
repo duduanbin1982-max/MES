@@ -1,9 +1,11 @@
 import { computed, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import api from '../../api'
 import { emptyBusinessViews, templateDesc } from './bomShared'
 
 export function useBomData() {
+  const route = useRoute()
   const instances = ref<any[]>([])
   const instanceId = ref<number | null>(null)
   const summary = ref<any>({ 0: 0, 1: 0, 2: 0, 3: 0, total: 0 })
@@ -36,9 +38,14 @@ export function useBomData() {
         api.get(`/equipment_instances/${instanceId.value}/bom/business-views`).catch(() => emptyBusinessViews()),
       ])
       tree.value = treeR.tree || []
-      summary.value = treeR.tier_summary || levelsR.summary
+      summary.value = { ...(treeR.tier_summary || levelsR.summary || {}), ...(treeR.structure_summary || levelsR.structure_summary || {}) }
       flat.value = []
-      for (let tier = 0; tier <= 3; tier += 1) flat.value.push(...(levelsR.levels?.[tier] || []))
+      const levels = levelsR.levels || {}
+      Object.keys(levels)
+        .map((key) => Number(key))
+        .filter((tier) => Number.isFinite(tier))
+        .sort((a, b) => a - b)
+        .forEach((tier) => flat.value.push(...(levels[tier] || [])))
       costs.value = costR.items || []
       materials.value = matsR.items || []
       health.value = healthR || { score: 0, checks: {}, highlights: [] }
@@ -52,7 +59,9 @@ export function useBomData() {
     const result: any = await api.get('/equipment_instances?limit=100')
     instances.value = result.items || result || []
     if (instances.value.length && !instanceId.value) {
-      instanceId.value = instances.value[0].id
+      const routeInstanceId = Number(route.query.instance_id || route.query.equipment_instance_id || 0)
+      const routed = instances.value.find((item: any) => Number(item.id) === routeInstanceId)
+      instanceId.value = routed?.id || instances.value[0].id
       await loadAll()
     }
   }

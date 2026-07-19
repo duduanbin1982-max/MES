@@ -120,7 +120,7 @@
             <el-option label="运行中" value="running" />
           </el-select>
         </div>
-        <el-table :data="historyList" stripe size="small" v-loading="histLoading" style="margin-top:10px" @row-click="viewHistoryDetail" highlight-current-row>
+        <el-table :data="historyList" stripe size="small" v-loading="histLoading" style="margin-top:10px" @row-click="viewHistoryDetail">
           <el-table-column prop="report_name" label="报表名称" min-width="180" />
           <el-table-column prop="run_at" label="执行时间" width="170" />
           <el-table-column label="状态" width="100">

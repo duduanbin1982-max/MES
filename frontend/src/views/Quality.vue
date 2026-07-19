@@ -1,7 +1,8 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title"><el-icon><Search /></el-icon> 质检管理</div>
+      <div class="page-title"><el-icon><Search /></el-icon> {{ pageTitle }}</div>
+      <div class="page-subtitle">{{ pageSubtitle }}</div>
     </div>
 
     <el-tabs v-model="activeTab" type="border-card">
@@ -15,8 +16,11 @@
           :loading="loading"
           :type-label="typeLabel"
           :type-color="typeColor"
+          :inspection-entry="inspectionEntry"
+          :is-scoped="isInspectionTypeScoped"
           @load="load"
-          @create="showCreate = true"
+          @create="openCreateInspection"
+          @clear-scope="clearInspectionRouteScope"
         />
       </el-tab-pane>
 
@@ -45,7 +49,6 @@
           :users="users"
           :rows="capaRows"
           :loading="capaLoading"
-          :row-class="capaRowClass"
           @load="loadCapa"
           @complete="completeCapa"
         />
@@ -111,6 +114,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import QualityInspectionsTab from './quality/QualityInspectionsTab.vue'
 import QualityNcrTab from './quality/QualityNcrTab.vue'
 import QualityCapaTab from './quality/QualityCapaTab.vue'
@@ -121,6 +125,7 @@ import { useQualityManagement } from './quality/useQualityManagement'
 
 const {
   activeTab,
+  clearInspectionRouteScope,
   filters,
   rows,
   stats,
@@ -132,6 +137,9 @@ const {
   submitting,
   form,
   types,
+  inspectionEntry,
+  isInspectionTypeScoped,
+  openCreateInspection,
   typeLabel,
   typeColor,
   load,
@@ -168,7 +176,6 @@ const {
   capaFilters,
   capaRows,
   capaLoading,
-  capaRowClass,
   loadCapa,
   completeCapa,
   showClosureDialog,
@@ -192,10 +199,18 @@ const {
   submitTemplate,
   viewTemplateItems,
 } = useQualityManagement()
+
+const pageTitle = computed(() => activeTab.value === 'inspections' ? inspectionEntry.value.title : '质检管理')
+const pageSubtitle = computed(() => (
+  activeTab.value === 'inspections'
+    ? inspectionEntry.value.subtitle
+    : 'NCR、CAPA、检验模板与质量看板统一管理'
+))
 </script>
 
 <style scoped>
 .page{padding:16px 24px}
 .page-header{margin-bottom:16px}
-.page-title{font-size:20px;font-weight:600}
+.page-title{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:600;color:var(--mes-text-primary, #1f2937)}
+.page-subtitle{margin-top:6px;color:var(--mes-text-secondary, #6b7280);font-size:13px}
 </style>

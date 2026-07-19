@@ -1,59 +1,32 @@
 <template>
-  <el-container style="height: 100vh">
-    <el-aside width="260px" class="sidebar">
-      <div class="logo">
-        <span class="logo-title">TBM-MES</span>
-        <div class="logo-sub">成套装备生产管理 v2.3</div>
-      </div>
-      <el-menu
-        :default-active="activeMenuIndex"
-        :default-openeds="openedSections"
-        :collapse-transition="false"
-        background-color="var(--color-sidebar-bg)"
-        text-color="var(--color-sidebar-text)"
-        active-text-color="var(--color-sidebar-active)"
-        router
-      >
-        <el-sub-menu v-for="section in visibleSections" :key="section.key" :index="section.key">
-          <template #title>
-            <el-icon><component :is="section.icon" /></el-icon>
-            <span>{{ section.title }}</span>
-          </template>
-          <el-menu-item v-for="item in section.items" :key="item.key" :index="item.to">
-            <el-icon><component :is="item.icon" /></el-icon>
-            <span>{{ item.title }}</span>
-          </el-menu-item>
-        </el-sub-menu>
-      </el-menu>
-    </el-aside>
+  <a class="skip-link" href="#main-content">跳到主内容</a>
+  <el-container class="app-shell">
+    <AppSidebar
+      v-model:menu-keyword="menuKeyword"
+      :active-menu-index="activeMenuIndex"
+      :favorite-items="favoriteItems"
+      :filtered-sections="filteredSections"
+      :is-favorite="isFavorite"
+      :is-menu-item-active="isMenuItemActive"
+      :menu-key="menuKey"
+      :opened-sections="openedSections"
+      :recent-items="recentItems"
+      :show-quick-nav="showQuickNav"
+      :toggle-favorite="toggleFavorite"
+    />
 
     <el-container>
-      <el-header class="top-header">
-        <div style="font-size: 16px; font-weight: 500">{{ $route.meta?.title || 'TBM-MES' }}</div>
-        <div style="display: flex; align-items: center; gap: 16px">
-          <span :title="`WebSocket: ${wsStatus}`" :style="{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: wsStatus === 'open' ? 'var(--el-color-success)' : wsStatus === 'connecting' ? 'var(--el-color-warning)' : 'var(--el-color-danger)' }"></span>
-          <el-button :icon="isDark ? Sunny : Moon" circle size="small" @click="toggleTheme" :title="isDark ? '切换亮色' : '切换暗色'" />
-          <router-link to="/help/manual" class="manual-link">操作手册</router-link>
-          <router-link to="/scan" class="scan-link">扫码报工</router-link>
-          <span class="clock">{{ now }}</span>
-          <el-dropdown @command="onCmd" trigger="click">
-            <span style="cursor: pointer; display: flex; align-items: center; gap: 6px">
-              <el-avatar :size="28" style="background: var(--el-color-primary)">{{ auth.user?.full_name?.[0] || '?' }}</el-avatar>
-              <span style="font-size: 13px">{{ auth.user?.full_name || '未登录' }}</span>
-              <el-tag size="small">{{ auth.user?.role || '-' }}</el-tag>
-            </span>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="logout" divided>
-                  <el-icon><SwitchButton /></el-icon>登出
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </el-header>
+      <AppHeader
+        :is-dark="isDark"
+        :now="now"
+        :title="$route.meta?.title || 'TBM-MES'"
+        :user="auth.user"
+        :ws-status="wsStatus"
+        @command="onCmd"
+        @toggle-theme="toggleTheme"
+      />
 
-      <el-main style="padding: 0; background: var(--el-bg-color-page)">
+      <el-main id="main-content" class="layout-main">
         <router-view />
       </el-main>
     </el-container>
@@ -64,10 +37,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Moon, Sunny, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import AppHeader from '../components/layout/AppHeader.vue'
+import AppSidebar from '../components/layout/AppSidebar.vue'
 import WsPanel from '../components/WsPanel.vue'
-import { MENU_SECTIONS } from '../config/menuCatalog'
+import { MENU_SECTIONS, type MenuItem } from '../config/menuCatalog'
 import { filterMenuSections } from '../config/menuPolicy'
 import { useShellNotifications } from '../composables/useShellNotifications'
 import { useAuthStore } from '../stores/auth'
@@ -77,7 +51,21 @@ const route = useRoute()
 const auth = useAuthStore()
 const now = ref('')
 const isDark = ref(false)
+const menuKeyword = ref('')
+const favoriteKeys = ref<string[]>([])
+const recentKeys = ref<string[]>([])
+const storageReady = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
+
+const FAVORITE_STORAGE_KEY = 'tbm-menu-favorites'
+const RECENT_STORAGE_KEY = 'tbm-menu-recent'
+const MAX_FAVORITES = 8
+const MAX_RECENT = 8
+
+type NavMenuItem = MenuItem & {
+  sectionKey: string
+  sectionTitle: string
+}
 
 const onCmd = (cmd: string) => {
   if (cmd === 'logout') {
@@ -92,9 +80,36 @@ const visibleSections = computed(() => filterMenuSections(MENU_SECTIONS, {
   hasAnyPerm: (...needs: string[]) => auth.hasAnyPerm(...needs),
 }))
 
-const openedSections = computed(() => visibleSections.value.map((section) => section.key))
+const visibleItems = computed<NavMenuItem[]>(() =>
+  visibleSections.value.flatMap((section) =>
+    section.items.map((item) => ({
+      ...item,
+      sectionKey: section.key,
+      sectionTitle: section.title,
+    })),
+  ),
+)
+
+const normalizedMenuKeyword = computed(() => menuKeyword.value.trim().toLowerCase())
+
+const filteredSections = computed(() => {
+  const keyword = normalizedMenuKeyword.value
+  if (!keyword) return visibleSections.value
+
+  return visibleSections.value
+    .map((section) => {
+      const sectionText = `${section.title} ${section.key}`.toLowerCase()
+      const sectionMatched = sectionText.includes(keyword)
+      const items = sectionMatched
+        ? section.items
+        : section.items.filter((item) => `${item.title} ${item.key} ${item.to}`.toLowerCase().includes(keyword))
+      return { ...section, items }
+    })
+    .filter((section) => section.items.length > 0)
+})
+
 const activeMenuIndex = computed(() => {
-  const items = visibleSections.value.flatMap((section) => section.items)
+  const items = visibleItems.value
   const tabOnly = route.query.tab ? `${route.path}?tab=${route.query.tab}` : route.path
   return items.find((item) => item.to === route.fullPath)?.to
     || items.find((item) => item.to === tabOnly)?.to
@@ -102,18 +117,73 @@ const activeMenuIndex = computed(() => {
     || route.path
 })
 
-watch(visibleSections, (sections) => {
-  console.log(
-    '[Layout] visible menu sections=',
-    sections.map((section) => ({ key: section.key, items: section.items.map((item) => item.to) })),
-    'permissions=' + JSON.stringify(auth.permissions),
-    'role=' + auth.user?.role,
-  )
-}, { immediate: true })
+const favoriteItems = computed(() => resolveMenuKeys(favoriteKeys.value).slice(0, MAX_FAVORITES))
+const recentItems = computed(() => resolveMenuKeys(recentKeys.value).slice(0, MAX_RECENT))
+const showQuickNav = computed(() => !normalizedMenuKeyword.value)
 
-watch(() => route.path, (path) => {
-  console.log('[Layout] active route=', path)
-}, { immediate: true })
+const currentSectionKey = computed(() => {
+  const active = activeMenuIndex.value
+  return visibleSections.value.find((section) =>
+    section.items.some((item) => item.to === active || item.to.split('?')[0] === route.path),
+  )?.key
+})
+
+const openedSections = computed(() => {
+  if (normalizedMenuKeyword.value) return filteredSections.value.map((section) => section.key)
+  if (currentSectionKey.value) return [currentSectionKey.value]
+  return filteredSections.value.slice(0, 1).map((section) => section.key)
+})
+
+const menuKey = computed(() => `${normalizedMenuKeyword.value ? 'search' : 'route'}:${openedSections.value.join(',')}`)
+
+function resolveMenuKeys(keys: string[]) {
+  return keys
+    .map((key) => visibleItems.value.find((item) => item.key === key))
+    .filter((item): item is NavMenuItem => Boolean(item))
+}
+
+function isFavorite(key: string) {
+  return favoriteKeys.value.includes(key)
+}
+
+function toggleFavorite(key: string) {
+  favoriteKeys.value = isFavorite(key)
+    ? favoriteKeys.value.filter((itemKey) => itemKey !== key)
+    : [key, ...favoriteKeys.value.filter((itemKey) => itemKey !== key)].slice(0, MAX_FAVORITES)
+  persistMenuList(FAVORITE_STORAGE_KEY, favoriteKeys.value)
+}
+
+function isMenuItemActive(item: Pick<NavMenuItem, 'to'>) {
+  const tabOnly = route.query.tab ? `${route.path}?tab=${route.query.tab}` : route.path
+  return item.to === route.fullPath || item.to === tabOnly || item.to.split('?')[0] === route.path
+}
+
+function findCurrentMenuItem() {
+  return visibleItems.value.find((item) => isMenuItemActive(item))
+}
+
+function recordRecent(item = findCurrentMenuItem()) {
+  if (!item || !storageReady.value) return
+  recentKeys.value = [item.key, ...recentKeys.value.filter((itemKey) => itemKey !== item.key)].slice(0, MAX_RECENT)
+  persistMenuList(RECENT_STORAGE_KEY, recentKeys.value)
+}
+
+function readMenuList(key: string) {
+  try {
+    const rawValue = localStorage.getItem(key)
+    const parsedValue = rawValue ? JSON.parse(rawValue) : []
+    return Array.isArray(parsedValue)
+      ? parsedValue.filter((itemKey): itemKey is string => typeof itemKey === 'string')
+      : []
+  } catch {
+    return []
+  }
+}
+
+function persistMenuList(key: string, value: string[]) {
+  if (!storageReady.value) return
+  localStorage.setItem(key, JSON.stringify(value))
+}
 
 const toggleTheme = () => {
   isDark.value = !isDark.value
@@ -128,24 +198,26 @@ const update = () => {
 const { status: wsStatus } = useShellNotifications()
 
 onMounted(() => {
+  favoriteKeys.value = readMenuList(FAVORITE_STORAGE_KEY)
+  recentKeys.value = readMenuList(RECENT_STORAGE_KEY)
+  storageReady.value = true
+  recordRecent()
+
   const saved = localStorage.getItem('tbm-theme')
   if (saved === 'light' || saved === 'dark') {
     isDark.value = saved === 'dark'
   } else {
-    isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+    isDark.value = false
   }
   applyTheme()
   update()
   timer = setInterval(update, 1000)
-
-  const mq = window.matchMedia('(prefers-color-scheme: dark)')
-  mq.addEventListener('change', e => {
-    if (!localStorage.getItem('tbm-theme')) {
-      isDark.value = e.matches
-      applyTheme()
-    }
-  })
 })
+
+watch(
+  () => [route.fullPath, visibleItems.value.map((item) => item.key).join('|')],
+  () => recordRecent(),
+)
 
 function applyTheme() {
   if (isDark.value) document.documentElement.setAttribute('data-theme', 'dark')
@@ -158,50 +230,32 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.el-menu { border-right: 0; }
-
-.sidebar {
-  background: var(--color-sidebar-bg);
-  color: var(--color-sidebar-text);
-  border-right: 1px solid var(--el-border-color);
+.app-shell {
+  height: 100vh;
+  background: var(--el-bg-color-page);
 }
 
-.logo {
-  padding: 20px 16px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+.layout-main {
+  padding: 0;
+  background: var(--el-bg-color-page);
+  overflow: auto;
 }
 
-.logo-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #F1F5F9;
-}
-
-.logo-sub {
-  font-size: 11px;
-  color: #C2CCD8;
-  margin-top: 4px;
-}
-
-.top-header {
+.skip-link {
+  position: fixed;
+  left: 12px;
+  top: 12px;
+  z-index: 3000;
+  transform: translateY(-140%);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
   background: var(--el-bg-color-overlay);
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--space-lg);
-  height: 56px;
+  color: var(--el-text-color-primary);
+  box-shadow: var(--shadow-md);
+  transition: transform var(--transition-fast);
 }
 
-.manual-link,
-.scan-link {
-  color: var(--el-color-primary);
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.clock {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
+.skip-link:focus {
+  transform: translateY(0);
 }
 </style>

@@ -1,42 +1,54 @@
 <template>
   <div class="mindmap">
-    <div class="mindmap-header" @click="expanded = !expanded">
+    <div
+      class="mindmap-header"
+      role="button"
+      tabindex="0"
+      :aria-expanded="expanded"
+      aria-controls="process-tree-mindmap-body"
+      @click="expanded = !expanded"
+      @keydown.enter.self.prevent="expanded = !expanded"
+      @keydown.space.self.prevent="expanded = !expanded"
+    >
       <span class="mindmap-toggle">{{ expanded ? '▼' : '▶' }}</span>
       <span class="mindmap-title"><el-icon><MagicStick /></el-icon> 思维导图视图</span>
       <span class="mindmap-hint">{{ hint }}</span>
-      <el-button
-        v-if="expanded"
-        size="small"
-        text
-        @click.stop="loadCurrent(true)"
-        :loading="loading"
-      >刷新</el-button>
+      <div v-if="expanded" class="mindmap-header-actions">
+        <el-button size="small" :disabled="!canGoParent" @click.stop="goParent">返回上层</el-button>
+        <el-button size="small" :disabled="isRoot" @click.stop="goRoot">回到总装</el-button>
+        <el-button
+          size="small"
+          text
+          @click.stop="loadCurrent(true)"
+          :loading="loading"
+        >刷新</el-button>
+      </div>
     </div>
 
     <transition name="mindmap-fade">
-      <div v-if="expanded" class="mindmap-body">
-        <!-- 加载 / 错误 / 空状态 -->
+      <div v-if="expanded" id="process-tree-mindmap-body" class="mindmap-body">
         <el-skeleton v-if="loading && !tree" :rows="3" animated />
         <el-empty v-else-if="error" :description="error" />
         <el-empty v-else-if="!tree" description="无数据" />
 
         <template v-else>
-          <!-- 面包屑导航（可点击回溯） -->
-          <div v-if="breadcrumb.length > 1" class="mindmap-breadcrumb">
-            <span
+          <div v-if="breadcrumb.length > 0" class="mindmap-breadcrumb" aria-label="工艺树当前位置">
+            <span class="mindmap-breadcrumb-label">当前位置</span>
+            <button
               v-for="(crumb, i) in breadcrumb"
               :key="crumb.part_id"
+              type="button"
               class="mindmap-crumb"
               :class="{ 'mindmap-crumb-current': i === breadcrumb.length - 1 }"
+              :disabled="i === breadcrumb.length - 1"
               @click="onCrumbClick(crumb.part_id)"
             >
               <span class="mindmap-crumb-icon">{{ levelIcon(crumb.level) }}</span>
               <span class="mindmap-crumb-name">{{ crumb.name }}</span>
               <span v-if="i < breadcrumb.length - 1" class="mindmap-crumb-sep">›</span>
-            </span>
+            </button>
           </div>
 
-          <!-- 顶部 KPI 卡片 -->
           <div class="mindmap-kpi">
             <div class="mindmap-stat">
               <span class="mindmap-stat-value">{{ tree.current.total_nodes }}</span>
@@ -60,27 +72,49 @@
             </div>
           </div>
 
-          <!-- 中心节点 + 径向布局图 -->
-          <div ref="chartEl" class="mindmap-chart"></div>
+          <section class="mindmap-chart-shell">
+            <div class="mindmap-chart-toolbar">
+              <div>
+                <span class="mindmap-chart-eyebrow">层级结构</span>
+                <strong>{{ tree.current.name }}</strong>
+              </div>
+              <div class="mindmap-chart-tools">
+                <span class="mindmap-chart-help">长条节点展示完整文字，拐角连线表达上下级关系</span>
+                <el-button size="small" @click="resetChartView">适配画布</el-button>
+              </div>
+            </div>
+            <div
+              ref="chartEl"
+              class="mindmap-chart"
+              role="img"
+              :aria-label="`工艺树思维导图，当前层级 ${tree.current.name}`"
+            ></div>
+          </section>
 
-          <!-- 操作按钮 -->
           <div class="mindmap-actions">
             <el-button
               size="small"
               type="primary"
-              @click="onCenterClick"
-              :disabled="breadcrumb.length === 0"
+              @click="goParent"
+              :disabled="!canGoParent"
             >
-              {{ tree.current.kind === 'root' ? '回到总览' : '回到当前层中心' }}
+              返回上层
+            </el-button>
+            <el-button
+              size="small"
+              @click="goRoot"
+              :disabled="isRoot"
+            >
+              回到总装
             </el-button>
             <el-button size="small" @click="loadCurrent(true)" :loading="loading">重新加载</el-button>
+            <el-button size="small" @click="resetChartView">适配画布</el-button>
           </div>
 
-          <!-- 子节点列表（点击进入下层） -->
           <div v-if="tree.children && tree.children.length > 0" class="mindmap-children">
             <div class="mindmap-children-title">
               {{ levelTitle(tree.current.level) }} · 共 {{ tree.children.length }} 项
-              <span class="mindmap-hint-tiny">· hover 看详情</span>
+              <span class="mindmap-hint-tiny">· 点击卡片进入下层</span>
             </div>
             <div class="mindmap-child-grid">
               <el-tooltip
@@ -110,10 +144,11 @@
                     <div v-if="child.required_workstation_id" class="mindmap-tooltip-row"><span class="mindmap-tooltip-key">工位</span><span class="mindmap-tooltip-val">#{{ child.required_workstation_id }}</span></div>
                     <div v-if="child.material_name && child.material_name !== child.name" class="mindmap-tooltip-row"><span class="mindmap-tooltip-key">物料</span><span class="mindmap-tooltip-val">{{ child.material_name }}</span></div>
                     <div v-if="child.notes" class="mindmap-tooltip-row mindmap-tooltip-row-notes"><span class="mindmap-tooltip-key">备注</span><span class="mindmap-tooltip-val">{{ child.notes }}</span></div>
-                    <div class="mindmap-tooltip-hint">点击进入下层 →</div>
+                    <div class="mindmap-tooltip-hint">点击进入下层</div>
                   </div>
                 </template>
-                <div
+                <button
+                  type="button"
                   class="mindmap-child-card"
                   :class="'mindmap-child-' + child.kind"
                   @click="onChildClick(child)"
@@ -137,7 +172,7 @@
                     </div>
                   </div>
                   <div class="mindmap-child-arrow">›</div>
-                </div>
+                </button>
               </el-tooltip>
             </div>
           </div>
@@ -166,6 +201,8 @@ const {
   error,
   chartEl,
   hint,
+  isRoot,
+  canGoParent,
   levelIcon,
   kindIcon,
   kindLabel,
@@ -175,8 +212,8 @@ const {
   loadCurrent,
   onChildClick,
   onCrumbClick,
-  onCenterClick,
+  goParent,
+  goRoot,
+  resetChartView,
 } = useProcessTreeMindmap(props, emit)
 </script>
-
-

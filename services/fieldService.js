@@ -4,6 +4,7 @@
 const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 const { ensureFieldServiceSchema } = require("./fieldServiceSchema");
+const fieldServiceCore = require("./fieldServiceCore");
 
 function register(app, db) {
   const all = (sql, params) => db.prepare(sql).all(params || []);
@@ -14,35 +15,16 @@ function register(app, db) {
 
   // ========== MAINTENANCE PLANS ==========
   app.get("/api/field-service/maintenance-plans", wrap(function(req, res) {
-    var sql = "SELECT mp.*, ei.instance_code FROM maintenance_plans mp LEFT JOIN equipment_instances ei ON mp.equipment_instance_id = ei.id WHERE 1=1";
-    var params = [];
-    if (req.query.equipment_instance_id) { sql += " AND mp.equipment_instance_id = ?"; params.push(req.query.equipment_instance_id); }
-    if (req.query.status) { sql += " AND mp.status = ?"; params.push(req.query.status); }
-    sql += " ORDER BY mp.next_due_date ASC";
-    res.json(all(sql, params));
+    res.json(fieldServiceCore.listMaintenancePlans(db, req.query));
   }));
 
   app.post("/api/field-service/maintenance-plans", wrap(function(req, res) {
-    var body = req.body;
-    if (!body.equipment_instance_id || !body.maintenance_type) throw ApiError.validation("equipment_instance_id and maintenance_type required");
-    var r = run("INSERT INTO maintenance_plans (equipment_instance_id, plan_code, plan_name, maintenance_type, frequency_days, assigned_to, next_due_date) VALUES (?,?,?,?,?,?,?)",
-      [body.equipment_instance_id, body.plan_code || null, body.plan_name || null, body.maintenance_type, body.frequency_days || null, body.assigned_to || null, body.next_due_date || null]);
-    res.json({ id: r.lastInsertRowid });
+    res.json(fieldServiceCore.createMaintenancePlan(db, req.body));
   }));
 
   app.put("/api/field-service/maintenance-plans/:id", wrap(function(req, res) {
-    var existing = get("SELECT id FROM maintenance_plans WHERE id = ?", [req.params.id]);
-    if (!existing) throw ApiError.notFound("Maintenance plan not found");
-    var allowed = ["equipment_instance_id","plan_name","maintenance_type","frequency_days","last_done_date","next_due_date","assigned_to","status"];
-    var sets = [], params = [];
-    for (var i = 0; i < allowed.length; i++) {
-      var k = allowed[i];
-      if (req.body[k] !== undefined) { sets.push(k + " = ?"); params.push(req.body[k]); }
-    }
-    if (sets.length === 0) throw ApiError.validation("No fields to update");
-    params.push(req.params.id);
-    run("UPDATE maintenance_plans SET " + sets.join(", ") + ", updated_at = datetime('now') WHERE id = ?", params);
-    res.json({ ok: true });
+    if (!fieldServiceCore.getMaintenancePlan(db, req.params.id)) throw ApiError.notFound("Maintenance plan not found");
+    res.json(fieldServiceCore.updateMaintenancePlan(db, req.params.id, req.body));
   }));
 
   // ========== MAINTENANCE LOGS ==========
@@ -65,23 +47,20 @@ function register(app, db) {
 
   // ========== SPARE PARTS ==========
   app.get("/api/field-service/spare-parts", wrap(function(req, res) {
-    var sql = "SELECT sp.* FROM spare_parts sp ORDER BY sp.quantity ASC";
-    res.json(all(sql));
+    res.json(fieldServiceCore.listSpareParts(db, req.query));
   }));
 
   app.post("/api/field-service/spare-parts", wrap(function(req, res) {
-    var body = req.body;
-    if (!body.part_name) throw ApiError.validation("part_name required");
-    var r = run("INSERT INTO spare_parts (equipment_instance_id, part_code, part_name, part_type, quantity, min_stock, unit, location, supplier, unit_price) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      [body.equipment_instance_id || null, body.part_code || null, body.part_name, body.part_type || "mechanical", body.quantity || 0, body.min_stock || 5, body.unit || "pcs", body.location || null, body.supplier || null, body.unit_price || 0]);
-    res.json({ id: r.lastInsertRowid });
+    res.json(fieldServiceCore.createSparePart(db, req.body));
+  }));
+
+  app.post("/api/field-service/spare-parts/adjust", wrap(function(req, res) {
+    res.json(fieldServiceCore.adjustSparePartStock(db, req.body));
   }));
 
   app.put("/api/field-service/spare-parts/:id/stock", wrap(function(req, res) {
-    var body = req.body;
-    if (body.quantity === undefined) throw ApiError.validation("quantity required");
-    run("UPDATE spare_parts SET quantity = ?, updated_at = datetime('now') WHERE id = ?", [body.quantity, req.params.id]);
-    res.json({ ok: true });
+    if (!fieldServiceCore.getSparePart(db, req.params.id)) throw ApiError.notFound("Spare part not found");
+    res.json(fieldServiceCore.setSparePartStock(db, req.params.id, req.body.quantity));
   }));
 
   // ========== BREAKDOWN REPORTS ==========

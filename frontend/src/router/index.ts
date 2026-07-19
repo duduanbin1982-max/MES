@@ -17,20 +17,22 @@ const routes = [
       { path: '/help/manual', name: 'operation-manual', component: () => import('../views/OperationManual.vue'), meta: { title: '操作手册' } },
       { path: '/delivery', name: 'delivery', component: () => import('../views/DeliveryDashboard.vue'), meta: { title: '项目交付看板', icon: 'Finished' } },
       { path: '/setup', name: 'setup', component: () => import('../views/SetupWizard.vue'), meta: { title: '初始化向导', icon: 'Guide' } },
+      { path: '/project-wizard', name: 'project-wizard', component: () => import('../views/ProjectLaunchWizard.vue'), meta: { title: '项目启动向导', icon: 'Guide' } },
       { path: '/mdm', name: 'mdm', component: () => import('../views/MasterDataGovernance.vue'), meta: { title: '主数据治理', icon: 'DataAnalysis' } },
       { path: '/exceptions', name: 'exceptions', component: () => import('../views/ExceptionCenter.vue'), meta: { title: '异常中心', icon: 'WarningFilled' } },
       { path: '/dashboard', name: 'dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '仪表盘', icon: 'DataBoard' } },
-      { path: '/instances', name: 'instances', component: () => import('../views/EquipmentInstances.vue'), meta: { title: '装备实例', icon: 'Box' } },
-      { path: '/instances/:id', name: 'instance-detail', component: () => import('../views/EquipmentInstanceDetail.vue'), meta: { title: '实例详情', hidden: true } },
+      { path: '/instances', name: 'instances', component: () => import('../views/EquipmentInstances.vue'), meta: { title: '项目装备', icon: 'Box' } },
+      { path: '/instances/:id', name: 'instance-detail', component: () => import('../views/EquipmentInstanceDetail.vue'), meta: { title: '项目装备详情', hidden: true } },
       { path: '/kit-closure', name: 'kit-closure', component: () => import('../views/KitClosure.vue'), meta: { title: '齐套缺料', icon: 'Box' } },
       { path: '/materials', name: 'materials', component: () => import('../views/MaterialCenter.vue'), meta: { title: '物料中心', icon: 'Goods' } },
       { path: '/inventory', redirect: '/materials?tab=inv', meta: { hidden: true } },
       { path: '/material-alerts', name: 'material-alerts', component: () => import('../views/MaterialAlerts.vue'), meta: { title: '物料预警', icon: 'Warning' } },
       { path: '/purchase', name: 'purchase', component: () => import('../views/PurchaseManagement.vue'), meta: { title: '采购管理', icon: 'ShoppingCart' } },
       { path: '/reports', name: 'reports', component: () => import('../views/Reports.vue'), meta: { title: '报表中心', icon: 'DataLine' } },
+      { path: '/business-reports', name: 'business-reports', component: () => import('../views/BusinessReports.vue'), meta: { title: '经营分析报表', icon: 'DataLine' } },
       { path: '/eco', name: 'eco', component: () => import('../views/Eco.vue'), meta: { title: '设计变更', icon: 'Refresh' } },
-      { path: '/gantt', name: 'gantt', component: () => import('../views/Gantt.vue'), meta: { title: 'Gantt', icon: 'Calendar' } },
-      { path: '/multi-schedule', name: 'multi-schedule', component: () => import('../views/MultiSchedule.vue'), meta: { title: '多项目排程', icon: 'Connection' } },
+      { path: '/gantt', name: 'gantt', component: () => import('../views/Gantt.vue'), meta: { title: '单项目甘特', icon: 'Calendar' } },
+      { path: '/multi-schedule', name: 'multi-schedule', component: () => import('../views/MultiSchedule.vue'), meta: { title: '多项目资源平衡', icon: 'Connection' } },
       { path: '/oee', name: 'oee', component: () => import('../views/OEE.vue'), meta: { title: 'OEE', icon: 'Cpu' } },
       { path: '/settings', name: 'settings', component: () => import('../views/Settings.vue'), meta: { title: '系统设置', icon: 'Setting' } },
       { path: '/quality', name: 'quality', component: () => import('../views/Quality.vue'), meta: { title: '质检管理', icon: 'CircleCheck' } },
@@ -55,6 +57,9 @@ const routes = [
       
       { path: '/critical-parts', name: 'critical-parts', component: () => import('../views/CriticalParts.vue'), meta: { title: '关键件管理', icon: 'Key' } },
       { path: '/cost', name: 'cost', component: () => import('../views/CostAllocation.vue'), meta: { title: '成本归集', icon: 'Money' } },
+      { path: '/price-variance', name: 'price-variance', component: () => import('../views/PriceVariance.vue'), meta: { title: '采购估价 vs 实际合同价', icon: 'DataLine' } },
+      { path: '/cost-variance', name: 'cost-variance', component: () => import('../views/CostAllocation.vue'), meta: { title: '项目成本偏差', icon: 'DataAnalysis' } },
+      { path: '/outsourcing-depreciation-cost', name: 'outsourcing-depreciation-cost', component: () => import('../views/OutsourcingDepreciationCost.vue'), meta: { title: '外协/折旧成本', icon: 'Money' } },
       { path: '/workflow', name: 'workflow', component: () => import('../views/WorkflowEngine.vue'), meta: { title: '工作流引擎', icon: 'Guide' } },
       { path: '/iot', name: 'iot', component: () => import('../views/IoTMonitor.vue'), meta: { title: 'IoT 监控', icon: 'Connection' } },
       { path: '/plm', name: 'plm', component: () => import('../views/PlmDrawings.vue'), meta: { title: 'PLM 图纸', icon: 'EditPen' } },
@@ -62,6 +67,8 @@ const routes = [
       { path: '/erp', name: 'erp', component: () => import('../views/ErpLedger.vue'), meta: { title: 'ERP 台账', icon: 'Money' } },
       
       { path: '/suppliers', name: 'suppliers', component: () => import('../views/SupplierDashboard.vue'), meta: { title: '供应商协同', icon: 'Connection' } },
+      { path: '/equipment-ledger', name: 'equipment-ledger', component: () => import('../views/EquipmentLedger.vue'), meta: { title: '设备台账', icon: 'Monitor' } },
+      { path: '/workstation-resources', name: 'workstation-resources', component: () => import('../views/WorkstationResources.vue'), meta: { title: '工位/资源配置', icon: 'OfficeBuilding' } },
       { path: '/resources', name: 'resources', component: () => import('../views/ResourceDashboard.vue'), meta: { title: '资源分配与状态', icon: 'Monitor' } },
       { path: '/digital-twin', name: 'digital-twin', component: () => import('../views/DigitalTwin.vue'), meta: { title: '数字孪生', icon: 'Monitor' } },
     ]
@@ -87,6 +94,7 @@ const WAREHOUSE_ALLOWED_PATHS = new Set([
   '/material-alerts',
   '/work-orders',
   '/documents',
+  '/scan',
 ])
 
 const WAREHOUSE_DEFAULT_PATH = '/shopfloor?tab=pick'

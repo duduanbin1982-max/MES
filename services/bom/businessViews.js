@@ -1,6 +1,10 @@
 "use strict";
+const { buildKitRiskComponents, summarizeKitRisk } = require("../../app/domain/bomTree");
 const { buildPurchaseView } = require("./businessViews/purchaseView");
 const { buildAssemblyView } = require("./businessViews/assemblyView");
+const { buildRawView } = require("./businessViews/rawView");
+const { buildCostView } = require("./businessViews/costView");
+const { computeHealthView } = require("./businessViews/healthView");
 
 function createBusinessViewsBuilder(deps) {
   const {
@@ -224,26 +228,13 @@ function buildBusinessViews(db, instanceId, rowsArg = null) {
     uniqText,
     earliestDate,
   });
-
-  const rawSource = rows.filter((row) => Number(row.tier) === 3 && !normalizeBool(row.is_phantom));
-  const rawItems = rawSource.map((row) => ({
-    bom_id: row.id,
-    parent_id: row.parent_id,
-    material_id: row.material_id || null,
-    material_code: row.material_code || null,
-    material_name: row.material_name || null,
-    part_number: row.part_number || null,
-    category: row.category || null,
-    quantity: Number(row.quantity || 0),
-    unit: row.unit || row.m_unit || null,
-    material_grade: row.material_grade || null,
-    surface_treatment: row.surface_treatment || null,
-    scrap_factor: Number(row.scrap_factor || 1),
-    weight: normalizeFloat(row.weight, null),
-    unit_price: normalizeFloat(row.unit_price, null),
-    estimated_amount: round2(Number(costMap.get(Number(row.id))?.self || 0)),
-    notes: row.notes || null,
-  })).sort((a, b) => b.estimated_amount - a.estimated_amount);
+  const rawView = buildRawView({
+    rows,
+    costMap,
+    normalizeBool,
+    normalizeFloat,
+    round2,
+  });
 
   const { assemblyComponents, processComponents } = buildAssemblyView({
     rows,
@@ -271,68 +262,24 @@ function buildBusinessViews(db, instanceId, rowsArg = null) {
     statusType,
     uniqText,
   });
+  const costView = buildCostView({
+    rows,
+    costMap,
+    normalizeBool,
+    normalizeFloat,
+    round2,
+  });
 
-  const categoryCostMap = new Map();
-  for (const row of rows.filter((row) => Number(row.tier) >= 2 && !normalizeBool(row.is_phantom))) {
-    const key = row.category || "未分类";
-    if (!categoryCostMap.has(key)) categoryCostMap.set(key, { category: key, node_count: 0, estimated_amount: 0, missing_price: 0 });
-    const bucket = categoryCostMap.get(key);
-    bucket.node_count += 1;
-    bucket.estimated_amount += Number(costMap.get(Number(row.id))?.self || 0);
-    if (normalizeFloat(row.unit_price, null) === null) bucket.missing_price += 1;
-  }
-  const costByCategory = [...categoryCostMap.values()]
-    .map((item) => ({ ...item, estimated_amount: round2(item.estimated_amount) }))
-    .sort((a, b) => b.estimated_amount - a.estimated_amount);
-
-  const topCostItems = rows
-    .filter((row) => Number(row.tier) >= 2 && !normalizeBool(row.is_phantom))
-    .map((row) => ({
-      bom_id: row.id,
-      material_code: row.material_code || null,
-      material_name: row.material_name || null,
-      part_number: row.part_number || null,
-      category: row.category || null,
-      tier: row.tier,
-      self_cost: round2(Number(costMap.get(Number(row.id))?.self || 0)),
-      quantity: Number(row.quantity || 0),
-      unit: row.unit || null,
-      unit_price: normalizeFloat(row.unit_price, null),
-    }))
-    .sort((a, b) => b.self_cost - a.self_cost)
-    .slice(0, 20);
-
-  const riskComponents = assemblyComponents
-    .filter((item) => item.kit_status !== "ready")
-    .map((item) => ({
-      component_id: item.component_id,
-      component_name: item.component_name,
-      part_number: item.part_number,
-      kit_status: item.kit_status,
-      shortage_line_count: item.kit_shortage_count,
-      blocked_material_count: item.kit_blocked_count,
-      incoming_material_count: item.kit_incoming_count,
-      next_expected_date: item.next_expected_date,
-      shortage_amount: item.shortage_amount,
-      owners: uniqText((item.risk_items || []).flatMap((risk) => risk.owners || [])),
-      purchase_order_count: (item.risk_items || []).reduce((sum, risk) => sum + Number((risk.purchase_orders || []).length), 0),
-      purchase_request_count: uniqText((item.risk_items || []).flatMap((risk) => risk.purchase_request_nos || [])).length,
-      items: item.risk_items,
-    }))
-    .sort((a, b) => {
-      const weight = { blocked: 3, incoming: 2, ready: 1 };
-      return (weight[b.kit_status] || 0) - (weight[a.kit_status] || 0)
-        || Number(b.shortage_amount || 0) - Number(a.shortage_amount || 0);
-    });
+  const riskComponents = buildKitRiskComponents(assemblyComponents, uniqText);
 
   return {
     summary: {
       total_nodes: rows.length,
       total_cost: round2(totalCost),
       purchase_line_count: purchaseItems.length,
-      raw_line_count: rawItems.length,
+      raw_line_count: rawView.rawItems.length,
       component_count: assemblyComponents.length,
-      missing_price_count: rows.filter((row) => Number(row.tier) >= 2 && !normalizeBool(row.is_phantom) && normalizeFloat(row.unit_price, null) === null).length,
+      missing_price_count: costView.missingPriceCount,
       complete_process_components: processComponents.filter((item) => item.process_status === "success").length,
       purchase_contract_signed_count: purchaseContractItems.filter((item) => item.actual_unit_price !== null).length,
       purchase_contract_pending_count: purchaseContractItems.filter((item) => item.actual_unit_price === null).length,
@@ -356,22 +303,17 @@ function buildBusinessViews(db, instanceId, rowsArg = null) {
     assembly: {
       components: assemblyComponents,
       total_cost: round2(assemblyComponents.reduce((sum, item) => sum + item.total_cost, 0)),
-      kit_summary: {
-        ready_count: assemblyComponents.filter((item) => item.kit_status === "ready").length,
-        incoming_count: assemblyComponents.filter((item) => item.kit_status === "incoming").length,
-        blocked_count: assemblyComponents.filter((item) => item.kit_status === "blocked").length,
-        shortage_line_count: riskComponents.reduce((sum, item) => sum + Number(item.shortage_line_count || 0), 0),
-      },
+      kit_summary: summarizeKitRisk(assemblyComponents, riskComponents),
       kit_risks: riskComponents,
     },
     raw: {
-      total_estimated_amount: round2(rawItems.reduce((sum, item) => sum + item.estimated_amount, 0)),
-      total_weight: round2(rawItems.reduce((sum, item) => sum + Number(item.weight || 0), 0)),
-      items: rawItems,
+      total_estimated_amount: rawView.totalEstimatedAmount,
+      total_weight: rawView.totalWeight,
+      items: rawView.rawItems,
     },
     cost: {
       total_cost: round2(totalCost),
-      by_category: costByCategory,
+      by_category: costView.byCategory,
       by_component: assemblyComponents.map((component) => ({
         component_id: component.component_id,
         component_name: component.component_name,
@@ -380,7 +322,7 @@ function buildBusinessViews(db, instanceId, rowsArg = null) {
         self_made_count: component.self_made_count,
         raw_count: component.raw_count,
       })),
-      top_items: topCostItems,
+      top_items: costView.topItems,
     },
     process: {
       summary: {
@@ -396,76 +338,20 @@ function buildBusinessViews(db, instanceId, rowsArg = null) {
 }
 
 function computeHealth(db, instanceId, rowsArg = null) {
-  const rows = rowsArg || db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, id").all(instanceId);
-  const validation = validateTree(db, instanceId, rows);
-  const duplicates = detectDuplicates(rows);
-  const missingMaterialOrPart = rows.filter((r) => Number(r.tier) >= 2 && !r.material_id && !cleanText(r.part_number) && !normalizeBool(r.is_phantom));
-  const missingMaterialGrade = rows.filter((r) => SELF_MADE_CATEGORIES.has(r.category) && !cleanText(r.material_grade));
-  const missingSurface = rows.filter((r) => SELF_MADE_CATEGORIES.has(r.category) && !cleanText(r.surface_treatment));
-  const missingBrand = rows.filter((r) => PURCHASED_CATEGORIES.has(r.category) && !cleanText(r.brand_recommend));
-  const missingUnitPrice = rows.filter((r) => Number(r.tier) >= 2 && !normalizeBool(r.is_phantom) && normalizeFloat(r.unit_price, null) === null);
-  const missingVersion = rows.filter((r) => !cleanText(r.version));
-  const missingOperation = rows.filter((r) => Number(r.tier) >= 1 && Number(r.tier) <= 2 && !normalizeBool(r.is_phantom) && !normalizeInt(r.operation_id, null));
-  const alternativeWithoutGroup = rows.filter((r) => normalizeBool(r.is_alternative) && !cleanText(r.alternative_group));
-  const materialWarnings = rows.filter((r) => r.material_id && cleanText(r.part_number) && normalizeInt(r.tier, 0) >= 2);
-
-  let unlinkedDocuments = [];
-  if (tableExists(db, "documents")) {
-    try {
-      unlinkedDocuments = rows.filter((r) => {
-        const doc = db.prepare("SELECT id FROM documents WHERE bom_node_id = ? LIMIT 1").get(r.id);
-        return Number(r.tier) >= 1 && !doc;
-      });
-    } catch (_e) {
-      unlinkedDocuments = [];
-    }
-  }
-
-  const issues = [
-    validation.errors.length * 8,
-    duplicates.duplicateMaterialNodes.length * 5,
-    duplicates.duplicatePartNumbers.length * 4,
-    missingMaterialOrPart.length * 4,
-    missingMaterialGrade.length * 3,
-    missingSurface.length * 3,
-    missingBrand.length * 2,
-    missingUnitPrice.length * 2,
-    missingOperation.length * 1,
-    alternativeWithoutGroup.length * 2,
-    unlinkedDocuments.length * 1,
-  ].reduce((sum, value) => sum + value, 0);
-
-  const score = Math.max(0, 100 - issues);
-  const samples = [];
-  if (missingMaterialOrPart[0]) samples.push(`缺物料/图号: #${missingMaterialOrPart[0].id}`);
-  if (missingUnitPrice[0]) samples.push(`缺估价: #${missingUnitPrice[0].id}`);
-  if (duplicates.duplicateMaterialNodes[0]) samples.push(`重复物料: ${duplicates.duplicateMaterialNodes[0][0]}`);
-  if (missingOperation[0]) samples.push(`缺工艺: #${missingOperation[0].id}`);
-  if (unlinkedDocuments[0]) samples.push(`缺图纸: #${unlinkedDocuments[0].id}`);
-
-  return {
-    score,
-    summary: tierSummary(rows),
-    total_nodes: rows.length,
-    errors_count: validation.errors.length,
-    warnings_count: validation.warnings.length,
-    checks: {
-      duplicate_material_nodes: duplicates.duplicateMaterialNodes.length,
-      duplicate_part_numbers: duplicates.duplicatePartNumbers.length,
-      missing_material_or_part: missingMaterialOrPart.length,
-      missing_material_grade: missingMaterialGrade.length,
-      missing_surface_treatment: missingSurface.length,
-      missing_brand_recommend: missingBrand.length,
-      missing_unit_price: missingUnitPrice.length,
-      missing_version: missingVersion.length,
-      missing_operation_route: missingOperation.length,
-      alternative_without_group: alternativeWithoutGroup.length,
-      nodes_without_documents: unlinkedDocuments.length,
-      material_and_part_both_filled: materialWarnings.length,
-    },
-    highlights: samples,
-    validation,
-  };
+  return computeHealthView({
+    db,
+    instanceId,
+    rowsArg,
+    validateTree,
+    detectDuplicates,
+    cleanText,
+    normalizeBool,
+    normalizeFloat,
+    normalizeInt,
+    tierSummary,
+    SELF_MADE_CATEGORIES,
+    PURCHASED_CATEGORIES,
+  });
 }
 
   return { buildBusinessViews, computeHealth };

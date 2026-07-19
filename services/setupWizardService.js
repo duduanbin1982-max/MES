@@ -153,8 +153,8 @@ function buildSetupStatus(db) {
     ...(materialWithSafety < 10 ? [issue("warning", "安全库存/再订货点覆盖不足", "常用件和长周期物料应配置预警线。", "/materials", "仓库/采购")] : []),
   ];
   const instanceIssues = [
-    ...(activeInstances < 1 ? [issue("critical", "至少建立一台 TBM/盾构机装备实例", "后续BOM、图纸、采购、工单和成本都必须归属到实例。", "/instances", "项目经理")] : []),
-    ...(codedInstances < activeInstances ? [issue("high", "装备实例编码不完整", "建议统一项目号、合同号、序列号、客户、年份规则。", "/instances", "项目经理")] : []),
+    ...(activeInstances < 1 ? [issue("critical", "至少建立一台 TBM/盾构机项目装备", "后续BOM、图纸、采购、工单和成本都必须归属到项目装备。", "/instances", "项目经理")] : []),
+    ...(codedInstances < activeInstances ? [issue("high", "项目装备编码不完整", "建议统一项目号、合同号、序列号、客户、年份规则。", "/instances", "项目经理")] : []),
     ...(lifecycleInstances < activeInstances ? [issue("warning", "生命周期阶段不完整", "建议维护设计中、采购中、制造中、总装中、调试中、验收中、交付、运维。", "/instances", "项目经理")] : []),
   ];
   const bomIssues = [
@@ -202,10 +202,10 @@ function buildSetupStatus(db) {
       { label: "物料预警", route: "/material-alerts" },
       { label: "主数据治理", route: "/mdm" },
     ], "物料管理员", "统一一物一码、分类、单位、库存预警。"),
-    step("instances", "4. 装备实例", "/instances", pct(Math.min(activeInstances, 1) + Math.min(codedInstances, activeInstances) + Math.min(lifecycleInstances, activeInstances), Math.max(activeInstances * 3, 1)), {
+    step("instances", "4. 项目装备", "/instances", pct(Math.min(activeInstances, 1) + Math.min(codedInstances, activeInstances) + Math.min(lifecycleInstances, activeInstances), Math.max(activeInstances * 3, 1)), {
       instances, active_instances: activeInstances, coded_instances: codedInstances, lifecycle_instances: lifecycleInstances,
     }, instanceIssues, [
-      { label: "装备实例", route: "/instances", primary: true },
+      { label: "项目装备", route: "/instances", primary: true },
       { label: "项目交付闭环", route: "/delivery" },
     ], "项目经理", "建立一台TBM作为合同、BOM、图纸、采购、工单、成本的主线。"),
     step("bom", "5. 导入 BOM", "/bom", pct(Math.min(bomTier0, 1) + Math.min(bomTier1, 5) + Math.min(bomTier2, 20) - Math.min(bomWithoutMaterial, 5), 26), {

@@ -1,0 +1,525 @@
+{
+  "version": 1,
+  "description": "TBM-MES module manifest. Keep menu, router and permission-facing modules in sync.",
+  "sections": [
+    {
+      "key": "cockpit",
+      "title": "首页驾驶舱",
+      "icon": "DataBoard",
+      "modules": [
+        {
+          "key": "dashboard",
+          "title": "仪表盘",
+          "path": "/dashboard",
+          "entry": "/dashboard",
+          "icon": "DataBoard"
+        },
+        {
+          "key": "delivery",
+          "title": "项目交付看板",
+          "path": "/delivery",
+          "entry": "/delivery",
+          "icon": "Finished"
+        },
+        {
+          "key": "reports",
+          "title": "报表中心",
+          "path": "/reports",
+          "entry": "/reports?tab=instant",
+          "icon": "DataLine"
+        },
+        {
+          "key": "oee",
+          "title": "OEE 深度分析",
+          "path": "/oee",
+          "entry": "/oee",
+          "icon": "Cpu"
+        }
+      ]
+    },
+    {
+      "key": "project",
+      "title": "项目与装备",
+      "icon": "Finished",
+      "modules": [
+        {
+          "key": "project-wizard",
+          "title": "项目启动向导",
+          "path": "/project-wizard",
+          "entry": "/project-wizard",
+          "icon": "Guide"
+        },
+        {
+          "key": "instances",
+          "title": "项目装备",
+          "path": "/instances",
+          "entry": "/instances",
+          "icon": "Box"
+        },
+        {
+          "key": "schedule",
+          "title": "项目排程",
+          "path": "/schedule",
+          "entry": "/schedule",
+          "icon": "Calendar"
+        },
+        {
+          "key": "gantt",
+          "title": "单项目甘特",
+          "path": "/gantt",
+          "entry": "/gantt",
+          "icon": "Calendar",
+          "permission": "equipment:read"
+        },
+        {
+          "key": "tbm-advanced",
+          "title": "TBM 增强",
+          "path": "/tbm-advanced",
+          "entry": "/tbm-advanced?tab=project",
+          "icon": "SetUp"
+        },
+        {
+          "key": "acceptance",
+          "title": "客户验收",
+          "path": "/tbm-advanced",
+          "entry": "/tbm-advanced?tab=accept",
+          "icon": "CircleCheck"
+        }
+      ]
+    },
+    {
+      "key": "design",
+      "title": "设计与BOM",
+      "icon": "Box",
+      "modules": [
+        {
+          "key": "bom",
+          "title": "BOM 管理",
+          "path": "/bom",
+          "entry": "/bom",
+          "icon": "SetUp"
+        },
+        {
+          "key": "documents",
+          "title": "文档/图纸",
+          "path": "/documents",
+          "entry": "/documents",
+          "icon": "FolderOpened"
+        },
+        {
+          "key": "eco",
+          "title": "设计变更(ECO)",
+          "path": "/eco",
+          "entry": "/eco",
+          "icon": "Refresh"
+        },
+        {
+          "key": "process-tree",
+          "title": "工艺树",
+          "path": "/process-tree",
+          "entry": "/process-tree",
+          "icon": "Share"
+        },
+        {
+          "key": "process-master",
+          "title": "工序/岗位配置",
+          "path": "/process-master",
+          "entry": "/process-master",
+          "icon": "Operation"
+        },
+        {
+          "key": "process-params",
+          "title": "工艺参数",
+          "path": "/process-params",
+          "entry": "/process-params",
+          "icon": "SetUp"
+        },
+        {
+          "key": "spc-design",
+          "title": "SPC 控制图",
+          "path": "/spc",
+          "entry": "/spc",
+          "icon": "TrendCharts"
+        }
+      ]
+    },
+    {
+      "key": "execution",
+      "title": "生产执行",
+      "icon": "Calendar",
+      "modules": [
+        {
+          "key": "work-orders",
+          "title": "工单管理",
+          "path": "/work-orders",
+          "entry": "/work-orders?tab=list",
+          "icon": "Document"
+        },
+        {
+          "key": "process-hours",
+          "title": "工时与报工",
+          "path": "/process-hours",
+          "entry": "/process-hours",
+          "icon": "Clock"
+        },
+        {
+          "key": "shopfloor",
+          "title": "车间工作台",
+          "path": "/shopfloor",
+          "entry": "/shopfloor",
+          "icon": "Cellphone"
+        },
+        {
+          "key": "dispatch",
+          "title": "生产单元派工",
+          "path": "/work-orders",
+          "entry": "/work-orders?tab=dispatch",
+          "icon": "Guide"
+        },
+        {
+          "key": "scan",
+          "title": "扫码报工",
+          "path": "/scan",
+          "entry": "/scan",
+          "icon": "Cellphone"
+        }
+      ]
+    },
+    {
+      "key": "supply",
+      "title": "采购与库存",
+      "icon": "Goods",
+      "modules": [
+        {
+          "key": "materials",
+          "title": "物料中心",
+          "path": "/materials",
+          "entry": "/materials?tab=materials",
+          "icon": "Goods"
+        },
+        {
+          "key": "material-units",
+          "title": "单位换算",
+          "path": "/materials",
+          "entry": "/materials?tab=units",
+          "icon": "SetUp"
+        },
+        {
+          "key": "inventory",
+          "title": "库存清单",
+          "path": "/materials",
+          "entry": "/materials?tab=inv",
+          "icon": "Box"
+        },
+        {
+          "key": "material-alerts",
+          "title": "库存预警",
+          "path": "/material-alerts",
+          "entry": "/material-alerts",
+          "icon": "Warning"
+        },
+        {
+          "key": "purchase-orders",
+          "title": "采购管理",
+          "path": "/purchase",
+          "entry": "/purchase?tab=orders",
+          "icon": "ShoppingCart"
+        },
+        {
+          "key": "suppliers",
+          "title": "供应商管理",
+          "path": "/purchase",
+          "entry": "/purchase?tab=suppliers",
+          "icon": "User"
+        },
+        {
+          "key": "kit-closure",
+          "title": "齐套/缺料闭环",
+          "path": "/kit-closure",
+          "entry": "/kit-closure",
+          "icon": "Box"
+        },
+        {
+          "key": "purchase-followup",
+          "title": "采购跟催",
+          "path": "/purchase",
+          "entry": "/purchase?tab=followup",
+          "icon": "Connection"
+        }
+      ]
+    },
+    {
+      "key": "quality",
+      "title": "质量与追溯",
+      "icon": "CircleCheck",
+      "modules": [
+        {
+          "key": "quality",
+          "title": "质检管理",
+          "path": "/quality",
+          "entry": "/quality?tab=inspections",
+          "icon": "CircleCheck"
+        },
+        {
+          "key": "ncr",
+          "title": "NCR / CAPA",
+          "path": "/quality",
+          "entry": "/quality?tab=ncr",
+          "icon": "WarningFilled"
+        },
+        {
+          "key": "incoming-qc",
+          "title": "来料检验",
+          "path": "/quality",
+          "entry": "/quality?tab=inspections&type=incoming",
+          "icon": "CircleCheck"
+        },
+        {
+          "key": "process-qc",
+          "title": "过程检验",
+          "path": "/quality",
+          "entry": "/quality?tab=inspections&type=in_process",
+          "icon": "CircleCheck"
+        },
+        {
+          "key": "final-qc",
+          "title": "出厂检验",
+          "path": "/quality",
+          "entry": "/quality?tab=inspections&type=final",
+          "icon": "CircleCheck"
+        },
+        {
+          "key": "trace",
+          "title": "端到端追溯",
+          "path": "/trace",
+          "entry": "/trace",
+          "icon": "Search"
+        },
+        {
+          "key": "critical-parts",
+          "title": "关键件管理",
+          "path": "/tbm-advanced",
+          "entry": "/tbm-advanced?tab=critical",
+          "icon": "SetUp"
+        }
+      ]
+    },
+    {
+      "key": "service",
+      "title": "设备与维护",
+      "icon": "Tools",
+      "modules": [
+        {
+          "key": "equipment-ledger",
+          "title": "设备台账",
+          "path": "/equipment-ledger",
+          "entry": "/equipment-ledger",
+          "icon": "Monitor"
+        },
+        {
+          "key": "tpm",
+          "title": "点检 / TPM",
+          "path": "/field-service",
+          "entry": "/field-service?tab=logs",
+          "icon": "Tools"
+        },
+        {
+          "key": "maintenance-plans",
+          "title": "维保计划",
+          "path": "/field-service",
+          "entry": "/field-service?tab=plans",
+          "icon": "Calendar"
+        },
+        {
+          "key": "field-service",
+          "title": "现场服务",
+          "path": "/field-service",
+          "entry": "/field-service",
+          "icon": "Tools"
+        },
+        {
+          "key": "spares",
+          "title": "备件库",
+          "path": "/field-service",
+          "entry": "/field-service?tab=spares",
+          "icon": "Box"
+        },
+        {
+          "key": "iot",
+          "title": "IoT 设备监控大屏",
+          "path": "/iot",
+          "entry": "/iot",
+          "icon": "Connection"
+        },
+        {
+          "key": "digital-twin",
+          "title": "数字孪生",
+          "path": "/digital-twin",
+          "entry": "/digital-twin",
+          "icon": "Monitor"
+        }
+      ]
+    },
+    {
+      "key": "cost",
+      "title": "成本与经营",
+      "icon": "Money",
+      "modules": [
+        {
+          "key": "cost",
+          "title": "成本归集",
+          "path": "/cost",
+          "entry": "/cost",
+          "icon": "Money"
+        },
+        {
+          "key": "price-variance",
+          "title": "采购估价 vs 实际合同价",
+          "path": "/price-variance",
+          "entry": "/price-variance",
+          "icon": "DataLine"
+        },
+        {
+          "key": "cost-variance",
+          "title": "项目成本偏差",
+          "path": "/cost-variance",
+          "entry": "/cost-variance",
+          "icon": "DataAnalysis"
+        },
+        {
+          "key": "outsource-depreciation",
+          "title": "外协/折旧成本",
+          "path": "/outsourcing-depreciation-cost",
+          "entry": "/outsourcing-depreciation-cost",
+          "icon": "Money"
+        },
+        {
+          "key": "business-reports",
+          "title": "经营分析报表",
+          "path": "/business-reports",
+          "entry": "/business-reports",
+          "icon": "DataLine"
+        }
+      ]
+    },
+    {
+      "key": "exception",
+      "title": "异常与协同",
+      "icon": "WarningFilled",
+      "modules": [
+        {
+          "key": "exceptions",
+          "title": "异常中心",
+          "path": "/exceptions",
+          "entry": "/exceptions",
+          "icon": "WarningFilled"
+        },
+        {
+          "key": "andon",
+          "title": "ANDON 安灯",
+          "path": "/andon",
+          "entry": "/andon",
+          "icon": "Bell"
+        },
+        {
+          "key": "risk-todo",
+          "title": "风险待办池",
+          "path": "/exceptions",
+          "entry": "/exceptions?status=open",
+          "icon": "Warning"
+        },
+        {
+          "key": "purchase-exceptions",
+          "title": "采购异常",
+          "path": "/exceptions",
+          "entry": "/exceptions?type=purchase_delay",
+          "icon": "ShoppingCart"
+        },
+        {
+          "key": "quality-exceptions",
+          "title": "质量异常",
+          "path": "/exceptions",
+          "entry": "/exceptions?type=quality_ncr",
+          "icon": "CircleCheck"
+        },
+        {
+          "key": "mdm-exceptions",
+          "title": "主数据治理异常",
+          "path": "/exceptions",
+          "entry": "/exceptions?type=mdm_materials",
+          "icon": "DataAnalysis"
+        }
+      ]
+    },
+    {
+      "key": "system",
+      "title": "系统管理",
+      "icon": "Setting",
+      "modules": [
+        {
+          "key": "users",
+          "title": "用户管理",
+          "path": "/users",
+          "entry": "/users?tab=users",
+          "icon": "User"
+        },
+        {
+          "key": "roles",
+          "title": "角色与权限",
+          "path": "/users",
+          "entry": "/users?tab=matrix",
+          "icon": "Lock"
+        },
+        {
+          "key": "role-groups",
+          "title": "角色组",
+          "path": "/users",
+          "entry": "/users?tab=groups",
+          "icon": "UserFilled"
+        },
+        {
+          "key": "workstations",
+          "title": "工位/资源配置",
+          "path": "/workstation-resources",
+          "entry": "/workstation-resources",
+          "icon": "Monitor"
+        },
+        {
+          "key": "labor",
+          "title": "人员资质",
+          "path": "/labor",
+          "entry": "/labor",
+          "icon": "UserFilled"
+        },
+        {
+          "key": "coding-rules",
+          "title": "编码规则",
+          "path": "/mdm",
+          "entry": "/mdm",
+          "icon": "DataAnalysis"
+        },
+        {
+          "key": "settings",
+          "title": "参数配置",
+          "path": "/settings",
+          "entry": "/settings",
+          "icon": "Setting"
+        },
+        {
+          "key": "system-diagnostics",
+          "title": "系统诊断",
+          "path": "/settings",
+          "entry": "/settings?tab=diagnostics",
+          "icon": "Monitor"
+        },
+        {
+          "key": "audit",
+          "title": "审计日志",
+          "path": "/audit",
+          "entry": "/audit",
+          "icon": "DocumentChecked"
+        }
+      ]
+    }
+  ]
+}

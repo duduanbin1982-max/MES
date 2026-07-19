@@ -1,5 +1,16 @@
 const { ApiError } = require('../../app/errors');
 const { wrap } = require('../../middleware/asyncHandler');
+const {
+  LIFE_CYCLE,
+  DEFAULT_MILESTONES,
+  DEFAULT_DOC_FOLDERS,
+  TEMPLATE_SCOPE_OPTIONS,
+  EMPTY_TEMPLATE_SCOPE,
+  INSTANCE_TEMPLATE_SCOPE,
+} = require('./catalog');
+const { initEquipmentInstanceEnhancements } = require('./schema');
+const { createEquipmentOverview } = require('./overview');
+const { registerLifecycleRoutes } = require('./lifecycleRoutes');
 // services/equipmentService.js
 // P0-#1 拆 server.js: 整机/型号/子系统/工位/设备实时状态 (P2-#3 设备看板)
 // Author: 三狗子 | Date: 2026-06-23
@@ -9,88 +20,8 @@ function register(app, db) {
   const get = (sql, params = []) => db.prepare(sql).get(params);
   const run = (sql, params = []) => db.prepare(sql).run(params);
 
-  const LIFE_CYCLE = [
-    { value: 'design', label: '设计中' },
-    { value: 'procurement', label: '采购中' },
-    { value: 'manufacturing', label: '制造中' },
-    { value: 'assembly', label: '总装中' },
-    { value: 'commissioning', label: '调试中' },
-    { value: 'acceptance', label: '验收中' },
-    { value: 'delivered', label: '交付' },
-    { value: 'operation', label: '运维' },
-    { value: 'archived', label: '归档' },
-  ];
-  const LIFE_VALUES = new Set(LIFE_CYCLE.map(x => x.value));
-  const DEFAULT_MILESTONES = [
-    ['S1', '设计冻结', 10],
-    ['S2', '长周期采购', 20],
-    ['S3', '部件制造', 30],
-    ['S4', '总装', 40],
-    ['S5', '联调测试', 50],
-    ['S6', '客户验收', 60],
-    ['S7', '交付发运', 70],
-    ['S8', '运维移交', 80],
-  ];
-  const DEFAULT_DOC_FOLDERS = ['合同', 'BOM', '图纸', '工艺', '质检', '验收', '运维'];
 
-  function tableColumns(table) {
-    return new Set(db.prepare('PRAGMA table_info(' + table + ')').all().map(c => c.name));
-  }
-
-  function hasTable(table) {
-    return !!get("SELECT name FROM sqlite_master WHERE type='table' AND name=?", table);
-  }
-
-  function addColumn(table, column, ddl) {
-    const cols = tableColumns(table);
-    if (!cols.has(column)) run('ALTER TABLE ' + table + ' ADD COLUMN ' + ddl);
-  }
-
-  function initEquipmentInstanceEnhancements() {
-    addColumn('equipment_instances', 'project_no', 'project_no TEXT');
-    addColumn('equipment_instances', 'archive_status', "archive_status TEXT DEFAULT 'active'");
-    addColumn('equipment_instances', 'archived_at', 'archived_at TEXT');
-    addColumn('equipment_instances', 'archived_by', 'archived_by INTEGER');
-    addColumn('equipment_instances', 'frozen_at', 'frozen_at TEXT');
-    addColumn('equipment_instances', 'frozen_by', 'frozen_by INTEGER');
-    addColumn('equipment_instances', 'freeze_snapshot', 'freeze_snapshot TEXT');
-    db.exec(`CREATE TABLE IF NOT EXISTS equipment_instance_lifecycle_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      equipment_instance_id INTEGER NOT NULL,
-      from_stage TEXT,
-      to_stage TEXT NOT NULL,
-      reason TEXT,
-      changed_by INTEGER,
-      changed_at TEXT DEFAULT (datetime('now'))
-    )`);
-    db.exec(`CREATE TABLE IF NOT EXISTS equipment_instance_milestones (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id INTEGER NOT NULL,
-      phase_code TEXT NOT NULL,
-      phase_name TEXT NOT NULL,
-      sequence INTEGER DEFAULT 0,
-      planned_start TEXT,
-      planned_end TEXT,
-      actual_start TEXT,
-      actual_end TEXT,
-      status TEXT DEFAULT 'pending',
-      notes TEXT
-    )`);
-    db.exec('CREATE INDEX IF NOT EXISTS idx_equipment_instance_milestones_instance ON equipment_instance_milestones(project_id)');
-    db.exec(`CREATE TABLE IF NOT EXISTS document_folders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      equipment_instance_id INTEGER NOT NULL,
-      folder_name TEXT NOT NULL,
-      folder_type TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      UNIQUE(equipment_instance_id, folder_name)
-    )`);
-    db.exec('CREATE INDEX IF NOT EXISTS idx_document_folders_instance ON document_folders(equipment_instance_id)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_equipment_instances_project_no ON equipment_instances(project_no)');
-    db.exec('CREATE INDEX IF NOT EXISTS idx_equipment_instances_archive_status ON equipment_instances(archive_status)');
-  }
-
-  initEquipmentInstanceEnhancements();
+  initEquipmentInstanceEnhancements(db);
 
   function cleanCodeToken(value) {
     return String(value || '')
@@ -113,11 +44,69 @@ function register(app, db) {
     return `${prefix}-${seq}`;
   }
 
+  function nextTemplateCode(category) {
+    const y = String(new Date().getFullYear());
+    const categoryToken = cleanCodeToken(category || 'TBM') || 'TBM';
+    const prefix = `TPL-${categoryToken}-${y}`;
+    const row = get(
+      "SELECT template_code FROM equipment_instance_templates WHERE template_code LIKE ? ORDER BY id DESC LIMIT 1",
+      [`${prefix}-%`]
+    );
+    const last = row?.template_code?.match(/-(\d{3,})$/);
+    const seq = String(last ? Number(last[1]) + 1 : 1).padStart(3, '0');
+    return `${prefix}-${seq}`;
+  }
+
+  function normalizeCopyScope(value, fallback = EMPTY_TEMPLATE_SCOPE) {
+    let parsed = value;
+    if (typeof value === 'string') {
+      try { parsed = JSON.parse(value); } catch (_error) { parsed = {}; }
+    }
+    if (Array.isArray(parsed)) {
+      parsed = parsed.reduce((acc, key) => {
+        acc[key] = true;
+        return acc;
+      }, {});
+    }
+    const source = parsed && typeof parsed === 'object' ? parsed : {};
+    const result = {};
+    for (const option of TEMPLATE_SCOPE_OPTIONS) {
+      result[option.key] = source[option.key] === undefined ? !!fallback[option.key] : !!source[option.key];
+    }
+    return result;
+  }
+
+  function scopeKeys(scope) {
+    return TEMPLATE_SCOPE_OPTIONS.filter((option) => scope[option.key]).map((option) => option.key);
+  }
+
+  function templateRow(row) {
+    if (!row) return null;
+    const copyScope = normalizeCopyScope(row.copy_scope, row.source_instance_id ? INSTANCE_TEMPLATE_SCOPE : EMPTY_TEMPLATE_SCOPE);
+    return {
+      ...row,
+      copy_scope: copyScope,
+      copy_scope_keys: scopeKeys(copyScope),
+    };
+  }
+
+  function getTemplate(templateId) {
+    if (!templateId) return null;
+    const row = get(`
+      SELECT t.*, ei.instance_code AS source_instance_code, ei.instance_name AS source_instance_name
+      FROM equipment_instance_templates t
+      LEFT JOIN equipment_instances ei ON ei.id = t.source_instance_id
+      WHERE t.id = ?
+    `, templateId);
+    if (!row) throw ApiError.notFound('项目装备模板不存在');
+    return templateRow(row);
+  }
+
   function ensureNotFrozen(id) {
     const inst = get('SELECT archive_status, frozen_at FROM equipment_instances WHERE id = ?', id);
-    if (!inst) throw ApiError.notFound('装备实例不存在');
+    if (!inst) throw ApiError.notFound('项目装备不存在');
     if (inst.archive_status === 'archived' || inst.frozen_at) {
-      throw ApiError.validation('该装备实例已冻结/归档，禁止修改历史基线');
+      throw ApiError.validation('该项目装备已冻结/归档，禁止修改历史基线');
     }
     return inst;
   }
@@ -191,7 +180,8 @@ function register(app, db) {
       'equipment_instance_id', 'parent_id', 'bom_node_id', 'operation_name', 'operation_type', 'sequence',
       'estimated_hours', 'required_workstation_id', 'required_skill', 'required_materials', 'is_milestone',
       'phase_code', 'status', 'planned_start', 'planned_end', 'planned_cost', 'auto_unblock', 'sort_order',
-      'notes', 'assigned_to', 'subsystem_id'
+      'notes', 'assigned_to', 'subsystem_id', 'operation_template_id', 'required_position_code', 'worker_count',
+      'qc_required', 'sop_required', 'drawing_required'
     ].filter(c => cols.has(c));
     const placeholders = copyCols.map(() => '?').join(', ');
     const stmt = db.prepare(`INSERT INTO process_nodes (${copyCols.join(', ')}) VALUES (${placeholders})`);
@@ -225,88 +215,46 @@ function register(app, db) {
       serial_no,
       notes,
       project_no,
+      template_id,
       template_instance_id,
-      generate_milestones = true,
-      create_bom_shell = true,
-      create_doc_dirs = true,
-      copy_template_bom = false,
-      copy_template_process = false,
-      copy_template_milestones = false,
     } = body;
     const code = instance_code || nextInstanceCode(customer_name, planned_start?.slice(0, 4));
     if (!code || !customer_name) throw ApiError.validation('instance_code/customer_name 必填');
+    const selectedTemplate = template_id ? getTemplate(template_id) : null;
+    if (selectedTemplate && selectedTemplate.status !== 'published') throw ApiError.validation('只能使用已发布的项目装备模板');
+    const templateSourceId = selectedTemplate?.source_instance_id || template_instance_id || null;
+    if (templateSourceId && !get('SELECT id FROM equipment_instances WHERE id = ?', templateSourceId)) throw ApiError.validation('模板来源项目装备不存在');
+    const selectedScope = selectedTemplate?.copy_scope || null;
+    const useFlag = (field, fallback) => body[field] === undefined ? fallback : !!body[field];
+    const shouldGenerateMilestones = useFlag('generate_milestones', selectedScope ? !!selectedScope.milestones : true);
+    const shouldCreateBomShell = useFlag('create_bom_shell', selectedScope ? !!selectedScope.bom_shell : true);
+    const shouldCreateDocDirs = useFlag('create_doc_dirs', selectedScope ? !!selectedScope.doc_dirs : true);
+    const shouldCopyMilestones = !!templateSourceId && useFlag('copy_template_milestones', selectedScope ? !!selectedScope.milestones : false);
+    const shouldCopyBom = !!templateSourceId && useFlag('copy_template_bom', selectedScope ? !!selectedScope.bom : false);
+    const shouldCopyProcess = !!templateSourceId && useFlag('copy_template_process', selectedScope ? !!selectedScope.process : false);
     const lifecycle = 'design';
     const r = run(
-      "INSERT INTO equipment_instances (instance_code, instance_name, equipment_model_id, customer_name, customer_contact, site_location, contract_no, contract_amount, start_date, planned_start, planned_end, serial_no, status, lifecycle_stage, project_no, archive_status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [code, instance_name || code, equipment_model_id || null, customer_name, customer_contact || null, site_location || null, contract_no || null, contract_amount || null, start_date || null, planned_start || null, planned_end || null, serial_no || null, lifecycle, lifecycle, project_no || null, 'active', notes || null]
+      "INSERT INTO equipment_instances (instance_code, instance_name, equipment_model_id, customer_name, customer_contact, site_location, contract_no, contract_amount, start_date, planned_start, planned_end, serial_no, status, lifecycle_stage, project_no, archive_status, notes, source_template_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [code, instance_name || code, equipment_model_id || null, customer_name, customer_contact || null, site_location || null, contract_no || null, contract_amount || null, start_date || null, planned_start || null, planned_end || null, serial_no || null, lifecycle, lifecycle, project_no || null, 'active', notes || null, selectedTemplate?.id || null]
     );
     const instanceId = r.lastInsertRowid;
-    if (template_instance_id) {
-      if (copy_template_milestones) copyMilestones(template_instance_id, instanceId, planned_start, planned_end);
-      else if (generate_milestones) createDefaultMilestones(instanceId, planned_start, planned_end);
-      if (copy_template_bom) copyBom(template_instance_id, instanceId);
-      else if (create_bom_shell) createBomShell(instanceId, code, instance_name || code);
-      if (copy_template_process) copyProcessNodes(template_instance_id, instanceId);
+    if (templateSourceId) {
+      if (shouldCopyMilestones) copyMilestones(templateSourceId, instanceId, planned_start, planned_end);
+      else if (shouldGenerateMilestones) createDefaultMilestones(instanceId, planned_start, planned_end);
+      if (shouldCopyBom) copyBom(templateSourceId, instanceId);
+      else if (shouldCreateBomShell) createBomShell(instanceId, code, instance_name || code);
+      if (shouldCopyProcess) copyProcessNodes(templateSourceId, instanceId);
     } else {
-      if (generate_milestones) createDefaultMilestones(instanceId, planned_start, planned_end);
-      if (create_bom_shell) createBomShell(instanceId, code, instance_name || code);
+      if (shouldGenerateMilestones) createDefaultMilestones(instanceId, planned_start, planned_end);
+      if (shouldCreateBomShell) createBomShell(instanceId, code, instance_name || code);
     }
-    if (create_doc_dirs) createDocFolders(instanceId);
+    if (shouldCreateDocDirs) createDocFolders(instanceId);
     run('INSERT INTO equipment_instance_lifecycle_logs (equipment_instance_id, from_stage, to_stage, reason, changed_by) VALUES (?, NULL, ?, ?, ?)', [instanceId, lifecycle, '实例创建向导初始化', userId || null]);
     return { id: instanceId, code, lifecycle };
   });
 
-  function countOrZero(sql, params = []) {
-    try { return get(sql, params)?.c || 0; } catch (_e) { return 0; }
-  }
 
-  function sumOrZero(sql, params = []) {
-    try { return get(sql, params)?.v || 0; } catch (_e) { return 0; }
-  }
-
-  function buildOverview(id) {
-    const inst = get("SELECT ei.*, em.model_code, em.model_name, em.diameter_mm, et.name_zh as type_name FROM equipment_instances ei LEFT JOIN equipment_models em ON ei.equipment_model_id = em.id LEFT JOIN equipment_types et ON em.equipment_type_id = et.id WHERE ei.id = ?", id);
-    if (!inst) throw ApiError.notFound('装备实例不存在');
-    const wo = get("SELECT count(*) total, sum(CASE WHEN status='pending' THEN 1 ELSE 0 END) pending, sum(CASE WHEN status='in_progress' THEN 1 ELSE 0 END) in_progress, sum(CASE WHEN status='completed' THEN 1 ELSE 0 END) completed, sum(CASE WHEN status IN ('issue','rework') THEN 1 ELSE 0 END) issue FROM work_orders WHERE equipment_instance_id = ?", id) || {};
-    const qc = get("SELECT count(*) total, sum(CASE WHEN result='pass' THEN 1 ELSE 0 END) passed, sum(CASE WHEN result!='pass' THEN 1 ELSE 0 END) failed FROM qc_inspections WHERE equipment_instance_id = ?", id) || {};
-    const shortages = get("SELECT count(*) total, sum(CASE WHEN status IN ('open','following') THEN 1 ELSE 0 END) open FROM shortage_cases WHERE equipment_instance_id = ?", id) || {};
-    const ncr = get("SELECT count(*) total, sum(CASE WHEN closed_at IS NULL THEN 1 ELSE 0 END) open FROM ncr_reports WHERE equipment_instance_id = ?", id) || {};
-    const purchase = get("SELECT count(*) total, sum(CASE WHEN status NOT IN ('closed','completed','cancelled') THEN 1 ELSE 0 END) open FROM purchase_orders WHERE equipment_instance_id = ?", id) || {};
-    const milestones = all('SELECT * FROM equipment_instance_milestones WHERE project_id = ? ORDER BY sequence, id', id);
-    const lifecycleLogs = all('SELECT * FROM equipment_instance_lifecycle_logs WHERE equipment_instance_id = ? ORDER BY id DESC LIMIT 20', id);
-    const materialCost = sumOrZero("SELECT SUM(COALESCE(unit_price,0) * COALESCE(quantity,0)) v FROM instance_bom WHERE equipment_instance_id = ?", [id]);
-    const ledgerCost = sumOrZero("SELECT SUM(COALESCE(debit_amount,0) - COALESCE(credit_amount,0)) v FROM erp_cost_ledger WHERE equipment_instance_id = ?", [id]);
-    const risks = [];
-    if ((shortages.open || 0) > 0) risks.push({ type: 'shortage', level: 'high', title: `缺料未闭环 ${shortages.open} 项` });
-    if ((ncr.open || 0) > 0) risks.push({ type: 'quality', level: 'high', title: `NCR 未闭环 ${ncr.open} 项` });
-    if ((wo.issue || 0) > 0) risks.push({ type: 'work_order', level: 'medium', title: `异常/返工工单 ${wo.issue} 项` });
-    if ((purchase.open || 0) > 0) risks.push({ type: 'purchase', level: 'medium', title: `采购未关闭 ${purchase.open} 单` });
-    if (inst.planned_end && !['delivered', 'operation', 'archived'].includes(inst.lifecycle_stage) && new Date(inst.planned_end) < new Date()) {
-      risks.push({ type: 'schedule', level: 'high', title: '计划交付日期已逾期' });
-    }
-    return {
-      instance: inst,
-      lifecycle: LIFE_CYCLE,
-      lifecycle_logs: lifecycleLogs,
-      milestones,
-      cards: {
-        bom: { total: countOrZero('SELECT COUNT(*) c FROM instance_bom WHERE equipment_instance_id = ?', [id]), key_components: countOrZero('SELECT COUNT(*) c FROM instance_bom WHERE equipment_instance_id = ? AND COALESCE(is_key_component,0)=1', [id]) },
-        documents: { total: countOrZero('SELECT COUNT(*) c FROM documents WHERE equipment_instance_id = ?', [id]), folders: countOrZero('SELECT COUNT(*) c FROM document_folders WHERE equipment_instance_id = ?', [id]) },
-        purchase,
-        kit: shortages,
-        work_orders: wo,
-        quality: { inspections: qc, ncr },
-        cost: { material_estimate: materialCost, ledger_cost: ledgerCost, total: materialCost + ledgerCost },
-        risks: { total: risks.length, items: risks },
-      },
-      freeze: {
-        archive_status: inst.archive_status || 'active',
-        frozen_at: inst.frozen_at,
-        archived_at: inst.archived_at,
-        snapshot: inst.freeze_snapshot ? JSON.parse(inst.freeze_snapshot) : null,
-      }
-    };
-  }
+  const buildOverview = createEquipmentOverview({ db, ApiError, lifecycle: LIFE_CYCLE });
 
 // ============================================================
 // ============================================================
@@ -316,6 +264,91 @@ app.get('/api/equipment_instances/code-preview', wrap((req, res) => {
 
 app.get('/api/equipment_instances/lifecycle-options', wrap((req, res) => {
   res.json(LIFE_CYCLE);
+}));
+
+app.get('/api/equipment_instance_templates/scope-options', wrap((_req, res) => {
+  res.json(TEMPLATE_SCOPE_OPTIONS);
+}));
+
+app.get('/api/equipment_instance_templates', wrap((req, res) => {
+  const { status, category } = req.query;
+  let sql = `
+    SELECT t.*, ei.instance_code AS source_instance_code, ei.instance_name AS source_instance_name
+    FROM equipment_instance_templates t
+    LEFT JOIN equipment_instances ei ON ei.id = t.source_instance_id
+    WHERE 1=1
+  `;
+  const params = [];
+  if (status) { sql += ' AND t.status = ?'; params.push(status); }
+  if (category) { sql += ' AND t.category = ?'; params.push(category); }
+  sql += " ORDER BY CASE t.status WHEN 'published' THEN 1 WHEN 'draft' THEN 2 ELSE 3 END, t.updated_at DESC, t.id DESC";
+  res.json(all(sql, params).map(templateRow));
+}));
+
+app.post('/api/equipment_instance_templates', wrap((req, res) => {
+  const body = req.body || {};
+  const templateName = String(body.template_name || '').trim();
+  if (!templateName) throw ApiError.validation('template_name 必填');
+  const category = String(body.category || 'TBM').trim() || 'TBM';
+  const templateCode = String(body.template_code || nextTemplateCode(category)).trim().toUpperCase();
+  const status = ['draft', 'published', 'disabled'].includes(body.status) ? body.status : 'published';
+  const version = String(body.version || 'A0').trim() || 'A0';
+  const sourceInstanceId = body.source_instance_id ? Number(body.source_instance_id) : null;
+  if (sourceInstanceId && !get('SELECT id FROM equipment_instances WHERE id = ?', sourceInstanceId)) throw ApiError.validation('来源项目装备不存在');
+  const duplicate = get('SELECT id FROM equipment_instance_templates WHERE template_code = ?', templateCode);
+  if (duplicate) throw ApiError.validation('模板编码已存在: ' + templateCode);
+  const copyScope = normalizeCopyScope(body.copy_scope, sourceInstanceId ? INSTANCE_TEMPLATE_SCOPE : EMPTY_TEMPLATE_SCOPE);
+  const result = run(
+    `INSERT INTO equipment_instance_templates
+      (template_code, template_name, category, version, source_instance_id, copy_scope, status, description, created_by, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    [templateCode, templateName, category, version, sourceInstanceId, JSON.stringify(copyScope), status, body.description || null, req.user?.sub || req.user?.id || null]
+  );
+  res.json({ id: result.lastInsertRowid, template_code: templateCode, copy_scope: copyScope, status });
+}));
+
+app.put('/api/equipment_instance_templates/:id', wrap((req, res) => {
+  const current = get('SELECT * FROM equipment_instance_templates WHERE id = ?', req.params.id);
+  if (!current) throw ApiError.notFound('项目装备模板不存在');
+  const body = req.body || {};
+  const updates = [];
+  const params = [];
+  for (const field of ['template_name', 'category', 'version', 'description']) {
+    if (body[field] !== undefined) {
+      updates.push(field + ' = ?');
+      params.push(body[field]);
+    }
+  }
+  if (body.source_instance_id !== undefined) {
+    const sourceInstanceId = body.source_instance_id ? Number(body.source_instance_id) : null;
+    if (sourceInstanceId && !get('SELECT id FROM equipment_instances WHERE id = ?', sourceInstanceId)) throw ApiError.validation('来源项目装备不存在');
+    updates.push('source_instance_id = ?');
+    params.push(sourceInstanceId);
+  }
+  if (body.copy_scope !== undefined) {
+    const sourceInstanceId = body.source_instance_id === undefined ? current.source_instance_id : (body.source_instance_id || null);
+    updates.push('copy_scope = ?');
+    params.push(JSON.stringify(normalizeCopyScope(body.copy_scope, sourceInstanceId ? INSTANCE_TEMPLATE_SCOPE : EMPTY_TEMPLATE_SCOPE)));
+  }
+  if (body.status !== undefined) {
+    if (!['draft', 'published', 'disabled'].includes(body.status)) throw ApiError.validation('模板状态不合法');
+    updates.push('status = ?');
+    params.push(body.status);
+  }
+  if (!updates.length) throw ApiError.validation('no fields');
+  updates.push("updated_at = datetime('now')");
+  params.push(req.params.id);
+  const result = run('UPDATE equipment_instance_templates SET ' + updates.join(', ') + ' WHERE id = ?', params);
+  res.json({ changes: result.changes });
+}));
+
+app.post('/api/equipment_instance_templates/:id/status', wrap((req, res) => {
+  const status = req.body?.status;
+  if (!['draft', 'published', 'disabled'].includes(status)) throw ApiError.validation('模板状态不合法');
+  const current = get('SELECT id FROM equipment_instance_templates WHERE id = ?', req.params.id);
+  if (!current) throw ApiError.notFound('项目装备模板不存在');
+  const result = run("UPDATE equipment_instance_templates SET status = ?, updated_at = datetime('now') WHERE id = ?", [status, req.params.id]);
+  res.json({ id: Number(req.params.id), status, changes: result.changes });
 }));
 
 app.get('/api/equipment_instances', wrap((req, res) => {
@@ -372,43 +405,11 @@ app.get('/api/equipment_instances/:id/overview', wrap((req, res) => {
   res.json(buildOverview(req.params.id));
 }));
 
-app.post('/api/equipment_instances/:id/lifecycle', wrap((req, res) => {
-  ensureNotFrozen(req.params.id);
-  const toStage = req.body.lifecycle_stage || req.body.status;
-  if (!LIFE_VALUES.has(toStage)) throw ApiError.validation('生命周期状态不合法');
-  const inst = get('SELECT lifecycle_stage FROM equipment_instances WHERE id = ?', req.params.id);
-  const fromStage = inst.lifecycle_stage;
-  run("UPDATE equipment_instances SET lifecycle_stage = ?, status = ?, updated_at = datetime('now') WHERE id = ?", [toStage, toStage, req.params.id]);
-  run('INSERT INTO equipment_instance_lifecycle_logs (equipment_instance_id, from_stage, to_stage, reason, changed_by) VALUES (?, ?, ?, ?, ?)', [req.params.id, fromStage, toStage, req.body.reason || null, req.user?.sub || req.user?.id || null]);
-  res.json({ id: Number(req.params.id), from_stage: fromStage, to_stage: toStage });
-}));
+registerLifecycleRoutes({ app, db, wrap, ApiError, ensureNotFrozen, buildOverview });
 
-app.post('/api/equipment_instances/:id/freeze', wrap((req, res) => {
-  const inst = get('SELECT * FROM equipment_instances WHERE id = ?', req.params.id);
-  if (!inst) throw ApiError.notFound('装备实例不存在');
-  const overview = buildOverview(req.params.id);
-  const snapshot = {
-    frozen_reason: req.body.reason || '交付后冻结基线',
-    frozen_at: new Date().toISOString(),
-    lifecycle_stage: inst.lifecycle_stage,
-    counts: overview.cards,
-    milestones: overview.milestones.map(m => ({ phase_code: m.phase_code, phase_name: m.phase_name, status: m.status, planned_start: m.planned_start, planned_end: m.planned_end })),
-  };
-  run("UPDATE equipment_instances SET archive_status = 'frozen', frozen_at = COALESCE(frozen_at, datetime('now')), frozen_by = COALESCE(frozen_by, ?), freeze_snapshot = ?, updated_at = datetime('now') WHERE id = ?", [req.user?.sub || req.user?.id || null, JSON.stringify(snapshot), req.params.id]);
-  res.json({ id: Number(req.params.id), archive_status: 'frozen', snapshot });
-}));
-
-app.post('/api/equipment_instances/:id/archive', wrap((req, res) => {
-  const inst = get('SELECT * FROM equipment_instances WHERE id = ?', req.params.id);
-  if (!inst) throw ApiError.notFound('装备实例不存在');
-  if (!inst.frozen_at) {
-    const overview = buildOverview(req.params.id);
-    run("UPDATE equipment_instances SET frozen_at = datetime('now'), frozen_by = ?, freeze_snapshot = ? WHERE id = ?", [req.user?.sub || req.user?.id || null, JSON.stringify({ archived_with_freeze: true, counts: overview.cards }), req.params.id]);
-  }
-  run("UPDATE equipment_instances SET archive_status = 'archived', lifecycle_stage = 'archived', status = 'archived', archived_at = datetime('now'), archived_by = ?, updated_at = datetime('now') WHERE id = ?", [req.user?.sub || req.user?.id || null, req.params.id]);
-  res.json({ id: Number(req.params.id), archive_status: 'archived', lifecycle_stage: 'archived' });
-}));
-
+// ============================================================
+// 装备类型 / 型号 / 子系统 / 工位
+// ============================================================
 // ============================================================
 // 装备类型 / 型号 / 子系统 / 工位
 // ============================================================

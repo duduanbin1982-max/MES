@@ -25,6 +25,7 @@ export function useBomManagement() {
     drillNode,
     health: data.health,
     templateMeta: data.templateMeta,
+    allNodes: data.allNodes,
     loadAll: data.loadAll,
   })
 
@@ -35,6 +36,7 @@ export function useBomManagement() {
       if ((node.material_name || '').toLowerCase().includes(query)) return true
       if ((node.material_code || '').toLowerCase().includes(query)) return true
       if ((node.part_number || '').toLowerCase().includes(query)) return true
+      if ((node.level_code || '').toLowerCase().includes(query)) return true
       return node.children?.some(match) || false
     }
     return data.tree.value.filter((row: any) => match(row))
@@ -47,10 +49,6 @@ export function useBomManagement() {
   function setLevel(tier: number) {
     activeLevel.value = tier
     mainTab.value = ['tree', 'l0', 'l1', 'l2', 'l3'][tier] || 'tree'
-  }
-
-  function tierName(tier: number) {
-    return ['0 总装', '1 部件', '2 零件', '3 毛坯'][tier] || tier
   }
 
   function onNodeClick(node: any) {
@@ -89,7 +87,6 @@ export function useBomManagement() {
     drillChildren,
     rowsOfLevel,
     setLevel,
-    tierName,
     onNodeClick,
     onRowSelect,
     drillPart,

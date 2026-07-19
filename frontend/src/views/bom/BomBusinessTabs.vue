@@ -1,6 +1,6 @@
 <template>
       <el-tab-pane label="<el-icon><ShoppingCart /></el-icon> 采购视图" name="purchase">
-        <el-row :gutter="12" style="margin-bottom: 12px">
+        <el-row :gutter="12" class="metric-row">
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">采购条目</div><div class="health-metric">{{ businessViews.summary?.purchase_line_count || 0 }}</div><div class="health-sub">按物料/型号聚合后的采购清单</div></el-card></el-col>
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">采购估价</div><div class="health-metric">¥{{ fmtMoney(businessViews.purchase?.total_estimated_amount) }}</div><div class="health-sub">作为采购预算与合同对比基线</div></el-card></el-col>
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">总需求量</div><div class="health-metric">{{ businessViews.purchase?.total_quantity || 0 }}</div><div class="health-sub">已合并同物料需求数量</div></el-card></el-col>
@@ -25,9 +25,9 @@
           </el-table-column>
         </el-table>
 
-        <el-card style="margin-top: 12px">
+        <el-card class="section-card">
           <template #header><span>采购估价 → 实际合同价差异表</span></template>
-          <el-row :gutter="12" style="margin-bottom: 12px">
+          <el-row :gutter="12" class="metric-row">
             <el-col :span="6"><el-card shadow="never"><div class="health-title">已签合同</div><div class="health-metric">{{ businessViews.purchase?.contract_diff?.signed_count || 0 }}</div><div class="health-sub">已形成合同价的采购条目</div></el-card></el-col>
             <el-col :span="6"><el-card shadow="never"><div class="health-title">待签合同</div><div class="health-metric">{{ businessViews.purchase?.contract_diff?.pending_count || 0 }}</div><div class="health-sub">仍按 BOM 估价执行的条目</div></el-card></el-col>
             <el-col :span="6"><el-card shadow="never"><div class="health-title">合同总额</div><div class="health-metric">¥{{ fmtMoney(businessViews.purchase?.contract_diff?.total_actual_amount) }}</div><div class="health-sub">按已录入 PO/合同单价折算</div></el-card></el-col>
@@ -66,7 +66,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="<el-icon><Connection /></el-icon> 装配视图" name="assembly">
-        <el-row :gutter="12" style="margin-bottom: 12px">
+        <el-row :gutter="12" class="metric-row">
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">部件数量</div><div class="health-metric">{{ businessViews.summary?.component_count || 0 }}</div><div class="health-sub">1级部件/模组装配视角</div></el-card></el-col>
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">完整工艺部件</div><div class="health-metric">{{ businessViews.summary?.complete_process_components || 0 }}</div><div class="health-sub">工位/工时/技能齐全的部件</div></el-card></el-col>
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">部件成本</div><div class="health-metric">¥{{ fmtMoney(businessViews.assembly?.total_cost) }}</div><div class="health-sub">累计部件成本汇总</div></el-card></el-col>
@@ -96,9 +96,9 @@
           </el-table-column>
         </el-table>
 
-        <el-card style="margin-top: 12px">
+        <el-card class="section-card">
           <template #header><span>装配齐套 / 缺件风险视图</span></template>
-          <el-row :gutter="12" style="margin-bottom: 12px">
+          <el-row :gutter="12" class="metric-row">
             <el-col :span="6"><el-card shadow="never"><div class="health-title">已齐套部件</div><div class="health-metric">{{ businessViews.assembly?.kit_summary?.ready_count || 0 }}</div><div class="health-sub">库存满足装配需求</div></el-card></el-col>
             <el-col :span="6"><el-card shadow="never"><div class="health-title">待到货部件</div><div class="health-metric">{{ businessViews.assembly?.kit_summary?.incoming_count || 0 }}</div><div class="health-sub">有在途采购可覆盖缺口</div></el-card></el-col>
             <el-col :span="6"><el-card shadow="never"><div class="health-title">阻塞部件</div><div class="health-metric">{{ businessViews.assembly?.kit_summary?.blocked_count || 0 }}</div><div class="health-sub">现有库存+在途仍不足</div></el-card></el-col>
@@ -136,7 +136,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="<el-icon><Histogram /></el-icon> 毛坯视图" name="raw-view">
-        <el-row :gutter="12" style="margin-bottom: 12px">
+        <el-row :gutter="12" class="metric-row">
           <el-col :span="8"><el-card shadow="hover"><div class="health-title">毛坯条目</div><div class="health-metric">{{ businessViews.summary?.raw_line_count || 0 }}</div><div class="health-sub">生产下料/材料准备视角</div></el-card></el-col>
           <el-col :span="8"><el-card shadow="hover"><div class="health-title">毛坯估价</div><div class="health-metric">¥{{ fmtMoney(businessViews.raw?.total_estimated_amount) }}</div><div class="health-sub">原材料毛坯成本基础</div></el-card></el-col>
           <el-col :span="8"><el-card shadow="hover"><div class="health-title">总重量</div><div class="health-metric">{{ businessViews.raw?.total_weight || 0 }} kg</div><div class="health-sub">按已维护重量字段汇总</div></el-card></el-col>
@@ -159,12 +159,12 @@
       </el-tab-pane>
 
       <el-tab-pane label="<el-icon><Money /></el-icon> 成本视图" name="cost-view">
-        <el-row :gutter="12" style="margin-bottom: 12px">
+        <el-row :gutter="12" class="metric-row">
           <el-col :span="8"><el-card shadow="hover"><div class="health-title">整机总成本</div><div class="health-metric">¥{{ fmtMoney(businessViews.cost?.total_cost) }}</div><div class="health-sub">以0级根节点累计成本为准</div></el-card></el-col>
           <el-col :span="8"><el-card shadow="hover"><div class="health-title">缺估价节点</div><div class="health-metric">{{ businessViews.summary?.missing_price_count || 0 }}</div><div class="health-sub">补齐后才能做更准确归集</div></el-card></el-col>
           <el-col :span="8"><el-card shadow="hover"><div class="health-title">成本分类数</div><div class="health-metric">{{ (businessViews.cost?.by_category || []).length }}</div><div class="health-sub">按物料分类归集成本</div></el-card></el-col>
         </el-row>
-        <el-row :gutter="12">
+        <el-row :gutter="12" class="metric-row">
           <el-col :span="12">
             <el-card>
               <template #header><span>按分类成本</span></template>
@@ -197,7 +197,7 @@
       </el-tab-pane>
 
       <el-tab-pane label="<el-icon><Tools /></el-icon> 工艺完整性" name="process-view">
-        <el-row :gutter="12" style="margin-bottom: 12px">
+        <el-row :gutter="12" class="metric-row">
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">部件数</div><div class="health-metric">{{ businessViews.process?.summary?.component_count || 0 }}</div><div class="health-sub">按1级部件检查工艺闭环</div></el-card></el-col>
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">完整数</div><div class="health-metric">{{ businessViews.process?.summary?.complete_count || 0 }}</div><div class="health-sub">有工序/工位/技能/工时</div></el-card></el-col>
           <el-col :span="6"><el-card shadow="hover"><div class="health-title">缺工序</div><div class="health-metric">{{ businessViews.process?.summary?.missing_route_count || 0 }}</div><div class="health-sub">尚未建立工艺路线的部件</div></el-card></el-col>
@@ -222,11 +222,11 @@
 
       <!-- MESA #4: 图纸/文档 Tab -->
       <el-tab-pane label="<el-icon><Files /></el-icon> 图纸/文档" name="documents">
-        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center">
-          <el-select v-model="docFilter.bom_node_id" placeholder="全部 BOM 节点" clearable filterable size="small" style="width:220px">
+        <div class="doc-toolbar">
+          <el-select v-model="docFilter.bom_node_id" placeholder="全部 BOM 节点" clearable filterable size="small" class="select-wide">
             <el-option v-for="n in flat" :key="n.id" :label="n.part_number + ' ' + (n.material_name || '')" :value="n.id" />
           </el-select>
-          <el-select v-model="docFilter.doc_type" placeholder="全部类型" clearable size="small" style="width:140px">
+          <el-select v-model="docFilter.doc_type" placeholder="全部类型" clearable size="small" class="select-compact">
             <el-option label="<el-icon><TrendCharts /></el-icon> 图纸" value="drawing" />
             <el-option label="<el-icon><Document /></el-icon> SOP" value="sop" />
             <el-option label="<el-icon><Setting /></el-icon> 工艺" value="process" />
@@ -261,6 +261,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { contractDiffLabel, contractDiffTagType, kitRiskLabel, kitRiskTagType, processLabel, processTagType } from './bomShared'
 
 const props = defineProps<{
   businessViews: any
@@ -284,47 +285,14 @@ const assemblyMissingDocs = computed(() =>
 function fmtMoney(value: any) {
   return Number(value || 0).toFixed(2)
 }
-
-function processTagType(status: string) {
-  if (status === 'success') return 'success'
-  if (status === 'danger') return 'danger'
-  return 'warning'
-}
-
-function processLabel(status: string) {
-  if (status === 'success') return '完整'
-  if (status === 'danger') return '缺工序'
-  return '待完善'
-}
-
-function contractDiffTagType(status: string) {
-  if (status === 'on_or_under_budget') return 'success'
-  if (status === 'over_20pct') return 'danger'
-  if (status === 'over_budget') return 'warning'
-  return 'info'
-}
-
-function contractDiffLabel(status: string) {
-  if (status === 'on_or_under_budget') return '预算内'
-  if (status === 'over_20pct') return '超 20%'
-  if (status === 'over_budget') return '超预算'
-  return '待签合同'
-}
-
-function kitRiskTagType(status: string) {
-  if (status === 'ready') return 'success'
-  if (status === 'blocked') return 'danger'
-  return 'warning'
-}
-
-function kitRiskLabel(status: string) {
-  if (status === 'ready') return '已齐套'
-  if (status === 'blocked') return '阻塞'
-  return '待到货'
-}
 </script>
 
 <style scoped>
+.metric-row { margin-bottom: 12px; }
+.section-card { margin-top: 12px; }
+.doc-toolbar { display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
+.select-wide { width:220px; }
+.select-compact { width:140px; }
 .health-title { font-size: 13px; color: var(--el-text-color-regular); margin-bottom: 8px; }
 .health-metric { font-size: 18px; font-weight: 600; line-height: 1.4; }
 .health-sub { font-size: 12px; color: var(--el-color-info); margin-top: 8px; min-height: 32px; }

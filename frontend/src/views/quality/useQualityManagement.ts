@@ -35,6 +35,13 @@ export function useQualityManagement() {
     if (inspections.applyInspectionTypeFromRoute(route.query.type)) await inspections.load()
   })
 
+  const clearInspectionRouteScope = async () => {
+    const nextQuery = { ...route.query }
+    delete nextQuery.type
+    await router.replace({ query: nextQuery })
+    if (inspections.applyInspectionTypeFromRoute(undefined)) await inspections.load()
+  }
+
   onMounted(() => {
     inspections.applyInspectionTypeFromRoute(route.query.type)
     inspections.load()
@@ -46,6 +53,7 @@ export function useQualityManagement() {
 
   return {
     activeTab,
+    clearInspectionRouteScope,
     ...inspections,
     ...dashboard,
     ...ncr,

@@ -10,7 +10,20 @@
 import { ref, computed } from 'vue'
 import { decorateWithDerivedStatus } from '../utils/nodeStatus.js'
 
-const authHeader = () => ({ Authorization: 'Bearer ' + localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token') })
+const authToken = () => localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token') || ''
+const authHeader = () => {
+  const token = authToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+const fetchJson = async (url) => {
+  const res = await fetch(url, { headers: authHeader() })
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`HTTP ${res.status}${body ? ` — ${body.slice(0, 120)}` : ''}`)
+  }
+  return res.json()
+}
 
 export function useProcessTree(instanceIdRef) {
   const tree = ref([])
@@ -46,9 +59,9 @@ export function useProcessTree(instanceIdRef) {
     error.value = null
     try {
       const [treeRes, cpmRes, progRes] = await Promise.all([
-        fetch('/api/equipment_instances/' + instanceIdRef.value + '/process_tree', { headers: authHeader() }).then(r => r.json()),
-        fetch('/api/equipment_instances/' + instanceIdRef.value + '/critical_path', { headers: authHeader() }).then(r => r.json()),
-        fetch('/api/equipment_instances/' + instanceIdRef.value + '/process_progress', { headers: authHeader() }).then(r => r.json())
+        fetchJson('/api/equipment_instances/' + instanceIdRef.value + '/process_tree'),
+        fetchJson('/api/equipment_instances/' + instanceIdRef.value + '/critical_path'),
+        fetchJson('/api/equipment_instances/' + instanceIdRef.value + '/process_progress')
       ])
       flat.value = treeRes.flat || []
       deps.value = treeRes.deps || []

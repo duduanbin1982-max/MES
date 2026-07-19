@@ -64,9 +64,11 @@ function mkApp(db) {
 test('P2.BOM.1 validateNode 基础校验', () => {
   const v1 = bomService.validateNode({ tier: 2, quantity: 1, unit: '件', category: '外购成品' })
   assert.equal(v1.ok, true)
-  const v2 = bomService.validateNode({ tier: 5, quantity: 1, unit: '件' })
-  assert.equal(v2.ok, false)
-  assert.ok(v2.errors.some(e => e.includes('tier')))
+  const v2 = bomService.validateNode({ tier: 5, quantity: 1, unit: '件', category: '外购成品' })
+  assert.equal(v2.ok, true)
+  const v2b = bomService.validateNode({ tier: -1, quantity: 1, unit: '件', category: '外购成品' })
+  assert.equal(v2b.ok, false)
+  assert.ok(v2b.errors.some(e => e.includes('tier')))
   const v3 = bomService.validateNode({ tier: 2, quantity: 0, unit: '件' })
   assert.ok(v3.errors.some(e => e.includes('quantity')))
   const v4 = bomService.validateNode({ tier: 2, quantity: 1, unit: '袋' })
@@ -245,6 +247,7 @@ test('P2.BOM.11 GET /bom 默认返树状 + tier_summary', () => {
   const j = res._j.json
   assert.equal(j.view, 'tree')
   assert.deepEqual(j.tier_summary, { 0: 1, 1: 1, 2: 1, 3: 0, total: 3 })
+  assert.deepEqual(j.structure_summary, { deep: 0, max_depth: 2, total: 3 })
   assert.equal(j.tree.length, 1, '应只有 1 个根 (tier 0)')
   assert.equal(j.tree[0].id, 1)
   assert.equal(j.tree[0].children.length, 1, '根下挂 1 个部件')

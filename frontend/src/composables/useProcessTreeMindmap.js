@@ -13,7 +13,10 @@ export function useProcessTreeMindmap(props, emit) {
   const error = ref(null)
   const chartEl = ref(null)
   const currentPartId = ref(props.initialPartId || 'root')
-  const { renderChart, disposeChart, onResize } = useMindmapChart(chartEl, tree)
+  const { renderChart, disposeChart, fitChartView, onResize } = useMindmapChart(chartEl, tree)
+
+  const isRoot = computed(() => currentPartId.value === 'root' || tree.value?.current?.kind === 'root')
+  const canGoParent = computed(() => breadcrumb.value.length > 1)
 
   const hint = computed(() => {
     if (!tree.value) return '点击展开工艺树思维导图'
@@ -22,22 +25,22 @@ export function useProcessTreeMindmap(props, emit) {
   })
 
   const levelIcon = (level) => {
-    if (level === 1) return '🏭'
-    if (level === 2) return '⚙️'
-    if (level === 3) return '🔧'
-    if (level === 4) return '📋'
-    return '•'
+    if (level === 1) return 'L1'
+    if (level === 2) return 'L2'
+    if (level === 3) return 'L3'
+    if (level === 4) return 'L4'
+    return 'L-'
   }
 
   const kindIcon = (kind) => {
-    if (kind === 'root') return '🏭'
-    if (kind === 'subsystem') return '⚙️'
-    if (kind === 'part') return '🔧'
-    if (kind === 'operation') return '📋'
-    return '•'
+    if (kind === 'root') return '总'
+    if (kind === 'subsystem') return '系'
+    if (kind === 'part') return '件'
+    if (kind === 'operation') return '序'
+    return '项'
   }
 
-  const kindLabel = (kind) => ({ root: '总装', subsystem: '子系统', part: '零件', operation: '工序', edge: '依赖' }[kind] || kind)
+  const kindLabel = (kind) => ({ root: '总装', subsystem: '子系统', part: '部件/零件', operation: '工序', edge: '依赖' }[kind] || kind)
 
   const levelTitle = (level) => {
     if (level === 1) return '总装层'
@@ -92,24 +95,42 @@ export function useProcessTreeMindmap(props, emit) {
     }
   }
 
+  function navigateTo(partId, payload = {}) {
+    disposeChart()
+    currentPartId.value = partId || 'root'
+    loadCurrent(true)
+    emit('navigate', payload)
+  }
+
   function onChildClick(child) {
     if (String(child.part_id).startsWith('edge_')) return
-    disposeChart()
-    currentPartId.value = child.part_id
-    loadCurrent()
-    emit('navigate', { part_id: child.part_id, name: child.name })
+    navigateTo(child.part_id, { part_id: child.part_id, name: child.name })
   }
 
   function onCrumbClick(partId) {
-    currentPartId.value = partId
-    loadCurrent()
+    if (!partId || partId === currentPartId.value) return
+    const crumb = breadcrumb.value.find((item) => item.part_id === partId)
+    navigateTo(partId, { part_id: partId, name: crumb?.name })
+  }
+
+  function goParent() {
+    if (!canGoParent.value) return
+    const parent = breadcrumb.value[breadcrumb.value.length - 2]
+    if (!parent?.part_id) return
+    navigateTo(parent.part_id, { part_id: parent.part_id, name: parent.name })
+  }
+
+  function goRoot() {
+    if (isRoot.value) return
+    navigateTo('root', { part_id: 'root', name: '总装' })
+  }
+
+  function resetChartView() {
+    fitChartView()
   }
 
   function onCenterClick() {
-    if (currentPartId.value !== 'root') {
-      currentPartId.value = 'root'
-      loadCurrent()
-    }
+    goRoot()
   }
 
   watch(
@@ -146,6 +167,8 @@ export function useProcessTreeMindmap(props, emit) {
     error,
     chartEl,
     hint,
+    isRoot,
+    canGoParent,
     levelIcon,
     kindIcon,
     kindLabel,
@@ -156,5 +179,8 @@ export function useProcessTreeMindmap(props, emit) {
     onChildClick,
     onCrumbClick,
     onCenterClick,
+    goParent,
+    goRoot,
+    resetChartView,
   }
 }

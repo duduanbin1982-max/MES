@@ -1,16 +1,16 @@
 <template>
   <div class="page">
     <div class="page-header">
-      <div class="page-title"><el-icon><Money /></el-icon> 成本归集</div>
+      <div class="page-title"><el-icon><Money /></el-icon> {{ pageTitle }}</div>
       <div>
-        <el-select v-model="selectedInstance" placeholder="选择装备实例" style="width: 280px; margin-right: 8px" @change="load">
+        <el-select v-if="showInstancePicker" v-model="selectedInstance" placeholder="选择装备实例" style="width: 280px; margin-right: 8px" @change="load">
           <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
         </el-select>
-        <el-button type="primary" @click="load" :loading="loading">查询</el-button>
+        <el-button type="primary" @click="load" :loading="loading">{{ showInstancePicker ? '查询' : '刷新' }}</el-button>
       </div>
     </div>
 
-    <div v-if="!selectedInstance" style="text-align: center; padding: 40px">
+    <div v-if="showInstancePicker && !selectedInstance" style="text-align: center; padding: 40px">
       <el-empty description="选择装备实例查看成本归集" />
     </div>
 
@@ -90,18 +90,39 @@
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
+
+      <el-card v-if="isVarianceView" style="margin-top: 16px">
+        <template #header><span style="font-weight: 500"><el-icon><DataAnalysis /></el-icon> 偏差诊断</span></template>
+        <el-row :gutter="16">
+          <el-col :span="8"><div class="stat-mini"><span class="stat-val">{{ data.totals?.budget_cost != null ? fmtMoney(data.totals.budget_cost) : '-' }}</span><span class="stat-lbl">预算基线</span></div></el-col>
+          <el-col :span="8"><div class="stat-mini"><span class="stat-val">{{ data.totals?.actual_cost != null ? fmtMoney(data.totals.actual_cost) : '-' }}</span><span class="stat-lbl">实际归集</span></div></el-col>
+          <el-col :span="8"><div class="stat-mini"><span class="stat-val" :style="{color: (data.totals?.cost_diff||0) > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)'}">{{ data.totals?.cost_diff != null ? fmtMoney(data.totals.cost_diff) : '-' }}</span><span class="stat-lbl">偏差</span></div></el-col>
+        </el-row>
+        <el-alert
+          style="margin-top: 12px"
+          :type="(data.totals?.cost_diff||0) > 0 ? 'error' : 'success'"
+          :closable="false"
+          show-icon
+          :title="(data.totals?.cost_diff||0) > 0 ? '当前项目存在超支风险，建议从材料、外协、折旧和返工优先排查。' : '当前项目成本偏差受控，可继续按计划归集。'"
+        />
+      </el-card>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { Api } from '../api'
 
+const route = useRoute()
 const instances = ref([])
 const selectedInstance = ref(null)
 const data = ref({})
 const loading = ref(false)
+const isVarianceView = computed(() => route.path === '/cost-variance' || route.query.view === 'variance' || route.query.view === 'cost-variance')
+const showInstancePicker = computed(() => !isVarianceView.value)
+const pageTitle = computed(() => isVarianceView.value ? '项目成本偏差' : '成本归集')
 
 const loadInstances = async () => {
   try { const r = await Api.get('/equipment_instances'); instances.value = r.items || r || [] }
@@ -109,7 +130,7 @@ const loadInstances = async () => {
 }
 
 const load = async () => {
-  if (!selectedInstance.value) return
+  if (showInstancePicker.value && !selectedInstance.value) return
   loading.value = true
   try { data.value = await Api.get('/equipment_instances/' + selectedInstance.value + '/cost_rollup') }
   catch(_) { data.value = {}; ElMessage.error('加载成本数据失败') }
@@ -121,7 +142,13 @@ const fmtMoney = (v) => {
   return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-onMounted(loadInstances)
+onMounted(async () => {
+  await loadInstances()
+  if (isVarianceView.value) {
+    selectedInstance.value = Number(route.query.instance_id || instances.value[0]?.id || 0) || null
+    if (selectedInstance.value) await load()
+  }
+})
 </script>
 
 <style scoped>

@@ -10,6 +10,23 @@ const { compileCron, executeScheduledReport, startScheduler } = require('./sched
 function register(app, db) {
   const { all, get, run } = makeHelpers(db);
 
+  const tableCache = new Map();
+  function tableExists(table) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(table)) return false;
+    if (!tableCache.has(table)) {
+      tableCache.set(table, !!get("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", table));
+    }
+    return tableCache.get(table);
+  }
+
+  function safeAll(sql, params = []) {
+    try {
+      return all(sql, params);
+    } catch (_error) {
+      return [];
+    }
+  }
+
   // ====== 建表 ======
   run("CREATE TABLE IF NOT EXISTS scheduled_reports (id INTEGER PRIMARY KEY, report_name TEXT NOT NULL, report_type TEXT, schedule_cron TEXT, recipients TEXT, filters TEXT, format TEXT DEFAULT 'json', is_active INTEGER DEFAULT 1, last_run_at TEXT, created_at TEXT DEFAULT (datetime('now')))");
   run("CREATE TABLE IF NOT EXISTS report_history (id INTEGER PRIMARY KEY, report_id INTEGER, run_at TEXT DEFAULT (datetime('now')), status TEXT, output_data TEXT, error_msg TEXT)");
@@ -33,27 +50,53 @@ function register(app, db) {
         return { type, summary, rows, generated_at: new Date().toISOString() };
       }
       case "quality_monthly": {
-        const sql = `SELECT qc.inspection_type, qc.result, qc.inspection_date, ei.instance_code, m.material_name
-          FROM qc_inspections qc JOIN equipment_instances ei ON qc.equipment_instance_id = ei.id LEFT JOIN materials m ON qc.material_id = m.id
-          WHERE 1=1`;
-        const params = [];
-        if (from) { params.push(from); params.push(to || new Date().toISOString().slice(0,10)); }
-        else { params.push(new Date(new Date().setMonth(new Date().getMonth()-1)).toISOString().slice(0,10)); params.push(new Date().toISOString().slice(0,10)); }
-        const rows = all(sql + " AND qc.inspection_date >= ? AND qc.inspection_date <= ? ORDER BY qc.inspection_date DESC LIMIT ?", [...params, parseInt(limit) || 500]);
+        const fromDate = from || new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().slice(0, 10);
+        const toDate = to || new Date().toISOString().slice(0, 10);
+        const rows = tableExists("qc_inspections")
+          ? safeAll(`SELECT qc.inspection_type, qc.result, qc.inspection_date, qc.work_order_id,
+                           qc.notes, ei.instance_code, ei.instance_name,
+                           wo.wo_code, wo.title AS work_order_title
+                    FROM qc_inspections qc
+                    JOIN equipment_instances ei ON qc.equipment_instance_id = ei.id
+                    LEFT JOIN work_orders wo ON qc.work_order_id = wo.id
+                    WHERE qc.inspection_date >= ? AND qc.inspection_date <= ?
+                    ORDER BY qc.inspection_date DESC
+                    LIMIT ?`, [fromDate, toDate, parseInt(limit) || 500])
+          : [];
         const pass = rows.filter(r => r.result === "pass").length;
         const fail = rows.filter(r => r.result === "fail").length;
         const summary = { total: rows.length, pass, fail, pass_rate: rows.length ? (pass / rows.length * 100).toFixed(1) + "%" : "0%" };
         return { type, summary, rows, generated_at: new Date().toISOString() };
       }
       case "oee_weekly": {
-        const fromDate = from || new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
-        const toDate = to || new Date().toISOString().slice(0,10);
-        const rows = all("SELECT o.*, ei.instance_code FROM oee_records o JOIN equipment_instances ei ON o.equipment_instance_id = ei.id WHERE o.record_date >= ? AND o.record_date <= ? ORDER BY o.record_date DESC LIMIT ?", fromDate, toDate, parseInt(limit) || 500);
+        const fromDate = from || new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+        const toDate = to || new Date().toISOString().slice(0, 10);
+        const rows = tableExists("oee_shift_log")
+          ? safeAll(`SELECT o.id, o.shift_date AS record_date, o.shift_name,
+                           o.planned_minutes, o.operating_minutes, o.ideal_cycle_time,
+                           o.total_output, o.good_output,
+                           ei.instance_code,
+                           ROUND(CASE WHEN o.planned_minutes > 0 THEN o.operating_minutes * 100.0 / o.planned_minutes ELSE 0 END, 1) AS availability,
+                           ROUND(CASE WHEN o.operating_minutes > 0 AND o.ideal_cycle_time > 0 THEN o.total_output * o.ideal_cycle_time * 100.0 / o.operating_minutes ELSE 0 END, 1) AS performance,
+                           ROUND(CASE WHEN o.total_output > 0 THEN o.good_output * 100.0 / o.total_output ELSE 0 END, 1) AS quality,
+                           ROUND(
+                             (CASE WHEN o.planned_minutes > 0 THEN o.operating_minutes * 1.0 / o.planned_minutes ELSE 0 END) *
+                             (CASE WHEN o.operating_minutes > 0 AND o.ideal_cycle_time > 0 THEN o.total_output * o.ideal_cycle_time * 1.0 / o.operating_minutes ELSE 0 END) *
+                             (CASE WHEN o.total_output > 0 THEN o.good_output * 1.0 / o.total_output ELSE 0 END) * 100,
+                             1
+                           ) AS oee
+                    FROM oee_shift_log o
+                    JOIN equipment_instances ei ON o.equipment_instance_id = ei.id
+                    WHERE o.shift_date >= ? AND o.shift_date <= ?
+                    ORDER BY o.shift_date DESC
+                    LIMIT ?`, [fromDate, toDate, parseInt(limit) || 500])
+          : [];
         if (rows.length) {
-          const avgAvailability = rows.reduce((s,r) => s + (r.availability || 0), 0) / rows.length;
-          const avgPerformance = rows.reduce((s,r) => s + (r.performance || 0), 0) / rows.length;
-          const avgQuality = rows.reduce((s,r) => s + (r.quality || 0), 0) / rows.length;
-          const summary = { total: rows.length, avg_availability: avgAvailability.toFixed(1) + "%", avg_performance: avgPerformance.toFixed(1) + "%", avg_quality: avgQuality.toFixed(1) + "%", avg_oee: (avgAvailability * avgPerformance * avgQuality / 10000).toFixed(1) + "%" };
+          const avgAvailability = rows.reduce((s, r) => s + Number(r.availability || 0), 0) / rows.length;
+          const avgPerformance = rows.reduce((s, r) => s + Number(r.performance || 0), 0) / rows.length;
+          const avgQuality = rows.reduce((s, r) => s + Number(r.quality || 0), 0) / rows.length;
+          const avgOee = rows.reduce((s, r) => s + Number(r.oee || 0), 0) / rows.length;
+          const summary = { total: rows.length, avg_availability: avgAvailability.toFixed(1) + "%", avg_performance: avgPerformance.toFixed(1) + "%", avg_quality: avgQuality.toFixed(1) + "%", avg_oee: avgOee.toFixed(1) + "%" };
           return { type, summary, rows, generated_at: new Date().toISOString() };
         }
         return { type, summary: { total: 0 }, rows: [], generated_at: new Date().toISOString() };
@@ -69,11 +112,22 @@ function register(app, db) {
         return { type, summary, rows, generated_at: new Date().toISOString() };
       }
       case "cost_summary": {
-        const rows = all(`SELECT ei.instance_code, ei.instance_name, ei.contract_amount,
-          COALESCE((SELECT SUM(mc.total_cost) FROM material_costs mc WHERE mc.equipment_instance_id=ei.id), 0) AS material_cost,
-          COALESCE((SELECT SUM(wo.actual_hours * COALESCE(wo.hourly_rate, 200)) FROM work_orders wo WHERE wo.equipment_instance_id=ei.id), 0) AS labor_cost
-          FROM equipment_instances ei ORDER BY ei.contract_amount DESC LIMIT ?`, parseInt(limit) || 100);
-        const summary = { total_projects: rows.length, total_contract: rows.reduce((s,r) => s + (r.contract_amount || 0), 0), total_material_cost: rows.reduce((s,r) => s + (r.material_cost || 0), 0), total_labor_cost: rows.reduce((s,r) => s + (r.labor_cost || 0), 0) };
+        const rows = safeAll(`SELECT ei.instance_code, ei.instance_name, ei.contract_amount,
+          COALESCE((SELECT SUM(pce.amount) FROM project_cost_entries pce WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL AND COALESCE(pce.status, 'posted') NOT IN ('cancelled','void') AND pce.cost_type IN ('material','materials','purchase')), 0) AS material_cost,
+          COALESCE((SELECT SUM(wo.actual_hours * 200) FROM work_orders wo WHERE wo.equipment_instance_id = ei.id), 0) AS labor_cost,
+          COALESCE((SELECT SUM(pce.amount) FROM project_cost_entries pce WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL AND pce.cost_type = 'outsourcing'), 0) AS outsourcing_cost,
+          COALESCE((SELECT SUM(pce.amount) FROM project_cost_entries pce WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL AND pce.cost_type = 'depreciation'), 0) AS depreciation_cost,
+          COALESCE((SELECT SUM(pce.amount) FROM project_cost_entries pce WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL AND pce.cost_type IN ('rework','quality_loss')), 0) AS loss_cost
+          FROM equipment_instances ei ORDER BY ei.contract_amount DESC LIMIT ?`, [parseInt(limit) || 100]);
+        const summary = {
+          total_projects: rows.length,
+          total_contract: rows.reduce((s, r) => s + Number(r.contract_amount || 0), 0),
+          total_material_cost: rows.reduce((s, r) => s + Number(r.material_cost || 0), 0),
+          total_labor_cost: rows.reduce((s, r) => s + Number(r.labor_cost || 0), 0),
+          total_outsourcing_cost: rows.reduce((s, r) => s + Number(r.outsourcing_cost || 0), 0),
+          total_depreciation_cost: rows.reduce((s, r) => s + Number(r.depreciation_cost || 0), 0),
+          total_loss_cost: rows.reduce((s, r) => s + Number(r.loss_cost || 0), 0),
+        };
         return { type, summary, rows, generated_at: new Date().toISOString() };
       }
       default:

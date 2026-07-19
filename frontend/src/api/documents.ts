@@ -5,6 +5,7 @@ export function createDocumentsApi() {
     documents: (params?: any) => api.get('/documents', { params }),
     document: (id: number) => api.get(`/documents/${id}`),
     documentVersions: (id: number) => api.get(`/documents/${id}/versions`),
+    documentHistory: (id: number) => api.get(`/documents/${id}/history`),
     documentStats: () => api.get('/documents/stats'),
     uploadDocument,
     issueDocument: (id: number, issued_to: string) => api.put(`/documents/${id}/issue`, { issued_to }),

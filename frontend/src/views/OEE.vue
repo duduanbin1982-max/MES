@@ -1,42 +1,73 @@
 <template>
   <div class="page">
-    <div class="page-header">
-      <div class="page-title"><el-icon><Setting /></el-icon> 设备综合效率 (OEE)</div>
-    </div>
+    <PageToolbar
+      title="设备综合效率 (OEE)"
+      subtitle="统一查看工位利用率、六大损失、班次对比与趋势分析。"
+      aria-label="OEE 工具栏"
+    >
+      <template #icon>
+        <el-icon><Setting /></el-icon>
+      </template>
+      <template v-if="activeTab === 'overview'" #filters>
+        <div class="toolbar-form">
+          <span class="toolbar-label">统计周期</span>
+          <el-select v-model="days" class="days-select" @change="load">
+            <el-option v-for="d in [7,14,30,60,90]" :key="d" :label="d+' 天'" :value="d" />
+          </el-select>
+          <el-button :icon="Refresh" type="primary" :loading="loading" @click="load">刷新</el-button>
+        </div>
+      </template>
+    </PageToolbar>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <el-tab-pane label="工位概览" name="overview">
-        <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
-          <el-select v-model="days" style="width:120px" @change="load">
-            <el-option v-for="d in [7,14,30,60,90]" :key="d" :label="d+' 天'" :value="d" />
-          </el-select>
-          <el-button @click="load" type="primary" :loading="loading">刷新</el-button>
-        </div>
-
-        <el-row :gutter="12" style="margin-bottom:12px" v-loading="loading">
-          <el-col :span="6"><div class="stat-card"><div class="stat-label">车队利用率</div><div class="stat-value" :style="{color:utilColor(summary.fleet_utilization_pct)}">{{ summary.fleet_utilization_pct || 0 }}%</div><div class="stat-label" style="font-size:11px">{{ summary.fleet_busy_hours }}h / {{ summary.fleet_available_hours }}h</div></div></el-col>
-          <el-col :span="6"><div class="stat-card"><div class="stat-label">工位</div><div class="stat-value">{{ summary.workstation_count || 0 }}</div><div class="stat-label" style="font-size:11px">总工位</div></div></el-col>
-          <el-col :span="6"><div class="stat-card"><div class="stat-label">过载</div><div class="stat-value" :style="{color:(summary.overloaded_count||0)>0?'var(--el-color-danger)':'var(--el-color-success)'}">{{ summary.overloaded_count || 0 }}</div><div class="stat-label" style="font-size:11px">&ge;90% 利用率</div></div></el-col>
-          <el-col :span="6"><div class="stat-card"><div class="stat-label">闲置</div><div class="stat-value" style="color:var(--el-color-info)">{{ summary.idle_count || 0 }}</div><div class="stat-label" style="font-size:11px">&lt;30% 利用率</div></div></el-col>
+        <PageState
+          v-if="loadError"
+          state="error"
+          title="OEE 数据加载失败"
+          :description="loadError"
+          action-text="重新加载"
+          @retry="load"
+        />
+        <PageState
+          v-else-if="loading && !workstations.length"
+          state="loading"
+          title="正在加载 OEE 数据"
+          description="正在汇总工位利用率、瓶颈与负荷数据。"
+        />
+        <PageState
+          v-else-if="!loading && !workstations.length && !summary.workstation_count"
+          state="empty"
+          title="暂无 OEE 工位数据"
+          description="当前周期没有可统计的工位负荷数据，可调整天数或先维护工位/工单。"
+          action-text="刷新"
+          @retry="load"
+        />
+        <template v-else>
+        <el-row :gutter="12" class="metric-row" v-loading="loading">
+          <el-col :span="6"><div class="stat-card"><div class="stat-label">车队利用率</div><div class="stat-value" :class="utilToneClass(summary.fleet_utilization_pct)">{{ summary.fleet_utilization_pct || 0 }}%</div><div class="stat-label stat-caption">{{ summary.fleet_busy_hours }}h / {{ summary.fleet_available_hours }}h</div></div></el-col>
+          <el-col :span="6"><div class="stat-card"><div class="stat-label">工位</div><div class="stat-value">{{ summary.workstation_count || 0 }}</div><div class="stat-label stat-caption">总工位</div></div></el-col>
+          <el-col :span="6"><div class="stat-card"><div class="stat-label">过载</div><div class="stat-value" :class="binaryToneClass((summary.overloaded_count||0)>0)">{{ summary.overloaded_count || 0 }}</div><div class="stat-label stat-caption">&ge;90% 利用率</div></div></el-col>
+          <el-col :span="6"><div class="stat-card"><div class="stat-label">闲置</div><div class="stat-value text-info">{{ summary.idle_count || 0 }}</div><div class="stat-label stat-caption">&lt;30% 利用率</div></div></el-col>
         </el-row>
 
-        <el-row :gutter="12" style="margin-bottom:12px">
+        <el-row :gutter="12" class="metric-row">
           <el-col :span="12">
-            <el-card><template #header><span style="color:var(--el-color-danger);font-weight:500"><el-icon><Sunny /></el-icon> 瓶颈工位</span></template>
+            <el-card><template #header><span class="card-title text-danger"><el-icon><Sunny /></el-icon> 瓶颈工位</span></template>
               <div v-if="summary.bottleneck">
-                <div style="font-size:18px;font-weight:600">{{ summary.bottleneck.name }}</div>
-                <el-progress :percentage="summary.bottleneck.utilization_pct" :status="summary.bottleneck.utilization_pct>=90?'exception':'warning'" style="margin-top:8px" />
-                <div style="font-size:12px;color:var(--el-color-info);margin-top:4px">利用率最高，建议优先调度</div>
+                <div class="item-title">{{ summary.bottleneck.name }}</div>
+                <el-progress :percentage="summary.bottleneck.utilization_pct" :status="summary.bottleneck.utilization_pct>=90?'exception':'warning'" class="mt-xs" />
+                <div class="hint-text">利用率最高，建议优先调度</div>
               </div>
               <el-empty v-else description="暂无数据" :image-size="60" />
             </el-card>
           </el-col>
           <el-col :span="12">
-            <el-card><template #header><span style="color:var(--el-color-success);font-weight:500"><el-icon><Moon /></el-icon> 闲置工位</span></template>
+            <el-card><template #header><span class="card-title text-success"><el-icon><Moon /></el-icon> 闲置工位</span></template>
               <div v-if="summary.least_busy">
-                <div style="font-size:18px;font-weight:600">{{ summary.least_busy.name }}</div>
-                <el-progress :percentage="summary.least_busy.utilization_pct" :status="summary.least_busy.utilization_pct<30?'success':'warning'" style="margin-top:8px" />
-                <div style="font-size:12px;color:var(--el-color-info);margin-top:4px">利用率最低，可承接更多任务</div>
+                <div class="item-title">{{ summary.least_busy.name }}</div>
+                <el-progress :percentage="summary.least_busy.utilization_pct" :status="summary.least_busy.utilization_pct<30?'success':'warning'" class="mt-xs" />
+                <div class="hint-text">利用率最低，可承接更多任务</div>
               </div>
               <el-empty v-else description="暂无数据" :image-size="60" />
             </el-card>
@@ -44,13 +75,13 @@
         </el-row>
 
         <el-card>
-          <template #header><span style="font-weight:500"><el-icon><OfficeBuilding /></el-icon> 各工位利用率（按利用率降序）</span></template>
+          <template #header><span class="card-title"><el-icon><OfficeBuilding /></el-icon> 各工位利用率（按利用率降序）</span></template>
           <el-table :data="workstations" stripe size="small" empty-text="加载中">
             <el-table-column type="index" width="50" />
             <el-table-column prop="name" label="工位" width="160" />
             <el-table-column prop="workshop" label="车间" width="120" />
             <el-table-column label="利用率" min-width="220">
-              <template #default="{row}"><div style="display:flex;align-items:center;gap:8px"><el-progress :percentage="row.utilization_pct" :status="utilStatus(row.level)" style="flex:1" /><span style="font-weight:600;min-width:40px">{{ row.utilization_pct }}%</span></div></template>
+              <template #default="{row}"><div class="util-bar"><el-progress :percentage="row.utilization_pct" :status="utilStatus(row.level)" class="util-progress" /><span class="util-value">{{ row.utilization_pct }}%</span></div></template>
             </el-table-column>
             <el-table-column prop="busy_hours" label="已用工时" width="100" sortable />
             <el-table-column prop="available_hours" label="可用工时" width="100" />
@@ -62,15 +93,16 @@
           </el-table>
         </el-card>
 
-        <el-alert v-if="oeeNote" :title="oeeNote" type="info" :closable="false" style="margin-top:12px" />
+        <el-alert v-if="oeeNote" :title="oeeNote" type="info" :closable="false" class="mt-md" />
+        </template>
       </el-tab-pane>
 
       <el-tab-pane label="损失分析" name="loss">
         <div class="tab-toolbar">
-          <el-select v-model="lossFilter.instance_id" placeholder="选择设备实例" filterable style="width:260px" @change="loadLossAnalysis">
+          <el-select v-model="lossFilter.instance_id" placeholder="选择设备实例" filterable class="filter-wide" @change="loadLossAnalysis">
             <el-option v-for="inst in instances" :key="inst.id" :label="inst.instance_code+' '+(inst.instance_name||'')" :value="inst.id" />
           </el-select>
-          <el-date-picker v-model="lossFilter.dateRange" type="daterange" range-separator="→" start-placeholder="开始" end-placeholder="结束" value-format="YYYY-MM-DD" @change="loadLossAnalysis" style="width:260px" />
+          <el-date-picker v-model="lossFilter.dateRange" type="daterange" range-separator="→" start-placeholder="开始" end-placeholder="结束" value-format="YYYY-MM-DD" @change="loadLossAnalysis" class="filter-wide" />
           <el-button type="primary" @click="showLossDialog=true">+ 记录损失</el-button>
         </div>
 
@@ -84,31 +116,31 @@
           <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
         </el-table>
 
-        <el-row :gutter="12" style="margin-top:16px" v-if="lossRecords.length">
-          <el-col :span="12"><div ref="lossPieRef" style="height:320px"></div></el-col>
-          <el-col :span="12"><div ref="lossBarRef" style="height:320px"></div></el-col>
+        <el-row :gutter="12" class="chart-row" v-if="lossRecords.length">
+          <el-col :span="12"><div ref="lossPieRef" class="chart-box-sm"></div></el-col>
+          <el-col :span="12"><div ref="lossBarRef" class="chart-box-sm"></div></el-col>
         </el-row>
 
         <el-dialog v-model="showLossDialog" title="记录损失" width="500px" @close="resetLossForm">
           <el-form :model="lossForm" label-width="90px">
             <el-form-item label="设备实例">
-              <el-select v-model="lossForm.instance_id" placeholder="选择设备实例" filterable style="width:100%">
+              <el-select v-model="lossForm.instance_id" placeholder="选择设备实例" filterable class="form-full">
                 <el-option v-for="inst in instances" :key="inst.id" :label="inst.instance_code+' '+(inst.instance_name||'')" :value="inst.id" />
               </el-select>
             </el-form-item>
             <el-form-item label="损失类别">
-              <el-select v-model="lossForm.loss_category" placeholder="选择类别" style="width:100%">
+              <el-select v-model="lossForm.loss_category" placeholder="选择类别" class="form-full">
                 <el-option v-for="c in lossCategories" :key="c.value" :label="c.label" :value="c.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="开始时间">
-              <el-date-picker v-model="lossForm.start_time" type="datetime" placeholder="选择开始时间" value-format="YYYY-MM-DD HH:mm:ss" @change="calcLossDuration" style="width:100%" />
+              <el-date-picker v-model="lossForm.start_time" type="datetime" placeholder="选择开始时间" value-format="YYYY-MM-DD HH:mm:ss" @change="calcLossDuration" class="form-full" />
             </el-form-item>
             <el-form-item label="结束时间">
-              <el-date-picker v-model="lossForm.end_time" type="datetime" placeholder="选择结束时间" value-format="YYYY-MM-DD HH:mm:ss" @change="calcLossDuration" style="width:100%" />
+              <el-date-picker v-model="lossForm.end_time" type="datetime" placeholder="选择结束时间" value-format="YYYY-MM-DD HH:mm:ss" @change="calcLossDuration" class="form-full" />
             </el-form-item>
             <el-form-item label="时长(分钟)">
-              <el-input-number v-model="lossForm.duration_minutes" :min="0" :step="1" style="width:100%" />
+              <el-input-number v-model="lossForm.duration_minutes" :min="0" :step="1" class="form-full" />
             </el-form-item>
             <el-form-item label="描述">
               <el-input v-model="lossForm.description" type="textarea" :rows="3" placeholder="可选描述" />
@@ -123,16 +155,16 @@
 
       <el-tab-pane label="班组对比" name="shift">
         <div class="tab-toolbar">
-          <el-select v-model="shiftFilter.instance_id" placeholder="选择设备实例" filterable style="width:260px" @change="loadShiftComparison">
+          <el-select v-model="shiftFilter.instance_id" placeholder="选择设备实例" filterable class="filter-wide" @change="loadShiftComparison">
             <el-option v-for="inst in instances" :key="inst.id" :label="inst.instance_code+' '+(inst.instance_name||'')" :value="inst.id" />
           </el-select>
-          <el-date-picker v-model="shiftFilter.dateRange" type="daterange" range-separator="→" start-placeholder="开始" end-placeholder="结束" value-format="YYYY-MM-DD" @change="loadShiftComparison" style="width:260px" />
+          <el-date-picker v-model="shiftFilter.dateRange" type="daterange" range-separator="→" start-placeholder="开始" end-placeholder="结束" value-format="YYYY-MM-DD" @change="loadShiftComparison" class="filter-wide" />
         </div>
 
         <el-table :data="shiftData" v-loading="shiftLoading" border stripe size="small" empty-text="请选择设备实例" max-height="350">
           <el-table-column prop="shift_name" label="班组" width="120" />
           <el-table-column prop="oee" label="OEE" width="80" align="right">
-            <template #default="{row}"><span style="font-weight:600" :style="{color:row.oee>=85?'var(--el-color-success)':row.oee>=60?'var(--el-color-warning)':'var(--el-color-danger)'}">{{ row.oee }}%</span></template>
+            <template #default="{row}"><span class="score-value" :class="shiftOeeToneClass(row.oee)">{{ row.oee }}%</span></template>
           </el-table-column>
           <el-table-column prop="availability" label="可用性" width="80" align="right" />
           <el-table-column prop="performance" label="性能" width="80" align="right" />
@@ -140,32 +172,35 @@
           <el-table-column prop="total_output" label="总产出" width="90" align="right" />
         </el-table>
 
-        <el-row :gutter="12" style="margin-top:16px" v-if="shiftData.length">
-          <el-col :span="12"><div ref="shiftGroupRef" style="height:320px"></div></el-col>
-          <el-col :span="12"><div ref="shiftStackRef" style="height:320px"></div></el-col>
+        <el-row :gutter="12" class="chart-row" v-if="shiftData.length">
+          <el-col :span="12"><div ref="shiftGroupRef" class="chart-box-sm"></div></el-col>
+          <el-col :span="12"><div ref="shiftStackRef" class="chart-box-sm"></div></el-col>
         </el-row>
       </el-tab-pane>
 
       <el-tab-pane label="OEE趋势" name="trend">
         <div class="tab-toolbar">
-          <el-select v-model="trendFilter.instance_id" placeholder="选择设备实例" filterable style="width:260px" @change="loadTrend">
+          <el-select v-model="trendFilter.instance_id" placeholder="选择设备实例" filterable class="filter-wide" @change="loadTrend">
             <el-option v-for="inst in instances" :key="inst.id" :label="inst.instance_code+' '+(inst.instance_name||'')" :value="inst.id" />
           </el-select>
-          <el-select v-model="trendFilter.days" style="width:100px" @change="loadTrend">
+          <el-select v-model="trendFilter.days" class="trend-days-select" @change="loadTrend">
             <el-option v-for="d in [30,60,90,180]" :key="d" :label="d+' 天'" :value="d" />
           </el-select>
         </div>
-        <div ref="trendRef" style="height:400px" v-loading="trendLoading"></div>
+        <div ref="trendRef" class="chart-box-lg" v-loading="trendLoading"></div>
       </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
+import { Refresh, Setting } from '@element-plus/icons-vue'
+import PageState from '../components/PageState.vue'
+import PageToolbar from '../components/PageToolbar.vue'
 
 const activeTab = ref('overview')
 
@@ -174,19 +209,43 @@ const loading = ref(false)
 const summary = ref<any>({})
 const workstations = ref<any[]>([])
 const oeeNote = ref<string>('')
+const loadError = ref('')
 
 const utilColor = (p: number) => p >= 90 ? 'var(--el-color-danger)' : p >= 70 ? 'var(--el-color-warning)' : p >= 30 ? 'var(--el-color-success)' : 'var(--el-color-info)'
+const utilToneClass = (p: number) => p >= 90 ? 'text-danger' : p >= 70 ? 'text-warning' : p >= 30 ? 'text-success' : 'text-info'
+const binaryToneClass = (bad: boolean) => bad ? 'text-danger' : 'text-success'
+const shiftOeeToneClass = (value: number) => value >= 85 ? 'text-success' : value >= 60 ? 'text-warning' : 'text-danger'
 const utilStatus = (level: string) => ({ overload: 'exception', busy: 'warning', normal: 'success', idle: '' }[level] || '')
 const levelTag = (level: string) => ({ overload: 'danger', busy: 'warning', normal: 'success', idle: 'info' }[level] || 'info')
 const levelLabel = (level: string) => ({ overload: '过载', busy: '繁忙', normal: '正常', idle: '闲置' }[level] || level)
 
+const themeColor = (name: string, fallbackVar = '--color-primary') => {
+  if (typeof window === 'undefined') return 'currentColor'
+  const styles = getComputedStyle(document.documentElement)
+  return styles.getPropertyValue(name).trim()
+    || styles.getPropertyValue(fallbackVar).trim()
+    || 'currentColor'
+}
+
+const chartTones = () => ({
+  blue: themeColor('--chart-blue'),
+  green: themeColor('--chart-green', '--color-success'),
+  amber: themeColor('--chart-amber', '--color-warning'),
+  red: themeColor('--chart-red', '--color-danger'),
+})
+
 const load = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const data = await Api.oee({ days: days.value })
     summary.value = data.summary || {}
     workstations.value = data.workstations || []
     oeeNote.value = data.note || ''
+  } catch (error: any) {
+    summary.value = {}
+    workstations.value = []
+    loadError.value = error?.message || 'OEE 接口暂时不可用，请稍后重试。'
   } finally { loading.value = false }
 }
 
@@ -319,6 +378,7 @@ const renderShiftCharts = async () => {
   if (shiftGroupRef.value && shiftData.value.length) {
     if (!shiftGroupChart) shiftGroupChart = echarts.init(shiftGroupRef.value)
     const names = shiftData.value.map((s: any) => s.shift_name)
+    const tones = chartTones()
     shiftGroupChart.setOption({
       title: { text: '班组 OEE 对比', left: 'center', textStyle: { fontSize: 14 } },
       tooltip: { trigger: 'axis' },
@@ -326,9 +386,9 @@ const renderShiftCharts = async () => {
       xAxis: { type: 'category', data: names },
       yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
       series: [
-        { name: '可用性', type: 'bar', data: shiftData.value.map((s: any) => s.availability), itemStyle: { color: '#5470c6' } },
-        { name: '性能', type: 'bar', data: shiftData.value.map((s: any) => s.performance), itemStyle: { color: '#91cc75' } },
-        { name: '质量', type: 'bar', data: shiftData.value.map((s: any) => s.quality), itemStyle: { color: '#fac858' } }
+        { name: '可用性', type: 'bar', data: shiftData.value.map((s: any) => s.availability), itemStyle: { color: tones.blue } },
+        { name: '性能', type: 'bar', data: shiftData.value.map((s: any) => s.performance), itemStyle: { color: tones.green } },
+        { name: '质量', type: 'bar', data: shiftData.value.map((s: any) => s.quality), itemStyle: { color: tones.amber } }
       ]
     }, true)
   }
@@ -364,6 +424,7 @@ const loadTrend = async () => {
     await nextTick()
     if (trendRef.value) {
       if (!trendChart) trendChart = echarts.init(trendRef.value)
+      const tones = chartTones()
       const rows = data?.dates || data?.rows || []
       const dates = rows.map((r: any) => r.date || r.day || r)
       const aData = rows.map((r: any) => r.availability || 0)
@@ -377,10 +438,10 @@ const loadTrend = async () => {
         xAxis: { type: 'category', data: dates, axisLabel: { rotate: 30, fontSize: 10 } },
         yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
         series: [
-          { name: '可用性', type: 'line', data: aData, smooth: true, lineStyle: { color: '#5470c6' } },
-          { name: '性能', type: 'line', data: pData, smooth: true, lineStyle: { color: '#91cc75' } },
-          { name: '质量', type: 'line', data: qData, smooth: true, lineStyle: { color: '#fac858' } },
-          { name: 'OEE', type: 'line', data: oeeData, smooth: true, lineStyle: { color: '#ee6666', width: 3 }, symbol: 'circle', symbolSize: 6 }
+          { name: '可用性', type: 'line', data: aData, smooth: true, lineStyle: { color: tones.blue } },
+          { name: '性能', type: 'line', data: pData, smooth: true, lineStyle: { color: tones.green } },
+          { name: '质量', type: 'line', data: qData, smooth: true, lineStyle: { color: tones.amber } },
+          { name: 'OEE', type: 'line', data: oeeData, smooth: true, lineStyle: { color: tones.red, width: 3 }, symbol: 'circle', symbolSize: 6 }
         ]
       }, true)
     }
@@ -407,11 +468,44 @@ onMounted(() => {
   loadInstances()
   window.addEventListener('resize', handleResize)
 })
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  lossPieChart?.dispose()
+  lossBarChart?.dispose()
+  shiftGroupChart?.dispose()
+  shiftStackChart?.dispose()
+  trendChart?.dispose()
+})
 </script>
 
 <style scoped>
-.stat-card { background:var(--el-color-white); padding:16px; border-radius:6px; text-align:center; border:1px solid var(--el-border-color-lighter); }
+.stat-card { background:var(--el-bg-color-overlay); padding:16px; border-radius:var(--radius-lg); text-align:center; border:1px solid var(--el-border-color-lighter); box-shadow:var(--shadow-sm); }
 .stat-label { font-size:12px; color:var(--el-color-info); margin-bottom:6px; }
+.stat-caption { font-size:11px; }
 .stat-value { font-size:28px; font-weight:600; color:var(--el-text-color-primary); line-height:1.2; }
+.toolbar-form { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.toolbar-label { color:var(--el-text-color-secondary); font-size:13px; }
+.days-select { width:120px; }
+.metric-row { margin-bottom:12px; }
+.card-title { display:inline-flex; align-items:center; gap:6px; font-weight:600; }
+.item-title { font-size:18px; font-weight:600; color:var(--el-text-color-primary); }
+.hint-text { font-size:12px; color:var(--el-color-info); margin-top:4px; }
+.mt-xs { margin-top:8px; }
+.mt-md { margin-top:12px; }
+.util-bar { display:flex; align-items:center; gap:8px; }
+.util-progress { flex:1; }
+.util-value { font-weight:600; min-width:40px; text-align:right; }
+.filter-wide { width:260px; }
+.trend-days-select { width:100px; }
+.form-full { width:100%; }
+.chart-row { margin-top:16px; }
+.chart-box-sm { height:320px; }
+.chart-box-lg { height:400px; }
+.score-value { font-weight:600; }
+.text-success { color:var(--el-color-success); }
+.text-warning { color:var(--el-color-warning); }
+.text-danger { color:var(--el-color-danger); }
+.text-info { color:var(--el-color-info); }
 .tab-toolbar { display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
 </style>

@@ -35,6 +35,9 @@
       <el-tab-pane name="import"><template #label><span><el-icon><Download /></el-icon> 导入校验</span></template>
         <TabImport v-if="activeTab === 'import'" :tab="activeTab" />
       </el-tab-pane>
+      <el-tab-pane name="units"><template #label><span>单位换算</span></template>
+        <TabUnits v-if="activeTab === 'units'" :tab="activeTab" />
+      </el-tab-pane>
     </el-tabs>
 
     <!-- Dialogs (动态 import) -->
@@ -60,6 +63,7 @@ const TabInv      = defineAsyncComponent(() => import('./materialCenter/TabInv.v
 const TabMov      = defineAsyncComponent(() => import('./materialCenter/TabMov.vue'))
 const TabOps      = defineAsyncComponent(() => import('./materialCenter/TabOps.vue'))
 const TabImport   = defineAsyncComponent(() => import('./materialCenter/TabImport.vue'))
+const TabUnits    = defineAsyncComponent(() => import('./materialCenter/TabUnits.vue'))
 const DlgReceive      = defineAsyncComponent(() => import('./materialCenter/DlgReceive.vue'))
 const DlgAllocRelease = defineAsyncComponent(() => import('./materialCenter/DlgAllocRelease.vue'))
 const DlgSplitMerge   = defineAsyncComponent(() => import('./materialCenter/DlgSplitMerge.vue'))

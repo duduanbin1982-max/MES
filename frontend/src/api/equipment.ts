@@ -3,6 +3,7 @@ import { api } from './client'
 export function createEquipmentApi() {
   return {
     dashboard: () => api.get('/dashboard'),
+    riskSummary: () => api.get('/dashboard/risk-summary'),
     dashboardAlerts: () => api.get('/dashboard/alerts'),
     delays: (params?: any) => api.get('/dashboard/delays', { params }),
     delaysSummary: () => api.get('/dashboard/delays/summary'),
@@ -16,6 +17,11 @@ export function createEquipmentApi() {
     instanceOverview: (id: number) => api.get(`/equipment_instances/${id}/overview`),
     instanceCodePreview: (params?: any) => api.get('/equipment_instances/code-preview', { params }),
     instanceLifecycleOptions: () => api.get('/equipment_instances/lifecycle-options'),
+    equipmentInstanceTemplates: (params?: any) => api.get('/equipment_instance_templates', { params }),
+    equipmentInstanceTemplateScopeOptions: () => api.get('/equipment_instance_templates/scope-options'),
+    createEquipmentInstanceTemplate: (data: any) => api.post('/equipment_instance_templates', data),
+    updateEquipmentInstanceTemplate: (id: number, data: any) => api.put(`/equipment_instance_templates/${id}`, data),
+    updateEquipmentInstanceTemplateStatus: (id: number, data: any) => api.post(`/equipment_instance_templates/${id}/status`, data),
     updateInstanceLifecycle: (id: number, data: any) => api.post(`/equipment_instances/${id}/lifecycle`, data),
     freezeInstance: (id: number, data?: any) => api.post(`/equipment_instances/${id}/freeze`, data || {}),
     archiveInstance: (id: number, data?: any) => api.post(`/equipment_instances/${id}/archive`, data || {}),

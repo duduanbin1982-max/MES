@@ -1,6 +1,6 @@
 "use strict";
 
-const { buildTree, tierSummary } = require("../core");
+const { buildTree, tierSummary, structureSummary } = require("../core");
 
 function selectBomRows(db, instanceId) {
   return db.prepare(`
@@ -8,7 +8,7 @@ function selectBomRows(db, instanceId) {
     FROM instance_bom b
     LEFT JOIN materials m ON m.id = b.material_id
     WHERE b.equipment_instance_id = ?
-    ORDER BY b.tier, b.parent_id, b.id
+    ORDER BY COALESCE(b.level_code, ''), b.tier, COALESCE(b.sort_order, 0), b.id
   `).all(instanceId);
 }
 
@@ -41,16 +41,18 @@ function buildBomListResponse(db, instanceId, query = {}) {
   const { view = "tree" } = query;
   const allRows = selectBomRows(db, instanceId);
   const summary = tierSummary(allRows);
+  const structure = structureSummary(allRows);
 
   if (view === "tree") {
     const rows = query.part_id ? filterBomRows(allRows, { part_id: query.part_id }) : allRows;
-    return { view: "tree", tier_summary: summary, tree: buildTree(rows), total: rows.length };
+    return { view: "tree", tier_summary: summary, structure_summary: structure, tree: buildTree(rows), total: rows.length };
   }
 
   const flat = filterBomRows(allRows, query);
   return {
     view: "flat",
     tier_summary: summary,
+    structure_summary: structure,
     items: flat,
     total: flat.length,
     tier: query.tier !== undefined ? Number(query.tier) : null,
@@ -61,9 +63,11 @@ function buildBomLevelsResponse(db, instanceId) {
   const rows = selectBomRows(db, instanceId);
   const levels = { 0: [], 1: [], 2: [], 3: [] };
   rows.forEach((row) => {
-    if (levels[row.tier]) levels[row.tier].push(row);
+    const tier = Number(row.tier || 0);
+    if (!levels[tier]) levels[tier] = [];
+    levels[tier].push(row);
   });
-  return { levels, summary: tierSummary(rows) };
+  return { levels, summary: tierSummary(rows), structure_summary: structureSummary(rows) };
 }
 
 module.exports = {

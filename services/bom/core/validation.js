@@ -5,10 +5,11 @@ const {
   SELF_MADE_CATEGORIES,
   PURCHASED_CATEGORIES,
   COMPONENT_CATEGORIES,
+  NODE_TYPES,
   VERSION_RE,
 } = require("./constants");
 const { normalizeInt, normalizeFloat, normalizeBool, cleanText } = require("./utils");
-const { tierSummary } = require("./tree");
+const { tierSummary, structureSummary } = require("./tree");
 
 function validateDateRange(node, errors) {
   if (!node.effective_from || !node.effective_to) return;
@@ -29,13 +30,15 @@ function validateNode(node, ctx = {}) {
   const partNumber = cleanText(node.part_number);
   const materialId = normalizeInt(node.material_id, null);
   const parentId = normalizeInt(node.parent_id, null);
+  const nodeType = cleanText(node.node_type);
   const version = cleanText(node.version);
   const scrapFactor = normalizeFloat(node.scrap_factor, 1);
   const isAlternative = normalizeBool(node.is_alternative);
   const alternativeGroup = cleanText(node.alternative_group);
   const enforceStructure = Boolean(ctx.enforceStructure || ctx.parentById || ctx.materialIds);
 
-  if (!Number.isInteger(tier) || tier < 0 || tier > 3) errors.push("tier 必须是 0/1/2/3");
+  if (!Number.isInteger(tier) || tier < 0) errors.push("tier 必须是 >= 0 的整数");
+  if (nodeType && !NODE_TYPES.has(nodeType)) errors.push("node_type 必须是: " + [...NODE_TYPES].join("/"));
   if (!(quantity > 0)) errors.push("quantity 必须 > 0");
   if (!unit) errors.push("unit 必填");
   else if (!BOM_FIELDS.unit.enum.includes(unit)) errors.push("unit 必须是: " + BOM_FIELDS.unit.enum.join("/"));
@@ -51,12 +54,12 @@ function validateNode(node, ctx = {}) {
     if (category && category !== "成品") warnings.push("0级总装节点分类建议为 成品");
     if (quantity !== null && quantity !== 1) warnings.push("0级总装节点数量通常应为 1");
   } else {
-    if (enforceStructure && !parentId && !ctx.allowParentless) errors.push("1-3级节点必须有父节点");
+    if (enforceStructure && !parentId && !ctx.allowParentless) errors.push("非根节点必须有父节点");
     if (tier === 1 && category && !COMPONENT_CATEGORIES.has(category) && !normalizeBool(node.is_phantom)) {
       warnings.push("1级部件分类建议使用 自制部件/外购成品");
     }
     if (enforceStructure && tier >= 2 && !materialId && !partNumber && !normalizeBool(node.is_phantom)) {
-      errors.push("2/3级节点必须填写 material_id 或 part_number");
+      errors.push("零件/基础件节点必须填写 material_id 或 part_number");
     }
   }
 
@@ -82,7 +85,7 @@ function validateNode(node, ctx = {}) {
     if (!parent) errors.push(`父节点不存在: ${parentId}`);
     else {
       const parentTier = normalizeInt(parent.tier, -1);
-      if (tier !== parentTier + 1 && !(tier === 3 && parentTier === 2)) {
+      if (tier !== parentTier + 1) {
         errors.push(`层级关系错误: 当前 tier=${tier}, 父节点 tier=${parentTier}`);
       }
     }
@@ -206,6 +209,7 @@ function validateTree(db, instanceId, rowsArg = null) {
     warnings,
     total: rows.length,
     tier_summary: structure.summary,
+    structure_summary: structureSummary(rows),
     required_tiers: structure.required_tiers,
   };
 }

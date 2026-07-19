@@ -8,45 +8,53 @@
       </div>
     </div>
 
-    <el-row :gutter="12" style="margin-bottom: 12px" v-loading="loading">
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">总设置</div><div class="stat-value">{{ stats.total }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">已设置</div><div class="stat-value" style="color: var(--el-color-success)">{{ stats.set }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">未设置</div><div class="stat-value" style="color: var(--el-color-warning)">{{ stats.unset }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">敏感项</div><div class="stat-value" style="color: var(--el-color-info)">{{ stats.secret }}</div></div></el-col>
-    </el-row>
+    <el-tabs v-model="activeTab" class="settings-tabs">
+      <el-tab-pane label="参数配置" name="settings">
+        <el-row :gutter="12" style="margin-bottom: 12px" v-loading="loading">
+          <el-col :xs="24" :sm="12" :lg="6"><div class="stat-card"><div class="stat-label">总设置</div><div class="stat-value">{{ stats.total }}</div></div></el-col>
+          <el-col :xs="24" :sm="12" :lg="6"><div class="stat-card"><div class="stat-label">已设置</div><div class="stat-value" style="color: var(--el-color-success)">{{ stats.set }}</div></div></el-col>
+          <el-col :xs="24" :sm="12" :lg="6"><div class="stat-card"><div class="stat-label">未设置</div><div class="stat-value" style="color: var(--el-color-warning)">{{ stats.unset }}</div></div></el-col>
+          <el-col :xs="24" :sm="12" :lg="6"><div class="stat-card"><div class="stat-label">敏感项</div><div class="stat-value" style="color: var(--el-color-info)">{{ stats.secret }}</div></div></el-col>
+        </el-row>
 
-    <el-card>
-      <template #header>
-        <div style="display: flex; align-items: center; gap: 12px">
-          <el-select v-model="category" placeholder="全部分类" clearable style="width: 160px" @change="load">
-            <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
-          </el-select>
-          <span style="flex: 1; color: var(--el-color-info); font-size: 12px">修改后即时生效（5s 缓存）</span>
-        </div>
-      </template>
-      <el-table :data="filtered" stripe size="small" empty-text="加载中">
-        <el-table-column prop="key" label="Key" width="220" />
-        <el-table-column prop="category" label="分类" width="120">
-          <template #default="{ row }">
-            <el-tag size="small" :type="categoryColor(row.category)">{{ row.category }}</el-tag>
+        <el-card>
+          <template #header>
+            <div class="settings-filter">
+              <el-select v-model="category" placeholder="全部分类" clearable style="width: 160px" @change="load">
+                <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
+              </el-select>
+              <span>修改后即时生效（5s 缓存）</span>
+            </div>
           </template>
-        </el-table-column>
-        <el-table-column prop="value_type" label="类型" width="80" />
-        <el-table-column label="值" min-width="200">
-          <template #default="{ row }">
-            <span v-if="row.is_secret" style="color: var(--el-color-info); font-style: italic">**** (敏感) — {{ row.is_set ? '已设置' : '未设置' }}</span>
-            <span v-else style="font-family: monospace">{{ row.value === null ? '(空)' : row.value }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="description" label="说明" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="updated_at" label="更新时间" width="160" />
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" type="primary" @click="edit(row)">编辑</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+          <el-table :data="filtered" stripe size="small" empty-text="加载中">
+            <el-table-column prop="key" label="Key" width="220" />
+            <el-table-column prop="category" label="分类" width="120">
+              <template #default="{ row }">
+                <el-tag size="small" :type="categoryColor(row.category)">{{ row.category }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="value_type" label="类型" width="80" />
+            <el-table-column label="值" min-width="200">
+              <template #default="{ row }">
+                <span v-if="row.is_secret" class="secret-value">**** (敏感) — {{ row.is_set ? '已设置' : '未设置' }}</span>
+                <span v-else class="mono">{{ row.value === null ? '(空)' : row.value }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="description" label="说明" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="updated_at" label="更新时间" width="160" />
+            <el-table-column label="操作" width="120" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" type="primary" @click="edit(row)">编辑</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="运维诊断" name="diagnostics">
+        <SystemDiagnostics v-if="activeTab === 'diagnostics'" />
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 编辑对话框 -->
     <el-dialog v-model="showEdit" :title="editing.key" width="500px">
@@ -80,10 +88,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import api from '../api'
 import { ElMessage } from 'element-plus'
+import SystemDiagnostics from './settings/SystemDiagnostics.vue'
 
+const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
 const saving = ref(false)
 const sending = ref(false)
@@ -92,7 +104,9 @@ const category = ref<string>('')
 const showEdit = ref(false)
 const showTestFeishu = ref(false)
 const editing = ref<any>({ key: '', value: '', value_type: 'string', description: '', is_secret: false })
-const testFeishu = ref({ title: '<el-icon><Bell /></el-icon> MES 测试消息', content: '这是一条来自 Settings.vue 的测试消息' })
+const testFeishu = ref({ title: 'MES 测试消息', content: '这是一条来自 Settings.vue 的测试消息' })
+const tabNames = new Set(['settings', 'diagnostics'])
+const activeTab = ref(tabNames.has(String(route.query.tab || '')) ? String(route.query.tab) : 'settings')
 
 const categories = computed(() => [...new Set(items.value.map((i: any) => i.category).filter(Boolean))])
 const filtered = computed(() => category.value ? items.value.filter((i: any) => i.category === category.value) : items.value)
@@ -103,6 +117,15 @@ const stats = computed(() => {
 })
 
 const categoryColor = (c: string) => ({ notification: 'success', system: 'info', security: 'danger' }[c] || '')
+
+watch(() => route.query.tab, (value) => {
+  const next = tabNames.has(String(value || '')) ? String(value) : 'settings'
+  if (next !== activeTab.value) activeTab.value = next
+})
+
+watch(activeTab, (value) => {
+  if (route.query.tab !== value) router.replace({ query: { ...route.query, tab: value } })
+})
 
 const load = async () => {
   loading.value = true
@@ -141,7 +164,47 @@ onMounted(load)
 </script>
 
 <style scoped>
-.stat-card { background: var(--el-color-white); padding: 16px; border-radius: 6px; text-align: center; border: 1px solid var(--el-border-color-lighter); }
-.stat-label { font-size: 12px; color: var(--el-color-info); margin-bottom: 6px; }
-.stat-value { font-size: 24px; font-weight: 600; color: var(--el-text-color-primary); }
+.settings-tabs {
+  min-height: 360px;
+}
+
+.settings-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-filter span {
+  flex: 1;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.stat-card {
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 14px;
+  text-align: center;
+  background: linear-gradient(180deg, var(--color-surface-raised), var(--el-bg-color-overlay));
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-label {
+  margin-bottom: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.stat-value {
+  color: var(--el-text-color-primary);
+  font-family: "Fira Code", "Cascadia Code", monospace;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.secret-value {
+  color: var(--el-color-info);
+  font-style: italic;
+}
 </style>

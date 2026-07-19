@@ -18,7 +18,7 @@
     <div v-loading="loading">
       <el-alert
         v-if="overview?.freeze?.frozen_at"
-        :title="`该实例已冻结基线：${overview.freeze.frozen_at}。BOM、图纸、工艺、成本基线禁止继续修改。`"
+        :title="`该项目装备已冻结基线：${overview.freeze.frozen_at}。BOM、图纸、工艺、成本基线禁止继续修改。`"
         type="warning"
         show-icon
         style="margin-bottom: 12px"
@@ -42,13 +42,13 @@
       </el-card>
 
       <el-tabs v-model="tab">
-        <el-tab-pane label="实例总览" name="overview">
+        <el-tab-pane label="项目装备总览" name="overview">
           <el-row :gutter="16">
             <el-col :span="14">
               <el-card>
                 <template #header>合同与编码</template>
                 <el-descriptions :column="2" border>
-                  <el-descriptions-item label="实例编码">{{ inst?.instance_code }}</el-descriptions-item>
+                  <el-descriptions-item label="项目装备编码">{{ inst?.instance_code }}</el-descriptions-item>
                   <el-descriptions-item label="项目号">{{ inst?.project_no || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="合同号">{{ inst?.contract_no || '-' }}</el-descriptions-item>
                   <el-descriptions-item label="出厂序列号">{{ inst?.serial_no || '-' }}</el-descriptions-item>
@@ -171,7 +171,7 @@ import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
-import { EQUIPMENT_LIFECYCLE_META, statusLabel as catalogStatusLabel, statusTag as catalogStatusTag } from '../domain/statusCatalog'
+import { EQUIPMENT_LIFECYCLE_META, EQUIPMENT_LIFECYCLE_OPTIONS, statusLabel as catalogStatusLabel, statusTag as catalogStatusTag } from '../domain/statusCatalog'
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
@@ -189,17 +189,7 @@ const treeRef = ref()
 const nextStage = ref('')
 const transitionReason = ref('')
 
-const lifecycleOptions = ref<any[]>([
-  { value: 'design', label: '设计中' },
-  { value: 'procurement', label: '采购中' },
-  { value: 'manufacturing', label: '制造中' },
-  { value: 'assembly', label: '总装中' },
-  { value: 'commissioning', label: '调试中' },
-  { value: 'acceptance', label: '验收中' },
-  { value: 'delivered', label: '交付' },
-  { value: 'operation', label: '运维' },
-  { value: 'archived', label: '归档' },
-])
+const lifecycleOptions = ref<any[]>([...EQUIPMENT_LIFECYCLE_OPTIONS])
 
 const statusLabel = (s: string) => lifecycleOptions.value.find(x => x.value === s)?.label || catalogStatusLabel(EQUIPMENT_LIFECYCLE_META, s)
 const statusTagType = (s: string) => catalogStatusTag(EQUIPMENT_LIFECYCLE_META, s)
@@ -290,7 +280,7 @@ const freezeInstance = async () => {
 
 const archiveInstance = async () => {
   try {
-    await ElMessageBox.confirm('归档会把实例转为历史状态，并自动冻结基线。确认归档？', '归档实例', { type: 'warning' })
+    await ElMessageBox.confirm('归档会把项目装备转为历史状态，并自动冻结基线。确认归档？', '归档项目装备', { type: 'warning' })
     await Api.archiveInstance(id.value, { reason: '交付归档' })
     ElMessage.success('已归档')
     await load()

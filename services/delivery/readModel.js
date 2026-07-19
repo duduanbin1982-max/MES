@@ -2,10 +2,11 @@
 const { createPurchaseFollowupReader } = require("./readModel/purchaseFollowups");
 const { createExceptionReadModel } = require("./readModel/exceptions");
 const { createProjectWorkflowReadModel } = require("./readModel/projectWorkflow");
+const { createProjectLineageReadModel } = require("./readModel/projectLineage");
 // services/delivery/readModel.js
 
 function createReadModel(ctx) {
-  const { tableExists, has, safeAll, safeGet, enrichEscalation } = ctx;
+  const { tableExists, has, columns, safeAll, safeGet, enrichEscalation } = ctx;
   const purchaseFollowupReader = createPurchaseFollowupReader(ctx);
   const { purchaseFollowupPath, purchaseFollowupsForInstance } = purchaseFollowupReader;
 
@@ -31,6 +32,16 @@ function createReadModel(ctx) {
     return { critical: 4, high: 3, warning: 2, info: 1 }[severity] || 0;
   }
 
+  function appendProjectQuery(path, instanceId, extra = {}) {
+    const [base, query = ""] = String(path || "/delivery").split("?");
+    const search = new URLSearchParams(query);
+    for (const [key, value] of Object.entries({ instance_id: instanceId, from: "delivery", ...extra })) {
+      if (value !== null && value !== undefined && String(value).trim() !== "") search.set(key, String(value));
+    }
+    const queryString = search.toString();
+    return queryString ? `${base}?${queryString}` : base;
+  }
+
 
 
 
@@ -51,7 +62,10 @@ function createReadModel(ctx) {
              ${field("customer_name", "''")},
              ${field("planned_end", "NULL")},
              ${field("contract_amount", "0")},
-             ${field("contract_amount_unit", "''")}
+             ${field("contract_amount_unit", "''")},
+             ${field("contract_no", "''")},
+             ${field("project_no", "''")},
+             ${field("serial_no", "''")}
       FROM equipment_instances
       ORDER BY id
     `);
@@ -180,11 +194,11 @@ function createReadModel(ctx) {
     const score = active.reduce((sum, e) => sum + severityRank(e.severity), 0) + costRiskScore + (overdueFollowups.length ? 2 : purchaseFollowups.length ? 1 : 0);
     const riskLevel = score >= 12 ? "critical" : score >= 6 ? "high" : score >= 2 ? "warning" : "normal";
     const actions = [];
-    if (shortageRows.length) actions.push({ type: "kit_shortage", label: "处理缺料", path: "/kit-closure", count: shortageRows.length });
+    if (shortageRows.length) actions.push({ type: "kit_shortage", label: "处理缺料", path: appendProjectQuery("/kit-closure", id, { segment: "kit" }), count: shortageRows.length });
     if (purchaseFollowups.length) actions.push({ type: "purchase_followup", label: "采购跟催", path: purchaseFollowupPath(id), count: purchaseFollowups.length });
-    if (ncrRows.length) actions.push({ type: "quality_ncr", label: "关闭NCR", path: "/quality", count: ncrRows.length });
-    if (cost.risk_level !== "normal") actions.push({ type: "cost_variance", label: "复核成本", path: "/cost", count: 1 });
-    if (active.some((e) => e.escalation_due)) actions.push({ type: "escalation", label: "升级异常", path: "/exceptions", count: active.filter((e) => e.escalation_due).length });
+    if (ncrRows.length) actions.push({ type: "quality_ncr", label: "关闭NCR", path: appendProjectQuery("/quality", id, { segment: "quality" }), count: ncrRows.length });
+    if (cost.risk_level !== "normal") actions.push({ type: "cost_variance", label: "复核成本", path: appendProjectQuery("/cost", id, { segment: "cost" }), count: 1 });
+    if (active.some((e) => e.escalation_due)) actions.push({ type: "escalation", label: "升级异常", path: appendProjectQuery("/exceptions", id, { segment: "exceptions" }), count: active.filter((e) => e.escalation_due).length });
     return {
       score,
       risk_level: riskLevel,
@@ -280,12 +294,12 @@ function createReadModel(ctx) {
     };
   }
 
-
-
-
-
-
-
+  const projectLineageReadModel = createProjectLineageReadModel(ctx, {
+    pct,
+    buildProject,
+    costSummaryForInstance,
+  });
+  const { buildProjectLineage } = projectLineageReadModel;
 
   return {
     collectExceptions,
@@ -293,6 +307,7 @@ function createReadModel(ctx) {
     getInstances,
     buildProject,
     buildProjectRiskDrilldown,
+    buildProjectLineage,
   };
 }
 

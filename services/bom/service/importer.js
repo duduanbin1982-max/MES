@@ -3,18 +3,19 @@
 const { ApiError } = require("../../../app/errors");
 const { validateNode, computeHealth, parseCsv, normalizeInt, cleanText } = require("../core");
 const { getImportTemplate } = require("./importTemplate");
-const { buildValidationContext, resolveMaterialId, rowToSafeNode } = require("./mutations");
+const { buildValidationContext, resolveMaterialId, rowToSafeNode, recomputeStructureMetadata } = require("./mutations");
+const { ensureBomStructureColumns } = require("./schema");
 
 function createInsertStatement(db) {
   return db.prepare(`
     INSERT INTO instance_bom (
-      equipment_instance_id, parent_id, tier, version, eco_id, effective_from, effective_to,
+      equipment_instance_id, parent_id, tier, node_type, level_code, sort_order, view_flags, version, eco_id, effective_from, effective_to,
       material_id, part_number, quantity, unit, scrap_factor, category, material_grade,
       surface_treatment, brand_recommend, brand_grade, is_alternative, alternative_group,
       alternative_priority, operation_id, is_phantom, is_key_component, is_wear_part,
       storage_location, weight, unit_price, notes, created_by
     ) VALUES (
-      @equipment_instance_id, @parent_id, @tier, @version, @eco_id, @effective_from, @effective_to,
+      @equipment_instance_id, @parent_id, @tier, @node_type, @level_code, @sort_order, @view_flags, @version, @eco_id, @effective_from, @effective_to,
       @material_id, @part_number, @quantity, @unit, @scrap_factor, @category, @material_grade,
       @surface_treatment, @brand_recommend, @brand_grade, @is_alternative, @alternative_group,
       @alternative_priority, @operation_id, @is_phantom, @is_key_component, @is_wear_part,
@@ -24,6 +25,7 @@ function createInsertStatement(db) {
 }
 
 function importBomCsv(db, instanceId, csv, userId = null) {
+  ensureBomStructureColumns(db);
   if (!csv) throw ApiError.validation("csv 必填");
   const { headers, rows } = parseCsv(csv);
   const required = ["tier", "quantity", "unit", "category"];
@@ -65,6 +67,7 @@ function importBomCsv(db, instanceId, csv, userId = null) {
       errorList.push({ line: row.__line, ref: nodeRef, errors: [error.message] });
     }
   }
+  recomputeStructureMetadata(db, instanceId);
 
   return {
     inserted,

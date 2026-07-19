@@ -1,8 +1,8 @@
-'use strict';
-const { ApiError } = require('../app/errors');
-const { wrap } = require('../middleware/asyncHandler');
+"use strict";
 
-// ===== Migration =====
+const { ApiError } = require("../app/errors");
+const { wrap } = require("../middleware/asyncHandler");
+
 function runMigration(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schedule_assignments (
@@ -23,21 +23,46 @@ function runMigration(db) {
       FOREIGN KEY (workstation_id) REFERENCES workstations(id)
     )
   `);
+
+  db.exec(`
+    DELETE FROM schedule_assignments
+    WHERE status IN ('assigned', 'in_progress', 'pending')
+      AND id NOT IN (
+        SELECT MAX(id)
+        FROM schedule_assignments
+        WHERE status IN ('assigned', 'in_progress', 'pending')
+        GROUP BY process_node_id
+      );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_assignments_active_node
+      ON schedule_assignments(process_node_id)
+      WHERE status IN ('assigned', 'in_progress', 'pending');
+    CREATE INDEX IF NOT EXISTS idx_schedule_assignments_user_status
+      ON schedule_assignments(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_schedule_assignments_workstation_dates
+      ON schedule_assignments(workstation_id, planned_start, planned_end);
+  `);
 }
 
-// ===== Register =====
+function toInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeDate(value) {
+  return value ? String(value).slice(0, 19) : null;
+}
+
 function register(app, db) {
   runMigration(db);
 
-  const all = (sql, ...p) => db.prepare(sql).all(...p);
-  const get = (sql, ...p) => db.prepare(sql).get(...p);
-  const run = (sql, ...p) => db.prepare(sql).run(...p);
+  const all = (sql, ...params) => db.prepare(sql).all(...params);
+  const get = (sql, ...params) => db.prepare(sql).get(...params);
+  const run = (sql, ...params) => db.prepare(sql).run(...params);
 
-  // --- 1. GET /api/schedule/weekly?date=2026-06-26 ---
-  app.get('/api/schedule/weekly', wrap((req, res) => {
-    const { date } = req.query;
-    const ref = date ? new Date(date + 'T00:00:00') : new Date();
-    if (isNaN(ref.getTime())) throw ApiError.validation('Invalid date format, use YYYY-MM-DD');
+  app.get("/api/schedule/weekly", wrap((req, res) => {
+    const refValue = req.query.date || req.query.week;
+    const ref = refValue ? new Date(String(refValue).slice(0, 10) + "T00:00:00") : new Date();
+    if (Number.isNaN(ref.getTime())) throw ApiError.validation("Invalid date format, use YYYY-MM-DD");
 
     const day = ref.getDay();
     const monday = new Date(ref);
@@ -49,146 +74,186 @@ function register(app, db) {
     const weekEnd = sunday.toISOString().slice(0, 10);
 
     const nodes = all(`
-      SELECT pn.id, pn.operation_name, pn.status, pn.planned_start, pn.planned_end,
+      SELECT pn.id, pn.sequence, pn.operation_name, pn.status, pn.planned_start, pn.planned_end,
              pn.estimated_hours, pn.phase_code, pn.equipment_instance_id,
+             pn.assigned_to AS assigned_id,
+             pn.required_workstation_id AS workstation_id,
              u.full_name AS assigned_name,
              w.name AS workstation_name
       FROM process_nodes pn
       LEFT JOIN users u ON pn.assigned_to = u.id
       LEFT JOIN workstations w ON pn.required_workstation_id = w.id
       WHERE (pn.planned_start <= ? AND pn.planned_end >= ?)
-         OR pn.status IN ('pending', 'in_progress')
-      ORDER BY pn.equipment_instance_id, pn.planned_start
+         OR pn.status IN ('pending', 'in_progress', 'blocked', 'delayed')
+      ORDER BY pn.equipment_instance_id, COALESCE(pn.planned_start, '9999-12-31'), pn.sequence, pn.id
     `, weekEnd, weekStart);
 
     const equipMap = {};
-    for (const n of nodes) {
-      const eid = n.equipment_instance_id;
-      if (!equipMap[eid]) equipMap[eid] = { nodes: [] };
-      equipMap[eid].nodes.push(n);
+    for (const node of nodes) {
+      const equipmentId = node.equipment_instance_id;
+      if (!equipMap[equipmentId]) equipMap[equipmentId] = { nodes: [] };
+      equipMap[equipmentId].nodes.push(node);
     }
 
     const equipment = [];
-    for (const [eid, group] of Object.entries(equipMap)) {
-      const inst = get('SELECT id, instance_code, instance_name FROM equipment_instances WHERE id = ?', eid);
+    for (const [equipmentId, group] of Object.entries(equipMap)) {
+      const instance = get("SELECT id, instance_code, instance_name FROM equipment_instances WHERE id = ?", equipmentId);
       const total = group.nodes.length;
-      const completed = group.nodes.filter(n => n.status === 'completed').length;
-      equipment.push({
-        instance_id: inst ? inst.id : parseInt(eid),
-        instance_code: inst ? inst.instance_code : 'N/A',
-        instance_name: inst ? inst.instance_name : 'N/A',
+      const completed = group.nodes.filter((node) => node.status === "completed").length;
+      const item = {
+        id: instance ? instance.id : Number.parseInt(equipmentId, 10),
+        instance_id: instance ? instance.id : Number.parseInt(equipmentId, 10),
+        instance_code: instance ? instance.instance_code : "N/A",
+        instance_name: instance ? instance.instance_name : "N/A",
         progress_pct: total > 0 ? Math.round((completed / total) * 100) : 0,
         nodes: group.nodes,
-      });
+        process_nodes: group.nodes,
+      };
+      equipment.push(item);
     }
 
     const summary = {
+      total: nodes.length,
       total_nodes: nodes.length,
-      completed: nodes.filter(n => n.status === 'completed').length,
-      in_progress: nodes.filter(n => n.status === 'in_progress').length,
-      pending: nodes.filter(n => n.status === 'pending').length,
-      delayed: nodes.filter(n => n.status === 'delayed' || n.status === 'blocked').length,
+      completed: nodes.filter((node) => node.status === "completed").length,
+      in_progress: nodes.filter((node) => node.status === "in_progress").length,
+      pending: nodes.filter((node) => node.status === "pending" || !node.status).length,
+      delayed: nodes.filter((node) => node.status === "delayed" || node.status === "blocked").length,
     };
 
-    res.json({ week_start: weekStart, week_end: weekEnd, equipment, summary });
+    res.json({ week_start: weekStart, week_end: weekEnd, equipment, equipment_instances: equipment, summary });
   }));
 
-  // --- 2. PUT /api/schedule/process-nodes/:id/assign ---
-  app.put('/api/schedule/process-nodes/:id/assign', wrap((req, res) => {
-    const nodeId = parseInt(req.params.id, 10);
-    const { user_id, planned_start, planned_end, workstation_id } = req.body || {};
+  app.put("/api/schedule/process-nodes/:id/assign", wrap((req, res) => {
+    const nodeId = toInt(req.params.id);
+    const body = req.body || {};
+    const userId = toInt(body.user_id || body.assigned_id);
+    const workstationId = body.workstation_id ? toInt(body.workstation_id) : null;
 
-    if (!user_id) throw ApiError.validation('user_id is required');
+    if (!nodeId) throw ApiError.validation("process node id is required");
+    if (!userId) throw ApiError.validation("user_id is required");
 
-    const node = get('SELECT id, status, estimated_hours FROM process_nodes WHERE id = ?', nodeId);
-    if (!node) throw ApiError.notFound('Process node not found');
+    const node = get("SELECT id, status, estimated_hours FROM process_nodes WHERE id = ?", nodeId);
+    if (!node) throw ApiError.notFound("Process node not found");
 
-    run(`UPDATE process_nodes
-         SET assigned_to = ?, planned_start = ?, planned_end = ?,
-             status = 'in_progress', updated_at = datetime('now')
-         WHERE id = ?`,
-      user_id, planned_start || null, planned_end || null, nodeId);
+    const user = get("SELECT id FROM users WHERE id = ? AND is_active = 1", userId);
+    if (!user) throw ApiError.notFound("Worker not found or inactive");
 
-    const result = run(`INSERT INTO schedule_assignments
-      (process_node_id, user_id, workstation_id, planned_start, planned_end, estimated_hours, status)
-      VALUES (?, ?, ?, ?, ?, ?, 'assigned')`,
-      nodeId, user_id, workstation_id || null,
-      planned_start || null, planned_end || null,
-      node.estimated_hours || 0);
-
-    res.json({
-      ok: true,
-      process_node_id: nodeId,
-      user_id,
-      assignment_id: result.lastInsertRowid,
-    });
-  }));
-
-  // --- 3. PUT /api/schedule/process-nodes/:id/status ---
-  app.put('/api/schedule/process-nodes/:id/status', wrap((req, res) => {
-    const nodeId = parseInt(req.params.id, 10);
-    const { status } = req.body || {};
-    const validStatuses = ['pending', 'in_progress', 'completed', 'blocked', 'delayed'];
-
-    if (!status || !validStatuses.includes(status)) {
-      throw ApiError.validation(`status must be one of: ${validStatuses.join(', ')}`);
+    if (workstationId) {
+      const workstation = get("SELECT id FROM workstations WHERE id = ? AND is_active = 1", workstationId);
+      if (!workstation) throw ApiError.notFound("Workstation not found or inactive");
     }
 
-    const node = get('SELECT id FROM process_nodes WHERE id = ?', nodeId);
-    if (!node) throw ApiError.notFound('Process node not found');
+    const plannedStart = normalizeDate(body.planned_start);
+    const plannedEnd = normalizeDate(body.planned_end);
+    const nextStatus = node.status || "pending";
 
-    const updates = ['status = ?', "updated_at = datetime('now')"];
+    run(`UPDATE process_nodes
+         SET assigned_to = ?,
+             planned_start = COALESCE(?, planned_start),
+             planned_end = COALESCE(?, planned_end),
+             required_workstation_id = COALESCE(?, required_workstation_id),
+             status = ?,
+             updated_at = datetime('now')
+         WHERE id = ?`,
+      userId, plannedStart, plannedEnd, workstationId, nextStatus, nodeId);
+
+    const existing = get(`
+      SELECT id
+      FROM schedule_assignments
+      WHERE process_node_id = ? AND status IN ('assigned', 'in_progress', 'pending')
+      ORDER BY id DESC
+      LIMIT 1
+    `, nodeId);
+
+    let assignmentId;
+    if (existing) {
+      run(`UPDATE schedule_assignments
+           SET user_id = ?, workstation_id = ?, planned_start = ?, planned_end = ?,
+               estimated_hours = ?, status = 'assigned', updated_at = datetime('now')
+           WHERE id = ?`,
+        userId, workstationId, plannedStart, plannedEnd, node.estimated_hours || 0, existing.id);
+      assignmentId = existing.id;
+    } else {
+      const result = run(`INSERT INTO schedule_assignments
+        (process_node_id, user_id, workstation_id, planned_start, planned_end, estimated_hours, status)
+        VALUES (?, ?, ?, ?, ?, ?, 'assigned')`,
+        nodeId, userId, workstationId, plannedStart, plannedEnd, node.estimated_hours || 0);
+      assignmentId = result.lastInsertRowid;
+    }
+
+    res.json({ ok: true, process_node_id: nodeId, user_id: userId, assignment_id: assignmentId, status: nextStatus });
+  }));
+
+  app.put("/api/schedule/process-nodes/:id/status", wrap((req, res) => {
+    const nodeId = toInt(req.params.id);
+    const { status } = req.body || {};
+    const validStatuses = ["pending", "in_progress", "completed", "blocked", "delayed"];
+
+    if (!nodeId) throw ApiError.validation("process node id is required");
+    if (!status || !validStatuses.includes(status)) {
+      throw ApiError.validation(`status must be one of: ${validStatuses.join(", ")}`);
+    }
+
+    const node = get("SELECT id FROM process_nodes WHERE id = ?", nodeId);
+    if (!node) throw ApiError.notFound("Process node not found");
+
+    const updates = ["status = ?", "updated_at = datetime('now')"];
     const params = [status];
 
-    if (status === 'completed') {
-      updates.push("actual_end = datetime('now')");
+    if (status === "in_progress") {
+      updates.push("actual_start = COALESCE(actual_start, ?)");
+      params.push(normalizeDate(req.body.actual_start) || new Date().toISOString().slice(0, 19));
+    }
+
+    if (status === "completed") {
+      updates.push("actual_start = COALESCE(actual_start, ?)");
+      updates.push("actual_end = ?");
+      params.push(normalizeDate(req.body.actual_start) || new Date().toISOString().slice(0, 19));
+      params.push(normalizeDate(req.body.actual_end) || new Date().toISOString().slice(0, 19));
     }
 
     params.push(nodeId);
-    run(`UPDATE process_nodes SET ${updates.join(', ')} WHERE id = ?`, ...params);
+    run(`UPDATE process_nodes SET ${updates.join(", ")} WHERE id = ?`, ...params);
 
-    run(`UPDATE schedule_assignments SET status = ?, updated_at = datetime('now')
-         WHERE process_node_id = ? AND status = 'assigned'`,
+    run(`UPDATE schedule_assignments
+         SET status = ?, updated_at = datetime('now')
+         WHERE process_node_id = ? AND status IN ('assigned', 'in_progress', 'pending')`,
       status, nodeId);
 
     res.json({ ok: true, process_node_id: nodeId, status });
   }));
 
-  // --- 4. GET /api/schedule/capacity?workstation_id=X&date=YYYY-MM-DD ---
-  app.get('/api/schedule/capacity', wrap((req, res) => {
+  app.get("/api/schedule/capacity", wrap((req, res) => {
     const { workstation_id, date } = req.query;
-    if (!workstation_id) throw ApiError.validation('workstation_id is required');
-    if (!date) throw ApiError.validation('date is required (YYYY-MM-DD)');
+    if (!workstation_id) throw ApiError.validation("workstation_id is required");
+    if (!date) throw ApiError.validation("date is required (YYYY-MM-DD)");
 
-    const ws = get('SELECT id, name, capacity_per_day FROM workstations WHERE id = ? AND is_active = 1', workstation_id);
-    if (!ws) throw ApiError.notFound('Workstation not found or inactive');
+    const workstation = get("SELECT id, name, capacity_per_day FROM workstations WHERE id = ? AND is_active = 1", workstation_id);
+    if (!workstation) throw ApiError.notFound("Workstation not found or inactive");
 
-    const capacityHours = (ws.capacity_per_day || 1) * 8;
-
+    const capacityHours = (workstation.capacity_per_day || 1) * 8;
     const result = get(`
-      SELECT COALESCE(SUM(sa.estimated_hours), 0) AS assigned_hours
-      FROM schedule_assignments sa
-      WHERE sa.workstation_id = ?
-        AND sa.planned_start <= ? AND sa.planned_end >= ?
-        AND sa.status IN ('assigned', 'in_progress')
+      SELECT COALESCE(SUM(estimated_hours), 0) AS assigned_hours
+      FROM schedule_assignments
+      WHERE workstation_id = ?
+        AND planned_start <= ? AND planned_end >= ?
+        AND status IN ('assigned', 'in_progress')
     `, workstation_id, date, date);
 
     const assignedHours = result ? result.assigned_hours : 0;
-    const availableHours = Math.max(0, capacityHours - assignedHours);
-
     res.json({
-      workstation_name: ws.name,
+      workstation_name: workstation.name,
       capacity_hours: capacityHours,
       assigned_hours: assignedHours,
-      available_hours: availableHours,
-      can_accept: availableHours > 0,
+      available_hours: Math.max(0, capacityHours - assignedHours),
+      can_accept: capacityHours - assignedHours > 0,
     });
   }));
 
-  // --- 5. GET /api/schedule/daily?date=YYYY-MM-DD ---
-  app.get('/api/schedule/daily', wrap((req, res) => {
+  app.get("/api/schedule/daily", wrap((req, res) => {
     const { date } = req.query;
-    if (!date) throw ApiError.validation('date is required (YYYY-MM-DD)');
+    if (!date) throw ApiError.validation("date is required (YYYY-MM-DD)");
 
     const nodes = all(`
       SELECT pn.id, pn.operation_name, pn.status, pn.planned_start, pn.planned_end,
@@ -201,29 +266,28 @@ function register(app, db) {
       LEFT JOIN users u ON pn.assigned_to = u.id
       LEFT JOIN workstations w ON pn.required_workstation_id = w.id
       LEFT JOIN equipment_instances ei ON pn.equipment_instance_id = ei.id
-      WHERE pn.planned_start <= ? AND pn.planned_end >= ?
+      WHERE (pn.planned_start <= ? AND pn.planned_end >= ?)
          OR pn.status IN ('in_progress')
       ORDER BY pn.required_workstation_id, pn.planned_start
     `, date, date);
 
-    const wsMap = {};
-    for (const n of nodes) {
-      const key = n.required_workstation_id || 'unassigned';
-      if (!wsMap[key]) {
-        wsMap[key] = {
-          workstation_id: n.required_workstation_id || null,
-          workstation_name: n.workstation_name || 'Unassigned',
+    const workstationMap = {};
+    for (const node of nodes) {
+      const key = node.required_workstation_id || "unassigned";
+      if (!workstationMap[key]) {
+        workstationMap[key] = {
+          workstation_id: node.required_workstation_id || null,
+          workstation_name: node.workstation_name || "未分配",
           nodes: [],
         };
       }
-      wsMap[key].nodes.push(n);
+      workstationMap[key].nodes.push(node);
     }
 
-    res.json({ date, workstations: Object.values(wsMap) });
+    res.json({ date, workstations: Object.values(workstationMap) });
   }));
 
-  // --- 6. GET /api/schedule/my-tasks ---
-  app.get('/api/schedule/my-tasks', wrap((req, res) => {
+  app.get("/api/schedule/my-tasks", wrap((req, res) => {
     const userId = req.user && req.user.sub;
     if (!userId) throw ApiError.unauthorized();
 
@@ -256,20 +320,18 @@ function register(app, db) {
       ORDER BY pn.planned_start ASC
     `, userId, userId);
 
-    const merged = [...tasks, ...directNodes];
     const seen = new Set();
-    const unique = merged.filter(t => {
-      if (seen.has(t.id)) return false;
-      seen.add(t.id);
+    const unique = [...tasks, ...directNodes].filter((task) => {
+      if (seen.has(task.id)) return false;
+      seen.add(task.id);
       return true;
     });
-    unique.sort((a, b) => (a.priority || 1) - (b.priority || 1) ||
-      (a.planned_start || '').localeCompare(b.planned_start || ''));
+    unique.sort((a, b) => (a.priority || 1) - (b.priority || 1) || (a.planned_start || "").localeCompare(b.planned_start || ""));
 
     res.json({ tasks: unique });
   }));
 
-  console.log('[scheduleService] Dispatch scheduling registered');
+  console.log("[scheduleService] Dispatch scheduling registered");
 }
 
 module.exports = { register };

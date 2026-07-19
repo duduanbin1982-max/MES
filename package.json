@@ -8,11 +8,12 @@
     "migrate": "node migrate.js",
     "dev": "node server.js",
     "test": "bash scripts/run-all-tests.sh",
-    "test:unit": "node --test tests/processNodeSubsystem.test.js tests/processTreeCrossSubsystemDeps.test.js tests/processTreeMindmap.test.js tests/utils-partno.test.js tests/keyComponentPrices.test.js tests/costRollup.test.js tests/materialPrices.test.js tests/materialService.test.js tests/purchase.test.js tests/delayAlerts.test.js tests/processParams.test.js tests/oee.test.js tests/scheduler.test.js",
+    "test:unit": "node --test tests/processNodeSubsystem.test.js tests/processTreeCrossSubsystemDeps.test.js tests/processTreeMindmap.test.js tests/utils-partno.test.js tests/keyComponentPrices.test.js tests/costRollup.test.js tests/materialPrices.test.js tests/materialService.test.js tests/purchase.test.js tests/delayAlerts.test.js tests/processParams.test.js tests/oee.test.js tests/scheduler.test.js tests/dashboardRiskSummary.test.js",
     "test:integration": "node tests/processTreeCrossSubsystemDeps.integration.test.js",
     "test:all": "bash scripts/run-all-tests.sh",
     "predeploy": "bash scripts/pre-deploy-test.sh",
-    "check:routes": "node scripts/check-duplicate-routes.js"
+    "check:routes": "node scripts/check-duplicate-routes.js",
+    "check:modules": "node scripts/check-module-manifest.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

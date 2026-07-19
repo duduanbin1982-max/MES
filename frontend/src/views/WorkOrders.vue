@@ -175,6 +175,12 @@ const activeTab = ref(routeTab())
 const quickFilter = ref('all')
 
 const filters = reactive({ equipment_instance_id: undefined as any, status: '' })
+const routeInstanceId = () => Number(route.query.instance_id || route.query.equipment_instance_id || 0) || undefined
+const applyRouteInstanceFilter = () => {
+  const id = routeInstanceId()
+  if (id) filters.equipment_instance_id = id
+}
+applyRouteInstanceFilter()
 const instances = ref<any[]>([])
 const rows = ref<any[]>([])
 const loading = ref(false)
@@ -270,6 +276,12 @@ watch(() => route.query.tab, () => {
     activeTab.value = next
     onTabChange(next)
   }
+})
+
+watch(() => [route.query.instance_id, route.query.equipment_instance_id], async () => {
+  const before = filters.equipment_instance_id
+  applyRouteInstanceFilter()
+  if (filters.equipment_instance_id !== before) await load()
 })
 
 const openDispatch = (row: any) => {

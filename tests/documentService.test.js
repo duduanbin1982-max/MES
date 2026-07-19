@@ -134,6 +134,8 @@ test('P0.DOC.4 上传文档 (raw body + X-Doc-Meta)', () => {
   assert.equal(res._j.json.doc_type, 'drawing')
   assert.equal(res._j.json.file_size, buf.length)
   assert.equal(res._j.json.file_hash.length, 64)  // sha256 hex
+  const events = db.prepare('SELECT action, to_status, version FROM document_events WHERE doc_id = ?').all(res._j.json.id)
+  assert.deepEqual(events, [{ action: 'upload', to_status: 'draft', version: 'A0' }])
   // 文件应该写到了 data/uploads/2026/06/...
   const abs = path.join(TEST_UPLOAD_ROOT, res._j.json.file_path.replace(/^uploads[\\/]/, ''))
   assert.ok(fs.existsSync(abs), '文件应已落盘: ' + abs)
@@ -195,4 +197,24 @@ test('P0.DOC.8 版本历史 (按 doc_code 聚合)', () => {
   assert.equal(res._j.json.items.length, 2)
   const versions = res._j.json.items.map(x => x.version).sort()
   assert.deepEqual(versions, ['A0', 'A1'])
+})
+
+test('P0.DOC.9 签发/签收/收回历史可追溯', () => {
+  const db = freshDb()
+  const { find } = mkApp(db)
+  const historyFile = path.join(TEST_UPLOAD_ROOT, 'history.pdf'); fs.writeFileSync(historyFile, 'pdf')
+  db.prepare(`INSERT INTO documents (equipment_instance_id, doc_type, doc_name, file_path, file_size, status, title, file_name, doc_code, version) VALUES (1, 'drawing', 'X', 'uploads/history.pdf', 3, 'draft', '机架图', 'history.pdf', 'ZZ-HIS', 'A0')`).run()
+
+  find('PUT', '/api/documents/:id/issue')({ params: { id: 1 }, body: { issued_to: 'assembly' }, user: { uid: 1 } }, mkRes(), () => {})
+  find('POST', '/api/documents/:id/acknowledge')({ params: { id: 1 }, user: { id: 1 } }, mkRes(), () => {})
+  find('PUT', '/api/documents/:id/revoke')({ params: { id: 1 }, body: { reason: 'ECO 替换' }, user: { uid: 1 } }, mkRes(), () => {})
+
+  const versionsRes = mkRes()
+  find('GET', '/api/documents/:id/versions')({ params: { id: 1 } }, versionsRes, () => {})
+  assert.deepEqual(versionsRes._j.json.events.map(e => e.action).sort(), ['acknowledge', 'issue', 'revoke'])
+
+  const historyRes = mkRes()
+  find('GET', '/api/documents/:id/history')({ params: { id: 1 } }, historyRes, () => {})
+  assert.equal(historyRes._j.json.doc_id, 1)
+  assert.ok(historyRes._j.json.events.some(e => e.action === 'revoke' && e.reason.includes('ECO')))
 })

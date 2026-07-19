@@ -6,6 +6,13 @@
       <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label"><el-icon><Close /></el-icon> 不通过</div><div class="stat-value fail">{{ stats.fail || 0 }}</div></div></el-card></el-col>
       <el-col :span="6"><el-card><div class="stat-card"><div class="stat-label">合格率</div><div class="stat-value" :style="{color: (stats.pass_rate||0) >= 95 ? 'var(--el-color-success)' : 'var(--el-color-warning)'}">{{ stats.pass_rate || 0 }}%</div></div></el-card></el-col>
     </el-row>
+    <el-alert v-if="isScoped" type="info" :closable="false" show-icon class="entry-alert">
+      <template #title>当前入口：{{ inspectionEntry.title }}</template>
+      <div class="entry-alert-body">
+        <span>{{ inspectionEntry.subtitle }}，已自动筛选「{{ typeLabel(filters.inspection_type) }}」。</span>
+        <el-button link type="primary" @click="$emit('clear-scope')">查看全部检验</el-button>
+      </div>
+    </el-alert>
     <el-card>
       <div class="toolbar">
         <el-form :inline="true" :model="filters" size="default">
@@ -15,7 +22,7 @@
             </el-select>
           </el-form-item>
           <el-form-item label="类型">
-            <el-select v-model="filters.inspection_type" clearable placeholder="全部" class="type-select">
+            <el-select v-model="filters.inspection_type" clearable placeholder="全部" class="type-select" :disabled="isScoped">
               <el-option v-for="type in types" :key="type.value" :label="type.label" :value="type.value" />
             </el-select>
           </el-form-item>
@@ -27,7 +34,7 @@
           </el-form-item>
           <el-form-item><el-button type="primary" @click="$emit('load')">查询</el-button></el-form-item>
         </el-form>
-        <el-button type="primary" @click="$emit('create')">+ 新建质检记录</el-button>
+        <el-button type="primary" @click="$emit('create')">+ 新建{{ inspectionEntry.createLabel }}</el-button>
       </div>
     </el-card>
     <el-card class="table-card">
@@ -49,6 +56,8 @@
 </template>
 
 <script setup lang="ts">
+type InspectionEntry = { title: string; subtitle: string; badge: string; createLabel: string }
+
 defineProps<{
   stats: any
   filters: any
@@ -58,16 +67,21 @@ defineProps<{
   loading: boolean
   typeLabel: (value: string) => string
   typeColor: (value: string) => string
+  inspectionEntry: InspectionEntry
+  isScoped: boolean
 }>()
 
 defineEmits<{
   (event: 'load'): void
   (event: 'create'): void
+  (event: 'clear-scope'): void
 }>()
 </script>
 
 <style scoped>
 .quality-stat-row{margin-bottom:12px}
+.entry-alert{margin-bottom:12px}
+.entry-alert-body{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .toolbar{display:flex;justify-content:space-between;align-items:center}
 .instance-select{width:220px}
 .type-select{width:140px}

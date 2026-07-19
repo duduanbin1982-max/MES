@@ -54,6 +54,12 @@ export const EQUIPMENT_LIFECYCLE_META: Record<string, { label: string; tag: stri
   S1: { label: '设计中', tag: 'info', color: '#909399' },
 }
 
+export const EQUIPMENT_LIFECYCLE_OPTIONS = Object.entries(EQUIPMENT_LIFECYCLE_META).map(([value, meta]) => ({
+  value,
+  label: meta.label,
+  tag: meta.tag,
+}))
+
 export function statusLabel(meta: Record<string, { label: string }>, value?: string) {
   return value ? (meta[value]?.label || value) : '-'
 }

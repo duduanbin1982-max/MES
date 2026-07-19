@@ -20,7 +20,7 @@
     <!-- Drawings Table -->
     <el-card style="margin-bottom:12px">
       <template #header><span style="font-weight:600"><el-icon><Document /></el-icon> 图纸列表</span></template>
-      <el-table :data="drawings" stripe size="small" @row-click="selectDwg" highlight-current-row empty-text="暂无图纸">
+      <el-table :data="drawings" stripe size="small" @row-click="selectDwg" empty-text="暂无图纸">
         <el-table-column prop="drawing_no" label="图号" width="160" />
         <el-table-column prop="title" label="标题" min-width="180" />
         <el-table-column prop="revision" label="版本" width="60" />

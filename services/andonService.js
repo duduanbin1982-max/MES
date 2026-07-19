@@ -19,7 +19,7 @@ const { ApiError } = require('../app/errors');
 const { emit, Events } = require("../app/ws/EventBus");
 const { queryLowStock } = require("./material/core");
 // P0-3 SSRF 防御
-const { validateWebhookUrl } = require("./webhookValidator");
+const { validateWebhookUrl, validateWebhookUrlSync } = require("./webhookValidator");
 
 function register(app, db) {
   const all = (sql, p = []) => db.prepare(sql).all(p);

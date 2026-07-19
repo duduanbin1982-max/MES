@@ -10,6 +10,7 @@ const { round2 } = require("./queries");
 function register(app, db) {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
   const get = (sql, ...p) => db.prepare(sql).get(...p);
+  const tableExists = (name) => !!get("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", name);
   
 
   app.get('/api/equipment_instances/:id/cost_rollup/breakdown', wrap((req, res) => {
@@ -96,7 +97,42 @@ function register(app, db) {
       )
     `, req.params.id);
 
-    const items = [...keyRows, ...matRows];
+    const projectCostRows = tableExists("project_cost_entries") ? all(`
+      SELECT
+        'project_cost_entry' AS line_type,
+        bom_node_id AS bom_id,
+        id AS item_id,
+        cost_type AS material_code,
+        description AS material_name,
+        cost_type AS material_type,
+        currency AS unit,
+        1 AS quantity,
+        amount AS estimated_unit_price,
+        amount AS actual_unit_price,
+        source_ref AS contract_no,
+        amount AS estimated_total,
+        amount AS actual_total,
+        0 AS price_diff,
+        status AS cost_status,
+        cost_type,
+        CASE cost_type
+          WHEN 'outsourcing' THEN '外协'
+          WHEN 'depreciation' THEN '折旧'
+          WHEN 'rework' THEN '返工'
+          WHEN 'quality_loss' THEN '质量损失'
+          ELSE cost_type
+        END AS cost_type_label,
+        source_type,
+        vendor,
+        occurred_on,
+        notes
+      FROM project_cost_entries
+      WHERE equipment_instance_id = ?
+        AND deleted_at IS NULL
+        AND status != 'void'
+    `, req.params.id) : [];
+
+    const items = [...keyRows, ...matRows, ...projectCostRows];
     if (laborRow && (Number(laborRow.estimated_total) > 0 || Number(laborRow.actual_total) > 0)) {
       items.push(laborRow);
     }

@@ -1,4 +1,5 @@
 const { ApiError } = require('../app/errors');
+const { appendClosureNote, evaluateNcrClosure } = require('../app/domain/qualityNcr');
 const { wrap } = require('../middleware/asyncHandler');
 // services/qcService.js
 // P0-#1: Quality Inspection + NCR/CAPA/Inspection Templates + Dashboard
@@ -322,22 +323,14 @@ function register(app, db) {
       WHERE r.ncr_id = ?
       ORDER BY r.created_at DESC
     `, [req.params.id]);
-    const hasDisposition = ncr.disposition && ncr.disposition !== 'pending';
-    const hasOpenCapa = capas.some(c => c.status !== 'closed');
-    const hasFailedRecheck = rechecks.some(r => r.result === 'fail');
-    const hasPassRecheck = rechecks.some(r => r.result === 'pass');
-    const canClose = Boolean(ncr.closed_at) || (hasDisposition && !hasOpenCapa && !hasFailedRecheck && (ncr.disposition === 'accept' || hasPassRecheck));
+    const closure = evaluateNcrClosure(ncr, capas, rechecks);
     res.json({
       ncr,
       capa_actions: capas,
       rechecks,
-      checklist: {
-        disposition_done: Boolean(hasDisposition),
-        capa_all_closed: !hasOpenCapa,
-        recheck_passed: ncr.disposition === 'accept' || hasPassRecheck,
-        has_failed_recheck: hasFailedRecheck,
-      },
-      can_close: canClose,
+      checklist: closure.checklist,
+      blockers: closure.blockers,
+      can_close: closure.canClose,
     });
   }));
 
@@ -347,15 +340,12 @@ function register(app, db) {
       if (!ncr) throw ApiError.notFound('NCR not found');
       const capas = all('SELECT status FROM capa_actions WHERE ncr_id = ?', [req.params.id]);
       const rechecks = all('SELECT result FROM ncr_rechecks WHERE ncr_id = ?', [req.params.id]);
-      const hasDisposition = ncr.disposition && ncr.disposition !== 'pending';
-      const hasOpenCapa = capas.some(c => c.status !== 'closed');
-      const hasFailedRecheck = rechecks.some(r => r.result === 'fail');
-      const hasPassRecheck = rechecks.some(r => r.result === 'pass');
-      return { ncr, canClose: Boolean(hasDisposition && !hasOpenCapa && !hasFailedRecheck && (ncr.disposition === 'accept' || hasPassRecheck)) };
+      const closure = evaluateNcrClosure(ncr, capas, rechecks);
+      return { ncr, canClose: closure.canClose, blockers: closure.blockers };
     })();
-    if (!closure.canClose) throw ApiError.validation('NCR closure checklist is not complete');
+    if (!closure.canClose) throw ApiError.validation(`NCR closure checklist is not complete: ${closure.blockers.join('、')}`);
     const { note } = req.body || {};
-    const rootCause = note ? [closure.ncr.root_cause || '', `关闭说明: ${note}`].filter(Boolean).join('\n') : closure.ncr.root_cause;
+    const rootCause = appendClosureNote(closure.ncr.root_cause, note);
     run("UPDATE ncr_reports SET closed_at = COALESCE(closed_at, datetime('now')), root_cause = ? WHERE id = ?", [rootCause || null, req.params.id]);
     res.json({ ok: true });
   }));
@@ -378,4 +368,4 @@ function register(app, db) {
   }));
 }
 
-module.exports = { register };
+module.exports = { register };

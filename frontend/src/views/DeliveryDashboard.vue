@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <div class="page-title">项目交付闭环</div>
+        <div class="page-title">项目交付看板</div>
         <div class="page-subtitle">合同到验收的项目级进度、风险与业务断点</div>
       </div>
       <el-button :icon="Refresh" size="small" :loading="loading" @click="loadAll">刷新</el-button>
@@ -39,6 +39,19 @@
       </el-col>
     </el-row>
 
+    <el-alert
+      v-if="loadError"
+      class="load-alert"
+      type="error"
+      show-icon
+      :closable="false"
+      title="项目交付看板加载失败"
+      :description="loadError"
+    >
+      <template #default>
+        <el-button size="small" type="primary" plain @click="loadAll">重试</el-button>
+      </template>
+    </el-alert>
 
     <el-card class="workflow-card">
       <template #header>
@@ -86,7 +99,7 @@
               <el-segmented v-model="riskFilter" :options="riskOptions" size="small" @change="applyFilter" />
             </div>
           </template>
-          <el-table :data="filteredProjects" size="small" height="620" highlight-current-row @row-click="selectProject">
+          <el-table :data="filteredProjects" size="small" height="620" @row-click="selectProject">
             <el-table-column prop="instance_code" label="项目编码" width="140" />
             <el-table-column prop="instance_name" label="项目名称" min-width="220" show-overflow-tooltip />
             <el-table-column prop="customer_name" label="客户" width="140" show-overflow-tooltip />
@@ -117,6 +130,11 @@
                 <el-button link size="small" @click.stop="openRiskDrawer(row)">钻取</el-button>
               </template>
             </el-table-column>
+            <el-table-column label="主线体检" width="110">
+              <template #default="{ row }">
+                <el-button link size="small" @click.stop="openLineageDrawer(row)">体检</el-button>
+              </template>
+            </el-table-column>
             <el-table-column label="异常" width="80">
               <template #default="{ row }">
                 <el-badge :value="row.exception_count" :hidden="!row.exception_count">
@@ -133,7 +151,11 @@
           <template #header>
             <div class="card-header">
               <span>{{ selected?.instance_code || '项目详情' }}</span>
-              <div><el-button v-if="selected" link size="small" @click="openRiskDrawer(selected)">风险钻取</el-button><el-button v-if="selected" link size="small" @click="goDetail(selected)">实例详情</el-button></div>
+              <div>
+                <el-button v-if="selected" link size="small" @click="openLineageDrawer(selected)">主线体检</el-button>
+                <el-button v-if="selected" link size="small" @click="openRiskDrawer(selected)">风险钻取</el-button>
+                <el-button v-if="selected" link size="small" @click="goDetail(selected)">实例详情</el-button>
+              </div>
             </div>
           </template>
 
@@ -299,17 +321,137 @@
       </template>
       <el-skeleton v-else :rows="8" animated />
     </el-drawer>
+
+    <el-drawer v-model="lineageDrawerVisible" size="70%" :title="lineageData?.project?.instance_code ? `${lineageData.project.instance_code} 主线数据体检` : '主线数据体检'">
+      <template v-if="lineageData">
+        <el-row :gutter="12" class="lineage-kpis">
+          <el-col :span="6">
+            <el-card shadow="never">
+              <div class="stat-label">主线健康分</div>
+              <div class="stat-value" :class="{ danger: lineageData.level === 'critical' || lineageData.level === 'high', warning: lineageData.level === 'warning' }">{{ lineageData.score }}</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card shadow="never">
+              <div class="stat-label">缺口总数</div>
+              <div class="stat-value warning">{{ lineageData.summary?.gap_count || 0 }}</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card shadow="never">
+              <div class="stat-label">高危缺口</div>
+              <div class="stat-value danger">{{ lineageData.summary?.severe_gap_count || 0 }}</div>
+            </el-card>
+          </el-col>
+          <el-col :span="6">
+            <el-card shadow="never">
+              <div class="stat-label">主线关键字段</div>
+              <div class="lineage-keys">{{ lineageData.link_keys?.join(' / ') }}</div>
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <el-alert
+          class="lineage-alert"
+          type="info"
+          :closable="false"
+          show-icon
+          title="主线体检用于确认一台 TBM 的合同、BOM、图纸、采购、齐套、工单、报工、质检、成本、批次和验收是否能串成完整数据链。"
+        />
+
+        <el-tabs v-model="lineageTab">
+          <el-tab-pane label="链路阶段" name="segments">
+            <el-table :data="lineageData.segments || []" size="small" height="380">
+              <el-table-column prop="label" label="阶段" width="120" />
+              <el-table-column label="状态" width="90">
+                <template #default="{ row }">
+                  <el-tag :type="lineageStatusTag(row.status)" size="small">{{ lineageStatusLabel(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="完整度" width="190">
+                <template #default="{ row }">
+                  <el-progress :percentage="row.percent || 0" :stroke-width="8" />
+                </template>
+              </el-table-column>
+              <el-table-column prop="linked" label="已关联" width="90" />
+              <el-table-column prop="total" label="总量" width="90" />
+              <el-table-column prop="gap_count" label="缺口" width="90" />
+              <el-table-column prop="owner_role" label="责任角色" width="130" />
+              <el-table-column label="处理入口" width="160">
+                <template #default="{ row }">
+                  <div class="fix-entry">
+                    <el-tag size="small" type="info">{{ fixEntry(row).module || '业务模块' }}</el-tag>
+                    <span>{{ fixEntry(row).label || '进入处理' }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="110">
+                <template #default="{ row }">
+                  <el-button link type="primary" size="small" @click="openFixEntry(row)">一键处理</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
+          <el-tab-pane label="数据缺口" name="gaps">
+            <el-table :data="lineageData.gaps || []" size="small" height="420" empty-text="主线数据链暂无明显缺口">
+              <el-table-column label="级别" width="80">
+                <template #default="{ row }">
+                  <el-tag :type="severityTag(row.severity)" size="small">{{ severityLabel(row.severity) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="title" label="缺口" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="message" label="影响说明" min-width="320" show-overflow-tooltip />
+              <el-table-column prop="count" label="数量" width="80" />
+              <el-table-column prop="owner_role" label="责任角色" width="120" />
+              <el-table-column label="样例" min-width="160" show-overflow-tooltip>
+                <template #default="{ row }">{{ (row.samples || []).join('，') || '-' }}</template>
+              </el-table-column>
+              <el-table-column label="修复入口" width="180">
+                <template #default="{ row }">
+                  <div class="fix-entry">
+                    <el-tag size="small" type="info">{{ fixEntry(row).module || '业务模块' }}</el-tag>
+                    <span>{{ fixEntry(row).label || '进入处理' }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="清单" width="80">
+                <template #default="{ row }">
+                  <el-popover placement="left" width="260" trigger="click">
+                    <template #reference>
+                      <el-button link size="small">查看</el-button>
+                    </template>
+                    <div class="fix-checklist-title">{{ row.title }}</div>
+                    <ol class="fix-checklist">
+                      <li v-for="item in fixEntry(row).checklist || []" :key="item">{{ item }}</li>
+                    </ol>
+                    <el-empty v-if="!(fixEntry(row).checklist || []).length" description="暂无处理清单" :image-size="42" />
+                  </el-popover>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="110">
+                <template #default="{ row }">
+                  <el-button link type="primary" size="small" @click="openFixEntry(row)">一键处理</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-tab-pane>
+        </el-tabs>
+      </template>
+      <el-skeleton v-else :rows="8" animated />
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { Api } from '../api'
 
 const router = useRouter()
 const loading = ref(false)
+const loadError = ref('')
 const summary = reactive<any>({})
 const projects = ref<any[]>([])
 const selected = ref<any | null>(null)
@@ -319,6 +461,9 @@ const riskTab = ref('exceptions')
 const riskFilter = ref('all')
 const stageDrawerVisible = ref(false)
 const stageData = ref<any | null>(null)
+const lineageDrawerVisible = ref(false)
+const lineageData = ref<any | null>(null)
+const lineageTab = ref('segments')
 const workflowKeys = ['contract', 'bom', 'documents', 'process', 'purchase', 'kit', 'work_orders', 'report', 'quality', 'cost', 'acceptance']
 const riskOptions = [
   { label: '全部', value: 'all' },
@@ -347,6 +492,14 @@ function statusTag(status: string) {
 
 function statusLabel(status: string) {
   return ({ blocked: '阻塞', warning: '预警', done: '完成', running: '进行中', pending: '待开始', empty: '未建' } as any)[status] || status || '-'
+}
+
+function lineageStatusTag(status: string) {
+  return status === 'blocked' ? 'danger' : status === 'warning' ? 'warning' : status === 'ok' ? 'success' : 'info'
+}
+
+function lineageStatusLabel(status: string) {
+  return ({ blocked: '阻塞', warning: '待完善', ok: '完整', empty: '未建' } as any)[status] || status || '-'
 }
 
 function openStage(project: any, stage: any) {
@@ -380,7 +533,28 @@ function applyFilter() {
 }
 
 function go(path?: string) {
-  if (path) router.push(path)
+  if (!path) return
+  router.push(path)
+}
+
+function fixEntry(row: any) {
+  return row?.fix_entry || {
+    module: row?.owner_role || '业务模块',
+    label: row?.action_label || '进入处理',
+    path: row?.action_path || row?.path,
+    checklist: []
+  }
+}
+
+function openFixEntry(row: any) {
+  const entry = fixEntry(row)
+  const path = entry?.path || row?.action_path || row?.path
+  if (!path) {
+    ElMessage.warning('这个缺口暂未配置处理入口')
+    return
+  }
+  lineageDrawerVisible.value = false
+  router.push(path)
 }
 
 function goDetail(row: any) {
@@ -388,7 +562,7 @@ function goDetail(row: any) {
 }
 
 function goExceptions(row: any) {
-  router.push(`/exceptions?instance_id=${row.id}`)
+  router.push(`/exceptions?instance_id=${row.id}&from=delivery`)
 }
 
 function money(value: any) {
@@ -408,13 +582,29 @@ async function openRiskDrawer(row: any) {
   }
 }
 
+async function openLineageDrawer(row: any) {
+  lineageDrawerVisible.value = true
+  lineageData.value = null
+  lineageTab.value = 'segments'
+  try {
+    lineageData.value = await Api.deliveryProjectLineage(row.id)
+  } catch (e: any) {
+    ElMessage.error('加载主线体检失败: ' + (e?.message || e))
+    lineageDrawerVisible.value = false
+  }
+}
+
 async function loadAll() {
   loading.value = true
+  loadError.value = ''
   try {
     const data: any = await Api.deliveryOverview()
     Object.assign(summary, data.summary || {})
     projects.value = data.projects || []
     selected.value = filteredProjects.value[0] || projects.value[0] || null
+  } catch (e: any) {
+    loadError.value = e?.message || String(e || '加载失败')
+    ElMessage.error('加载项目交付看板失败: ' + loadError.value)
   } finally {
     loading.value = false
   }
@@ -426,6 +616,7 @@ onMounted(loadAll)
 <style scoped>
 .page-subtitle { color: var(--el-text-color-secondary); font-size: 13px; margin-top: 4px; }
 .kpi-row { margin-bottom: 16px; }
+.load-alert { margin-bottom: 16px; }
 .kpi-card { min-height: 104px; }
 .stat-label { color: var(--el-text-color-secondary); font-size: 13px; }
 .stat-value { font-size: 30px; font-weight: 700; margin-top: 10px; }
@@ -445,6 +636,13 @@ onMounted(loadAll)
 .exception-line:hover .exception-title { color: var(--el-color-primary); }
 .exception-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .risk-kpis { margin-bottom: 12px; }
+.lineage-kpis { margin-bottom: 12px; }
+.lineage-alert { margin-bottom: 12px; }
+.lineage-keys { margin-top: 10px; color: var(--el-text-color-regular); font-size: 13px; line-height: 1.5; }
+.fix-entry { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.fix-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fix-checklist-title { font-weight: 600; margin-bottom: 8px; color: var(--el-text-color-primary); }
+.fix-checklist { margin: 0; padding-left: 18px; color: var(--el-text-color-regular); line-height: 1.8; }
 .quick-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
 
 .workflow-card { margin-bottom: 16px; }

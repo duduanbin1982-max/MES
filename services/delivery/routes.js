@@ -20,7 +20,7 @@ function registerDeliveryRoutes(app, ctx) {
     sendExceptionNotice,
     alreadyNotifiedToday,
   } = ctx;
-  const { collectExceptions, exceptionSummary, getInstances, buildProject, buildProjectRiskDrilldown } = readModel;
+  const { collectExceptions, exceptionSummary, getInstances, buildProject, buildProjectRiskDrilldown, buildProjectLineage } = readModel;
 
   app.get("/api/delivery/projects", wrap((req, res) => {
     const exceptions = collectExceptions();
@@ -36,6 +36,14 @@ function registerDeliveryRoutes(app, ctx) {
     if (!instance) return res.status(404).json({ error: "project not found" });
     const exceptions = collectExceptions();
     res.json(buildProjectRiskDrilldown(instance, exceptions));
+  }));
+
+  app.get("/api/delivery/projects/:id/lineage", wrap((req, res) => {
+    const id = Number(req.params.id);
+    const instance = getInstances().find((i) => Number(i.id) === id);
+    if (!instance) return res.status(404).json({ error: "project not found" });
+    const exceptions = collectExceptions();
+    res.json(buildProjectLineage(instance, exceptions));
   }));
 
   app.get("/api/delivery/projects/:id", wrap((req, res) => {

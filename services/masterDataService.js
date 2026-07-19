@@ -25,7 +25,7 @@ function register(app, db) {
     return tableCache.get(name);
   }
 
-  const MDM_ALLOWED_TABLES = new Set(["mdm_issue_waivers", "mdm_audit_log", "materials", "documents", "instance_bom", "purchase_orders", "work_orders", "inventory", "suppliers", "erp_cost_ledger", "equipment_instances", "workstations", "users"]);
+  const MDM_ALLOWED_TABLES = new Set(["mdm_issue_waivers", "mdm_audit_log", "materials", "documents", "instance_bom", "bom_nodes", "equipment_bom", "bom_items", "bom_components", "purchase_orders", "purchase_suppliers", "work_orders", "inventory", "suppliers", "erp_cost_ledger", "equipment_instances", "workstations", "process_nodes", "users"]);
 
   function columns(table) {
     if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
@@ -115,11 +115,11 @@ function register(app, db) {
   }
 
   function checkBom(issues) {
-    const table = firstTable(["bom_nodes", "equipment_bom", "bom_items", "bom_components"]);
+    const table = firstTable(["instance_bom", "bom_nodes", "equipment_bom", "bom_items", "bom_components"]);
     if (!table) return { domain: "bom", label: "BOM 层级", total: 0, issues: 0, score: 100 };
     const total = countRows(table);
     const idCol = has(table, "id") ? "id" : "rowid";
-    const levelCol = ["level_code", "level_no", "level", "hierarchy"].find((c) => has(table, c));
+    const levelCol = ["level_code", "level_no", "level", "tier", "hierarchy"].find((c) => has(table, c));
     const parentCol = ["parent_id", "parent_node_id"].find((c) => has(table, c));
     const qtyCol = ["quantity", "qty", "net_qty"].find((c) => has(table, c));
     const partCol = ["part_number", "material_code", "item_code", "code"].find((c) => has(table, c));

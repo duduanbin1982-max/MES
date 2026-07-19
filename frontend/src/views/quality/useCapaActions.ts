@@ -6,7 +6,6 @@ export function useCapaActions() {
   const capaFilters = reactive({ status: '', assignee: '' })
   const capaRows = ref<any[]>([])
   const capaLoading = ref(false)
-  const capaRowClass = ({ row }: any) => row.overdue && row.status !== 'closed' ? 'capa-overdue-row' : ''
 
   const loadCapa = async () => {
     capaLoading.value = true
@@ -36,7 +35,6 @@ export function useCapaActions() {
     capaFilters,
     capaRows,
     capaLoading,
-    capaRowClass,
     loadCapa,
     completeCapa,
   }

@@ -11,6 +11,17 @@ function tierSummary(rows) {
   return summary;
 }
 
+function structureSummary(rows) {
+  let deep = 0;
+  let maxDepth = 0;
+  for (const row of rows) {
+    const tier = Number(row.tier);
+    if (tier > 3) deep += 1;
+    if (tier > maxDepth) maxDepth = tier;
+  }
+  return { deep, max_depth: maxDepth, total: rows.length };
+}
+
 function buildTree(rows) {
   const byId = new Map();
   const roots = [];
@@ -19,7 +30,7 @@ function buildTree(rows) {
       ...row,
       quantity: normalizeFloat(row.quantity, 0),
       children: [],
-      label: row.material_name || row.part_number || row.material_code || `BOM#${row.id}`,
+      label: `${row.level_code ? `${row.level_code} ` : ""}${row.material_name || row.part_number || row.material_code || `BOM#${row.id}`}`,
     });
   }
   for (const row of byId.values()) {
@@ -32,5 +43,6 @@ function buildTree(rows) {
 
 module.exports = {
   tierSummary,
+  structureSummary,
   buildTree,
 };

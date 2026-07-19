@@ -124,16 +124,91 @@
       <template #footer><el-button @click="qcVisible=false">取消</el-button><el-button type="primary" :loading="saving" @click="submitQc">提交</el-button></template>
     </el-dialog>
 
-    <el-drawer v-model="pickVisible" size="90%" title="工单领料">
-      <el-alert v-if="pickList" :title="`${pickList.wo_code}：齐套 ${pickList.done_items || 0}/${pickList.total_items || 0}，短缺 ${pickList.short_items || 0}`" type="info" :closable="false" style="margin-bottom:12px" />
-      <el-table :data="pickList?.items || []" size="small" height="520">
-        <el-table-column prop="material_code" label="物料" width="120" />
-        <el-table-column prop="material_name" label="名称" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="remaining" label="待领" width="80" />
-        <el-table-column prop="available_qty" label="可用" width="80" />
-        <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag :type="row.status === 'ready' ? 'success' : row.status === 'done' ? 'info' : 'danger'" size="small">{{ row.status }}</el-tag></template></el-table-column>
-      </el-table>
-      <template #footer><el-button @click="pickVisible=false">关闭</el-button><el-button type="primary" @click="go('/kit-closure')">缺料闭环</el-button></template>
+    <el-drawer v-model="pickVisible" size="96%" title="工单领料 / 退料">
+      <el-alert
+        v-if="pickList"
+        :title="`${pickList.wo_code}：工单数量 ${pickList.work_order_qty || 1}，已齐套 ${pickList.done_items || 0}/${pickList.total_items || 0}，短缺 ${pickList.short_items || 0}`"
+        type="info"
+        :closable="false"
+        style="margin-bottom:12px"
+      />
+      <div class="pick-actions">
+        <el-button size="small" :loading="pickLoading" @click="refreshPick">刷新领料单</el-button>
+        <el-button size="small" type="primary" @click="fillSuggestedPick">一键填入建议量</el-button>
+        <el-button size="small" type="success" :loading="pickSubmitting" @click="submitPick">提交领料</el-button>
+        <el-button size="small" @click="go('/kit-closure')">缺料闭环</el-button>
+      </div>
+      <el-tabs model-value="pick">
+        <el-tab-pane label="领料单" name="pick">
+          <el-table :data="pickList?.items || []" size="small" height="430">
+            <el-table-column prop="material_code" label="物料" width="120" />
+            <el-table-column prop="material_name" label="名称" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="bom_required" label="需求" width="80" />
+            <el-table-column prop="already_picked" label="已领" width="80" />
+            <el-table-column prop="remaining" label="待领" width="80" />
+            <el-table-column prop="available_qty" label="可用" width="80" />
+            <el-table-column label="建议批次" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.suggested_allocations?.length">
+                  {{ row.suggested_allocations.map((a: any) => `${a.lot_no}@${a.location}×${a.quantity}`).join('，') }}
+                </span>
+                <span v-else class="muted">—</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="本次领料" width="150">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="pickQuantities[row.material_id]"
+                  :min="0"
+                  :max="Number(row.suggested_pick_qty || row.remaining || 0)"
+                  :step="1"
+                  size="small"
+                  controls-position="right"
+                  :disabled="row.status === 'done' || row.status === 'empty'"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="90">
+              <template #default="{ row }">
+                <el-tag :type="pickStatusType(row.status)" size="small">{{ pickStatusLabel(row.status) }}</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="退料" name="return">
+          <el-empty v-if="!pickList?.returnable_lots?.length" description="暂无可退批次" :image-size="64" />
+          <el-table v-else :data="pickList.returnable_lots" size="small" height="360">
+            <el-table-column prop="material_code" label="物料" width="120" />
+            <el-table-column prop="material_name" label="名称" min-width="150" />
+            <el-table-column prop="lot_no" label="批次" width="120" />
+            <el-table-column prop="returnable_qty" label="可退" width="80" />
+            <el-table-column label="退料数量" width="150">
+              <template #default="{ row }">
+                <el-input-number v-model="returnQuantities[row.lot_id]" :min="0" :max="Number(row.returnable_qty || 0)" :step="1" size="small" controls-position="right" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="90">
+              <template #default="{ row }">
+                <el-button size="small" type="warning" link :loading="pickSubmitting" @click="submitReturn(row)">退料</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+        <el-tab-pane label="历史" name="history">
+          <el-empty v-if="!pickHistory.length" description="暂无领退料历史" :image-size="64" />
+          <el-timeline v-else>
+            <el-timeline-item v-for="m in pickHistory" :key="m.id" :timestamp="m.created_at" :type="m.movement_type === 'issue' ? 'success' : 'warning'">
+              <div class="history-line">
+                <el-tag size="small" :type="m.movement_type === 'issue' ? 'success' : 'warning'">{{ m.movement_type === 'issue' ? '领料' : '退料' }}</el-tag>
+                <span>{{ m.material_code }} · {{ m.material_name }} · {{ m.lot_no }}</span>
+                <b>{{ m.quantity }} {{ m.unit }}</b>
+              </div>
+              <div class="muted">{{ m.from_location || m.to_location || '-' }} · {{ m.operator_name || '未记录操作人' }} · {{ m.notes || '' }}</div>
+            </el-timeline-item>
+          </el-timeline>
+        </el-tab-pane>
+      </el-tabs>
+      <template #footer><el-button @click="pickVisible=false">关闭</el-button></template>
     </el-drawer>
   </div>
 </template>
@@ -159,7 +234,12 @@ const currentWo = ref<any | null>(null)
 const reportVisible = ref(false)
 const qcVisible = ref(false)
 const pickVisible = ref(false)
+const pickLoading = ref(false)
+const pickSubmitting = ref(false)
 const pickList = ref<any | null>(null)
+const pickHistory = ref<any[]>([])
+const pickQuantities = reactive<Record<number, number>>({})
+const returnQuantities = reactive<Record<number, number>>({})
 const reportForm = reactive({ hours_spent: 1, quantity_completed: 1, quality_result: 'pass' })
 const qcForm = reactive({ inspection_type: 'in_process', result: 'pass', notes: '' })
 const andonForm = reactive({ title: '', message: '' })
@@ -224,7 +304,91 @@ async function executeScan(action: string) {
 async function openPick(wo: any) {
   currentWo.value = wo
   pickVisible.value = true
-  pickList.value = await Api.get(`/work_orders/${wo.id}/pick-list`)
+  await refreshPick()
+}
+
+async function refreshPick() {
+  if (!currentWo.value) return
+  pickLoading.value = true
+  try {
+    const [list, history] = await Promise.all([
+      Api.get(`/work_orders/${currentWo.value.id}/pick-list`),
+      Api.get(`/work_orders/${currentWo.value.id}/pick-history`).catch(() => ({ movements: [] })),
+    ])
+    pickList.value = list
+    pickHistory.value = history.movements || []
+    Object.keys(pickQuantities).forEach(key => delete pickQuantities[Number(key)])
+    Object.keys(returnQuantities).forEach(key => delete returnQuantities[Number(key)])
+    for (const item of list.items || []) pickQuantities[item.material_id] = 0
+    for (const lot of list.returnable_lots || []) returnQuantities[lot.lot_id] = 0
+  } finally {
+    pickLoading.value = false
+  }
+}
+
+function pickStatusType(status: string) {
+  return ({ ready: 'success', short: 'warning', empty: 'danger', done: 'info' } as any)[status] || 'info'
+}
+
+function pickStatusLabel(status: string) {
+  return ({ ready: '可领', short: '部分', empty: '缺料', done: '已领完' } as any)[status] || status
+}
+
+function fillSuggestedPick() {
+  for (const item of pickList.value?.items || []) {
+    pickQuantities[item.material_id] = Number(item.suggested_pick_qty || 0)
+  }
+}
+
+function allocationsForQty(row: any, quantity: number) {
+  let remaining = Number(quantity || 0)
+  const allocations = []
+  for (const allocation of row.suggested_allocations || []) {
+    if (remaining <= 0) break
+    const qty = Math.min(remaining, Number(allocation.quantity || 0))
+    if (qty > 0) allocations.push({ lot_id: allocation.lot_id, location: allocation.location, quantity: qty })
+    remaining -= qty
+  }
+  return allocations
+}
+
+async function submitPick() {
+  if (!currentWo.value || !pickList.value) return
+  const items = (pickList.value.items || [])
+    .map((row: any) => {
+      const quantity = Number(pickQuantities[row.material_id] || 0)
+      return quantity > 0 ? { material_id: row.material_id, quantity, allocations: allocationsForQty(row, quantity) } : null
+    })
+    .filter(Boolean)
+  if (!items.length) { ElMessage.warning('请填写本次领料数量'); return }
+  pickSubmitting.value = true
+  try {
+    const result: any = await Api.post(`/work_orders/${currentWo.value.id}/pick`, { items })
+    if (result.errors) ElMessage.warning(`领料完成 ${result.picked || 0} 项，失败 ${result.errors} 项`)
+    else ElMessage.success('领料成功')
+    await refreshPick()
+    await loadAll()
+  } finally {
+    pickSubmitting.value = false
+  }
+}
+
+async function submitReturn(row: any) {
+  if (!currentWo.value) return
+  const quantity = Number(returnQuantities[row.lot_id] || 0)
+  if (quantity <= 0) { ElMessage.warning('请填写退料数量'); return }
+  pickSubmitting.value = true
+  try {
+    const result: any = await Api.post(`/work_orders/${currentWo.value.id}/return`, {
+      items: [{ lot_id: row.lot_id, quantity, reason: '车间余料退库' }],
+    })
+    if (result.errors) ElMessage.warning(`退料完成 ${result.returned || 0} 项，失败 ${result.errors} 项`)
+    else ElMessage.success('退料成功')
+    await refreshPick()
+    await loadAll()
+  } finally {
+    pickSubmitting.value = false
+  }
 }
 
 function openReport(wo: any) {
@@ -307,6 +471,8 @@ onMounted(async () => { applyDefaultTab(); await loadAll() })
 .wo-main, .doc-line { display:flex; justify-content:space-between; align-items:center; gap:8px; }
 .wo-actions { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
 .doc-line { padding: 8px 0; border-bottom:1px solid var(--el-border-color-lighter); }
+.pick-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+.history-line { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 @media (max-width: 640px) {
   .action-grid { grid-template-columns: repeat(2, 1fr); }
   .wo-actions .el-button { flex: 1; }

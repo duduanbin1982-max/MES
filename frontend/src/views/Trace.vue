@@ -98,7 +98,7 @@
       </div>
 
       <el-card v-loading="treeLoading" v-if="treeData.length">
-        <el-tree :data="treeData" :props="treeProps" node-key="id" default-expand-all ref="treeRef" highlight-current @node-click="onTreeNodeClick">
+        <el-tree :data="treeData" :props="treeProps" node-key="id" default-expand-all ref="treeRef" @node-click="onTreeNodeClick">
           <template #default="{node,data}">
             <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-weight:500">{{ data.name || data.label }}</span>

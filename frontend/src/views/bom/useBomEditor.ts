@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
-import { defaultBomForm, templateDesc } from './bomShared'
+import { defaultBomForm, templateDesc, tierPreset, nodeTypePreset } from './bomShared'
 
 type BomEditorDeps = {
   instanceId: Ref<number | null>
@@ -9,10 +9,11 @@ type BomEditorDeps = {
   drillNode: Ref<any | null>
   health: Ref<any>
   templateMeta: Ref<any>
+  allNodes: Ref<any[]>
   loadAll: () => Promise<void>
 }
 
-export function useBomEditor({ instanceId, selected, drillNode, health, templateMeta, loadAll }: BomEditorDeps) {
+export function useBomEditor({ instanceId, selected, drillNode, health, templateMeta, allNodes, loadAll }: BomEditorDeps) {
   const dlgAdd = ref(false)
   const dlgImport = ref(false)
   const dlgValidate = ref(false)
@@ -38,27 +39,40 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
   }
 
   function onTierChange(tier: number) {
-    if (tier === 0) addForm.value.category = '成品'
-    else if (tier === 1) addForm.value.category = '自制部件'
-    else if (tier === 2) addForm.value.category = '外购成品'
-    else if (tier === 3) addForm.value.category = '自制机加件'
+    const preset = tierPreset(tier)
+    addForm.value.category = preset.category
+    addForm.value.node_type = preset.node_type
+    addForm.value.unit = preset.unit
+    addForm.value.is_phantom = false
   }
 
   function prefillTier(tier: number) {
     resetAddForm()
     addForm.value.tier = tier
-    if (tier === 0) addForm.value.category = '成品'
-    if (tier === 1) addForm.value.category = '自制部件'
-    if (tier === 2) addForm.value.category = '外购成品'
+    onTierChange(tier)
   }
 
   function openAddChild(parent: any) {
     resetAddForm()
     editingNode.value = { ...parent, _adding: true }
     addForm.value.parent_id = parent.id
-    addForm.value.tier = Math.min(parent.tier + 1, 3)
+    addForm.value.tier = Number(parent.tier || 0) + 1
     onTierChange(addForm.value.tier)
     dlgAdd.value = true
+  }
+
+  function onParentChange(parentId: number | null) {
+    const parent = allNodes.value.find((node: any) => Number(node.id) === Number(parentId))
+    addForm.value.tier = parent ? Number(parent.tier || 0) + 1 : 0
+    onTierChange(addForm.value.tier)
+  }
+
+  function onNodeTypeChange(nodeType: string) {
+    const preset = nodeTypePreset(nodeType)
+    addForm.value.is_phantom = !!preset?.phantom
+    if (!preset) return
+    addForm.value.category = preset.category
+    addForm.value.unit = preset.unit
   }
 
   function openEdit() {
@@ -66,6 +80,20 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
     editingNode.value = selected.value
     addForm.value = { ...defaultForm(), ...selected.value }
     dlgAdd.value = true
+  }
+
+  async function moveNode(draggingNode: any, dropNode: any, dropType: 'before' | 'after' | 'inner') {
+    const dragging = draggingNode?.data || draggingNode
+    const target = dropNode?.data || dropNode
+    if (!dragging?.id || !target?.id || dragging.id === target.id) return
+    try {
+      await api.post(`/bom/${dragging.id}/move`, { target_id: target.id, drop_type: dropType })
+      ElMessage.success('结构位置已更新')
+      await loadAll()
+    } catch (error: any) {
+      ElMessage.error('移动失败: ' + (error.response?.data?.message || error.message || error))
+      await loadAll()
+    }
   }
 
   async function doSave() {
@@ -202,8 +230,11 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
     resetAddForm,
     prefillTier,
     onTierChange,
+    onParentChange,
+    onNodeTypeChange,
     openAddChild,
     openEdit,
+    moveNode,
     doSave,
     doDelete,
     doImport,

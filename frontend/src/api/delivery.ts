@@ -8,6 +8,7 @@ export function createDeliveryApi() {
     deliveryProjects: (params?: any) => api.get('/delivery/projects', { params }),
     deliveryProject: (id: number) => api.get(`/delivery/projects/${id}`),
     deliveryProjectRisks: (id: number) => api.get(`/delivery/projects/${id}/risks`),
+    deliveryProjectLineage: (id: number) => api.get(`/delivery/projects/${id}/lineage`),
     exceptions: (params?: any) => api.get('/exceptions', { params }),
     exceptionsSummary: () => api.get('/exceptions/summary'),
     exceptionDetail: (id: string) => api.get(`/exceptions/${id}`),
