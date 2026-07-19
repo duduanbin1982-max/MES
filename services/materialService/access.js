@@ -1,16 +1,6 @@
 "use strict";
 
 function createAccessGuards(ApiError) {
-  const requireRole = (...allowed) => (req) => {
-    if (!req.user) {
-      throw ApiError.unauthorized();
-    }
-    if (!allowed.includes(req.user.role)) {
-      throw ApiError.forbidden("权限不足, 需要角色: " + allowed.join("/"));
-    }
-    return false;
-  };
-
   const requireLogin = (req) => {
     if (!req.user) {
       throw ApiError.unauthorized();
@@ -31,7 +21,7 @@ function createAccessGuards(ApiError) {
     return false;
   };
 
-  return { requireLogin, requirePermission, requireRole };
+  return { requireLogin, requirePermission };
 }
 
 module.exports = { createAccessGuards };
