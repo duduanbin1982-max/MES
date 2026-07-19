@@ -1,5 +1,7 @@
 "use strict";
 
+const { isShortageActive, isShortageFulfilled } = require("../../../app/domain/shortageCase");
+
 function normalizeInt(value, fallback = null) {
   if (value === "" || value === undefined || value === null) return fallback;
   const parsed = Number(value);
@@ -76,13 +78,11 @@ function uniqText(values) {
 }
 
 function isActiveShortageStatus(status) {
-  const value = String(status || "").trim().toLowerCase();
-  return !["closed", "resolved", "arrived", "received", "cancelled"].includes(value);
+  return isShortageActive(status);
 }
 
 function isResolvedShortageStatus(status) {
-  const value = String(status || "").trim().toLowerCase();
-  return ["closed", "arrived", "received"].includes(value);
+  return isShortageFulfilled(status);
 }
 
 function buildChildrenMap(rows) {

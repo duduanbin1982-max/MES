@@ -1,5 +1,6 @@
 "use strict";
 const { ApiError } = require("../app/errors");
+const { assessProcessRoute, summarizeProcessRoutes } = require("../app/domain/processRoute");
 const { wrap } = require("../middleware/asyncHandler");
 
 function register(app, db) {
@@ -22,24 +23,6 @@ function register(app, db) {
       stack.push(...(children.get(id) || []));
     }
     return ids;
-  }
-
-  function statusOf(component, operations) {
-    const missing = [];
-    if (!operations.length) missing.push("未建立工序");
-    if (operations.some(op => !op.estimated_hours || op.estimated_hours <= 0)) missing.push("存在工序缺标准工时");
-    if (operations.some(op => !op.required_workstation_id)) missing.push("存在工序未绑定工位");
-    if (operations.some(op => !op.required_skill)) missing.push("存在工序未设置技能/工种");
-    const standardManHours = operations.reduce((sum, op) => sum + Number(op.standard_man_hours || op.estimated_hours || 0), 0);
-    return {
-      ok: missing.length === 0,
-      missing,
-      operation_count: operations.length,
-      estimated_hours: operations.reduce((sum, op) => sum + Number(op.estimated_hours || 0), 0),
-      standard_man_hours: Math.round(standardManHours * 100) / 100,
-      workstation_count: new Set(operations.map(op => op.required_workstation_id).filter(Boolean)).size,
-      component,
-    };
   }
 
   app.get("/api/process-route/instances/:id/components", wrap((req, res) => {
@@ -98,19 +81,10 @@ function register(app, db) {
         unit: component.unit,
         category: component.category,
       };
-      return { ...statusOf(componentInfo, operations), operations };
+      return { ...assessProcessRoute(componentInfo, operations), operations };
     });
 
-    const summary = {
-      component_count: cards.length,
-      complete_count: cards.filter(card => card.ok).length,
-      missing_route_count: cards.filter(card => card.missing.includes("未建立工序")).length,
-      missing_hours_count: cards.filter(card => card.missing.some(item => item.includes("标准工时"))).length,
-      missing_workstation_count: cards.filter(card => card.missing.some(item => item.includes("工位"))).length,
-      total_operations: cards.reduce((sum, card) => sum + card.operation_count, 0),
-      total_estimated_hours: Math.round(cards.reduce((sum, card) => sum + card.estimated_hours, 0) * 100) / 100,
-      total_standard_man_hours: Math.round(cards.reduce((sum, card) => sum + card.standard_man_hours, 0) * 100) / 100,
-    };
+    const summary = summarizeProcessRoutes(cards);
     res.json({ instance: inst, summary, components: cards });
   }));
 

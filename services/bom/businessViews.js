@@ -1,5 +1,6 @@
 "use strict";
-const { buildKitRiskComponents, summarizeKitRisk } = require("../../app/domain/bomTree");
+const { buildKitRiskComponents, summarizeKitRisk } = require("../../app/domain/bomRisk");
+const { summarizeProcessRoutes } = require("../../app/domain/processRoute");
 const { buildPurchaseView } = require("./businessViews/purchaseView");
 const { buildAssemblyView } = require("./businessViews/assemblyView");
 const { buildRawView } = require("./businessViews/rawView");
@@ -272,6 +273,8 @@ function buildBusinessViews(db, instanceId, rowsArg = null) {
 
   const riskComponents = buildKitRiskComponents(assemblyComponents, uniqText);
 
+  const processSummary = summarizeProcessRoutes(processComponents);
+
   return {
     summary: {
       total_nodes: rows.length,
@@ -326,11 +329,11 @@ function buildBusinessViews(db, instanceId, rowsArg = null) {
     },
     process: {
       summary: {
-        component_count: processComponents.length,
-        complete_count: processComponents.filter((item) => item.process_status === "success").length,
-        missing_route_count: processComponents.filter((item) => item.missing.includes("未建立工序")).length,
-        missing_hours_count: processComponents.filter((item) => item.missing.some((msg) => msg.includes("标准工时"))).length,
-        missing_workstation_count: processComponents.filter((item) => item.missing.some((msg) => msg.includes("工位"))).length,
+        component_count: processSummary.component_count,
+        complete_count: processSummary.complete_count,
+        missing_route_count: processSummary.missing_route_count,
+        missing_hours_count: processSummary.missing_hours_count,
+        missing_workstation_count: processSummary.missing_workstation_count,
       },
       components: processComponents,
     },

@@ -1,5 +1,8 @@
 "use strict";
 
+const { PROCESS_ROUTE_GAPS, assessProcessRoute } = require("../../../app/domain/processRoute");
+const { buildDeliveryStage, summarizeDeliveryWorkflow } = require("../../../app/domain/projectDelivery");
+
 function createProjectWorkflowReadModel(ctx, helpers) {
   const { tableExists, has, safeAll } = ctx;
   const {
@@ -32,31 +35,18 @@ function createProjectWorkflowReadModel(ctx, helpers) {
     return { type, severity: severity || "warning", title, message: message || title, path: targetPath, owner_role: ownerRole || null };
   }
 
-  function stageStatus(done, total, blockers = []) {
-    if (blockers.some((b) => b.severity === "critical" || b.severity === "high")) return "blocked";
-    if (blockers.length) return "warning";
-    if (total === 0) return "empty";
-    if (done >= total) return "done";
-    if (done > 0) return "running";
-    return "pending";
-  }
-
   function stage(key, label, done, total, path, options = {}) {
-    const blockers = options.blockers || [];
-    const status = options.status || stageStatus(done, total, blockers);
-    return {
+    return buildDeliveryStage({
       key,
       label,
       done,
       total,
-      percent: pct(done, total),
-      status,
       path,
-      owner_role: options.owner_role || "项目经理",
-      action_label: options.action_label || "去处理",
-      blockers,
-      blocker_count: blockers.length,
-    };
+      ownerRole: options.owner_role,
+      actionLabel: options.action_label,
+      blockers: options.blockers || [],
+      status: options.status,
+    }, pct);
   }
 
   function bomStatsForInstance(id) {
@@ -117,16 +107,13 @@ function createProjectWorkflowReadModel(ctx, helpers) {
     for (const component of components) {
       const scope = scopeIds(component.id);
       const operations = processRows.filter((op) => op.bom_node_id && scope.has(Number(op.bom_node_id)));
-      const missing = [];
-      if (!operations.length) missing.push("未建立工序");
-      if (operations.some((op) => !Number(op.estimated_hours || 0))) missing.push("缺标准工时");
-      if (operations.some((op) => !op.required_workstation_id)) missing.push("缺工位");
-      if (operations.some((op) => !op.required_skill)) missing.push("缺技能/工种");
+      const assessment = assessProcessRoute(component, operations, "compact");
+      const missing = assessment.missing;
       standardManHours += operations.reduce((sum, op) => sum + Number(op.standard_man_hours || op.estimated_hours || 0), 0);
-      if (!missing.length) complete += 1;
+      if (assessment.ok) complete += 1;
       else {
         const name = component.part_number || component.notes || `部件#${component.id}`;
-        blockers.push(workflowBlocker("route_component_incomplete", missing.includes("未建立工序") ? "high" : "warning", `${name} 工艺不完整`, missing.join("、"), projectPath("/process-tree", id, "process"), "工艺/生产"));
+        blockers.push(workflowBlocker("route_component_incomplete", assessment.gap_codes.includes(PROCESS_ROUTE_GAPS.NO_OPERATIONS) ? "high" : "warning", `${name} 工艺不完整`, missing.join("、"), projectPath("/process-tree", id, "process"), "工艺/生产"));
       }
     }
     return {
@@ -267,8 +254,7 @@ function createProjectWorkflowReadModel(ctx, helpers) {
       stage("cost", "成本", costDone || (cost.actual_amount > 0 ? 1 : 0), Math.max(costTotal, cost.actual_amount > 0 ? 1 : 0, 1), projectPath("/cost", id, "cost"), { owner_role: "财务/项目", action_label: "复核成本", blockers: costBlockers }),
       stage("acceptance", "验收", acceptanceDone, Math.max(acceptanceTotal, 1), projectPath("/tbm-advanced", id, "acceptance"), { owner_role: "项目/售后", action_label: "登记验收", blockers: acceptanceBlockers }),
     ];
-    const workflowBlockers = stages.flatMap((s) => s.blockers.map((b) => ({ ...b, stage_key: s.key, stage_label: s.label })));
-    const workflowStatus = workflowBlockers.some((b) => b.severity === "critical" || b.severity === "high") ? "blocked" : workflowBlockers.length ? "warning" : "normal";
+    const workflow = summarizeDeliveryWorkflow(stages);
 
     return {
       id,
@@ -280,9 +266,9 @@ function createProjectWorkflowReadModel(ctx, helpers) {
       progress_pct: Math.max(0, Math.min(100, progress)),
       risk_score: riskBreakdown.score,
       risk_level: riskBreakdown.risk_level,
-      workflow_status: workflowStatus,
-      workflow_blockers: workflowBlockers,
-      workflow_blocker_count: workflowBlockers.length,
+      workflow_status: workflow.status,
+      workflow_blockers: workflow.blockers,
+      workflow_blocker_count: workflow.blocker_count,
       exception_count: projectExceptions.length,
       risk_breakdown: riskBreakdown,
       oee_30d: oeeForInstance(id),

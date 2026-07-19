@@ -1,9 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { buildKitRiskComponents, summarizeKitRisk } = require("../app/domain/bomTree");
+const { buildKitRiskComponents, summarizeKitRisk } = require("../app/domain/bomRisk");
 const { canTransitionLifecycle, normalizeLifecycleStatus } = require("../app/domain/equipmentInstance");
-const { isShortageActive, isShortageResolved, nextShortageStateForFollowup } = require("../app/domain/purchaseShortage");
+const { isShortageActive, isShortageFulfilled, isShortageResolved, nextShortageStateForFollowup } = require("../app/domain/shortageCase");
+const { PROCESS_ROUTE_GAPS, assessProcessRoute, summarizeProcessRoutes } = require("../app/domain/processRoute");
+const { buildDeliveryStage, summarizeDeliveryWorkflow } = require("../app/domain/projectDelivery");
 const { appendClosureNote, evaluateNcrClosure } = require("../app/domain/qualityNcr");
 
 test("BOM kit risks are sorted by blockage and amount", () => {
@@ -29,8 +31,42 @@ test("NCR closure requires disposition, CAPA closed and pass/accept", () => {
 test("shortage followup state maps drive close and reopen loops", () => {
   assert.equal(isShortageActive("open"), true);
   assert.equal(isShortageResolved("closed"), true);
+  assert.equal(isShortageActive("received"), false);
+  assert.equal(isShortageFulfilled("received"), true);
+  assert.equal(isShortageFulfilled("cancelled"), false);
   assert.equal(nextShortageStateForFollowup("arrived"), "closed");
   assert.equal(nextShortageStateForFollowup("cancelled"), "reopened");
+});
+
+test("process route owns gap codes and completeness summary", () => {
+  const missing = assessProcessRoute({ id: 1 }, [{ estimated_hours: 0, required_workstation_id: null, required_skill: "" }]);
+  assert.deepEqual(missing.gap_codes, [
+    PROCESS_ROUTE_GAPS.MISSING_HOURS,
+    PROCESS_ROUTE_GAPS.MISSING_WORKSTATION,
+    PROCESS_ROUTE_GAPS.MISSING_SKILL,
+  ]);
+  const complete = assessProcessRoute({ id: 2 }, [{ estimated_hours: 4, required_workstation_id: 3, required_skill: "welding" }]);
+  const summary = summarizeProcessRoutes([missing, complete]);
+  assert.equal(summary.component_count, 2);
+  assert.equal(summary.complete_count, 1);
+  assert.equal(summary.missing_hours_count, 1);
+});
+
+test("project delivery owns stage and workflow status", () => {
+  const percentage = (done, total) => total ? Math.round(done * 100 / total) : 0;
+  const stage = buildDeliveryStage({
+    key: "purchase",
+    label: "采购",
+    done: 1,
+    total: 3,
+    path: "/purchase",
+    blockers: [{ severity: "high", title: "采购延期" }],
+  }, percentage);
+  assert.equal(stage.status, "blocked");
+  assert.equal(stage.percent, 33);
+  const workflow = summarizeDeliveryWorkflow([stage]);
+  assert.equal(workflow.status, "blocked");
+  assert.equal(workflow.blockers[0].stage_key, "purchase");
 });
 
 test("equipment lifecycle permits only defined transitions", () => {

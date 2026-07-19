@@ -1,5 +1,7 @@
 "use strict";
 
+const { processRouteGapCodes, processRouteGapMessages } = require("../../../app/domain/processRoute");
+
 function buildAssemblyView(ctx) {
   const {
     rows,
@@ -38,11 +40,8 @@ function buildAssemblyView(ctx) {
     const rawCount = scopeRows.filter((row) => Number(row.tier) === 3).length;
     const linkedDocs = scopeRows.reduce((sum, row) => sum + ((docMap.get(Number(row.id)) || []).length), 0);
     const processOps = processNodes.filter((node) => node.bom_node_id && scopeIds.has(Number(node.bom_node_id)));
-    const missing = [];
-    if (!processOps.length) missing.push("未建立工序");
-    if (processOps.some((op) => !Number(op.estimated_hours || 0))) missing.push("存在工序缺标准工时");
-    if (processOps.some((op) => !op.required_workstation_id)) missing.push("存在工序未绑定工位");
-    if (processOps.some((op) => !op.required_skill)) missing.push("存在工序未设置技能/工种");
+    const gapCodes = processRouteGapCodes(processOps);
+    const missing = processRouteGapMessages(processOps);
     const bomBoundCount = scopeRows.filter((row) => Number(row.tier) >= 2 && row.operation_id).length;
     const totalProcessHours = processOps.reduce((sum, op) => sum + Number(op.estimated_hours || 0), 0);
     const totalStandardManHours = processOps.reduce((sum, op) => sum + Number(op.standard_man_hours || op.estimated_hours || 0), 0);
@@ -162,6 +161,7 @@ function buildAssemblyView(ctx) {
       missing_doc_count: Math.max(scopeRows.filter((row) => Number(row.tier) >= 1).length - linkedDocs, 0),
       total_cost: round2(Number(costMap.get(Number(component.id))?.cost || 0)),
       process_status: statusType(missing),
+      process_gap_codes: gapCodes,
       process_missing: missing,
       process_operation_count: processOps.length,
       process_hours: round2(totalProcessHours),
@@ -187,6 +187,7 @@ function buildAssemblyView(ctx) {
     component_name: component.component_name,
     part_number: component.part_number,
     process_status: component.process_status,
+    gap_codes: component.process_gap_codes,
     missing: component.process_missing,
     operation_count: component.process_operation_count,
     estimated_hours: component.process_hours,
