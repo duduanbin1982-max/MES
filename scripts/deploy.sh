@@ -67,7 +67,17 @@ fi
 
 # 健康
 echo "[4/4] 健康检查 ..."
-HEALTH=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3890/api/health)
+HEALTH=000
+for _attempt in $(seq 1 30); do
+  HEALTH=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3890/api/health 2>/dev/null || true)
+  if [ "$HEALTH" = "200" ]; then
+    break
+  fi
+  if [ "$(systemctl --user is-active "$SVC" 2>/dev/null || true)" != "active" ]; then
+    break
+  fi
+  sleep 1
+done
 if [ "$HEALTH" != "200" ]; then
   echo "❌ /api/health 返回 $HEALTH"
   exit 1
