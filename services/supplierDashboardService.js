@@ -1,10 +1,11 @@
 // services/supplierDashboardService.js
 // 供应商协同看板 —— 评分 / 采购跟催 / 来料检验 / 外协进度
 "use strict";
+const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
 
 function register(app, db) {
-  const { get, all, run } = require("../routes/_helpers")(db);
+  const { get, all, run } = makeDbHelpers(db);
 
   app.get("/api/supplier/dashboard", wrap((req, res) => {
     // 供应商列表 + 最新评分

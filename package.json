@@ -14,6 +14,7 @@
     "predeploy": "bash scripts/pre-deploy-test.sh",
     "check:routes": "node scripts/check-duplicate-routes.js",
     "check:modules": "node scripts/check-module-manifest.js",
+    "check:layers": "node scripts/check-layer-boundaries.js",
     "schema:check": "node scripts/check-service-schema-versions.js",
     "schema:write": "node scripts/check-service-schema-versions.js --write"
   },

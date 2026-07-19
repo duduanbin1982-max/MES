@@ -3,6 +3,7 @@
 "use strict";
 
 const { ApiError } = require("../app/errors");
+const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
 const { hasStoredFile } = require("./documentService");
 
@@ -13,7 +14,7 @@ function ensureSchema(db) {
 
 function register(app, db) {
   ensureSchema(db);
-  const { get, all, run } = require("../routes/_helpers")(db);
+  const { get, all, run } = makeDbHelpers(db);
 
   app.get("/api/critical-parts/dashboard", wrap((req, res) => {
     const instanceId = req.query.instance_id ? Number(req.query.instance_id) : null;

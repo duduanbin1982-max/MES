@@ -22,6 +22,9 @@ node scripts/check-module-manifest.js
 echo "=== 0.2) 检查服务 DDL 指纹/版本 ==="
 node scripts/check-service-schema-versions.js
 
+echo "=== 0.3) 检查服务/路由层依赖方向 ==="
+node scripts/check-layer-boundaries.js
+
 echo "=== 1) 准备 cross-sub seed DB ==="
 node tests/_seedXsubDb.js > /tmp/seed-xsub.json
 SEED_DB=$(python3 -c "import json; print(json.load(open('/tmp/seed-xsub.json'))['DB_PATH'])")

@@ -3,10 +3,11 @@
 "use strict";
 
 const { ApiError } = require("../app/errors");
+const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
 
 function register(app, db) {
-  const { get, all, run } = require("../routes/_helpers")(db);
+  const { get, all, run } = makeDbHelpers(db);
 
   app.get("/api/maintenance/dashboard", wrap((req, res) => {
     const instanceId = req.query.instance_id ? Number(req.query.instance_id) : null;

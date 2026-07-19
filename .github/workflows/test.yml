@@ -53,6 +53,9 @@ jobs:
       - name: Guard service DDL versions
         run: node scripts/check-service-schema-versions.js --base=HEAD^
 
+      - name: Guard architecture boundaries
+        run: node scripts/check-layer-boundaries.js
+
       - name: Frontend typecheck
         run: npm run typecheck --prefix frontend
 
