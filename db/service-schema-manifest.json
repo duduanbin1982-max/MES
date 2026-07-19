@@ -42,8 +42,8 @@
       "ddlStatements": 0
     },
     "deliveryService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "d97d0c58bfa248dcebae4830a21becdb8a7d0f235d23a1d9f121f3dd9c0d499b",
+      "schemaVersion": 2,
+      "ddlFingerprint": "4e4267ddd9c6eddaab7b96f4b2435249bcb608c50cde2a14c49e7f15c4d3db5c",
       "ddlStatements": 4
     },
     "digitalTwinService": {

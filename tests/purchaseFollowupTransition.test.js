@@ -6,8 +6,17 @@ const {
   deriveFollowupTransition,
   targetShortageIdsForTracking,
 } = require("../services/purchase/followupEffects");
+const { purchaseFollowupPath } = require("../services/delivery/readModel/purchaseFollowups");
 
 const NOW = new Date("2026-07-10T00:00:00Z").getTime();
+
+test("purchase follow-up: shared path builder preserves filters", () => {
+  assert.equal(purchaseFollowupPath(), "/purchase?tab=followup");
+  assert.equal(
+    purchaseFollowupPath(7, "PR 2026/001"),
+    "/purchase?tab=followup&instance_id=7&purchase_request_no=PR%202026%2F001"
+  );
+});
 
 test("purchase follow-up: actual delivery drives delivered + shortage close", () => {
   const transition = deriveFollowupTransition(

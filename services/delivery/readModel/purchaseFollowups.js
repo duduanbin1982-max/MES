@@ -1,14 +1,14 @@
 "use strict";
 
+function purchaseFollowupPath(instanceId, purchaseRequestNo = null) {
+  const params = [];
+  if (instanceId) params.push(`instance_id=${encodeURIComponent(instanceId)}`);
+  if (purchaseRequestNo) params.push(`purchase_request_no=${encodeURIComponent(purchaseRequestNo)}`);
+  return `/purchase?tab=followup${params.length ? `&${params.join("&")}` : ""}`;
+}
+
 function createPurchaseFollowupReader(ctx) {
   const { tableExists, safeAll } = ctx;
-
-  function purchaseFollowupPath(instanceId, purchaseRequestNo = null) {
-    const params = [];
-    if (instanceId) params.push(`instance_id=${encodeURIComponent(instanceId)}`);
-    if (purchaseRequestNo) params.push(`purchase_request_no=${encodeURIComponent(purchaseRequestNo)}`);
-    return `/purchase?tab=followup${params.length ? `&${params.join("&")}` : ""}`;
-  }
 
   function normalizeTrackingStatus(status, purchaseRequestNo = null) {
     if (status === "closed" || status === "arrived" || status === "received") return "delivered";
@@ -132,4 +132,4 @@ function createPurchaseFollowupReader(ctx) {
   };
 }
 
-module.exports = { createPurchaseFollowupReader };
+module.exports = { createPurchaseFollowupReader, purchaseFollowupPath };
