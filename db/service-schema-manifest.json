@@ -157,9 +157,9 @@
       "ddlStatements": 0
     },
     "processTree": {
-      "schemaVersion": 1,
-      "ddlFingerprint": null,
-      "ddlStatements": 0
+      "schemaVersion": 2,
+      "ddlFingerprint": "c44c261843ae20353084e93abd37600df7185d67e94681c2c86f2aef38822aec",
+      "ddlStatements": 5
     },
     "projectMasterService": {
       "schemaVersion": 1,

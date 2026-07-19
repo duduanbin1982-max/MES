@@ -1,9 +1,10 @@
 "use strict";
-// services/processTree/index.js
-// 工艺树模块统一入口 (register-all)
 
-function register(app, db) {
-  // subsystems and mindmap are loaded via routes/instance/process
+const { repairProcessNodesBomForeignKey } = require("./repairBomForeignKey");
+
+function register(_app, db) {
+  repairProcessNodesBomForeignKey(db);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_pn_bom ON process_nodes(bom_node_id)");
 }
 
-module.exports = { register };
+module.exports = { register, repairProcessNodesBomForeignKey };

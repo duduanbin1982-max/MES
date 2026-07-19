@@ -96,5 +96,7 @@ function initEquipmentInstanceEnhancements(db) {
 }
 
 module.exports = {
+  hasTable,
   initEquipmentInstanceEnhancements,
+  tableColumns,
 };

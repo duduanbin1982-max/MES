@@ -25,7 +25,7 @@ const MESA_SERVICES = [
   { name: "processHoursService", module: "./processHoursService", schemaVersion: 1 },
   { name: "processMasterService", module: "./processMasterService", schemaVersion: 1 },
   { name: "processRouteService", module: "./processRouteService", schemaVersion: 1 },
-  { name: "processTree", module: "./processTree", schemaVersion: 1 },
+  { name: "processTree", module: "./processTree", schemaVersion: 2 },
   { name: "qcService", module: "./qcService", schemaVersion: 1 },
   { name: "shopfloorService", module: "./shopfloorService", schemaVersion: 1 },
   { name: "shortageClosureService", module: "./shortageClosureService", schemaVersion: 1 },
