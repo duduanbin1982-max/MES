@@ -93,17 +93,18 @@ import { ref, reactive, onMounted, nextTick, watch } from 'vue'
 import { Api } from '../api'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
+import type { ApiRecord } from '../types/api'
 
 const activeTab = ref('analyze')
 
 // ========== Tab 1: SPC Analysis (existing) ==========
-const nodes = ref([])
+const nodes = ref<ApiRecord[]>([])
 const params = [{code:'temperature_c',label:'温度 (°C)'},{code:'current_amp',label:'电流 (A)'},{code:'voltage_v',label:'电压 (V)'},{code:'speed_mm_min',label:'速度 (mm/min)'},{code:'pressure_mpa',label:'压力 (MPa)'},{code:'feed_rate',label:'进给率'}]
-const sel = reactive({ node: null, param: 'temperature_c', ss: 5 })
+const sel = reactive<{ node: number | null; param: string; ss: number }>({ node: null, param: 'temperature_c', ss: 5 })
 const loading = ref(false)
-const data = ref(null)
-const chartRef = ref(null)
-let chartInst = null
+const data = ref<ApiRecord | null>(null)
+const chartRef = ref<HTMLElement | null>(null)
+let chartInst: echarts.ECharts | null = null
 
 onMounted(async () => {
   try { nodes.value = await Api.get('/spc/nodes-with-params') } catch (_) { nodes.value = [] }
@@ -122,10 +123,10 @@ const analyze = async () => {
 
 const renderChart = () => {
   if (!data.value?.subgroups?.length) return
-  const subs = data.value.subgroups
+  const subs: ApiRecord[] = data.value.subgroups
   const xr = data.value
-  const xdata = subs.map(s => s.index)
-  const means = subs.map(s => s.mean)
+  const xdata = subs.map((subgroup: ApiRecord) => subgroup.index)
+  const means = subs.map((subgroup: ApiRecord) => subgroup.mean)
 
   if (!chartRef.value) return
   if (!chartInst) chartInst = echarts.init(chartRef.value)
@@ -151,10 +152,10 @@ const renderChart = () => {
 
 // ========== Tab 2: Xbar-R ==========
 const xbarInput = ref('')
-const xbarResult = ref(null)
+const xbarResult = ref<ApiRecord | null>(null)
 const xbarLoading = ref(false)
-const xbarChartRef = ref(null)
-let xbarChartInst = null
+const xbarChartRef = ref<HTMLElement | null>(null)
+let xbarChartInst: echarts.ECharts | null = null
 
 const calcXbarR = async () => {
   if (!xbarInput.value.trim()) { ElMessage.warning('请输入子组数据'); return }
@@ -172,9 +173,10 @@ const calcXbarR = async () => {
 const renderXbarChart = () => {
   if (!xbarResult.value || !xbarChartRef.value) return
   const d = xbarResult.value
-  const xdata = d.subgroups.map((_, i) => i + 1)
-  const means = d.subgroups.map(s => s.mean)
-  const ocPoints = d.subgroups.map((s, i) => s.out_of_control ? i : null).filter(i => i !== null)
+  const subgroups: ApiRecord[] = d.subgroups || []
+  const xdata = subgroups.map((_subgroup: ApiRecord, index: number) => index + 1)
+  const means = subgroups.map((subgroup: ApiRecord) => subgroup.mean)
+  const ocPoints = subgroups.map((subgroup: ApiRecord, index: number) => subgroup.out_of_control ? index : null).filter((index: number | null): index is number => index !== null)
 
   if (!xbarChartInst) xbarChartInst = echarts.init(xbarChartRef.value)
   xbarChartInst.setOption({
@@ -206,10 +208,10 @@ const renderXbarChart = () => {
 const cpkInput = ref('')
 const cpkUsl = ref(10)
 const cpkLsl = ref(0)
-const cpkResult = ref(null)
+const cpkResult = ref<ApiRecord | null>(null)
 const cpkLoading = ref(false)
-const cpkChartRef = ref(null)
-let cpkChartInst = null
+const cpkChartRef = ref<HTMLElement | null>(null)
+let cpkChartInst: echarts.ECharts | null = null
 
 const calcCpk = async () => {
   if (!cpkInput.value.trim()) { ElMessage.warning('请输入测量值'); return }
@@ -224,15 +226,15 @@ const calcCpk = async () => {
 const renderCpkChart = () => {
   if (!cpkResult.value || !cpkChartRef.value) return
   const d = cpkResult.value
-  const bins = d.histogram?.bins || []
-  const counts = d.histogram?.counts || []
+  const bins: number[] = d.histogram?.bins || []
+  const counts: number[] = d.histogram?.counts || []
 
   if (!cpkChartInst) cpkChartInst = echarts.init(cpkChartRef.value)
   cpkChartInst.setOption({
     title: { text: '过程能力直方图', left: 'center', textStyle: { fontSize: 14 } },
     tooltip: { trigger: 'axis' },
     grid: { left: 60, right: 30, top: 40, bottom: 30 },
-    xAxis: { type: 'category', data: bins.map(b => b.toFixed(3)), name: '区间', axisLabel: { rotate: 30 } },
+    xAxis: { type: 'category', data: bins.map((bin: number) => bin.toFixed(3)), name: '区间', axisLabel: { rotate: 30 } },
     yAxis: { type: 'value', name: '频次' },
     series: [{
       name: '频次', type: 'bar', data: counts, barWidth: '90%',
@@ -249,13 +251,13 @@ const renderCpkChart = () => {
 }
 
 // ========== Tab 4: Pareto ==========
-const paretoInstance = ref(null)
+const paretoInstance = ref<number | null>(null)
 const paretoDays = ref(30)
-const paretoData = ref(null)
+const paretoData = ref<ApiRecord | null>(null)
 const paretoLoading = ref(false)
-const paretoChartRef = ref(null)
-let paretoChartInst = null
-const instances = ref([])
+const paretoChartRef = ref<HTMLElement | null>(null)
+let paretoChartInst: echarts.ECharts | null = null
+const instances = ref<ApiRecord[]>([])
 
 const loadPareto = async () => {
   if (!paretoInstance.value) { ElMessage.warning('请选择设备实例'); return }

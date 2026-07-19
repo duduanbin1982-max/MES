@@ -44,7 +44,7 @@
         <template #header>
           <span style="font-weight: 500"><el-icon><Tools /></el-icon> 关键件成本 ({{ data.key_components?.count || 0 }} 项)</span>
           <el-tag size="small" style="margin-left: 8px" :type="data.project_status==='over_budget'?'danger':data.project_status==='partial'?'warning':'success'">
-            {{ {over_budget:'超预算', partial:'部分签约', fully_contracted:'全部签约', no_key_components:'无关键件'}[data.project_status] || data.project_status }}
+            {{ projectStatusLabels[data.project_status] || data.project_status }}
           </el-tag>
         </template>
         <el-row :gutter="16" style="margin-bottom: 8px">
@@ -114,15 +114,18 @@
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Api } from '../api'
+import { ElMessage } from 'element-plus'
+import type { ApiRecord } from '../types/api'
 
 const route = useRoute()
-const instances = ref([])
-const selectedInstance = ref(null)
-const data = ref({})
+const instances = ref<ApiRecord[]>([])
+const selectedInstance = ref<number | null>(null)
+const data = ref<ApiRecord>({})
 const loading = ref(false)
 const isVarianceView = computed(() => route.path === '/cost-variance' || route.query.view === 'variance' || route.query.view === 'cost-variance')
 const showInstancePicker = computed(() => !isVarianceView.value)
 const pageTitle = computed(() => isVarianceView.value ? '项目成本偏差' : '成本归集')
+const projectStatusLabels: Record<string, string> = { over_budget: '超预算', partial: '部分签约', fully_contracted: '全部签约', no_key_components: '无关键件' }
 
 const loadInstances = async () => {
   try { const r = await Api.get('/equipment_instances'); instances.value = r.items || r || [] }
@@ -137,7 +140,7 @@ const load = async () => {
   finally { loading.value = false }
 }
 
-const fmtMoney = (v) => {
+const fmtMoney = (v: unknown) => {
   if (v == null) return '-'
   return Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }

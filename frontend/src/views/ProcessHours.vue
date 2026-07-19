@@ -236,43 +236,46 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { ApiRecord } from '../types/api'
 
 const activeTab = ref('hours')
 
 // 公共数据
-const instances = ref([])
-const workOrders = ref([])
-const processNodes = ref([])
-const selectedInstance = ref(null)
+const instances = ref<ApiRecord[]>([])
+const workOrders = ref<ApiRecord[]>([])
+const processNodes = ref<ApiRecord[]>([])
+const selectedInstance = ref<number | null>(null)
 
 // Tab 1: 工时定额
-const hoursSummary = reactive({ total_man_hours: 0, details: [] })
+const hoursSummary = reactive<{ total_man_hours: number; details: ApiRecord[] }>({ total_man_hours: 0, details: [] })
 const hoursLoading = ref(false)
 const showHoursEdit = ref(false)
 const hoursSaving = ref(false)
 const hoursForm = reactive({ node_id: 0, operation_name: '', work_type: 'assembly', standard_hours: 8, worker_count: 2, description: '' })
 
 // Tab 2: 工序报工
-const reports = ref([])
+const reports = ref<ApiRecord[]>([])
 const reportsLoading = ref(false)
-const reportFilter = reactive({ work_order_id: null, dateRange: null })
+const reportFilter = reactive<{ work_order_id: number | null; dateRange: [string, string] | null }>({ work_order_id: null, dateRange: null })
 const showReportDialog = ref(false)
 const reportSaving = ref(false)
-const reportForm = reactive({ work_order_id: null, process_node_id: null, hours_spent: 0, quantity_completed: 0, quality_result: 'pass', notes: '' })
+const reportForm = reactive<{ work_order_id: number | null; process_node_id: number | null; hours_spent: number; quantity_completed: number; quality_result: string; notes: string }>({ work_order_id: null, process_node_id: null, hours_spent: 0, quantity_completed: 0, quality_result: 'pass', notes: '' })
 
 // Tab 3: 日汇总
-const dailySummary = reactive({ workers: 0, details: [] })
+const dailySummary = reactive<{ workers: number; details: ApiRecord[] }>({ workers: 0, details: [] })
 const dailyLoading = ref(false)
 const dailyDate = ref(new Date().toISOString().substring(0, 10))
-const dailyTotalHours = computed(() => (dailySummary.details || []).reduce((s, r) => s + (r.total_hours || 0), 0))
+const dailyTotalHours = computed(() => (dailySummary.details || []).reduce((sum: number, row: ApiRecord) => sum + (row.total_hours || 0), 0))
 
 // Tab 4: 完工进度
-const selectedNodeId = ref(null)
-const nodeProgress = reactive({ process_node_id: 0, total_hours_reported: 0, standard_man_hours: 0, completion_pct: 0, recent_reports: [] })
+const selectedNodeId = ref<number | null>(null)
+const nodeProgress = reactive<{ process_node_id: number; total_hours_reported: number; standard_man_hours: number; completion_pct: number; report_count: number; recent_reports: ApiRecord[] }>({ process_node_id: 0, total_hours_reported: 0, standard_man_hours: 0, completion_pct: 0, report_count: 0, recent_reports: [] })
 
 // 工种映射
-const workTypeTag = (t) => ({ assembly: '', welding: 'warning', machining: 'danger', testing: 'info', qc: 'success' }[t] || '')
-const workTypeLabel = (t) => ({ assembly: '装配', welding: '焊接', machining: '机加', testing: '测试', qc: '质检' }[t] || t)
+const workTypeTags: Record<string, string> = { assembly: '', welding: 'warning', machining: 'danger', testing: 'info', qc: 'success' }
+const workTypeLabels: Record<string, string> = { assembly: '装配', welding: '焊接', machining: '机加', testing: '测试', qc: '质检' }
+const workTypeTag = (type: string) => workTypeTags[type] || ''
+const workTypeLabel = (type: string) => workTypeLabels[type] || type
 
 // 加载公共数据
 const loadCommonData = async () => {
@@ -286,11 +289,11 @@ const loadCommonData = async () => {
   } catch (_) { ElMessage.error('加载实例/工单失败') }
 }
 
-const loadProcessNodes = async (instanceId) => {
+const loadProcessNodes = async (instanceId: number | null) => {
   if (!instanceId) { processNodes.value = []; return }
   try {
     const r = await Api.get('/equipment_instances/' + instanceId + '/process_tree')
-    processNodes.value = (r.flat || []).map(n => ({ id: n.id, operation_name: n.operation_name || n.material_name }))
+    processNodes.value = (r.flat || []).map((node: ApiRecord) => ({ id: node.id, operation_name: node.operation_name || node.material_name }))
   } catch (_) { processNodes.value = [] }
 }
 
@@ -306,7 +309,7 @@ const loadHoursSummary = async () => {
   finally { hoursLoading.value = false }
 }
 
-const openHoursDialog = (row) => {
+const openHoursDialog = (row: ApiRecord) => {
   hoursForm.node_id = row.node_id
   hoursForm.operation_name = row.operation_name
   hoursForm.work_type = row.work_type || 'assembly'
@@ -332,7 +335,7 @@ const saveHours = async () => {
   finally { hoursSaving.value = false }
 }
 
-const deleteHours = async (row) => {
+const deleteHours = async (row: ApiRecord) => {
   try {
     await ElMessageBox.confirm('确认删除 #' + row.node_id + ' ' + row.work_type + ' 的工时定额?', '确认删除', { type: 'warning' })
     await Api.del('/process/nodes/' + row.node_id + '/hours/' + row.work_type)
@@ -345,7 +348,7 @@ const deleteHours = async (row) => {
 const loadReports = async () => {
   reportsLoading.value = true
   try {
-    const params = {}
+    const params: ApiRecord = {}
     if (reportFilter.work_order_id) params.work_order_id = reportFilter.work_order_id
     if (reportFilter.dateRange) { params.start_date = reportFilter.dateRange[0]; params.end_date = reportFilter.dateRange[1] }
     reports.value = await Api.get('/work-reports', { params })
@@ -378,7 +381,7 @@ const loadDailySummary = async () => {
 }
 
 // Tab 4: 进度
-const onNodeSelect = async (nodeId) => {
+const onNodeSelect = async (nodeId: number | null) => {
   if (!nodeId) return
   try {
     const r = await Api.get('/process/nodes/' + nodeId + '/progress')
@@ -388,7 +391,7 @@ const onNodeSelect = async (nodeId) => {
 
 
 // Tab 5: 工人绩效
-const perfFilter = reactive({ dateRange: null })
+const perfFilter = reactive<{ dateRange: [string, string] | null }>({ dateRange: null })
 const workerPerfData = ref<any[]>([])
 const perfLoading = ref(false)
 const perfSummary = reactive({ avg_efficiency: 0, total_hours_sum: 0, total_tasks: 0 })
@@ -409,7 +412,7 @@ const loadWorkerPerformance = async () => {
 }
 
 // Tab 6: 加班统计
-const otFilter = reactive({ dateRange: null })
+const otFilter = reactive<{ dateRange: [string, string] | null }>({ dateRange: null })
 const overtimeData = ref<any[]>([])
 const otLoading = ref(false)
 const otSummary = reactive({ total_overtime: 0, worker_count: 0 })
@@ -452,5 +455,3 @@ onMounted(() => {
 .stat-label { font-size:12px; color:var(--el-color-info); margin-bottom:6px; }
 .stat-value { font-size:24px; font-weight:600; color:var(--el-text-color-primary); line-height:1.2; }
 </style>
-
-

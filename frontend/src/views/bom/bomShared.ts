@@ -32,11 +32,12 @@ export function nodeTypeLabel(value: string) {
 }
 
 export function tierPreset(tier: number) {
-  return vocabulary.tierPresets[String(tier)] || vocabulary.tierPresets.default
+  const presets = vocabulary.tierPresets as Record<string, any>
+  return presets[String(tier)] || presets.default
 }
 
 export function nodeTypePreset(nodeType: string) {
-  return vocabulary.nodeTypes[nodeType] || null
+  return (vocabulary.nodeTypes as Record<string, any>)[nodeType] || null
 }
 
 export function defaultBomForm() {
@@ -67,15 +68,15 @@ export function defaultBomForm() {
 }
 
 export function contractDiffLabel(status: string) {
-  return vocabulary.contractDiffLabels[status] || '待签合同'
+  return (vocabulary.contractDiffLabels as Record<string, string>)[status] || '待签合同'
 }
 
 export function kitRiskLabel(status: string) {
-  return vocabulary.kitRiskLabels[status] || '待到货'
+  return (vocabulary.kitRiskLabels as Record<string, string>)[status] || '待到货'
 }
 
 export function processLabel(status: string) {
-  return vocabulary.processStatusLabels[status] || '待完善'
+  return (vocabulary.processStatusLabels as Record<string, string>)[status] || '待完善'
 }
 
 export function processTagType(status: string) {

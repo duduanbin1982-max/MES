@@ -45,8 +45,6 @@ function scanLookup(req, res, db) {
 }
 
 function scanExecute(req, res, db) {
-  ensureQuantityColumns(db);
-
   const { code, action, operator_id, hours_worked, notes, quantity_completed, defect_quantity } = req.body;
   if (!code || !action) throw ApiError.validation('code/action 必填')
 
@@ -126,4 +124,4 @@ function scanExecute(req, res, db) {
   res.json({ id: r.lastInsertRowid, target_type: targetType, target_id: target.id, message: '执行已记录' });
 }
 
-module.exports = { scanLookup, scanExecute };
+module.exports = { ensureQuantityColumns, scanLookup, scanExecute };

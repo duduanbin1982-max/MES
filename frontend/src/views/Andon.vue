@@ -19,11 +19,11 @@
           <el-button @click="doScan" :loading="scanning"><el-icon><Search /></el-icon> 扫描触发</el-button>
         </div>
         <el-table :data="alerts" stripe v-loading="loading" size="small" max-height="500">
-          <el-table-column label="级别" width="80"><template #default="{row}"><el-tag :type="row.level" size="small">{{ {danger:'严重',warning:'警告',info:'提示'}[row.level]||row.level }}</el-tag></template></el-table-column>
+          <el-table-column label="级别" width="80"><template #default="{row}"><el-tag :type="row.level" size="small">{{ alertLevelLabels[row.level] || row.level }}</el-tag></template></el-table-column>
           <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
           <el-table-column prop="message" label="详情" min-width="200" show-overflow-tooltip />
-          <el-table-column label="类型" width="100"><template #default="{row}"><el-tag size="small">{{ {inventory_low:'库存低',wo_overdue:'工单逾期',equipment_down:'设备故障',qc_fail:'质检不合格'}[row.alert_type]||row.alert_type }}</el-tag></template></el-table-column>
-          <el-table-column label="状态" width="100"><template #default="{row}"><el-tag :type="row.status==='open'?'danger':row.status==='acknowledged'?'warning':'success'" size="small">{{ {open:'未处理',acknowledged:'已确认',resolved:'已解决'}[row.status]||row.status }}</el-tag></template></el-table-column>
+          <el-table-column label="类型" width="100"><template #default="{row}"><el-tag size="small">{{ alertTypeLabels[row.alert_type] || row.alert_type }}</el-tag></template></el-table-column>
+          <el-table-column label="状态" width="100"><template #default="{row}"><el-tag :type="row.status==='open'?'danger':row.status==='acknowledged'?'warning':'success'" size="small">{{ alertStatusLabels[row.status] || row.status }}</el-tag></template></el-table-column>
           <el-table-column prop="created_at" label="时间" width="160" />
           <el-table-column label="操作" width="160" align="center" fixed="right">
             <template #default="{row}"><el-button v-if="row.status==='open'" size="small" type="warning" @click="ack(row)">确认</el-button><el-button v-if="row.status!=='resolved'" size="small" type="success" @click="resolve(row)">解决</el-button></template>
@@ -52,8 +52,8 @@
         <el-card>
           <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><el-button type="primary" @click="showEscalationCreate = true">+ 添加规则</el-button></div>
           <el-table :data="escalationRules" stripe v-loading="escalationLoading" size="small">
-            <el-table-column label="报警类型" width="120"><template #default="{row}"><el-tag size="small">{{ {inventory_low:'库存低',wo_overdue:'工单逾期',equipment_down:'设备故障',qc_fail:'质检不合格'}[row.andon_type]||row.andon_type }}</el-tag></template></el-table-column>
-            <el-table-column label="严重级别" width="100"><template #default="{row}"><el-tag :type="row.severity" size="small">{{ {danger:'严重',warning:'警告',info:'提示'}[row.severity]||row.severity }}</el-tag></template></el-table-column>
+            <el-table-column label="报警类型" width="120"><template #default="{row}"><el-tag size="small">{{ alertTypeLabels[row.andon_type] || row.andon_type }}</el-tag></template></el-table-column>
+            <el-table-column label="严重级别" width="100"><template #default="{row}"><el-tag :type="row.severity" size="small">{{ alertLevelLabels[row.severity] || row.severity }}</el-tag></template></el-table-column>
             <el-table-column prop="escalate_after_minutes" label="升级时间(分)" width="130" />
             <el-table-column prop="escalate_to_role" label="升级至角色" min-width="180" />
           </el-table>
@@ -109,6 +109,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import * as echarts from 'echarts'
 
 const activeTab = ref('alerts')
+const alertLevelLabels: Record<string, string> = { danger: '严重', warning: '警告', info: '提示' }
+const alertTypeLabels: Record<string, string> = { inventory_low: '库存低', wo_overdue: '工单逾期', equipment_down: '设备故障', qc_fail: '质检不合格' }
+const alertStatusLabels: Record<string, string> = { open: '未处理', acknowledged: '已确认', resolved: '已解决' }
 
 // ========== Tab 1: Alerts (existing) ==========
 const alerts = ref([])

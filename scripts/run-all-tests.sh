@@ -3,7 +3,6 @@
 # 一键跑全部测试（含 processTree cross-sub 的 seed DB 准备）
 set -e
 export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
-export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
 
 # 2026-07-11 Hermes brooks-test T5 修复: JWT_SECRET 全局可用
 # 所有加载 app/jwt 的测试都需要 JWT_SECRET (>= 32 字符)
@@ -63,50 +62,16 @@ run() {
 }
 
 echo "=== 2) 跑全部测试 ==="
-run "delayAlerts"            tests/delayAlerts.test.js            ""
-run "dashboardRiskSummary"   tests/dashboardRiskSummary.test.js   ""
-run "processParams"           tests/processParams.test.js           ""
-run "processMaster"          tests/processMaster.test.js          ""
-run "projectMaster"          tests/projectMaster.test.js          ""
-run "multiInstanceScheduler" tests/multiInstanceScheduler.test.js "export DB_PATH=$SEED_DB"
-run "oee"                    tests/oee.test.js                    ""
-run "iotLifecycle"            tests/iotLifecycle.test.js            ""
-run "iotCollector"            tests/iotCollector.test.js            ""
-run "iotGovernance"           tests/iotGovernance.test.js           ""
-run "externalAssetReadiness"  tests/externalAssetReadiness.test.js  ""
-run "aiModelTraining"         tests/aiModelTraining.test.js         ""
-run "serviceRegistration"      tests/serviceRegistration.test.js      ""
-run "domainRules"              tests/domainRules.test.js              ""
-run "equipmentLifecycle"       tests/equipmentLifecycle.test.js       ""
-run "keyComponentPrices"      tests/keyComponentPrices.test.js   ""
-run "purchase"             tests/purchase.test.js             ""
-run "purchaseReceiving"    tests/purchaseReceiving.test.js    ""
-run "traceRecords"         tests/traceRecords.test.js         ""
-run "reportScheduler"      tests/reportScheduler.test.js      ""
-run "purchaseFollowupTransition" tests/purchaseFollowupTransition.test.js ""
-run "materialService"           tests/materialService.test.js           ""
-run "costRollup"               tests/costRollup.test.js   ""
-run "materialPrices"            tests/materialPrices.test.js   ""
-run "processTreeCrossSubDeps(integration)" tests/processTreeCrossSubsystemDeps.integration.test.js "unset DB_PATH"
-run "processTreeCrossSubDeps" tests/processTreeCrossSubsystemDeps.test.js "export DB_PATH=$SEED_DB"
-run "processTreeMindmap"     tests/processTreeMindmap.test.js     ""
-run "scheduler"              tests/scheduler.test.js              ""
-run "recomputeSafetyStock"    tests/recompute-safety-stock.test.js ""
-run "migrate"                  tests/migrate.test.js                  ""
-run "pragmas"                  tests/pragmas.test.js                  ""
-run "workflow"                  tests/workflow.test.js               ""
-run "errorResponse"         tests/errorResponse.test.js         ""
-run "errorPaths"            tests/errorPaths.test.js            ""
-run "rbac"                        tests/rbac.test.js                  ""
-run "roles"                  tests/roles.test.js                  ""
-run "bomService"              tests/bomService.test.js              ""
-run "documentService"          tests/documentService.test.js       ""
-run "documentIntegrity"        tests/documentIntegrity.test.js        ""
-run "ws"                       tests/ws.test.js                    ""
-run "audit"                       tests/audit.test.js                 ""
-run "systemSettings"              tests/systemSettings.test.js        ""
-run "jwt"                         tests/jwt.test.js                   ""
-run "sqlInjection"          tests/sqlInjection.test.js          ""
+declare -A TEST_PRE_COMMANDS=(
+  ["tests/multiInstanceScheduler.test.js"]="export DB_PATH=$SEED_DB"
+  ["tests/processTreeCrossSubsystemDeps.test.js"]="export DB_PATH=$SEED_DB"
+  ["tests/processTreeCrossSubsystemDeps.integration.test.js"]="unset DB_PATH"
+)
+
+while IFS= read -r test_file; do
+  label=$(basename "$test_file" .test.js)
+  run "$label" "$test_file" "${TEST_PRE_COMMANDS[$test_file]:-}"
+done < <(find tests -maxdepth 1 -type f -name '*.test.js' -print | sort)
 
 echo "=== 总结: pass=$PASS fail=$FAIL skip=$SKIP ==="
 exit $FAIL

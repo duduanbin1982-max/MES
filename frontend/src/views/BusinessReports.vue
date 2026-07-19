@@ -52,6 +52,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Api } from '../api'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 const instances = ref<any[]>([])

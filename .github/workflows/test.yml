@@ -21,14 +21,20 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
 
       - name: Setup Python (for cross-sub seed DB)
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend
 
       - name: Syntax check (services + middleware + utils)
         run: |
@@ -41,6 +47,12 @@ jobs:
             fi
           done
           exit $ERR
+
+      - name: Frontend typecheck
+        run: npm run typecheck --prefix frontend
+
+      - name: Frontend production build
+        run: npm run build --prefix frontend
 
       - name: Run full test suite (incl. integration)
         run: bash scripts/run-all-tests.sh

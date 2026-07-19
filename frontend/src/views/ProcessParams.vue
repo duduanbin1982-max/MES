@@ -116,7 +116,7 @@ const spcResult = ref<any>(null);
 const chartRefs: Record<string, any> = {};
 const chartInstances: Record<string, any> = {};
 
-const trendParams = [
+const trendParams: Array<{ key: string; label: string; alerts?: number }> = [
   { key: "current_amp", label: "电流 (A)" },
   { key: "voltage_v", label: "电压 (V)" },
   { key: "speed_mm_min", label: "速度 (mm/min)" },

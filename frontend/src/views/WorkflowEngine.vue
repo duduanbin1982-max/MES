@@ -136,17 +136,18 @@
 import { ref, reactive, onMounted } from 'vue'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
+import type { ApiRecord } from '../types/api'
 
 const viewMode = ref('defs')
-const definitions = ref([])
+const definitions = ref<ApiRecord[]>([])
 const defLoading = ref(false)
-const instances = ref([])
+const instances = ref<ApiRecord[]>([])
 const instLoading = ref(false)
 const filter = reactive({ definition: '', status: '', entityId: '' })
 
-const startDlg = reactive({ visible: false, saving: false, form: {} })
-const transitDlg = reactive({ visible: false, saving: false, instance: null, form: {}, actions: [] })
-const detailDlg = reactive({ visible: false, data: null })
+const startDlg = reactive<{ visible: boolean; saving: boolean; form: ApiRecord }>({ visible: false, saving: false, form: {} })
+const transitDlg = reactive<{ visible: boolean; saving: boolean; instance: ApiRecord | null; form: ApiRecord; actions: ApiRecord[] }>({ visible: false, saving: false, instance: null, form: {}, actions: [] })
+const detailDlg = reactive<{ visible: boolean; data: ApiRecord | null }>({ visible: false, data: null })
 
 const loadDefs = async () => {
   defLoading.value = true
@@ -185,7 +186,7 @@ const doStart = async () => {
   finally { startDlg.saving = false }
 }
 
-const openTransit = async (row) => {
+const openTransit = async (row: ApiRecord) => {
   transitDlg.instance = row
   transitDlg.form = { action: '', comment: '' }
   try {
@@ -196,6 +197,7 @@ const openTransit = async (row) => {
 }
 
 const doTransit = async () => {
+  if (!transitDlg.instance) return
   transitDlg.saving = true
   try {
     await Api.post('/workflow/' + transitDlg.instance.id + '/transit', transitDlg.form)
@@ -206,7 +208,7 @@ const doTransit = async () => {
   finally { transitDlg.saving = false }
 }
 
-const viewInstance = async (row) => {
+const viewInstance = async (row: ApiRecord) => {
   try {
     detailDlg.data = await Api.get('/workflow/' + row.id)
     detailDlg.visible = true

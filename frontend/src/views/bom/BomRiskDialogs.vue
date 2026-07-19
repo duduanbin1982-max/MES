@@ -29,12 +29,12 @@
         </el-table-column>
         <el-table-column label="采购单" min-width="200">
           <template #default="{ row }">
-            {{ row.purchase_orders?.map(po => `${po.po_no}${po.expected_date ? `(${po.expected_date})` : ''}`).join('；') || '-' }}
+            {{ row.purchase_orders?.map((po: any) => `${po.po_no}${po.expected_date ? `(${po.expected_date})` : ''}`).join('；') || '-' }}
           </template>
         </el-table-column>
         <el-table-column label="缺料单" min-width="220">
           <template #default="{ row }">
-            {{ row.shortage_cases?.map(sc => `#${sc.id}${sc.owner_name ? `/${sc.owner_name}` : ''}${sc.expected_date ? `/${sc.expected_date}` : ''}`).join('；') || '-' }}
+            {{ row.shortage_cases?.map((shortageCase: any) => `#${shortageCase.id}${shortageCase.owner_name ? `/${shortageCase.owner_name}` : ''}${shortageCase.expected_date ? `/${shortageCase.expected_date}` : ''}`).join('；') || '-' }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">

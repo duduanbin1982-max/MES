@@ -1,36 +1,13 @@
 "use strict";
-// app/domain/statusCatalog.js
-// Central status vocabulary for MES lifecycle state mapping.
 
-const PURCHASE_ORDER_STATUSES = [
-  "draft",
-  "submitted",
-  "confirmed",
-  "in_transit",
-  "partially_received",
-  "received",
-  "closed",
-  "cancelled",
-];
+const catalog = require("../../shared/statusCatalog.json");
 
-const PURCHASE_FOLLOWUP_STATUSES = ["pending", "following", "delivered", "cancelled"];
-const PURCHASE_FOLLOWUP_TERMINAL_STATUSES = ["delivered", "cancelled"];
-
-const SHORTAGE_STATUSES = ["open", "assigned", "purchasing", "arrived", "closed", "cancelled"];
-const SHORTAGE_TERMINAL_STATUSES = ["closed", "resolved", "arrived", "received", "cancelled"];
-
-const EQUIPMENT_LIFECYCLE_META = {
-  design: { label: "设计中", tag: "info" },
-  procurement: { label: "采购中", tag: "warning" },
-  manufacturing: { label: "制造中", tag: "primary" },
-  assembly: { label: "总装中", tag: "primary" },
-  commissioning: { label: "调试中", tag: "success" },
-  acceptance: { label: "验收中", tag: "warning" },
-  delivered: { label: "交付", tag: "success" },
-  operation: { label: "运维", tag: "success" },
-  archived: { label: "归档", tag: "danger" },
-};
-
+const PURCHASE_ORDER_STATUSES = [...catalog.purchaseOrder.statuses];
+const PURCHASE_FOLLOWUP_STATUSES = [...catalog.purchaseFollowup.statuses];
+const PURCHASE_FOLLOWUP_TERMINAL_STATUSES = [...catalog.purchaseFollowup.terminalStatuses];
+const SHORTAGE_STATUSES = [...catalog.shortage.statuses];
+const SHORTAGE_TERMINAL_STATUSES = [...catalog.shortage.terminalStatuses];
+const EQUIPMENT_LIFECYCLE_META = { ...catalog.equipmentLifecycle.meta };
 const EQUIPMENT_LIFECYCLE_STATUSES = Object.keys(EQUIPMENT_LIFECYCLE_META);
 
 function normalizePurchaseFollowupStatus(status) {

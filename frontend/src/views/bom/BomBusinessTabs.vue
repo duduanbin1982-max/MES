@@ -123,7 +123,7 @@
             <el-table-column prop="purchase_order_count" label="PO数" width="70" />
             <el-table-column label="缺件明细" min-width="260">
               <template #default="{ row }">
-                {{ row.items?.slice(0, 3).map(it => `${it.material_code || it.material_name || it.part_number || '物料'}:${it.projected_shortage_qty || it.shortage_qty}${it.next_expected_date ? `(${it.next_expected_date})` : ''}`).join('；') || '-' }}
+                {{ row.items?.slice(0, 3).map((item: any) => `${item.material_code || item.material_name || item.part_number || '物料'}:${item.projected_shortage_qty || item.shortage_qty}${item.next_expected_date ? `(${item.next_expected_date})` : ''}`).join('；') || '-' }}
               </template>
             </el-table-column>
             <el-table-column label="操作" width="90" fixed="right">

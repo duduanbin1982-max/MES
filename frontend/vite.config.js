@@ -29,10 +29,10 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-vue': ['vue-router', 'pinia'],
-          'vendor-element': ['element-plus', '@element-plus/icons-vue'],
-          'vendor-echarts': ['echarts', 'vue-echarts']
+        manualChunks(id) {
+          if (id.includes('/node_modules/vue-router/') || id.includes('/node_modules/pinia/')) return 'vendor-vue'
+          if (id.includes('/node_modules/element-plus/') || id.includes('/node_modules/@element-plus/icons-vue/')) return 'vendor-element'
+          if (id.includes('/node_modules/echarts/') || id.includes('/node_modules/zrender/')) return 'vendor-echarts'
         }
       }
     }

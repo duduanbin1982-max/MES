@@ -20,7 +20,7 @@
       </el-tab-pane>
       <el-tab-pane name="inv">
         <template #label>
-          <span><el-icon><Files(orCoin) /></el-icon> 库存清单</span>
+          <span><el-icon><Coin /></el-icon> 库存清单</span>
           <el-badge v-if="data.alerts.value.length" :value="data.alerts.value.length" type="danger" :max="99" style="margin-left: 6px" />
         </template>
         <TabInv v-if="activeTab === 'inv' || activeTab === 'mov' || activeTab === 'ops'" :inv="data.inv.value" @open-receive="dlgReceive = true" @open-allocate="dlgAllocate = true" @open-release="dlgRelease = true" @open-batch="dlgBatch = true" @open-detail="onDetail" @open-split="onSplit" @open-merge="onMerge" />

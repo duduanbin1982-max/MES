@@ -146,7 +146,7 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="showCreate = false">取消</el-button>
+        <el-button @click="visible = false">取消</el-button>
         <el-button :disabled="wizardStep === 0" @click="wizardStep--">上一步</el-button>
         <el-button v-if="wizardStep < 2" type="primary" @click="nextStep">下一步</el-button>
         <el-button v-else type="primary" :loading="creating" @click="createInstance">创建并初始化</el-button>

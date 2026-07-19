@@ -109,18 +109,18 @@
             <template #suffix><el-tag :type="kitDlg.result.kit_rate >= 100 ? 'success' : kitDlg.result.kit_rate >= 70 ? 'warning' : 'danger'" size="small">{{ kitDlg.result.kit_rate >= 100 ? '齐全' : kitDlg.result.kit_rate >= 70 ? '部分缺料' : '严重缺料' }}</el-tag></template>
           </el-statistic></el-card></el-col>
           <el-col :span="8"><el-card shadow="hover"><el-statistic title="需料项" :value="kitDlg.result.total_items"/></el-card></el-col>
-          <el-col :span="8"><el-card shadow="hover"><el-statistic title="缺料项" :value="kitDlg.result.missing_items"><template #suffix><el-tag v-if="kitDlg.result.missing_items > 0" type="danger" size="small">!</el-tag></template></el-statistic></el-card></el-col>
+          <el-col :span="8"><el-card shadow="hover"><el-statistic title="缺料项" :value="kitDlg.result.short_items"><template #suffix><el-tag v-if="kitDlg.result.short_items > 0" type="danger" size="small">!</el-tag></template></el-statistic></el-card></el-col>
         </el-row>
         <el-table :data="kitDlg.result.items||[]" size="small" border max-height="300">
           <el-table-column prop="material_code" label="物料编码" width="100" />
           <el-table-column prop="material_name" label="名称" min-width="140" />
           <el-table-column prop="required_qty" label="需求量" width="80" align="right" />
           <el-table-column prop="available_qty" label="库存" width="80" align="right" />
-          <el-table-column prop="shortage" label="缺料" width="80" align="right">
-            <template #default="{row}"><span :style="{color: row.shortage > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)', fontWeight: 'bold'}">{{ row.shortage }}</span></template>
+          <el-table-column prop="shortage_qty" label="缺料" width="80" align="right">
+            <template #default="{row}"><span :style="{color: row.shortage_qty > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)', fontWeight: 'bold'}">{{ row.shortage_qty }}</span></template>
           </el-table-column>
           <el-table-column label="状态" width="80" align="center">
-            <template #default="{row}"><el-tag :type="row.shortage > 0 ? 'danger' : 'success'" size="small">{{ row.shortage > 0 ? '缺料' : '充足' }}</el-tag></template>
+            <template #default="{row}"><el-tag :type="row.shortage_qty > 0 ? 'danger' : 'success'" size="small">{{ row.shortage_qty > 0 ? '缺料' : '充足' }}</el-tag></template>
           </el-table-column>
         </el-table>
       </div>
@@ -163,6 +163,7 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
+import type { KitCheckResult } from '../types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -184,7 +185,7 @@ applyRouteInstanceFilter()
 const instances = ref<any[]>([])
 const rows = ref<any[]>([])
 const loading = ref(false)
-const kitDlg = reactive({ show: false, wo_code: '', loading: false, result: null })
+const kitDlg = reactive<{ show: boolean; wo_code: string; loading: boolean; result: KitCheckResult | null }>({ show: false, wo_code: '', loading: false, result: null })
 const checkKit = async (row: any) => { kitDlg.show = true; kitDlg.wo_code = row.wo_code; kitDlg.loading = true; try { kitDlg.result = await Api.get('/work_orders/'+row.id+'/kit-check') } catch(_) { kitDlg.result = null } finally { kitDlg.loading = false } }
 
 // 待派工

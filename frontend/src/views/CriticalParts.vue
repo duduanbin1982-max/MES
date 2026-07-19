@@ -80,7 +80,7 @@
         <el-table :data="data.checklists" size="small" stripe max-height="450">
           <el-table-column prop="instance_name" label="装备" width="150" />
           <el-table-column prop="checklist_name" label="名称" min-width="180" />
-          <el-table-column prop="status" label="状态" width="90"><template #default="{row}"><el-tag :type="row.status==='passed'?'success':row.status==='failed'?'danger':'warning'" size="small">{{ {pending:'待验收',passed:'通过',failed:'不通过'}[row.status]||row.status }}</el-tag></template></el-table-column>
+          <el-table-column prop="status" label="状态" width="90"><template #default="{row}"><el-tag :type="row.status==='passed'?'success':row.status==='failed'?'danger':'warning'" size="small">{{ acceptanceStatusLabels[row.status] || row.status }}</el-tag></template></el-table-column>
           <el-table-column prop="inspector" label="检验员" width="90" />
           <el-table-column prop="customer_rep" label="客户代表" width="90" />
           <el-table-column prop="sign_date" label="签字日期" width="110" />
@@ -107,6 +107,7 @@ import { ElMessage } from "element-plus"
 
 const loading = ref(false)
 const tab = ref("parts")
+const acceptanceStatusLabels: Record<string, string> = { pending: "待验收", passed: "通过", failed: "不通过" }
 const filterInstanceId = ref(null as any)
 const certDialog = ref(false)
 const issuedDocuments = ref<any[]>([])

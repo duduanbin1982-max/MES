@@ -60,8 +60,8 @@
           <el-table-column prop="supplier" label="供应商" width="120" />
           <el-table-column prop="planned_delivery" label="计划到货" width="110" sortable />
           <el-table-column prop="delay_days" label="延期(天)" width="85"><template #default="{row}"><el-tag v-if="row.delay_days>0" type="danger" size="small">{{ row.delay_days }}天</el-tag><span v-else style="color:var(--el-color-success)">正常</span></template></el-table-column>
-          <el-table-column prop="status" label="状态" width="90"><template #default="{row}"><el-tag :type="row.status==='following'?'warning':row.status==='delivered'?'success':'info'" size="small">{{ {following:'跟催中',delivered:'已到货',closed:'已关闭'}[row.status]||row.status }}</el-tag></template></el-table-column>
-          <el-table-column prop="risk_level" label="风险" width="75"><template #default="{row}"><el-tag :type="row.risk_level==='critical'?'danger':row.risk_level==='high'?'warning':'info'" size="small">{{ {critical:'严重',high:'高',warning:'中'}[row.risk_level]||row.risk_level }}</el-tag></template></el-table-column>
+          <el-table-column prop="status" label="状态" width="90"><template #default="{row}"><el-tag :type="row.status==='following'?'warning':row.status==='delivered'?'success':'info'" size="small">{{ trackingStatusLabels[row.status] || row.status }}</el-tag></template></el-table-column>
+          <el-table-column prop="risk_level" label="风险" width="75"><template #default="{row}"><el-tag :type="row.risk_level==='critical'?'danger':row.risk_level==='high'?'warning':'info'" size="small">{{ riskLevelLabels[row.risk_level] || row.risk_level }}</el-tag></template></el-table-column>
           <el-table-column prop="owner_name" label="责任人" width="90" />
         </el-table>
       </el-tab-pane>
@@ -75,9 +75,9 @@
           <el-table-column prop="material_name" label="物料" width="140" />
           <el-table-column prop="inspection_date" label="日期" width="110" />
           <el-table-column label="抽样/不良" width="100"><template #default="{row}">{{ row.sample_qty }}/{{ row.defect_qty }}</template></el-table-column>
-          <el-table-column prop="result" label="结果" width="80"><template #default="{row}"><el-tag :type="row.result==='pass'?'success':row.result==='fail'?'danger':'warning'" size="small">{{ {pass:'合格',fail:'不合格',pending:'待检'}[row.result]||row.result }}</el-tag></template></el-table-column>
+          <el-table-column prop="result" label="结果" width="80"><template #default="{row}"><el-tag :type="row.result==='pass'?'success':row.result==='fail'?'danger':'warning'" size="small">{{ inspectionResultLabels[row.result] || row.result }}</el-tag></template></el-table-column>
           <el-table-column prop="defect_desc" label="缺陷描述" min-width="160" />
-          <el-table-column prop="disposition" label="处置" width="80"><template #default="{row}"><el-tag size="small">{{ {return:'退货',accept:'让步接收',rework:'返工'}[row.disposition]||row.disposition||'-' }}</el-tag></template></el-table-column>
+          <el-table-column prop="disposition" label="处置" width="80"><template #default="{row}"><el-tag size="small">{{ dispositionLabels[row.disposition] || row.disposition || '-' }}</el-tag></template></el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -90,8 +90,8 @@
           <el-table-column prop="item_name" label="项目" min-width="150" />
           <el-table-column prop="process_name" label="工序" width="100" />
           <el-table-column prop="planned_finish" label="计划完成" width="110" />
-          <el-table-column prop="status" label="状态" width="90"><template #default="{row}"><el-tag :type="row.status==='completed'?'success':row.status==='in_progress'?'warning':'info'" size="small">{{ {planned:'计划中',in_progress:'进行中',completed:'已完成',delayed:'延期'}[row.status]||row.status }}</el-tag></template></el-table-column>
-          <el-table-column prop="quality_status" label="质量" width="80"><template #default="{row}"><el-tag :type="row.quality_status==='pass'?'success':row.quality_status==='fail'?'danger':'warning'" size="small">{{ {pass:'合格',fail:'不合格',pending:'待检'}[row.quality_status]||row.quality_status }}</el-tag></template></el-table-column>
+          <el-table-column prop="status" label="状态" width="90"><template #default="{row}"><el-tag :type="row.status==='completed'?'success':row.status==='in_progress'?'warning':'info'" size="small">{{ outsourceStatusLabels[row.status] || row.status }}</el-tag></template></el-table-column>
+          <el-table-column prop="quality_status" label="质量" width="80"><template #default="{row}"><el-tag :type="row.quality_status==='pass'?'success':row.quality_status==='fail'?'danger':'warning'" size="small">{{ inspectionResultLabels[row.quality_status] || row.quality_status }}</el-tag></template></el-table-column>
           <el-table-column prop="contract_amount" label="金额(元)" width="100" align="right"><template #default="{row}">{{ row.contract_amount?.toLocaleString() }}</template></el-table-column>
         </el-table>
       </el-tab-pane>
@@ -105,6 +105,11 @@ import Api from "../api"
 
 const loading = ref(false)
 const tab = ref("suppliers")
+const trackingStatusLabels: Record<string, string> = { following: "跟催中", delivered: "已到货", closed: "已关闭" }
+const riskLevelLabels: Record<string, string> = { critical: "严重", high: "高", warning: "中" }
+const inspectionResultLabels: Record<string, string> = { pass: "合格", fail: "不合格", pending: "待检" }
+const dispositionLabels: Record<string, string> = { return: "退货", accept: "让步接收", rework: "返工" }
+const outsourceStatusLabels: Record<string, string> = { planned: "计划中", in_progress: "进行中", completed: "已完成", delayed: "延期" }
 const data = reactive({ overview: {} as any, suppliers: [] as any[], scores: [] as any[], tracking: [] as any[], inspections: [] as any[], orders: [] as any[], outsource: [] as any[] })
 
 const scoreColor = (s: number) => s >= 90 ? "var(--el-color-success)" : s >= 75 ? "var(--el-color-warning)" : "var(--el-color-danger)"

@@ -119,7 +119,7 @@
 <script setup lang="ts">
 defineProps<{
   orderFilter: any
-  poStatuses: any[]
+  poStatuses: readonly string[]
   poStatusLabel: (value: string) => string
   poStatusTag: (value: string) => string
   orders: any[]

@@ -47,6 +47,7 @@ import { ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from "vue"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
+import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js"
 import Api from "../api"
 import { ElMessage } from "element-plus"
 
@@ -260,7 +261,7 @@ function renderSelectedModel() {
   if (!scene) return
   clearModel()
   if (currentModel.value?.asset_ready && currentModel.value.file_path) {
-    new GLTFLoader().load('/' + currentModel.value.file_path, (gltf) => {
+    new GLTFLoader().load('/' + currentModel.value.file_path, (gltf: GLTF) => {
       const model = gltf.scene
       model.name = "tbm_group"
       const scale = Number(currentModel.value.scale_factor || 1)

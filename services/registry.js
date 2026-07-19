@@ -14,6 +14,6 @@ const SERVICES = [
   ...CORE_SERVICES,
   ...MESA_SERVICES,
   ...ADMIN_SERVICES,
-];
+].map((entry) => ({ schemaVersion: 1, ...entry }));
 
 module.exports = { SERVICES };

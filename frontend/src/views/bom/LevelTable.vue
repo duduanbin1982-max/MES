@@ -47,7 +47,7 @@
           <el-tag v-if="row.is_wear_part" size="small" type="warning" style="margin-left: 2px">易损</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="unit_price" label="单价" width="80" :formatter="(r) => r.unit_price || '-'" />
+      <el-table-column prop="unit_price" label="单价" width="80" :formatter="(row: any) => row.unit_price || '-'" />
       <el-table-column v-if="showActions !== false" label="操作" width="100" fixed="right">
         <template #default="{ row }">
           <el-button v-if="tier === 1" size="small" link type="primary" @click.stop="$emit('drill', row)">下钻</el-button>

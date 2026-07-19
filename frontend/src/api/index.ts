@@ -8,7 +8,7 @@ import { createMaterialsApi } from './materials'
 import { createPurchaseApi } from './purchase'
 import { createSystemApi } from './system'
 
-const Api: any = {
+const Api = Object.assign({
   ...createAuthApi(),
   ...createDeliveryApi(),
   ...createEquipmentApi(),
@@ -23,10 +23,10 @@ const Api: any = {
   patch: (url: string, data?: any) => api.patch(url, data),
   del: (url: string) => api.delete(url),
   delete: (url: string) => api.delete(url)
-}
-
-Api.defaults = api.defaults
-Api.interceptors = api.interceptors
+}, {
+  defaults: api.defaults,
+  interceptors: api.interceptors,
+})
 
 export { Api }
 export default Api

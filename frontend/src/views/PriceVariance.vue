@@ -54,6 +54,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { Api } from '../api'
+import { ElMessage } from 'element-plus'
 
 const loading = ref(false)
 const summary = ref<any>({})

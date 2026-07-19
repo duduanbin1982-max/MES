@@ -2,7 +2,7 @@
   <div class="page">
     <div class="page-header">
       <div>
-        <span class="page-title"><el-icon><Connection(orShare) /></el-icon> 项目结构 / BOM 树</span>
+        <span class="page-title"><el-icon><Share /></el-icon> 项目结构 / BOM 树</span>
         <el-tag size="small" type="info" style="margin-left: 12px">树状多级结构 · 节点类型 · ECO 追溯</el-tag>
       </div>
       <div>
@@ -146,8 +146,8 @@
                 <el-table-column prop="is_phantom" label="虚项" width="50">
                   <template #default="{ row }"><template v-if="row.is_phantom"><el-icon><Select /></el-icon></template><template v-else></template></template>
                 </el-table-column>
-                <el-table-column prop="self" label="自身" width="80" :formatter="(r) => r.self.toFixed(2)" />
-                <el-table-column prop="cost" label="累计" width="80" :formatter="(r) => r.cost.toFixed(2)" />
+                <el-table-column prop="self" label="自身" width="80" :formatter="(r: any) => r.self.toFixed(2)" />
+                <el-table-column prop="cost" label="累计" width="80" :formatter="(r: any) => r.cost.toFixed(2)" />
               </el-table>
             </el-card>
             <el-card v-if="selected">

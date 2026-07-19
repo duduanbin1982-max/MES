@@ -279,7 +279,7 @@ const uploading = ref(false)
 const uploadDialogRef = ref<any>(null)
 const uploadForm = reactive({
   title: '', doc_code: '', version: 'A0', doc_type: 'drawing',
-  equipment_instance_id: null as number | null, bom_node_id: null as number, eco_id: '',
+  equipment_instance_id: null as number | null, bom_node_id: null as number | null, eco_id: '',
   description: '', tags: ''
 })
 const resetUpload = () => {

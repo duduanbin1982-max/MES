@@ -173,6 +173,25 @@ const costStatus = ref<any>({})
 const acceptanceStatus = ref<any>({ total: 0, done: 0 })
 const loadErrors = ref<string[]>([])
 
+type ActionButtonType = 'default' | 'primary' | 'success' | 'warning' | 'info' | 'danger' | 'text'
+interface FlowAction {
+  label: string
+  type?: ActionButtonType
+  needInstance?: boolean
+  route?: string
+  loadingKey?: string
+  handler?: () => void | Promise<void>
+}
+interface FlowStep {
+  key: string
+  title: string
+  module: string
+  purpose: string
+  evidence: string
+  status: string
+  actions: FlowAction[]
+}
+
 const selectedInstance = computed(() => instances.value.find((item) => Number(item.id) === Number(selectedInstanceId.value)) || null)
 const processTotal = computed(() => Number(dashboard.value.process_nodes?.total || 0))
 const workOrderTotal = computed(() => Number(dashboard.value.work_orders?.total || 0))
@@ -197,7 +216,7 @@ const safeLoad = async (label: string, loader: () => Promise<any>, fallback: any
   }
 }
 
-const flowSteps = computed(() => {
+const flowSteps = computed<FlowStep[]>(() => {
   const bomCount = Number(dashboard.value.bom_count || 0)
   const workOrders = dashboard.value.work_orders || {}
   const completedWo = Number(workOrders.completed || 0)

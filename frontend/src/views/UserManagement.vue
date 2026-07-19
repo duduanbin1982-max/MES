@@ -325,10 +325,10 @@ const delUser = async (row: any) => {
 }
 
 
-let suggestTimer = null
+let suggestTimer: ReturnType<typeof setTimeout> | null = null
 const onRoleNameInput = () => {
   if (roleDlg.isEdit || !roleDlg.form.role_name) return
-  clearTimeout(suggestTimer)
+  if (suggestTimer) clearTimeout(suggestTimer)
   suggestTimer = setTimeout(async () => {
     try {
       const res = await Api.get("/roles/suggest-code", { params: { name: roleDlg.form.role_name } })
@@ -339,7 +339,7 @@ const onRoleNameInput = () => {
 
 const onGroupNameInput = () => {
   if (groupDlg.isEdit || !groupDlg.form.group_name) return
-  clearTimeout(suggestTimer)
+  if (suggestTimer) clearTimeout(suggestTimer)
   suggestTimer = setTimeout(async () => {
     try {
       const res = await Api.get("/role-groups/suggest-code", { params: { name: groupDlg.form.group_name } })

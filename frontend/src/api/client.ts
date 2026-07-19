@@ -1,7 +1,17 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
+import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 
-export const api = axios.create({ baseURL: '/api' })
+type DataClient = Omit<AxiosInstance, 'get' | 'post' | 'put' | 'patch' | 'delete' | 'request'> & {
+  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
+  post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  patch<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
+  request<T = any>(config: AxiosRequestConfig): Promise<T>
+}
+
+const axiosClient = axios.create({ baseURL: '/api' })
+export const api = axiosClient as DataClient
 export const ACCESS_KEY = 'tbm_access_token'
 export const REFRESH_KEY = 'tbm_refresh_token'
 export const USER_KEY = 'tbm_user'
@@ -28,13 +38,13 @@ function clearSession() {
   if (location.pathname !== '/login') location.href = '/login'
 }
 
-api.interceptors.request.use((config) => {
+axiosClient.interceptors.request.use((config) => {
   const token = localStorage.getItem(ACCESS_KEY) || localStorage.getItem('tbm_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-api.interceptors.response.use(
+axiosClient.interceptors.response.use(
   (response) => response.data,
   async (error: AxiosError<any>) => {
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
@@ -49,7 +59,7 @@ api.interceptors.response.use(
       refreshing = null
       if (newAccess) {
         original.headers!.Authorization = `Bearer ${newAccess}`
-        return api.request(original)
+        return axiosClient.request(original)
       }
       clearSession()
     } else if (status === 401) {

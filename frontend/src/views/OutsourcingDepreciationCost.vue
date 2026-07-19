@@ -119,6 +119,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { Api } from '../api'
+import { ElMessage } from 'element-plus'
 
 const instances = ref<any[]>([])
 const selectedInstance = ref<any>(null)

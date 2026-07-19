@@ -137,6 +137,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import type { CSSProperties } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
 
@@ -192,7 +193,7 @@ const months = computed(() => {
 
 const timelineWidth = computed(() => Math.max(800, months.value.length * monthWidth))
 
-const barStyle = (bar: any) => {
+const barStyle = (bar: any): CSSProperties => {
   const projectStart = parseDate(gantt.value.project_start)
   const barStart = parseDate(bar.start || bar.planned_start)
   const barEnd = parseDate(bar.end || bar.planned_end)

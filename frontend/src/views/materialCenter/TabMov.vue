@@ -8,7 +8,7 @@
       </el-form-item>
       <el-form-item label="批次">
         <el-select v-model="data.movFilter.material_lot_id" clearable filterable placeholder="全部" style="width: 200px">
-          <el-option v-for="l in data.lots" :key="l.id" :label="l.lot_no + ' | ' + l.material_name" :value="l.id" />
+          <el-option v-for="l in data.lots.value" :key="l.id" :label="l.lot_no + ' | ' + l.material_name" :value="l.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="日期">
@@ -19,7 +19,7 @@
         <el-button @click="onReset">重置</el-button>
       </el-form-item>
     </el-form>
-    <el-table :data="data.movs" stripe size="small">
+    <el-table :data="data.movs.value" stripe size="small">
       <el-table-column prop="material_name" label="物料" min-width="180" />
       <el-table-column prop="lot_no" label="批次" width="120" />
       <el-table-column label="类型" width="100">
@@ -34,14 +34,14 @@
       <el-table-column prop="notes" label="备注" min-width="150" />
     </el-table>
     <el-pagination
-      v-model:current-page="data.movPage"
-      v-model:page-size="data.movLimit"
-      :total="data.movTotal"
+      v-model:current-page="data.movPage.value"
+      v-model:page-size="data.movLimit.value"
+      :total="data.movTotal.value"
       :page-sizes="[20, 50, 100, 200]"
       layout="total, sizes, prev, pager, next, jumper"
       style="margin-top: 12px; text-align: right"
       @current-change="data.loadMovs"
-      @size-change="(s: number) => { data.movLimit = s; data.movPage = 1; data.loadMovs() }"
+      @size-change="(s: number) => { data.movLimit.value = s; data.movPage.value = 1; data.loadMovs() }"
     />
   </el-card>
 </template>

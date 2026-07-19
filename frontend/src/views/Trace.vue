@@ -231,15 +231,16 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Api } from '../api'
+import type { ApiRecord } from '../types/api'
 
 const tab = ref('forward')
-const instances = ref([])
+const instances = ref<ApiRecord[]>([])
 onMounted(async () => { try { instances.value = await Api.instances() } catch(_){} })
 
-const fw = reactive({ lot_no: '', loading: false, result: null })
+const fw = reactive<{ lot_no: string; loading: boolean; result: ApiRecord | null }>({ lot_no: '', loading: false, result: null })
 const doForward = async () => { if(!fw.lot_no) return; fw.loading=true; try { fw.result = await Api.get('/trace/forward',{params:{lot_no:fw.lot_no}}) } catch(_){ fw.result=null } finally { fw.loading=false } }
 
-const bw = reactive({ instance_id: null, loading: false, mloading: false, result: null, matrix: null })
+const bw = reactive<{ instance_id: number | null; loading: boolean; mloading: boolean; result: ApiRecord | null; matrix: ApiRecord | null }>({ instance_id: null, loading: false, mloading: false, result: null, matrix: null })
 const doBackward = async () => { if(!bw.instance_id) return; bw.loading=true; try { bw.result = await Api.get('/trace/backward',{params:{instance_id:bw.instance_id}}) } catch(_){ bw.result=null } finally { bw.loading=false } }
 
 // Tab: 追溯树视图
