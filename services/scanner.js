@@ -19,6 +19,10 @@ function ensureQuantityColumns(db) {
 }
 
 
+function register(_app, db) {
+  ensureQuantityColumns(db);
+}
+
 function scanLookup(req, res, db) {
   const { code } = req.query;
   if (!code) throw ApiError.validation('code 必填')
@@ -124,4 +128,4 @@ function scanExecute(req, res, db) {
   res.json({ id: r.lastInsertRowid, target_type: targetType, target_id: target.id, message: '执行已记录' });
 }
 
-module.exports = { ensureQuantityColumns, scanLookup, scanExecute };
+module.exports = { register, ensureQuantityColumns, scanLookup, scanExecute };

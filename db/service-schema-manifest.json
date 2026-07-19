@@ -186,6 +186,11 @@
       "ddlFingerprint": "ee4822c157e52e451e2beec54f9514b8e83a7ab87be240dda6eef05e2f5e5923",
       "ddlStatements": 4
     },
+    "scanner": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "7d5dcd48739af3187c5005b99d9f1e881d4b5c0f180c6b64d8ecddf159269271",
+      "ddlStatements": 1
+    },
     "scheduleService": {
       "schemaVersion": 1,
       "ddlFingerprint": "e420dab5f8d779ced19eecd3d0d50c54b826e1f24482ea302209c28cd51546fa",

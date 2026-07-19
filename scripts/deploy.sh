@@ -47,12 +47,21 @@ if ! bash "$ROOT/scripts/migrate.sh"; then
 fi
 echo "[3/4] 重启 $SVC ..."
 systemctl --user restart "$SVC"
-sleep 2
-ACTIVE=$(systemctl --user is-active "$SVC")
+ACTIVE=activating
+for _attempt in $(seq 1 75); do
+  ACTIVE=$(systemctl --user is-active "$SVC" 2>/dev/null || true)
+  if [ "$ACTIVE" = "active" ]; then
+    break
+  fi
+  if [ "$ACTIVE" = "failed" ]; then
+    break
+  fi
+  sleep 1
+done
 echo "  状态: $ACTIVE"
 
 if [ "$ACTIVE" != "active" ]; then
-  echo "❌ 启动失败, 查看日志: journalctl --user -u $SVC -n 30"
+  echo "❌ 启动未在 75 秒内进入 active, 查看日志: journalctl --user -u $SVC -n 30"
   exit 1
 fi
 

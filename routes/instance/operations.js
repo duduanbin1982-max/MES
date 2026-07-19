@@ -5,12 +5,10 @@
 
 const { wrap } = require('../../middleware/asyncHandler');
 const { requirePermission } = require('../../middleware/auth');
-const { withServiceSchemaVersion } = require('../../db/serviceMigrations');
-const { ensureQuantityColumns, scanLookup, scanExecute } = require('../../services/scanner');
+const { scanLookup, scanExecute } = require('../../services/scanner');
 const { getProcessProgress } = require('../../services/process/progress');
 
 function register(app, db) {
-  withServiceSchemaVersion(db, 'scanner', 1, ensureQuantityColumns);
   // dashboard/alerts 已迁移到 services/dashboardAlerts.js (标准 register 模式)
   app.get('/api/scan/lookup', requirePermission('equipment:read'), wrap((req, res) => scanLookup(req, res, db)));
   app.post('/api/scan/execute', requirePermission('equipment:write'), wrap((req, res) => scanExecute(req, res, db)));

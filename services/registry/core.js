@@ -11,6 +11,7 @@ const CORE_SERVICES = [
   { name: "purchase", module: "./purchase", schemaVersion: 1 },
   { name: "reportService", module: "./reportService", schemaVersion: 1 },
   { name: "resourceService", module: "./resourceService", schemaVersion: 1 },
+  { name: "scanner", module: "./scanner", schemaVersion: 1 },
   { name: "scheduleService", module: "./scheduleService", schemaVersion: 1 },
 ];
 

@@ -10,6 +10,7 @@ const os = require("node:os");
 const path = require("node:path");
 const Database = require("better-sqlite3");
 const express = require("express");
+const instanceRoutes = require("../routes/instance");
 const { registerAll } = require("../services/register-all");
 
 test("numbered migrations upgrade into a fully registered service schema", () => {
@@ -24,7 +25,9 @@ test("numbered migrations upgrade into a fully registered service schema", () =>
 
     const db = new Database(dbPath);
     db.pragma("foreign_keys = ON");
-    registerAll(express(), db);
+    const app = express();
+    instanceRoutes.register(app, db);
+    registerAll(app, db);
 
     assert.equal(db.pragma("integrity_check", { simple: true }), "ok");
     assert.deepEqual(db.pragma("foreign_key_check"), []);
