@@ -9,11 +9,11 @@ const MESA_SERVICES = [
   {
     name: "criticalPartsService",
     module: "./criticalPartsService",
-    schemaVersion: 1,
+    schemaVersion: 2,
     dependsOn: ["tbmAdvanced"],
   },
   { name: "cost", module: "./cost", schemaVersion: 1 },
-  { name: "documentService", module: "./documentService", schemaVersion: 1 },
+  { name: "documentService", module: "./documentService", schemaVersion: 2 },
   { name: "eco", module: "./eco", schemaVersion: 1 },
   { name: "fieldService", module: "./fieldService", schemaVersion: 1 },
   { name: "kitCheck", module: "./kitCheck", schemaVersion: 1 },

@@ -23,6 +23,17 @@ echo " factory-mes 安全部署"
 echo " 时间: $(date -Iseconds)"
 echo "=========================================="
 
+DIRTY_PATHS=$(git -C "$ROOT" status --porcelain --untracked-files=all)
+if [ -n "$DIRTY_PATHS" ]; then
+  if [ "${ALLOW_DIRTY_DEPLOY:-0}" != "1" ]; then
+    echo "❌ 工作树包含未提交改动，拒绝部署。请先建立可追溯提交。"
+    printf '%s\n' "$DIRTY_PATHS"
+    echo "   紧急情况可显式设置 ALLOW_DIRTY_DEPLOY=1，部署日志会保留该例外。"
+    exit 1
+  fi
+  echo "⚠️  ALLOW_DIRTY_DEPLOY=1: 正在部署未提交工作树"
+fi
+
 # 闸门
 if [ "$ALLOW_NO_TEST" = "1" ]; then
   echo "⚠️  --no-test: 跳过测试闸门 (紧急模式)"

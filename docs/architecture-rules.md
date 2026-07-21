@@ -8,6 +8,8 @@
 
 ```text
 frontend/views -> frontend/api
+frontend/views -> frontend/components / frontend/composables / frontend/domain
+frontend/composables -> frontend/api / frontend/domain
 routes         -> useCases / services
 useCases       -> repositories / domain / eventBus
 repositories  -> db
@@ -20,6 +22,7 @@ domain         -> 不依赖 express / middleware / db / Vue
 - `useCases` 不能直接挂 Express route。
 - `routes` 不能承载复杂业务规则，只做参数解析、权限守卫、调用 use case、返回响应。
 - `frontend/views` 不直接拼复杂状态机规则；复杂状态使用 `frontend/domain/*` 或后端返回的状态目录。
+- `frontend/composables` 禁止导入 `frontend/views`；流程映射下沉到 composable 子目录或纯 domain。
 
 ## 2. 后端模块结构
 
@@ -49,6 +52,8 @@ composables/useFoo.ts  # 页面内可复用数据加载/动作
 ```
 
 单个 `.vue` 文件超过 350 行必须拆 tab 或 dialog；超过 700 行禁止新增业务块。
+
+页面 composable 超过 300 行时，下一次功能修改必须按“查询状态 / 命令动作 / 图表或映射”拆分，禁止只把长页面整体搬进一个同样长的 composable。
 
 ## 4. Workflow 规则
 
@@ -83,8 +88,23 @@ Workflow 可以发布事件；订阅方更新自己的 read model。
 
 ```bash
 bash scripts/run-all-tests.sh
-cd frontend && npm run build
+cd frontend && npm run typecheck && npm run build
+npm audit --omit=dev
+cd frontend && npm audit --omit=dev
 curl -sk https://127.0.0.1/api/health
 ```
 
 通过后再重启服务并确认 `/api/health`。
+
+## 8. Service Schema 规则
+
+- Service 内新增、删除或修改 DDL 时，必须提升 registry 中对应 `schemaVersion`。
+- 运行 `npm run schema:write` 刷新 `db/service-schema-manifest.json`。
+- `npm run schema:check` 必须同时校验 manifest 内容和相对基线的版本提升。
+- 禁止修改已发布版本的 DDL fingerprint；已有生产库必须通过新版本迁移升级。
+
+## 9. 发布可追溯性
+
+- 正常部署必须基于干净 Git 工作树，`scripts/deploy.sh` 默认拒绝未提交改动。
+- 紧急例外只能显式设置 `ALLOW_DIRTY_DEPLOY=1`，并在恢复后立即建立提交与部署记录。
+- 部署完成必须记录 commit SHA、服务 PID 和 `/api/health` 结果。

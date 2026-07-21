@@ -1,257 +1,187 @@
 # Factory MES Architecture
 
-> TBM-MES v2.3 (Phase 1: Equipment-Centric + Process Tree + Settings) — 2026-06-24
-> Server: 192.168.1.73 (Node 22 + nginx + systemd)
+> TBM-MES v2.4, updated 2026-07-21
+> Runtime: Node.js 22, Express 4, Vue 3, SQLite, nginx, systemd
 
-## 1. 系统总览
+## 1. System Context
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          浏览器 (前端 SPA)                            │
-│                  Vue 3 + Vite + Element Plus (frontend/)             │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │ HTTPS
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                  nginx (443 ssl, server_name 192.168.1.73)          │
-│              location /api/  ->  factory_mes_backend (upstream)     │
-│              location /     ->  factory_mes_backend (SPA fallback)  │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │ http://127.0.0.1:3890
-                               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                factory-mes.service (systemd, user scope)            │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │  server.js  (装配层 65 行)                                     │  │
-│  │    ↓ createApp()  →  app.use(auth)  →  routes.register()      │  │
-│  │    ↓ services[*].register(app, db)                            │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────┐ │
-│  │  routes/  (适配层)│  │  services/ (业务) │  │  middleware/ (横切)│ │
-│  │  - instance.js   │  │  - process/*     │  │  - auth.js (JWT)   │ │
-│  │  - auth.js       │  │  - equipment/*   │  │                    │ │
-│  │  - guards.js     │  │  - cost/*        │  │                    │ │
-│  │  - settings.js   │  │  - reportService │  │                    │ │
-│  │  - health/root   │  │  - 12+ 单文件    │  │                    │ │
-│  └────────┬─────────┘  └─────────┬────────┘  └─────────┬──────────┘ │
-│           │                      │                      │            │
-│           └──────────┬───────────┴──────────────────────┘            │
-│                      ▼                                                │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │  db/index.js (better-sqlite3 单例)                              │  │
-│  │    - connection.js (DB_PATH 解析, data/mes.db 默认)             │  │
-│  │    - pragmas.js (WAL, foreign_keys, busy_timeout)              │  │
-│  │    - migrations/ (17 个 SQL, 001~017)                          │  │
-│  └───────────────────────────┬───────────────────────────────────┘  │
-└──────────────────────────────┼──────────────────────────────────────┘
-                               │
-                               ▼
-                  ┌────────────────────────────┐
-                  │   data/mes.db (SQLite WAL)  │
-                  │   data/factory.db (配置)    │
-                  │   data/mes.log (stdout/err) │
-                  └────────────────────────────┘
+```mermaid
+graph TD
+  Browser[Browser / Vue SPA] -->|HTTPS| Nginx[nginx :443]
+  Nginx -->|HTTP 127.0.0.1:3890| App[Express application]
+  App --> Auth[JWT + RBAC + audit trail]
+  App --> Registry[Explicit service registry]
+  Registry --> Services[50 registered services]
+  Services --> Domain[TBM domain policies]
+  Services --> Database[(SQLite / 141 tables)]
+  Services --> Files[Document storage]
+  Services --> Events[WebSocket event bus]
+  Services --> Integrations[ERP / PLM / IoT adapters]
 ```
 
-## 2. 进程内组件
+The deployable system is one Node.js process. nginx terminates TLS and proxies requests to
+`127.0.0.1:3890`; the application serves both `/api/*` and the built SPA. SQLite uses WAL,
+foreign keys, a busy timeout, and a slow-query profiler.
 
-### 2.1 启动顺序 (`server.js`)
+## 2. Dependency Direction
 
-```
-require('dotenv').config()           # 读 .env
-  ↓
-require('./app').createApp()         # 1. 装配 express (中间件链)
-  ↓
-require('./db')                      # 2. 建 SQLite 连接 + PRAGMA
-  ↓
-app.use('/api', authMiddleware)      # 3. JWT 鉴权 (白名单: /health, /auth/login)
-  ↓
-root / auth / health / settings      # 4. 基础路由
-  ↓
-routes/instance.register(app, db)    # 5. 实例重型路由 (16 条)
-  ↓
-services[*].register(app, db)        # 6. 业务模块 (20+ 个)
-  ↓
-app.listen(3890, '127.0.0.1')        # 7. 只绑 loopback, 经 nginx 暴露
+The enforced dependency direction is:
+
+```text
+frontend/router -> frontend/views
+frontend/views -> components / composables / domain / api
+frontend/components -> composables
+frontend/composables -> api / domain
+
+server/app composition -> routes -> services -> app/domain
+                                      |        -> shared catalogs
+                                      -> db / storage / integrations / events
 ```
 
-### 2.2 Express 中间件链 (`app/middleware/`)
+The following reverse edges are blocked by `scripts/check-layer-boundaries.js`:
 
-按调用顺序（`app/index.js` createApp）：
+- `services/** -> routes/**`
+- `app/domain/** -> services|routes|db|middleware|Express|WebSocket`
+- `frontend/src/domain/** -> Vue|Element Plus|router|views|components|api`
+- `frontend/src/composables/** -> frontend/src/views/**`
 
-| 顺序 | 中间件 | 文件 | 职责 |
-|---|---|---|---|
-| 1 | `staticFiles` | `staticFiles.js` | 挂 `frontend/dist/` 静态资源 |
-| 2 | `security` | `security.js` | Helmet (CSP / HSTS / X-Frame) |
-| 3 | `cors` | `cors.js` | 跨域白名单 |
-| 4 | `parser` | `parser.js` | `express.json()` + `urlencoded` |
-| 5 | `logger` | `logger.js` | 请求日志 (method, path, status, ms) |
+Composition roots such as `server.js`, `app/index.js`, `services/registry.js`, and the Vue
+router may have high fan-out by design. Domain policy modules remain infrastructure-free.
 
-`/api/*` 入口再加 `authMiddleware`（JWT 验证 + rate limit），见 §3。
+## 3. Backend Assembly
 
-### 2.3 数据库层 (`db/`)
+`server.js` performs application assembly in this order:
 
-- **连接**: `db/connection.js` 读 `DB_PATH` 环境变量, 缺省 `data/mes.db`
-- **PRAGMA**: `db/pragmas.js` 应用
-  - `journal_mode = WAL` (并发读写)
-  - `foreign_keys = ON` (引用完整性)
-  - `busy_timeout = 5000`
-  - `synchronous = NORMAL`
-- **迁移**: `db/migrations/001~017_*.sql`, 启动时按序号顺序执行
-- **单例**: `db/index.js` 导出的是 `Database` 实例本身 (`better-sqlite3` 同步 API, 无连接池)
-- **第二个 DB**: `data/factory.db` — 工厂级配置 (跟 `mes.db` 业务库分开)
+1. Load environment and create the Express app.
+2. Mount document raw-body handling and public root routes.
+3. Load role permissions, JWT authentication, API permission checks, and audit trail.
+4. Register base routes, instance routes, and admin diagnostics.
+5. Register the explicit 50-service catalog through `services/register-all.js`.
+6. Start IoT collection, IoT lifecycle management, and SPC monitoring.
+7. Serve uploads and the production SPA.
+8. Mount unified 404/error handlers.
+9. Attach WebSocket handling and listen on loopback port 3890.
 
-## 3. 鉴权 (JWT)
+`app/index.js` owns only cross-cutting Express middleware: static files, security headers,
+CORS, parsers, request IDs, response normalization, logging, and final error handlers.
 
-`middleware/auth.js` 自实现 HMAC-SHA256 签名 token:
+## 4. Service Registry And Schema Evolution
 
-```
-makeToken(uid, role) = base64url({uid, role, exp}) + '.' + hmacSig
-verifyToken(token)   = 验签 + 校验 exp
-```
+Services are declared in four catalogs under `services/registry/` and dependency-sorted before
+registration. Every entry declares a positive `schemaVersion`.
 
-- **登录**: `POST /api/auth/login` → `{token, user}`
-- **后续请求**: `Authorization: Bearer <token>`
-- **白名单**: `/api/health`, `/api/auth/login` 不需 token
-- **限流**: `express-rate-limit` (默认 60s 内 10 次登录)
-- **角色**: `users.role_code` 关联 `roles.permissions` JSON
-  - 权限粒度: `project:read` / `project:*` / `*` (admin)
-  - 守卫: `requirePermission(permCode)` / `onlyForemanOrAdmin` / `onlyWelder`
+Service-local DDL is governed by three artifacts:
 
-## 4. 数据流
+- `db/service-schema-manifest.json` records each service DDL fingerprint.
+- `db/serviceMigrations.js` records applied `service@version` migrations and refuses fingerprint drift.
+- `scripts/check-service-schema-versions.js` requires a version increment whenever DDL changes.
 
-### 4.1 写操作 (典型 — 新增工单)
+The current manifest covers 50 services, including 36 services with DDL. Traditional numbered
+migrations remain under `db/migrations/`; new service-local schema changes must update the service
+version and regenerate the manifest with `npm run schema:write`.
 
-```
-Browser
-  │ POST /api/work_orders  (Bearer token, JSON body)
-  ▼
-nginx 443 ── proxy_pass ──> 127.0.0.1:3890
-  │
-  ▼
-factory-mes 进程
-  │ authMiddleware 验 JWT → req.user = {uid, role}
-  ▼
-routes/instance.js (or workOrderService.register)
-  │ routes/guards.js 校验 role (foreman/admin)
-  ▼
-services/workOrderService.register(app, db)
-  │ insert work_orders + instance_bom
-  ▼
-db/index.js (better-sqlite3, 同步事务)
-  │ BEGIN; INSERT...; COMMIT;
-  ▼
-data/mes.db (SQLite WAL)
-  │
-  ▼ (下一次 GET 自动可见)
-GET /api/work_orders?instance_id=X
-  → JSON 响应回前端
-```
+## 5. Domain Ownership
 
-### 4.2 排程 (重型读 + 批量写)
+Cross-module state rules are centralized in `app/domain/`:
 
-```
-POST /api/equipment_instances/:id/schedule?dryRun=1
-  │
-  ▼
-services/equipment/scheduler/scheduler.js
-  │ 1. 查 instance + 全部 process_nodes + 全部 process_dependencies
-  │ 2. topo.js: Kahn 拓扑排序 + 环检测
-  │ 3. 沿拓扑序计算 earliest (前驱约束 + 工位冲突)
-  │ 4. dryRun=1 → 不写, 返回 sample + full
-  │ 5. dryRun=0 → 事务内 UPDATE planned_start/_end (N 行)
-  ▼
-data/mes.db
-  │ 同时触发 Gantt 渲染: GET /api/equipment_instances/:id/gantt
+| Domain concept | Policy module |
+|---|---|
+| Equipment lifecycle | `equipmentInstance.js` |
+| BOM hierarchy | `bomTree.js` |
+| BOM shortage risk | `bomRisk.js` |
+| Purchase shortage transitions | `purchaseShortage.js` |
+| Shortage case state | `shortageCase.js` |
+| Process route completeness | `processRoute.js` |
+| NCR closure | `qualityNcr.js` |
+| Project delivery state | `projectDelivery.js` |
+| Shared status vocabulary | `statusCatalog.js` |
+
+Simple CRUD remains transaction-script based. Cross-module state transitions must use these
+policies rather than reimplement status strings. Persistence ownership is complete for
+`project_cost_entries`; `shortage_cases` and `process_nodes` still have multiple bounded-context
+writers and are the next repository-consolidation targets.
+
+## 6. Frontend Structure
+
+The frontend exposes 64 functional modules through 58 router paths. Route components are lazy
+loaded. The active source currently contains 140 view files, 20 page composables, shared page
+state/toolbars, and a single API facade.
+
+Page code follows this split:
+
+```text
+views/Foo.vue                  page shell and layout
+views/foo/*.vue                tabs, dialogs, repeated panels
+composables/useFooPage.ts      page state and commands
+composables/foo/*.ts           cohesive controller helpers
+domain/*.ts                    pure frontend policies
+api/                           HTTP boundary
 ```
 
-### 4.3 成本归集 (跨多表)
+The page shell must not own large data-loading workflows, and composables must never import a
+view. Project launch flow definitions therefore live under `composables/projectLaunch/`.
 
-```
-GET /api/equipment_instances/:id/cost_rollup
-  │
-  ▼
-services/cost/rollup/rollup.js
-  │ 1. 查 key_components.unit_price + contract_signed (3 档 status)
-  │ 2. 查 instance_bom + materials.unit_price → material actual = estimated
-  │ 3. 查 work_orders → labor estimated_hours vs actual_hours
-  │ 4. 查 equipment_instances.contract_amount (wan) → contract_yuan
-  ▼
-aggregate.js 纯函数
-  │ - aggregateKeyComponents: estimated/actual/signed/pending/over_budget
-  │ - aggregateMaterials: estimated=actual (合同未签前)
-  │ - deriveContractMetrics: margin = contract_yuan - total_actual
-  ▼
-JSON 响应: {key, materials, labor, totals, project_status, contract_* }
+## 7. Important Runtime Flows
+
+### Authenticated request
+
+```text
+Browser -> nginx -> Express
+  -> authMiddleware
+  -> apiPermissionMiddleware
+  -> auditTrail
+  -> route/service adapter
+  -> domain policy + SQLite transaction
+  -> unified JSON response with requestId
 ```
 
-## 5. service 模块清单
+### Service schema startup
 
-### 5.1 `routes/` (适配层 — 7 文件)
+```text
+service registry
+  -> manifest version/fingerprint validation
+  -> migration proxy
+  -> apply unseen DDL once or suppress previously applied DDL
+  -> register service routes
+```
 
-| 文件 | 端点数 | 职责 |
-|---|---|---|
-| `auth.js` | 2 | 登录 / 登出 |
-| `health.js` | 1 | `/api/health` |
-| `root.js` | 1 | SPA fallback + favicon |
-| `instance.js` | 16 | 实例重型路由 (subsystems, cost_rollup, schedule, eco) |
-| `settings.js` | 4 | 系统设置 (经 systemSettings 注入) |
-| `guards.js` | — | 角色守卫 (onlyForemanOrAdmin / onlyWelder) |
-| `_helpers.js` | — | wrap / 错误处理 |
+### Production deployment
 
-### 5.2 `services/` (业务层 — 20+ 模块)
+```text
+clean Git worktree
+  -> pre-deploy tests
+  -> migrations
+  -> systemd restart
+  -> wait for active state
+  -> poll /api/health until HTTP 200
+```
 
-| 分类 | 模块 | 端点 (估) |
-|---|---|---|
-| **工艺 (process/)** | `node.js` (6 文件) | 16+ |
-| | `params.js` | 4 |
-| | `progress.js` | — |
-| | `nodeSubsystem.js` / `subsystemClassifier.js` | — |
-| **设备 (equipment/)** | `service.js` | — |
-| | `scheduler/` (4 文件) | 2 |
-| | `gantt.js` / `gantt/` | 2 |
-| | `oee.js` / `multiInstanceScheduler.js` | 4 |
-| **成本 (cost/)** | `keyComponentPrices/` (4 文件) | 6 |
-| | `materialPrices/` (4 文件) | 4 |
-| | `rollup/` (2 文件) | 1 |
-| **工艺树 (processTree/)** | `subsystems/` (4 文件 + 桥接) | 1 |
-| | `crossSubsystemDeps/` (3 文件 + 桥接) | 1 |
-| | `mindmap/` (1 文件) / `mindmap.js` | 1 |
-| | `generator.js` / `idCodec.js` / `breadcrumb.js` | — |
-| **工单/物料** | `workOrderService.js` | — |
-| | `materialService.js` | — |
-| | `materialMovement.js` | — |
-| | `materialPlanner.js` | — |
-| **质量** | `qcService.js` / `qcInspection.js` | — |
-| **报表** | `reportService/` (7 文件) | 14 |
-| **设置** | `systemSettings.js` / `userManagement.js` | — |
-| **其他** | `eco.js` / `feishuNotify.js` / `scanner.js` | — |
-| | `delayAlerts.js` / `dashboardAlerts.js` | — |
+`scripts/deploy.sh` refuses a dirty worktree by default. An emergency override requires the
+explicit `ALLOW_DIRTY_DEPLOY=1` environment variable and is visible in deployment output.
 
-> **拆分原则**: `services/xxx/` 子目录 = `index.js` 装配 + `_helpers.js` 工厂函数 + 业务子模块按职责命名。`register(app, db)` 是统一入口。
+## 8. Verification Baseline
 
-## 6. 外部接口
+The required structural and runtime gates are:
 
-| 接口 | 协议 | 端点 / 文件 |
-|---|---|---|
-| 浏览器 | HTTPS (443) | nginx → factory-mes |
-| 飞书通知 | HTTPS POST | `feishuNotify.js` → `data/feishu_queue.log` (本地队列) |
-| GitHub | SSH | `git@github.com:duduanbin1982-max/MES.git` (推送 / CI 镜像) |
-| systemd | 本地 socket | `factory-mes.service` |
-| systemd 日志 | journald | `data/mes.log` (追加) |
+```bash
+bash scripts/run-all-tests.sh
+cd frontend && npm run typecheck && npm run build
+npm audit --omit=dev
+cd frontend && npm audit --omit=dev
+git diff --check
+```
 
-## 7. 关键设计决策
+`run-all-tests.sh` also checks route uniqueness, module/menu/router consistency, service schema
+fingerprints, and layer boundaries. Service tests use injected in-memory SQLite databases; the
+production database is never used as a test fixture.
 
-1. **better-sqlite3 同步 API**: 单进程内串行, 无连接池, 事务简单 (`db.transaction(...)`)。并发靠 `WAL + busy_timeout`。
-2. **自实现 JWT (HMAC-SHA256)**: 不引 `jsonwebtoken` 库, 减少依赖。`JWT_SECRET` 必填且 ≥32 字符, 否则进程拒启。
-3. **service 模块化**: 每个 service `register(app, db)`, 业务逻辑跟 express 路由解耦, 易测试 (`tests/* 走直接 require(svcPath).register(app, db)`)。
-4. **拆子目录自动 fallback**: `require('./services/xxx')` 优先 `xxx.js`, 找不到就 `xxx/index.js`。拆完必须删原 `.js`。
-5. **process_dependencies 三类**: `FS` (Finish-Start, 默认) / `SS` (Start-Start) / `FF` (Finish-Finish), 排程器全支持。
-6. **成本口径**: 合同未签前 `material.actual = estimated`; 关键件按 `unit_price` + `cost_status` 4 档 (within_5pct / over_5pct / over_10pct / pending)。
+## 9. Current Residual Risks
 
-## 8. 相关文档
+- Several cohesive page controllers and read-model registrars remain 250-330 lines. They no
+  longer mix all UI/SQL concerns in one file, but should be split when their next feature lands.
+- `shortage_cases` has four direct writers and `process_nodes` has nine. The domain transition
+  policies are centralized, while persistence ownership remains transitional.
+- The Vue router and API facade have high fan-out/fan-in intentionally as composition boundaries.
 
-- `docs/deploy.md` — 部署手册 (从 0 到跑起来)
-- `docs/git-workflow.md` — 3 钩子 + 3 道闸门
-- `docs/splitting-guide.md` — 4 轮拆分套路
-- `docs/glossary.md` — 业务术语
+See `docs/architecture-rules.md`, `docs/service-schema-migrations.md`, `docs/deploy.md`, and the
+latest report under `docs/audits/` for enforcement details.

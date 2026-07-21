@@ -5,7 +5,7 @@
 const { ApiError } = require("../app/errors");
 const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
-const { hasStoredFile } = require("./documentService");
+const { hasStoredFile } = require("./documentService/storage");
 
 function ensureSchema(db) {
   const columns = new Set(db.prepare("PRAGMA table_info(critical_part_certificates)").all().map((column) => column.name));

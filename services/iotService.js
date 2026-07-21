@@ -5,20 +5,9 @@ const { ApiError } = require('../app/errors');
 // Supports Modbus TCP / OPC UA stub + MQTT placeholder
 const fs = require("fs");
 const { wrap } = require('../middleware/asyncHandler');
-const { emit, Events } = require('../app/ws/EventBus');
 const path = require("path");
-
-const ALLOWED_TABLES = new Set(["iot_devices", "iot_data_points", "iot_readings", "iot_alarms"]);
-
-function columnNames(db, table) {
-  if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
-  return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
-}
-
-function addColumn(db, table, name, definition) {
-  if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
-  if (!columnNames(db, table).has(name)) db.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition}`).run();
-}
+const { registerIngestionRoutes } = require("./iot/ingestionRoutes");
+const { runMigration } = require("./iot/schema");
 
 function validateThresholds(input) {
   const low = input.alarm_low === null || input.alarm_low === undefined || input.alarm_low === "" ? null : Number(input.alarm_low);
@@ -49,86 +38,6 @@ function deviceReadiness(device, pointCount = 0, addressedPointCount = pointCoun
     missing: [!connectionReady ? "connection" : null, Number(pointCount) <= 0 ? "data_points" : null,
       protocol === "modbus" && Number(addressedPointCount) !== Number(pointCount) ? "register_offsets" : null].filter(Boolean),
   };
-}
-
-function runMigration(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS iot_devices (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      device_code TEXT NOT NULL UNIQUE,
-      device_name TEXT NOT NULL,
-      device_type TEXT NOT NULL DEFAULT 'sensor',
-      protocol TEXT NOT NULL DEFAULT 'modbus',
-      connection_string TEXT,
-      ip_address TEXT,
-      port INTEGER,
-      slave_id INTEGER,
-      register_start INTEGER,
-      register_count INTEGER,
-      scan_interval_ms INTEGER NOT NULL DEFAULT 5000,
-      equipment_id INTEGER,
-      location TEXT,
-      manufacturer TEXT,
-      model TEXT,
-      status TEXT NOT NULL DEFAULT 'offline',
-      last_seen_at TEXT,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (equipment_id) REFERENCES equipment_instances(id)
-    );
-    CREATE TABLE IF NOT EXISTS iot_data_points (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      device_id INTEGER NOT NULL,
-      point_name TEXT NOT NULL,
-      point_code TEXT NOT NULL,
-      data_type TEXT NOT NULL DEFAULT 'float',
-      unit TEXT,
-      register_offset INTEGER,
-      min_value REAL, max_value REAL,
-      alarm_low REAL, alarm_high REAL,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (device_id) REFERENCES iot_devices(id) ON DELETE CASCADE,
-      UNIQUE(device_id, point_code)
-    );
-    CREATE TABLE IF NOT EXISTS iot_readings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      device_id INTEGER NOT NULL,
-      point_id INTEGER,
-      value REAL,
-      quality TEXT NOT NULL DEFAULT 'good',
-      read_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (device_id) REFERENCES iot_devices(id),
-      FOREIGN KEY (point_id) REFERENCES iot_data_points(id)
-    );
-    CREATE TABLE IF NOT EXISTS iot_alarms (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      device_id INTEGER NOT NULL,
-      point_id INTEGER,
-      alarm_type TEXT NOT NULL,
-      threshold_value REAL,
-      actual_value REAL,
-      message TEXT,
-      severity TEXT NOT NULL DEFAULT 'warning',
-      acknowledged INTEGER NOT NULL DEFAULT 0,
-      acknowledged_by INTEGER,
-      acknowledged_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (device_id) REFERENCES iot_devices(id),
-      FOREIGN KEY (point_id) REFERENCES iot_data_points(id)
-    );
-    CREATE INDEX IF NOT EXISTS idx_iot_readings_device ON iot_readings(device_id, read_at);
-    CREATE INDEX IF NOT EXISTS idx_iot_readings_point ON iot_readings(point_id, read_at);
-    CREATE INDEX IF NOT EXISTS idx_iot_alarms_device ON iot_alarms(device_id, acknowledged);
-    CREATE INDEX IF NOT EXISTS idx_iot_devices_status ON iot_devices(status);
-  `);
-  addColumn(db, "iot_readings", "source", "source TEXT NOT NULL DEFAULT 'external_adapter'");
-  addColumn(db, "iot_alarms", "source", "source TEXT NOT NULL DEFAULT 'external_adapter'");
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_iot_readings_source_time ON iot_readings(source, read_at);
-    CREATE INDEX IF NOT EXISTS idx_iot_alarms_source_time ON iot_alarms(source, created_at);
-  `);
 }
 
 function hasRecentOpenAlarm(db, deviceId, pointId, alarmType) {
@@ -359,114 +268,8 @@ function register(app, db) {
   registerReadings(app, db);
   registerAlarms(app, db);
   registerDashboard(app, db);
+  registerIngestionRoutes(app, db, { deviceReadiness });
   console.log("[iotService] IoT/SCADA integration registered (Devices + Readings + Alarms + Dashboard)");
-
-  // ====== MESA #5: 人工数据录入 ======
-  app.post("/api/iot/manual-entry", wrap((req, res) => {
-    var reading = req.body;
-    if (!reading.device_code && !reading.equipment_instance_id) reading.equipment_instance_id = null;
-    var r = db.prepare(
-      "INSERT INTO iot_readings (device_id, point_id, value, quality, source, read_at, point_code, unit, equipment_instance_id, operator_id, notes) VALUES (?, ?, ?, 'manual', 'manual', datetime('now'), ?, ?, ?, ?, ?)"
-    ).run(
-      reading.device_id || null, reading.point_id || null, reading.value,
-      reading.point_code || 'manual', reading.unit || null, reading.equipment_instance_id || null,
-      reading.operator_id || (req.user ? req.user.sub : 1), reading.notes || null
-    );
-    
-    // Check alarm thresholds
-    var alarm = db.prepare(
-      "SELECT * FROM iot_data_points WHERE device_id = ? AND point_code = ? AND is_active = 1 AND min_value IS NOT NULL AND max_value IS NOT NULL"
-    ).get(reading.device_id || 0, reading.point_code || 'manual');
-    if (alarm) {
-      var v = parseFloat(reading.value);
-      if (v < alarm.min_value || v > alarm.max_value) {
-        db.prepare(
-          "INSERT INTO iot_alarms (device_id, point_id, alarm_type, threshold_value, actual_value, message, severity, source) VALUES (?, NULL, 'threshold', ?, ?, ?, ?, 'manual')"
-        ).run(alarm.device_id, v < alarm.min_value ? alarm.min_value : alarm.max_value, v,
-          (v < alarm.min_value ? '低于' : '超出') + '阈值: ' + v + ' (' + alarm.min_value + '~' + alarm.max_value + ')',
-          v < alarm.min_value ? 'warning' : 'critical');
-      }
-    }
-    
-    emit(Events.IOT_READING, { device_id: reading.device_id, point_code: reading.point_code, value: reading.value });
-    res.json({ id: r.lastInsertRowid });
-  }));
-
-  // 扫码快速录入: scan code -> auto-fill context
-  app.post("/api/iot/scan-entry", wrap((req, res) => {
-    var code = req.body.code;
-    if (!code) throw ApiError.validation("code required");
-    
-    // Look up work order
-    var wo = db.prepare(
-      "SELECT wo.*, ei.instance_code, ei.instance_name FROM work_orders wo LEFT JOIN equipment_instances ei ON wo.equipment_instance_id = ei.id WHERE wo.wo_code = ?"
-    ).get(code);
-    if (wo) {
-      res.json({ type: 'work_order', context: wo, fields: ['hours_worked', 'quantity_completed', 'defect_quantity', 'temperature', 'pressure', 'notes'] });
-      return;
-    }
-    
-    // Look up equipment
-    var eq = db.prepare(
-      "SELECT * FROM equipment_instances WHERE instance_code = ? OR id = ?"
-    ).get(code, isNaN(code) ? -1 : parseInt(code));
-    if (eq) {
-      res.json({ type: 'equipment', context: eq, fields: ['temperature', 'vibration', 'rpm', 'pressure', 'current', 'notes'] });
-      return;
-    }
-    
-    res.json({ type: 'unknown', message: '无法识别扫码内容' });
-  }));
-
-  // ====== Modbus TCP 真实采集接口 ======
-  app.post("/api/iot/modbus/read", wrap((req, res) => {
-    var body = req.body;
-    if (!body.device_id && !body.ip) throw ApiError.validation("device_id or ip required");
-    
-    var device = body.device_id 
-      ? db.prepare("SELECT * FROM iot_devices WHERE id = ?").get(body.device_id)
-      : { ip_address: body.ip, port: body.port || 502, slave_id: body.slave_id || 1 };
-    
-    if (!device) throw ApiError.notFound("设备不存在");
-    
-    // For real Modbus TCP, use modbus-serial package
-    // Here we provide the interface and store readings from external adapter
-    var readings = body.readings || [];
-    var inserted = 0;
-    
-    var insert = db.prepare(
-      "INSERT INTO iot_readings (device_id, point_code, value, unit, quality, source, read_at) VALUES (?, ?, ?, ?, 'good', 'modbus_gateway', datetime('now'))"
-    );
-    
-    var tx = db.transaction(function() {
-      for (var i = 0; i < readings.length; i++) {
-        var r = readings[i];
-        insert.run(device.id || body.device_id, r.point_code || ('register_' + (r.address || i)), r.value, r.unit || null);
-        inserted++;
-      }
-    });
-    tx();
-    
-    // Update device last_seen
-    if (device.id) {
-      db.prepare("UPDATE iot_devices SET last_seen_at = datetime('now'), status = 'online' WHERE id = ?").run(device.id);
-    }
-    
-    res.json({ inserted: inserted, device: device.ip_address || device.device_code });
-  }));
-
-  // 手动标记设备在线状态
-  app.post("/api/iot/devices/:id/heartbeat", wrap((req, res) => {
-    const device = db.prepare("SELECT * FROM iot_devices WHERE id=?").get(req.params.id);
-    if (!device) throw ApiError.notFound("设备不存在");
-    const stats = db.prepare("SELECT COUNT(*) AS c, SUM(CASE WHEN register_offset IS NOT NULL THEN 1 ELSE 0 END) AS addressed FROM iot_data_points WHERE device_id=? AND is_active=1").get(device.id);
-    if (String(process.env.IOT_MODE || "production").toLowerCase() === "production" && !deviceReadiness(device, stats.c, stats.addressed || 0).configured) {
-      throw ApiError.validation("设备连接参数或数据点未配置完成，不能标记在线");
-    }
-    db.prepare("UPDATE iot_devices SET last_seen_at = datetime('now'), status = 'online' WHERE id = ?").run(req.params.id);
-    emit(Events.IOT_HEARTBEAT, { device_id: parseInt(req.params.id) });
-    res.json({ ok: true });
-  }));
 
 }
 

@@ -27,9 +27,9 @@
       "ddlStatements": 3
     },
     "criticalPartsService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "9687dbbf8b13628b6c9dcee3b496bafd43fb7975e295421c6011156590ca140d",
-      "ddlStatements": 3
+      "schemaVersion": 2,
+      "ddlFingerprint": "fd33d8b37d2485755db35223414370c1b567f59c25a5abf79bccc2dea492b71b",
+      "ddlStatements": 1
     },
     "dashboardAlerts": {
       "schemaVersion": 1,
@@ -52,8 +52,8 @@
       "ddlStatements": 2
     },
     "documentService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "5ffa6fb1b2488d0397ac38ba07361a09b9122c6c496578db0e8191eef891c378",
+      "schemaVersion": 2,
+      "ddlFingerprint": "f946158a1f233e01ed959705ebac22cf41303c78d420c08019575f6ad2130fa9",
       "ddlStatements": 2
     },
     "eco": {
@@ -82,8 +82,8 @@
       "ddlStatements": 4
     },
     "iotService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "bbf83351ddc4a17c063e0a5d71832c2585516eaa5f2cd03799ea4462bddc3b21",
+      "schemaVersion": 2,
+      "ddlFingerprint": "d19296a6f123403112c5ff990868c9b2ea573996bceb99a5e458f0a1a514ab29",
       "ddlStatements": 3
     },
     "kitCheck": {
@@ -182,8 +182,8 @@
       "ddlStatements": 3
     },
     "resourceService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "ee4822c157e52e451e2beec54f9514b8e83a7ab87be240dda6eef05e2f5e5923",
+      "schemaVersion": 2,
+      "ddlFingerprint": "7ac764de1632215343d3777f3ae27ad82bc44838042671aea62d2d3f5d84eee5",
       "ddlStatements": 4
     },
     "scanner": {
