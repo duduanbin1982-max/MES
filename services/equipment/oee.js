@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 const { wrap } = require('../../middleware/asyncHandler');
 // services/oee.js
 // P2-#C OEE 设备产能分析
@@ -7,13 +7,32 @@ const { wrap } = require('../../middleware/asyncHandler');
 //   Busy = sum of item.hours overlapping the window
 //   Utilization% = Busy / Available × 100
 //   (真正的 OEE = A × P × Q, 我们暂时只算 A, 等生产实绩数据)
+//
+// CHANGE 2026-10-08 (fix timezone fragility found by static analysis):
+//   Before: `new Date('2026-07-01')` and `new Date('2026-07-01 04:00:00')`
+//   are interpreted differently by JavaScript:
+//     - 'YYYY-MM-DD' (no time part) -> UTC
+//     - 'YYYY-MM-DD HH:MM:SS' (no timezone) -> LOCAL
+//   This caused a 1-day offset in non-UTC timezones. After the host
+//   was set to Asia/Shanghai (CST, UTC+8), `startDate` and the task
+//   `endD` were interpreted in different timezones and the task was
+//   wrongly skipped, returning busy_hours=0.
+//   After: parseDateUtc() forces every YYYY-MM-DD[ HH:MM:SS] string
+//   to be interpreted as UTC, making the algorithm timezone-stable
+//   across deployments.
+
+function parseDateUtc(s) {
+  if (!s) return new Date(NaN);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T00:00:00Z');
+  if (s.endsWith('Z')) return new Date(s);
+  return new Date(s + 'Z');
+}
 
 function register(app, db) {
   const all = (sql, params = []) => db.prepare(sql).all(params);
-  
 
   function getOEE(req, res) {
-    const startDate = new Date(req.query.start_date || new Date().toISOString().slice(0, 10));
+    const startDate = parseDateUtc(req.query.start_date || new Date().toISOString().slice(0, 10));
     const numDays = Math.min(parseInt(req.query.days) || 30, 365);
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + numDays);
@@ -21,12 +40,10 @@ function register(app, db) {
 
     const workstations = all('SELECT id, name, workshop FROM workstations ORDER BY id');
 
-    // 窗口内的 process_nodes (按 planned 或 actual)
     const items = all(
       "SELECT pn.id, pn.estimated_hours as hours, pn.planned_start, pn.planned_end, pn.actual_start, pn.actual_end, pn.status, pn.required_workstation_id as ws_id, ei.instance_code FROM process_nodes pn JOIN equipment_instances ei ON pn.equipment_instance_id = ei.id WHERE pn.required_workstation_id IS NOT NULL AND (pn.planned_end IS NOT NULL OR pn.actual_end IS NOT NULL)"
     );
 
-    // 按工位聚合 busy_hours (按天切片, 与 P2-#B heatmap 一致)
     const wsBusy = {};
     for (const ws of workstations) wsBusy[ws.id] = 0;
     const wsItems = {};
@@ -36,15 +53,14 @@ function register(app, db) {
       const start = it.actual_start || it.planned_start;
       const end = it.actual_end || it.planned_end;
       if (!start || !end) continue;
-      const startD = new Date(start);
-      const endD = new Date(end);
+      const startD = parseDateUtc(start);
+      const endD = parseDateUtc(end);
       if (endD < startDate || startD > endDate) continue;
-      // 裁剪到窗口
       const clipStart = startD < startDate ? startDate : startD;
       const clipEnd = endD > endDate ? endDate : endD;
       const overlapDays = Math.max(0, (clipEnd - clipStart) / (24 * 3600 * 1000));
       if (overlapDays > 0 && it.ws_id && wsBusy[it.ws_id] !== undefined) {
-        wsBusy[it.ws_id] += overlapDays * 24; // days → hours
+        wsBusy[it.ws_id] += overlapDays * 24;
       }
       if (it.ws_id) wsItems[it.ws_id].add(it.id);
     }
@@ -95,7 +111,7 @@ function register(app, db) {
         least_busy: leastBusy && leastBusy.utilization_pct < bottleneck.utilization_pct ? { ws_id: leastBusy.ws_id, name: leastBusy.name, utilization_pct: leastBusy.utilization_pct } : null
       },
       workstations: wsMetrics,
-      note: 'OEE 简化为单工位利用率 (Availability). 完整 OEE = A × P × Q, 等生产实绩数据接入.'
+      note: 'OEE 简化为单工位利用率 (Availability). 完整 OEE = A × P × Q, 等生产实绩数据接入. 时间统一按 UTC 解析, 与部署时区无关.'
     });
   }
 

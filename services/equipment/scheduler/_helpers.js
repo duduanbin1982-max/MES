@@ -10,10 +10,32 @@ function makeHelpers(db) {
   return { all, get, run, wrap }
 }
 
-// 把 ISO/YYYY-MM-DD 加 N 小时, 返回 YYYY-MM-DD HH:MM:SS
+// 解析日期字符串为 Date, 强制按 UTC 解读 (与部署时区无关)
+//   'YYYY-MM-DD'           -> 'YYYY-MM-DD T00:00:00Z'
+//   'YYYY-MM-DD HH:MM:SS'  -> 'YYYY-MM-DD HH:MM:SSZ'
+//   含 Z 或时区: 原样
+//   带多余引号: 自动 trim (兼容测试 mock 或脏数据)
+//   无法解析: 返回 null (调用方需自行 fallback)
+function parseDateUtc(s) {
+  if (s == null) return null
+  let v = String(s).trim().replace(/^['"]+|['"]+$/g, '')
+  if (!v) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) v = v + 'T00:00:00Z'
+  else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(v)) v = v + 'Z'
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return null
+  return d
+}
+
+// 把 ISO/YYYY-MM-DD 加 N 小时, 返回 YYYY-MM-DD HH:MM:SS (UTC)
+// 与部署时区无关: 统一按 UTC 解读
 function addHours(isoOrDate, hours) {
   if (!hours) hours = 0
-  const d = new Date(isoOrDate)
+  const d = parseDateUtc(isoOrDate)
+  if (!d) {
+    // 兜底: 解析失败时返回原值加占位
+    return String(isoOrDate || '').replace(/^['"]+|['"]+$/g, '')
+  }
   d.setTime(d.getTime() + hours * 3600 * 1000)
   return d.toISOString().replace('T', ' ').slice(0, 19)
 }
@@ -25,5 +47,4 @@ function maxDate(a, b) {
   return a > b ? a : b
 }
 
-module.exports = { makeHelpers, addHours, maxDate }
-
+module.exports = { makeHelpers, addHours, maxDate, parseDateUtc }

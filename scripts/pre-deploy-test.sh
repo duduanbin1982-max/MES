@@ -15,7 +15,7 @@ set -o pipefail
 ROOT=/home/dubin/factory-mes
 LOG_DIR=/home/dubin/factory-mes/logs/predeploy
 mkdir -p "$LOG_DIR"
-find "$LOG_DIR" -name 'predeploy-*.log' -mtime +14 -delete 2>/dev/null || true
+find "$LOG_DIR" -name 'predeploy-*.log' -mtime +3 -delete 2>/dev/null || true
 
 QUIET=0
 SKIP_INTEGRATION=0
@@ -30,11 +30,25 @@ export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:/usr/local/sbin:/usr/loc
 
 log() { [ "$QUIET" = "0" ] && echo "[predeploy] $*"; }
 
+# P1-4: 跑测试前 cp 生产 db 到临时 db, 避免测试写库
+TEST_DB=""
+if [ -f "$ROOT/data/mes.db" ]; then
+  TEST_DB="/tmp/factory-mes-predeploy-test-$(date +%Y%m%d_%H%M%S).db"
+  if cp "$ROOT/data/mes.db" "$TEST_DB" 2>/dev/null; then
+    export DB_PATH="$TEST_DB"
+    trap 'rm -f "$TEST_DB"' EXIT
+    log "测试用临时 db: $TEST_DB"
+  else
+    log "复制生产 db 失败, 回退用生产 db (有污染风险)"
+    TEST_DB=""
+  fi
+fi
+
 log "环境: node $(node -v 2>/dev/null || echo '?')  python3 $(python3 --version 2>/dev/null | awk '{print $2}' || echo '?')"
 log "工作目录: $ROOT"
 log "日志: $LOG_DIR/predeploy-$(date +%Y%m%d-%H%M%S).log"
 
-ts=$(date +%Y%m%d-%H%M%S)
+ts=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$LOG_DIR/predeploy-$ts.log"
 
 # 跑测试 (集成测试需要 seed DB, 沙箱里可能没 python3, 失败时降级)
