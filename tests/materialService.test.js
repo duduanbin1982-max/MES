@@ -13,13 +13,11 @@ const {
   freshDb,
   makeApp,
   mkReqRes,
-  resetDbCache,
   seedDefaultMaterialLot,
 } = require('./helpers/materialServiceHarness');
 
 let _db, ctx;
 test.beforeEach(() => {
-  resetDbCache();
   _db = freshDb();
   seedDefaultMaterialLot(_db);
   ctx = makeApp(_db);
@@ -154,7 +152,7 @@ test("P2-7-2 work_order_lots: 工单不存在返 404", () => {
 });
 
 test("P2-8-1 stagnant: 91 天无 movement 标呆滞", () => {
-  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity, unit, received_date) VALUES (3, 1, 'OLD-1', 50, '件', '2026-03-15')").run();
+  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity, unit, received_date) VALUES (3, 1, 'OLD-1', 50, '件', date('now','-120 day'))").run();
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (3, 'A', 50, '件', 'available')").run();
   const { req, res, getResult } = mkReqRes({});
   ctx.routes['GET /api/inventory/stagnant'].handler(req, res);
@@ -165,9 +163,9 @@ test("P2-8-1 stagnant: 91 天无 movement 标呆滞", () => {
 });
 
 test("P2-8-2 stagnant: 30 天前有 movement 不算呆滞", () => {
-  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity, unit, received_date) VALUES (4, 1, 'FRESH-1', 50, '件', '2026-05-25')").run();
+  _db.prepare("INSERT INTO material_lots (id, material_id, lot_no, quantity, unit, received_date) VALUES (4, 1, 'FRESH-1', 50, '件', date('now','-60 day'))").run();
   _db.prepare("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (4, 'A', 50, '件', 'available')").run();
-  _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, created_at) VALUES (4, 'issue', 5, '件', '2026-06-20')").run();
+  _db.prepare("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, created_at) VALUES (4, 'issue', 5, '件', date('now','-30 day'))").run();
   const { req, res, getResult } = mkReqRes({});
   ctx.routes['GET /api/inventory/stagnant'].handler(req, res);
   const r = getResult().json;
