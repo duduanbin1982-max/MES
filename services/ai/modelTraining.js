@@ -1,5 +1,6 @@
 "use strict";
 
+const ALLOWED_TABLES = new Set(["ai_models", "ai_predictions"]);
 const crypto = require("node:crypto");
 const { ApiError } = require("../../app/errors");
 const { wrap } = require("../../middleware/asyncHandler");
@@ -10,6 +11,7 @@ const {
 } = require("./modelCore");
 
 function columnNames(db, table) {
+  if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
   return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
 }
 

@@ -1,6 +1,14 @@
 const { EMPTY_TEMPLATE_SCOPE } = require("./catalog");
 
+// P0: ALLOWED_TABLES whitelist (callers verified 2026-10-08: equipment_instances, instance_bom, process_nodes)
+const ALLOWED_TABLES = new Set([
+  "equipment_instances",
+  "instance_bom",
+  "process_nodes",
+]);
+
 function tableColumns(db, table) {
+  if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
   return new Set(db.prepare("PRAGMA table_info(" + table + ")").all().map((column) => column.name));
 }
 

@@ -1,5 +1,27 @@
 "use strict";
 
+const ALLOWED_TABLES = new Set([
+  "qc_ncr",
+  "ncr_reports",
+  "shortage_cases",
+  "equipment_instances",
+  "oee_shift_log",
+  "project_cost_entries",
+  "erp_cost_ledger",
+  "documents",
+  "instance_bom",
+  "process_nodes",
+  "purchase_order_items",
+  "purchase_orders",
+  "purchase_tracking",
+  "qc_inspections",
+  "work_orders",
+  "andon_alerts",
+  "instance_eco",
+  "inventory",
+  "acceptance_checklists",
+]);
+
 function createDeliveryDbContext(db) {
   const tableCache = new Map();
   const columnCache = new Map();
@@ -13,6 +35,7 @@ function createDeliveryDbContext(db) {
   }
 
   function columns(table) {
+    if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
     if (!columnCache.has(table)) {
       if (!tableExists(table)) {
         columnCache.set(table, new Set());

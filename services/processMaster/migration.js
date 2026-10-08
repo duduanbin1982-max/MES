@@ -22,12 +22,18 @@ const DEFAULT_OPERATIONS = [
 ];
 
 function columnNames(db, table) {
+  if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
   return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
 }
 
 function addColumn(db, table, name, ddl) {
   if (!columnNames(db, table).has(name)) db.prepare(`ALTER TABLE ${table} ADD COLUMN ${ddl}`).run();
 }
+
+const ALLOWED_TABLES = new Set([
+  "process_nodes",
+  "process_operation_templates",
+]);
 
 function runMigration(db) {
   db.exec(`

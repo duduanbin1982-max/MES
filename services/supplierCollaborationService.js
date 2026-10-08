@@ -216,6 +216,7 @@ function scoreSupplier(db, supplierId, period = new Date().toISOString().slice(0
   return { supplier_id: supplierId, supplier_name: supplier.supplier_name, period, delivery_score: deliveryScore, quality_score: qualityScore, service_score: serviceScore, total_score: totalScore, grade, metrics };
 }
 
+const ALLOWED_TABLES = new Set(["incoming_inspections", "purchase_receiving"]);
 function register(app, db) {
   ensureSchema(db);
 

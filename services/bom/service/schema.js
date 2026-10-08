@@ -1,6 +1,19 @@
 "use strict";
 
+// P0: ALLOWED_TABLES whitelist (callers verified 2026-10-08: inventory, material_lots, purchase_order_items, purchase_orders, suppliers, users, shortage_cases, instance_bom)
+const ALLOWED_TABLES = new Set([
+  "inventory",
+  "material_lots",
+  "purchase_order_items",
+  "purchase_orders",
+  "suppliers",
+  "users",
+  "shortage_cases",
+  "instance_bom",
+]);
+
 function tableColumns(db, tableName) {
+  if (!ALLOWED_TABLES.has(tableName)) throw new Error("Invalid table name: " + tableName);
   try {
     return new Set(db.prepare(`PRAGMA table_info(${tableName})`).all().map((row) => row.name));
   } catch (_error) {

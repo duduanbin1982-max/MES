@@ -2,6 +2,17 @@
 
 const { isShortageActive, isShortageFulfilled } = require("../../../app/domain/shortageCase");
 
+const ALLOWED_TABLES = new Set([
+  "inventory",
+  "material_lots",
+  "purchase_order_items",
+  "purchase_orders",
+  "suppliers",
+  "users",
+  "shortage_cases",
+  "instance_bom",
+]);
+
 function normalizeInt(value, fallback = null) {
   if (value === "" || value === undefined || value === null) return fallback;
   const parsed = Number(value);
@@ -41,6 +52,7 @@ function tableExists(db, name) {
 }
 
 function tableColumns(db, name) {
+  if (!ALLOWED_TABLES.has(name)) throw new Error("Invalid table name: " + name);
   if (!tableExists(db, name)) return new Set();
   try {
     return new Set(db.prepare(`PRAGMA table_info(${name})`).all().map((row) => row.name));

@@ -1,9 +1,13 @@
 "use strict";
 
+const ALLOWED_TABLES = new Set(["users", "workstations", "resource_allocations"]);
 const { STATION_TYPES, inferStationType } = require("./catalog");
 
 function runMigration(db) {
-  const columnNames = (table) => new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
+  const columnNames = (table) => {
+    if (!ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
+    return new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
+  };
   const addColumn = (table, name, definition) => {
     if (!columnNames(table).has(name)) db.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition}`).run();
   };
