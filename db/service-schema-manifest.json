@@ -62,9 +62,9 @@
       "ddlStatements": 0
     },
     "equipment": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "29a703de586c75075fb57e06bf9edd279bd87989d387e22701fe2e20e6e63d38",
-      "ddlStatements": 11
+      "schemaVersion": 2,
+      "ddlFingerprint": "491cf5f301b422d7bdc0d81424315bc217634a0a78d937f8c29bcc2740e1a746",
+      "ddlStatements": 13
     },
     "erpService": {
       "schemaVersion": 1,
@@ -142,8 +142,8 @@
       "ddlStatements": 6
     },
     "processHoursService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "ca2f77aced1151c0d68254f6d175f6a145f3f577137fd8601996281191562ca0",
+      "schemaVersion": 2,
+      "ddlFingerprint": "587c10fdb2f64975bd55083d69a754e10ef57101dfe91c19dab67134c63262d5",
       "ddlStatements": 1
     },
     "processMasterService": {

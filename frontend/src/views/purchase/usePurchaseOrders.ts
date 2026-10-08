@@ -6,6 +6,7 @@ import { poStatuses, poStatusLabel, poStatusTag } from './purchaseShared'
 export function usePurchaseOrders(saving: Ref<boolean>) {
   const orders = ref<any[]>([])
   const oLoading = ref(false)
+  const orderError = ref('')
   const orderFilter = reactive({ status: '' })
   const orderDlg = reactive({ visible: false })
   const orderForm = reactive({
@@ -22,11 +23,15 @@ export function usePurchaseOrders(saving: Ref<boolean>) {
 
   const loadOrders = async () => {
     oLoading.value = true
+    orderError.value = ''
     try {
       const params: any = {}
       if (orderFilter.status) params.status = orderFilter.status
-      orders.value = await Api.get('/purchase/orders', { params })
-    } catch (_) { orders.value = [] }
+      orders.value = await Api.get('/purchase_orders', { params })
+    } catch (error: any) {
+      orders.value = []
+      orderError.value = error?.response?.data?.message || error?.message || '采购订单加载失败'
+    }
     finally { oLoading.value = false }
   }
 
@@ -46,9 +51,9 @@ export function usePurchaseOrders(saving: Ref<boolean>) {
     if (!orderForm.items.filter((item: any) => item.material_id).length) { ElMessage.warning('请添加物料明细'); return }
     saving.value = true
     try {
-      await Api.post('/purchase/orders', {
+      await Api.post('/purchase_orders', {
         supplier_id: orderForm.supplier_id,
-        items: orderForm.items.filter((item: any) => item.material_id).map((item: any) => ({
+        lines: orderForm.items.filter((item: any) => item.material_id).map((item: any) => ({
           material_id: item.material_id, quantity: item.quantity, unit_price: item.unit_price
         })),
         notes: orderForm.notes || undefined
@@ -62,25 +67,28 @@ export function usePurchaseOrders(saving: Ref<boolean>) {
 
   const showOrderDetail = async (row: any) => {
     try {
-      detailPo.value = await Api.get(`/purchase/orders/${row.id}`)
+      detailPo.value = await Api.get(`/purchase_orders/${row.id}`)
       detailDlg.visible = true
     } catch (_error: any) { ElMessage.error('加载详情失败') }
   }
 
   const approveOrder = async (row: any) => {
     try {
-      await ElMessageBox.confirm(`确认审批 PO "${row.po_code}" ?`, '审批确认', { type: 'warning' })
-      await Api.put(`/purchase/orders/${row.id}/approve`)
-      ElMessage.success('已审批')
+      await ElMessageBox.confirm(`确认采购订单 "${row.po_no}" ?`, '确认订单', { type: 'warning' })
+      await Api.patch(`/purchase_orders/${row.id}/status`, { status: 'confirmed' })
+      ElMessage.success('订单已确认')
       loadOrders()
-    } catch (_) { }
+    } catch (error: any) {
+      if (error === 'cancel' || error === 'close') return
+      ElMessage.error(error?.message || '采购订单审批失败')
+    }
   }
 
   const openReceiveDialog = async (row: any) => {
     try {
-      const detail = await Api.get(`/purchase/orders/${row.id}`)
+      const detail = await Api.get(`/purchase_orders/${row.id}`)
       receivePo.value = detail
-      receiveItems.value = (detail.items || []).map((item: any) => ({
+      receiveItems.value = (detail.lines || []).map((item: any) => ({
         ...item,
         receive_qty: 0,
         remaining: (item.quantity || 0) - (item.received_qty || 0)
@@ -94,8 +102,8 @@ export function usePurchaseOrders(saving: Ref<boolean>) {
     if (!toReceive.length) { ElMessage.warning('请填写收货数量'); return }
     saving.value = true
     try {
-      await Api.post(`/purchase/orders/${receivePo.value.id}/receive`, {
-        items: toReceive.map((item: any) => ({ material_id: item.material_id, quantity: item.receive_qty }))
+      await Api.post(`/purchase_orders/${receivePo.value.id}/receive`, {
+        lines: toReceive.map((item: any) => ({ line_id: item.id, received_qty: item.receive_qty }))
       })
       ElMessage.success('已收货入库')
       receiveDlg.visible = false
@@ -105,7 +113,7 @@ export function usePurchaseOrders(saving: Ref<boolean>) {
   }
 
   return {
-    poStatuses, poStatusLabel, poStatusTag, orders, oLoading, orderFilter, orderDlg,
+    poStatuses, poStatusLabel, poStatusTag, orders, oLoading, orderError, orderFilter, orderDlg,
     orderForm, orderTotal, detailDlg, detailPo, receiveDlg, receivePo, receiveItems,
     loadOrders, openOrderDialog, resetOrderForm, saveOrder, showOrderDetail,
     approveOrder, openReceiveDialog, doReceive,

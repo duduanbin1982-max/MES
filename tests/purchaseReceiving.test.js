@@ -36,3 +36,23 @@ test("failed IQC keeps inventory quarantined", () => {
   assert.equal(db.prepare("SELECT quality_status FROM material_lots WHERE id=10").get().quality_status, "failed");
   assert.equal(db.prepare("SELECT status FROM inventory WHERE id=20").get().status, "quarantined");
 });
+
+test("receiving context is resolved from the purchase receipt instead of client fields", () => {
+  const db = makeDb();
+  db.exec(`
+    CREATE TABLE purchase_orders (id INTEGER PRIMARY KEY, po_no TEXT, supplier_id INTEGER, equipment_instance_id INTEGER);
+    CREATE TABLE po_lines (id INTEGER PRIMARY KEY, po_id INTEGER, material_id INTEGER, line_no INTEGER);
+    CREATE TABLE materials (id INTEGER PRIMARY KEY, material_code TEXT, material_name TEXT);
+    CREATE TABLE suppliers (id INTEGER PRIMARY KEY, supplier_code TEXT, supplier_name TEXT);
+    INSERT INTO purchase_orders VALUES (2, 'PO-2', 30, 40);
+    INSERT INTO po_lines VALUES (3, 2, 50, 1);
+    INSERT INTO materials VALUES (50, 'MAT-50', '主轴承');
+    INSERT INTO suppliers VALUES (30, 'SUP-30', '关键件供应商');
+  `);
+  const context = supplierCollaboration.getReceivingContext(db, 1);
+  assert.equal(context.po_no, "PO-2");
+  assert.equal(context.material_id, 50);
+  assert.equal(context.supplier_id, 30);
+  assert.equal(context.equipment_instance_id, 40);
+  db.close();
+});

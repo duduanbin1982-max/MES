@@ -8,7 +8,7 @@ function tableExists(db, name) {
   return !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name);
 }
 
-const SETUP_ALLOWED_TABLES = new Set(["workstations", "users", "equipment_instances", "shift_schedules", "skill_matrices", "work_orders", "materials", "material_lots", "inventory", "production_orders", "iot_devices", "iot_data_points", "iot_readings", "iot_alarms", "documents", "quality_check_records", "resource_allocations", "mdm_issue_waivers", "instance_bom"]);
+const SETUP_ALLOWED_TABLES = new Set(["workstations", "users", "roles", "suppliers", "worker_certificates", "equipment_instances", "shift_schedules", "skill_matrices", "work_orders", "schedule_assignments", "process_nodes", "materials", "material_lots", "inventory", "production_orders", "iot_devices", "iot_data_points", "iot_readings", "iot_alarms", "documents", "quality_check_records", "resource_allocations", "mdm_issue_waivers", "instance_bom"]);
 
 function columns(db, table) {
   if (!SETUP_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
@@ -60,7 +60,7 @@ function maxSeverity(issues) {
   return issues.reduce((max, item) => (rank[item.severity] > rank[max] ? item.severity : max), "info");
 }
 
-function step(id, title, route, progress, metrics, issues, actions, ownerRole, businessGoal) {
+function step({ id, title, route, progress, metrics, issues, actions, ownerRole, businessGoal }) {
   const severity = issues.length ? maxSeverity(issues) : "info";
   return {
     id,
@@ -182,57 +182,57 @@ function buildSetupStatus(db) {
   ];
 
   const steps = [
-    step("users_roles", "1. 用户和角色权限", "/users", pct(Math.min(activeUsers, 6) + roleDone, 12), {
+    step({ id: "users_roles", title: "1. 用户和角色权限", route: "/users", progress: pct(Math.min(activeUsers, 6) + roleDone, 12), metrics: {
       active_users: activeUsers, roles, required_roles: roleDone + "/" + requiredRoles.length,
-    }, usersIssues, [
+    }, issues: usersIssues, actions: [
       { label: "用户管理", route: "/users", primary: true },
       { label: "审计日志", route: "/audit" },
-    ], "系统管理员", "先把谁能看、谁能改、谁审批定下来。"),
-    step("resources_suppliers", "2. 工位、人员、供应商", "/resources", pct(Math.min(workstations, 6) + Math.min(suppliers, 3) + Math.min(certificates, 3), 12), {
+    ], ownerRole: "系统管理员", businessGoal: "先把谁能看、谁能改、谁审批定下来。" }),
+    step({ id: "resources_suppliers", title: "2. 工位、人员、供应商", route: "/resources", progress: pct(Math.min(workstations, 6) + Math.min(suppliers, 3) + Math.min(certificates, 3), 12), metrics: {
       workstations, assembly_stations: assemblyStations, welding_stations: weldingStations, inspection_stations: inspectionStations, suppliers, key_suppliers: keySuppliers, outsourcing_suppliers: outsourcingSuppliers, certificates,
-    }, resourceIssues, [
+    }, issues: resourceIssues, actions: [
       { label: "资源看板", route: "/resources", primary: true },
       { label: "供应商管理", route: "/purchase" },
       { label: "劳动力管理", route: "/labor" },
-    ], "生产主管/采购主管", "准备可排程的工位、可派工的人员、可跟催的供应商。"),
-    step("materials", "3. 物料主数据", "/materials", pct(Math.min(materialWithCode, 30) + Math.min(materialWithSafety, 10) - Math.min(duplicateMaterialCodes, 10), 40), {
+    ], ownerRole: "生产主管/采购主管", businessGoal: "准备可排程的工位、可派工的人员、可跟催的供应商。" }),
+    step({ id: "materials", title: "3. 物料主数据", route: "/materials", progress: pct(Math.min(materialWithCode, 30) + Math.min(materialWithSafety, 10) - Math.min(duplicateMaterialCodes, 10), 40), metrics: {
       materials, material_with_code: materialWithCode, material_with_safety: materialWithSafety, duplicate_codes: duplicateMaterialCodes,
-    }, materialIssues, [
+    }, issues: materialIssues, actions: [
       { label: "物料中心", route: "/materials", primary: true },
       { label: "物料预警", route: "/material-alerts" },
       { label: "主数据治理", route: "/mdm" },
-    ], "物料管理员", "统一一物一码、分类、单位、库存预警。"),
-    step("instances", "4. 项目装备", "/instances", pct(Math.min(activeInstances, 1) + Math.min(codedInstances, activeInstances) + Math.min(lifecycleInstances, activeInstances), Math.max(activeInstances * 3, 1)), {
+    ], ownerRole: "物料管理员", businessGoal: "统一一物一码、分类、单位、库存预警。" }),
+    step({ id: "instances", title: "4. 项目装备", route: "/instances", progress: pct(Math.min(activeInstances, 1) + Math.min(codedInstances, activeInstances) + Math.min(lifecycleInstances, activeInstances), Math.max(activeInstances * 3, 1)), metrics: {
       instances, active_instances: activeInstances, coded_instances: codedInstances, lifecycle_instances: lifecycleInstances,
-    }, instanceIssues, [
+    }, issues: instanceIssues, actions: [
       { label: "项目装备", route: "/instances", primary: true },
       { label: "项目交付闭环", route: "/delivery" },
-    ], "项目经理", "建立一台TBM作为合同、BOM、图纸、采购、工单、成本的主线。"),
-    step("bom", "5. 导入 BOM", "/bom", pct(Math.min(bomTier0, 1) + Math.min(bomTier1, 5) + Math.min(bomTier2, 20) - Math.min(bomWithoutMaterial, 5), 26), {
+    ], ownerRole: "项目经理", businessGoal: "建立一台TBM作为合同、BOM、图纸、采购、工单、成本的主线。" }),
+    step({ id: "bom", title: "5. 导入 BOM", route: "/bom", progress: pct(Math.min(bomTier0, 1) + Math.min(bomTier1, 5) + Math.min(bomTier2, 20) - Math.min(bomWithoutMaterial, 5), 26), metrics: {
       bom_rows: bomRows, bom_instances: bomInstances, tier0: bomTier0, tier1: bomTier1, tier2: bomTier2, bom_without_material: bomWithoutMaterial,
-    }, bomIssues, [
+    }, issues: bomIssues, actions: [
       { label: "BOM 管理", route: "/bom", primary: true },
       { label: "PLM 图纸", route: "/plm" },
-    ], "工程/设计", "形成0级整机、1级部件、2级零件/外购件的树状BOM。"),
-    step("documents", "6. 绑定图纸/文档", "/documents", pct(Math.min(docs, 5) + Math.min(issuedDocs, 3) + Math.min(docsLinked, 5), 13), {
+    ], ownerRole: "工程/设计", businessGoal: "形成0级整机、1级部件、2级零件/外购件的树状BOM。" }),
+    step({ id: "documents", title: "6. 绑定图纸/文档", route: "/documents", progress: pct(Math.min(docs, 5) + Math.min(issuedDocs, 3) + Math.min(docsLinked, 5), 13), metrics: {
       documents: docs, issued_docs: issuedDocs, linked_docs: docsLinked,
-    }, docIssues, [
+    }, issues: docIssues, actions: [
       { label: "文档/图纸", route: "/documents", primary: true },
       { label: "BOM 管理", route: "/bom" },
-    ], "文控/工程", "让现场看到最新版图纸、SOP、检验标准，并能签收追溯。"),
-    step("process", "7. 建工艺路线", "/process-tree", pct(Math.min(processNodes, 30) + Math.min(processWithHours, 20) + Math.min(processWithStation, 20) + Math.min(processWithSkill, 20), 90), {
+    ], ownerRole: "文控/工程", businessGoal: "让现场看到最新版图纸、SOP、检验标准，并能签收追溯。" }),
+    step({ id: "process", title: "7. 建工艺路线", route: "/process-tree", progress: pct(Math.min(processNodes, 30) + Math.min(processWithHours, 20) + Math.min(processWithStation, 20) + Math.min(processWithSkill, 20), 90), metrics: {
       process_nodes: processNodes, with_hours: processWithHours, with_station: processWithStation, with_skill: processWithSkill,
-    }, processIssues, [
+    }, issues: processIssues, actions: [
       { label: "工艺树", route: "/process-tree", primary: true },
       { label: "工时与报工", route: "/process-hours" },
-    ], "工艺工程师", "明确每个部件经过哪些工序、标准工时、工位和技能要求。"),
-    step("orders_schedule", "8. 生成工单和排程", "/work-orders", pct(Math.min(workOrders, 5) + Math.min(dispatchedWorkOrders, 3) + Math.min(scheduleAssignments, 5), 13), {
+    ], ownerRole: "工艺工程师", businessGoal: "明确每个部件经过哪些工序、标准工时、工位和技能要求。" }),
+    step({ id: "orders_schedule", title: "8. 生成工单和排程", route: "/work-orders", progress: pct(Math.min(workOrders, 5) + Math.min(dispatchedWorkOrders, 3) + Math.min(scheduleAssignments, 5), 13), metrics: {
       work_orders: workOrders, dispatched_work_orders: dispatchedWorkOrders, schedule_assignments: scheduleAssignments,
-    }, orderIssues, [
+    }, issues: orderIssues, actions: [
       { label: "工单管理", route: "/work-orders", primary: true },
       { label: "项目排程", route: "/schedule" },
       { label: "齐套缺料", route: "/kit-closure" },
-    ], "生产计划", "把BOM和工艺转成可执行工单、排程、领料和报工。"),
+    ], ownerRole: "生产计划", businessGoal: "把BOM和工艺转成可执行工单、排程、领料和报工。" }),
   ];
 
   const overall = Math.round(steps.reduce((sum, item) => sum + item.progress, 0) / steps.length);

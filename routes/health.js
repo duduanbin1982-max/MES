@@ -9,7 +9,15 @@ function register(app, db) {
   app.get('/api/health', wrap((req, res) => {
     const t = db.prepare("SELECT count(*) c FROM sqlite_master WHERE type='table'").get().c;
     const instances = db.prepare('SELECT count(*) c FROM equipment_instances').get().c;
-    res.json({ status: 'ok', service: 'tbm-mes', version: '2.1.0', tables: t, instances, time: new Date().toISOString() });
+    res.json({
+      status: 'ok',
+      service: 'tbm-mes',
+      version: '2.3.0',
+      components: { api: 'online', database: 'online' },
+      tables: t,
+      instances,
+      time: new Date().toISOString(),
+    });
   }));
 }
 

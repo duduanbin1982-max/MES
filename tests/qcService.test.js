@@ -39,16 +39,14 @@ test("quality service registers the inspection and NCR closure API", () => {
   db.close();
 });
 
-test("failed incoming inspection creates a linked major NCR", async () => {
+test("legacy incoming inspection endpoint rejects orphan inspection writes", async () => {
   const { db, routes } = createHarness();
-  let response;
+  let error;
   await routes.get("POST /api/qc/incoming-inspection")({
     body: { material_id: 12, result: "fail", defect_desc: "尺寸超差", defect_qty: 2, inspector_id: 7 },
-  }, { json(value) { response = value; } });
-  assert.equal(response.result, "fail");
-  const ncr = db.prepare("SELECT * FROM ncr_reports WHERE source_type='incoming' AND source_id=?").get(response.id);
-  assert.equal(ncr.severity, "major");
-  assert.equal(ncr.defect_desc, "尺寸超差");
-  assert.equal(ncr.defect_qty, 2);
+  }, { json() {} }, (caught) => { error = caught; });
+  assert.match(error.message, /旧来料检验入口已停用/);
+  assert.equal(db.prepare("SELECT COUNT(*) AS c FROM qc_inspections").get().c, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) AS c FROM ncr_reports").get().c, 0);
   db.close();
 });

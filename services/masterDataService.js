@@ -59,7 +59,7 @@ function register(app, db) {
     return new Set(all("SELECT issue_id FROM mdm_issue_waivers WHERE active = 1").map((r) => r.issue_id));
   }
 
-  function issue(list, domain, rule, severity, title, detail, source, refId, path) {
+  function issue(list, { domain, rule, severity, title, detail, source, refId, path }) {
     list.push({
       id: stableIssueId(domain, rule, source, refId, title),
       domain,
@@ -93,22 +93,22 @@ function register(app, db) {
     const nameCol = has("materials", "material_name") ? "material_name" : has("materials", "name") ? "name" : null;
     const total = countRows("materials");
     if (!codeCol) {
-      issue(issues, "materials", "missing_code_column", "critical", "物料表缺少编码字段", "materials 表没有 material_code/code 字段", "materials", null, "/materials");
+      issue(issues, { domain: "materials", rule: "missing_code_column", severity: "critical", title: "物料表缺少编码字段", detail: "materials 表没有 material_code/code 字段", source: "materials", refId: null, path: "/materials" });
       return { domain: "materials", label: "物料编码", total, issues: 1, score: 40 };
     }
 
     for (const r of all(`SELECT id, ${codeCol} AS code, ${nameCol || "''"} AS name FROM materials WHERE ${codeCol} IS NULL OR trim(${codeCol}) = '' LIMIT 100`)) {
-      issue(issues, "materials", "missing_code", "critical", "物料缺少编码", `${r.name || "未命名物料"} 没有物料编码`, "materials", r.id, "/materials");
+      issue(issues, { domain: "materials", rule: "missing_code", severity: "critical", title: "物料缺少编码", detail: `${r.name || "未命名物料"} 没有物料编码`, source: "materials", refId: r.id, path: "/materials" });
     }
     for (const r of all(`SELECT ${codeCol} AS code, COUNT(*) AS c FROM materials WHERE ${codeCol} IS NOT NULL AND trim(${codeCol}) <> '' GROUP BY ${codeCol} HAVING COUNT(*) > 1 LIMIT 100`)) {
-      issue(issues, "materials", "duplicate_code", "critical", "物料编码重复", `${r.code} 出现 ${r.c} 次`, "materials", r.code, "/materials");
+      issue(issues, { domain: "materials", rule: "duplicate_code", severity: "critical", title: "物料编码重复", detail: `${r.code} 出现 ${r.c} 次`, source: "materials", refId: r.code, path: "/materials" });
     }
     for (const r of all(`SELECT id, ${codeCol} AS code, ${nameCol || "''"} AS name FROM materials WHERE ${codeCol} IS NOT NULL AND (length(trim(${codeCol})) < 4 OR instr(${codeCol}, '-') = 0 OR ${codeCol} GLOB '*[^A-Z0-9._-]*') LIMIT 100`)) {
-      issue(issues, "materials", "code_pattern", "warning", "物料编码格式异常", `${r.code} 建议使用大写分类前缀 + 分隔符`, "materials", r.id, "/materials");
+      issue(issues, { domain: "materials", rule: "code_pattern", severity: "warning", title: "物料编码格式异常", detail: `${r.code} 建议使用大写分类前缀 + 分隔符`, source: "materials", refId: r.id, path: "/materials" });
     }
     if (nameCol) {
       for (const r of all(`SELECT ${nameCol} AS name, COUNT(*) AS c FROM materials WHERE ${nameCol} IS NOT NULL AND trim(${nameCol}) <> '' GROUP BY ${nameCol} HAVING COUNT(*) > 1 LIMIT 50`)) {
-        issue(issues, "materials", "duplicate_name", "warning", "物料名称重复", `${r.name} 出现 ${r.c} 次，需确认是否一物多码`, "materials", r.name, "/materials");
+        issue(issues, { domain: "materials", rule: "duplicate_name", severity: "warning", title: "物料名称重复", detail: `${r.name} 出现 ${r.c} 次，需确认是否一物多码`, source: "materials", refId: r.name, path: "/materials" });
       }
     }
     return domainSummary("materials", "物料编码", total, issues);
@@ -125,19 +125,19 @@ function register(app, db) {
     const partCol = ["part_number", "material_code", "item_code", "code"].find((c) => has(table, c));
     const versionCol = ["version", "revision", "rev"].find((c) => has(table, c));
 
-    if (!levelCol) issue(issues, "bom", "missing_level", "critical", "BOM 缺少层级号", `${table} 未发现 level_code/level_no/level 字段`, table, null, "/bom");
-    if (!parentCol) issue(issues, "bom", "missing_parent", "high", "BOM 缺少父子关系字段", `${table} 未发现 parent_id 字段`, table, null, "/bom");
-    if (!versionCol) issue(issues, "bom", "missing_version", "warning", "BOM 缺少版本字段", `${table} 未发现 version/revision 字段`, table, null, "/bom");
+    if (!levelCol) issue(issues, { domain: "bom", rule: "missing_level", severity: "critical", title: "BOM 缺少层级号", detail: `${table} 未发现 level_code/level_no/level 字段`, source: table, refId: null, path: "/bom" });
+    if (!parentCol) issue(issues, { domain: "bom", rule: "missing_parent", severity: "high", title: "BOM 缺少父子关系字段", detail: `${table} 未发现 parent_id 字段`, source: table, refId: null, path: "/bom" });
+    if (!versionCol) issue(issues, { domain: "bom", rule: "missing_version", severity: "warning", title: "BOM 缺少版本字段", detail: `${table} 未发现 version/revision 字段`, source: table, refId: null, path: "/bom" });
     if (qtyCol) {
       if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
       for (const r of all(`SELECT ${idCol} AS id, ${qtyCol} AS qty FROM ${table} WHERE COALESCE(${qtyCol}, 0) <= 0 LIMIT 100`)) {
-        issue(issues, "bom", "invalid_qty", "high", "BOM 用量异常", `节点 ${r.id} 的数量为 ${r.qty || 0}`, table, r.id, "/bom");
+        issue(issues, { domain: "bom", rule: "invalid_qty", severity: "high", title: "BOM 用量异常", detail: `节点 ${r.id} 的数量为 ${r.qty || 0}`, source: table, refId: r.id, path: "/bom" });
       }
     }
     if (partCol) {
       if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
       for (const r of all(`SELECT ${idCol} AS id FROM ${table} WHERE ${partCol} IS NULL OR trim(${partCol}) = '' LIMIT 100`)) {
-        issue(issues, "bom", "missing_part", "high", "BOM 节点缺少物料/图号", `节点 ${r.id} 未填写物料编码或图号`, table, r.id, "/bom");
+        issue(issues, { domain: "bom", rule: "missing_part", severity: "high", title: "BOM 节点缺少物料/图号", detail: `节点 ${r.id} 未填写物料编码或图号`, source: table, refId: r.id, path: "/bom" });
       }
     }
     return domainSummary("bom", "BOM 层级", total, issues);
@@ -149,15 +149,15 @@ function register(app, db) {
     const codeCol = ["doc_code", "document_code", "drawing_no", "file_code"].find((c) => has("documents", c));
     const versionCol = ["version", "revision", "rev"].find((c) => has("documents", c));
     if (!versionCol) {
-      issue(issues, "documents", "missing_version_column", "critical", "文档缺少版本字段", "documents 表未发现 version/revision 字段", "documents", null, "/documents");
+      issue(issues, { domain: "documents", rule: "missing_version_column", severity: "critical", title: "文档缺少版本字段", detail: "documents 表未发现 version/revision 字段", source: "documents", refId: null, path: "/documents" });
     } else {
       for (const r of all(`SELECT id, title, ${versionCol} AS version FROM documents WHERE ${versionCol} IS NULL OR trim(${versionCol}) = '' LIMIT 100`)) {
-        issue(issues, "documents", "missing_version", "high", "图纸/文档缺少版本", `${r.title || r.id} 未填写版本`, "documents", r.id, "/documents");
+        issue(issues, { domain: "documents", rule: "missing_version", severity: "high", title: "图纸/文档缺少版本", detail: `${r.title || r.id} 未填写版本`, source: "documents", refId: r.id, path: "/documents" });
       }
     }
     if (codeCol && versionCol) {
       for (const r of all(`SELECT ${codeCol} AS code, ${versionCol} AS version, COUNT(*) AS c FROM documents WHERE ${codeCol} IS NOT NULL GROUP BY ${codeCol}, ${versionCol} HAVING COUNT(*) > 1 LIMIT 50`)) {
-        issue(issues, "documents", "duplicate_code_version", "high", "图纸编码版本重复", `${r.code}/${r.version || "-"} 出现 ${r.c} 次`, "documents", r.code, "/documents");
+        issue(issues, { domain: "documents", rule: "duplicate_code_version", severity: "high", title: "图纸编码版本重复", detail: `${r.code}/${r.version || "-"} 出现 ${r.c} 次`, source: "documents", refId: r.code, path: "/documents" });
       }
     }
     return domainSummary("documents", "图纸版本", total, issues);
@@ -172,10 +172,10 @@ function register(app, db) {
     if (nameCol) {
       if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
       for (const r of all(`SELECT rowid AS id FROM ${table} WHERE ${nameCol} IS NULL OR trim(${nameCol}) = '' LIMIT 100`)) {
-        issue(issues, "suppliers", "missing_name", "high", "供应商缺少名称", `供应商记录 ${r.id} 未填写名称`, table, r.id, "/purchase");
+        issue(issues, { domain: "suppliers", rule: "missing_name", severity: "high", title: "供应商缺少名称", detail: `供应商记录 ${r.id} 未填写名称`, source: table, refId: r.id, path: "/purchase" });
       }
     }
-    if (!codeCol) issue(issues, "suppliers", "missing_code_column", "warning", "供应商缺少编码字段", `${table} 未发现 supplier_code/code 字段`, table, null, "/purchase");
+    if (!codeCol) issue(issues, { domain: "suppliers", rule: "missing_code_column", severity: "warning", title: "供应商缺少编码字段", detail: `${table} 未发现 supplier_code/code 字段`, source: table, refId: null, path: "/purchase" });
     return domainSummary("suppliers", "供应商", total, issues);
   }
 
@@ -185,12 +185,12 @@ function register(app, db) {
       total += countRows("workstations");
       if (has("workstations", "code")) {
         for (const r of all("SELECT code, COUNT(*) AS c FROM workstations WHERE code IS NOT NULL GROUP BY code HAVING COUNT(*) > 1 LIMIT 50")) {
-          issue(issues, "process", "duplicate_station_code", "high", "工位编码重复", `${r.code} 出现 ${r.c} 次`, "workstations", r.code, "/resources");
+          issue(issues, { domain: "process", rule: "duplicate_station_code", severity: "high", title: "工位编码重复", detail: `${r.code} 出现 ${r.c} 次`, source: "workstations", refId: r.code, path: "/resources" });
         }
       }
       if (has("workstations", "capacity_per_day")) {
         for (const r of all("SELECT id, code, name FROM workstations WHERE COALESCE(capacity_per_day, 0) <= 0 LIMIT 100")) {
-          issue(issues, "process", "missing_capacity", "warning", "工位缺少产能", `${r.code || r.name || r.id} 未设置日产能`, "workstations", r.id, "/resources");
+          issue(issues, { domain: "process", rule: "missing_capacity", severity: "warning", title: "工位缺少产能", detail: `${r.code || r.name || r.id} 未设置日产能`, source: "workstations", refId: r.id, path: "/resources" });
         }
       }
     }
@@ -198,10 +198,10 @@ function register(app, db) {
       total += countRows("process_nodes");
       const stdCol = ["standard_hours", "standard_minutes", "planned_hours", "estimated_hours"].find((c) => has("process_nodes", c));
       if (!stdCol) {
-        issue(issues, "process", "missing_standard_time_column", "warning", "工序缺少标准工时字段", "process_nodes 未发现 standard_hours/standard_minutes 字段", "process_nodes", null, "/process-tree");
+        issue(issues, { domain: "process", rule: "missing_standard_time_column", severity: "warning", title: "工序缺少标准工时字段", detail: "process_nodes 未发现 standard_hours/standard_minutes 字段", source: "process_nodes", refId: null, path: "/process-tree" });
       } else {
         for (const r of all(`SELECT id, operation_name FROM process_nodes WHERE COALESCE(${stdCol}, 0) <= 0 LIMIT 100`)) {
-          issue(issues, "process", "missing_standard_time", "warning", "工序缺少标准工时", `${r.operation_name || r.id} 未设置标准工时`, "process_nodes", r.id, "/process-tree");
+          issue(issues, { domain: "process", rule: "missing_standard_time", severity: "warning", title: "工序缺少标准工时", detail: `${r.operation_name || r.id} 未设置标准工时`, source: "process_nodes", refId: r.id, path: "/process-tree" });
         }
       }
     }
@@ -213,7 +213,7 @@ function register(app, db) {
     const total = countRows("users");
     if (has("users", "role_code") && has("users", "cert_no")) {
       for (const r of all("SELECT id, full_name, role_code FROM users WHERE role_code IN ('worker','welder','qc') AND (cert_no IS NULL OR trim(cert_no) = '') LIMIT 100")) {
-        issue(issues, "labor", "missing_certificate", "high", "关键岗位缺少资质证书", `${r.full_name || r.id} (${r.role_code}) 未维护证书编号`, "users", r.id, "/labor");
+        issue(issues, { domain: "labor", rule: "missing_certificate", severity: "high", title: "关键岗位缺少资质证书", detail: `${r.full_name || r.id} (${r.role_code}) 未维护证书编号`, source: "users", refId: r.id, path: "/labor" });
       }
     }
     return domainSummary("labor", "人员资质", total, issues);
@@ -314,7 +314,9 @@ function waiveIssue(db, issueId, reason) {
 }
 
 function reopenIssue(db, issueId) {
-  try { db.prepare("UPDATE mdm_issue_waivers SET active = 0 WHERE issue_id = ?").run(issueId); } catch (_e) {}
+  const waiverTable = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get("mdm_issue_waivers");
+  if (!waiverTable) return;
+  db.prepare("UPDATE mdm_issue_waivers SET active = 0 WHERE issue_id = ?").run(issueId);
 }
 
 module.exports = { register, collectForException, waiveIssue, reopenIssue };

@@ -47,7 +47,10 @@
 
     <el-tabs v-model="mainTab" v-if="instanceId" style="margin-top: 12px">
       <!-- Tab 1: 项目结构树 -->
-      <el-tab-pane label="<el-icon><Share /></el-icon> 项目结构树" name="tree">
+      <el-tab-pane name="tree">
+        <template #label>
+          <span class="tab-label"><el-icon><Share /></el-icon>项目结构树</span>
+        </template>
         <div style="display: flex; gap: 12px; margin-bottom: 8px">
           <el-button size="small" type="primary" @click="prefillTier(0); dlgAdd = true; editingNode = null">+ 新增整机根节点</el-button>
           <el-button size="small" type="primary" plain :disabled="!selected" @click="openAddChild(selected)">+ 新增子部件</el-button>
@@ -369,6 +372,11 @@ const {
 </script>
 
 <style scoped>
+.tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .page { padding: 16px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .page-title { font-size: 18px; font-weight: 600; }

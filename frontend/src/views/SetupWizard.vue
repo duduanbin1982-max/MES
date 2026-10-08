@@ -61,7 +61,11 @@
           :key="step.id"
           class="flow-node"
           :class="`flow-${step.status}`"
+          role="button"
+          tabindex="0"
           @click="focusStep(step)"
+          @keydown.enter.prevent="focusStep(step)"
+          @keydown.space.prevent="focusStep(step)"
         >
           <div class="flow-title">{{ shortTitle(step.title) }}</div>
           <div class="flow-progress">{{ step.progress }}%</div>

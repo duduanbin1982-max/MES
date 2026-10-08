@@ -1,7 +1,7 @@
 <template>
   <div class="ws-panel-container">
     <!-- 悬浮触发按钮 -->
-    <div class="ws-trigger" @click="open = !open" :title="`WebSocket: ${stats.status.value}`">
+    <div class="ws-trigger" role="button" tabindex="0" :aria-expanded="open" :title="`WebSocket: ${stats.status.value}`" @click="open = !open" @keydown.enter.prevent="open = !open" @keydown.space.prevent="open = !open">
       <span class="ws-dot" :class="dotClass"></span>
       <span class="ws-label">实时</span>
       <span v-if="stats.eventCount.value > 0" class="ws-badge">{{ stats.eventCount.value }}</span>

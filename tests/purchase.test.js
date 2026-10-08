@@ -9,7 +9,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Database = require('better-sqlite3');
-const path = require('path');
 
 function freshDb() {
   const db = new Database(':memory:');
@@ -29,8 +28,6 @@ function freshDb() {
 }
 
 function makeApp(db) {
-  const fakePath = path.resolve(__dirname, '../db');
-  require.cache[fakePath] = { exports: db, loaded: true, id: fakePath, filename: fakePath, children: [], paths: [] };
   const svc = require('../services/purchase');
   const routes = {};
   const app = {
@@ -71,11 +68,6 @@ function call(routes, method, path, body) {
 
 let _db, routes;
 test.beforeEach(() => {
-  for (const k of Object.keys(require.cache)) {
-    if (k.includes('/db') && !k.includes('better-sqlite3') && !k.includes('node_modules')) {
-      delete require.cache[k];
-    }
-  }
   _db = freshDb();
   _db.prepare('INSERT INTO materials (id, material_code, material_name) VALUES (?, ?, ?)').run(101, 'M-T-1', '测试物料A');
   _db.prepare('INSERT INTO materials (id, material_code, material_name) VALUES (?, ?, ?)').run(102, 'M-T-2', '测试物料B');

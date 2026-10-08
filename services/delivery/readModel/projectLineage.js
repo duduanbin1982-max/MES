@@ -210,7 +210,7 @@ function createProjectLineageReadModel(ctx, deps) {
     if (!traceTables.length && workOrders.length) addGap("trace", "warning", "缺批次发料/装配关系记录", "要做到端到端追溯，需要记录 lot_id/serial_no 发到哪个工单、装到哪个部件", "/trace", "仓库/质量");
     addSegment("trace", "批次/谱系", 1, traceTables.length ? 1 : 0, "/trace", "仓库/质量");
 
-    const acceptanceTable = ["acceptance_records", "customer_acceptance", "tbm_acceptance"].find(tableExists);
+    const acceptanceTable = ["acceptance_checklists", "acceptance_records", "customer_acceptance", "tbm_acceptance"].find(tableExists);
     const acceptanceRows = acceptanceTable
       ? safeAll(has(acceptanceTable, "equipment_instance_id") ? `SELECT * FROM ${acceptanceTable} WHERE equipment_instance_id = ?` : "SELECT * FROM sqlite_master WHERE 1=0", [id])
       : [];

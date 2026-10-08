@@ -6,10 +6,13 @@ import { outsourceStatusLabel, outsourceStatusTag, scoreGradeTag } from './purch
 export function useSupplierCollaboration() {
   const collabLoading = ref(false)
   const collabOverview = ref<any>({})
+  const pendingReceipts = ref<any[]>([])
   const incomingInspections = ref<any[]>([])
   const outsourcingOrders = ref<any[]>([])
   const scorecards = ref<any[]>([])
   const incomingForm = reactive({
+    receiving_id: null as number | null,
+    purchase_order_id: null as number | null,
     supplier_id: null as number | null,
     material_id: null as number | null,
     lot_no: '',
@@ -30,13 +33,15 @@ export function useSupplierCollaboration() {
   const loadSupplierCollab = async () => {
     collabLoading.value = true
     try {
-      const [overview, incoming, outsourcing, scores] = await Promise.all([
+      const [overview, receipts, incoming, outsourcing, scores] = await Promise.all([
         Api.get('/supplier-collab/overview'),
+        Api.get('/supplier-collab/pending-receipts'),
         Api.get('/supplier-collab/incoming-inspections'),
         Api.get('/supplier-collab/outsourcing-orders'),
         Api.get('/supplier-collab/scorecards')
       ])
       collabOverview.value = overview || {}
+      pendingReceipts.value = receipts || []
       incomingInspections.value = incoming || []
       outsourcingOrders.value = outsourcing || []
       scorecards.value = scores || []
@@ -48,13 +53,13 @@ export function useSupplierCollaboration() {
   }
 
   const saveIncomingInspection = async () => {
-    if (!incomingForm.supplier_id || !incomingForm.material_id) { ElMessage.warning('请选择供应商和物料'); return }
+    if (!incomingForm.receiving_id) { ElMessage.warning('请选择待检收货批次'); return }
     if (incomingForm.result === 'fail' && !incomingForm.defect_desc) { ElMessage.warning('不合格时请填写缺陷说明'); return }
     collabLoading.value = true
     try {
       const result = await Api.post('/supplier-collab/incoming-inspections', incomingForm)
       ElMessage.success(result.ncr ? `已登记并生成 NCR #${result.ncr.id}` : '来料检验已登记')
-      Object.assign(incomingForm, { material_id: null, lot_no: '', result: 'pass', sample_qty: 1, defect_qty: 0, defect_desc: '', disposition: 'accept' })
+      Object.assign(incomingForm, { receiving_id: null, purchase_order_id: null, supplier_id: null, material_id: null, lot_no: '', result: 'pass', sample_qty: 1, defect_qty: 0, defect_desc: '', disposition: 'accept' })
       await loadSupplierCollab()
     } catch (error: any) {
       ElMessage.error(error?.message || '登记失败')
@@ -89,7 +94,7 @@ export function useSupplierCollaboration() {
   }
 
   return {
-    collabLoading, collabOverview, incomingInspections, outsourcingOrders, scorecards,
+    collabLoading, collabOverview, pendingReceipts, incomingInspections, outsourcingOrders, scorecards,
     outsourceStatusLabel, outsourceStatusTag, scoreGradeTag, incomingForm, outsourceForm,
     loadSupplierCollab, saveIncomingInspection, saveOutsourceOrder, updateOutsource,
   }

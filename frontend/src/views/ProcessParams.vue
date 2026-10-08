@@ -161,7 +161,9 @@ async function renderTrends() {
           },
         }],
       });
-    } catch (_e) {}
+    } catch (error) {
+      console.warn('[ProcessParams] 趋势图渲染失败', error)
+    }
   }
 }
 

@@ -119,7 +119,11 @@ function register(app, db) {
     );
     if (!alert) return res.status(404).json({ error: "告警不存在" });
     if (alert.data_json) {
-      try { alert.data = JSON.parse(alert.data_json); } catch (_e) {}
+      try {
+        alert.data = JSON.parse(alert.data_json);
+      } catch (_error) {
+        alert.data = null;
+      }
     }
     res.json(alert);
   }));

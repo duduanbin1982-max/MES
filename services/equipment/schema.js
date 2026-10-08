@@ -21,6 +21,39 @@ function migrateLegacyLifecycleStatuses(db) {
   db.prepare("UPDATE equipment_instances SET status = 'procurement' WHERE status = 'purchasing'").run();
 }
 
+function migrateLegacyMilestones(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS instance_milestones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    equipment_instance_id INTEGER NOT NULL,
+    phase_code TEXT NOT NULL,
+    phase_name TEXT NOT NULL,
+    sequence INTEGER DEFAULT 0,
+    planned_start TEXT,
+    planned_end TEXT,
+    actual_start TEXT,
+    actual_end TEXT,
+    status TEXT DEFAULT 'pending',
+    notes TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_instance_milestones_instance ON instance_milestones(equipment_instance_id, sequence)");
+  if (!hasTable(db, "equipment_instance_milestones")) return;
+  db.exec(`
+    INSERT INTO instance_milestones (
+      equipment_instance_id, phase_code, phase_name, sequence,
+      planned_start, planned_end, actual_start, actual_end, status, notes
+    )
+    SELECT legacy.project_id, legacy.phase_code, legacy.phase_name, legacy.sequence,
+           legacy.planned_start, legacy.planned_end, legacy.actual_start, legacy.actual_end,
+           legacy.status, legacy.notes
+      FROM equipment_instance_milestones legacy
+     WHERE NOT EXISTS (
+       SELECT 1 FROM instance_milestones canonical
+        WHERE canonical.equipment_instance_id = legacy.project_id
+          AND canonical.phase_code = legacy.phase_code
+     )
+  `);
+}
+
 function initEquipmentInstanceEnhancements(db) {
   const get = (sql, params = []) => db.prepare(sql).get(params);
   const run = (sql, params = []) => db.prepare(sql).run(params);
@@ -57,6 +90,7 @@ function initEquipmentInstanceEnhancements(db) {
     notes TEXT
   )`);
   db.exec("CREATE INDEX IF NOT EXISTS idx_equipment_instance_milestones_instance ON equipment_instance_milestones(project_id)");
+  migrateLegacyMilestones(db);
   db.exec(`CREATE TABLE IF NOT EXISTS document_folders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     equipment_instance_id INTEGER NOT NULL,
@@ -98,5 +132,6 @@ function initEquipmentInstanceEnhancements(db) {
 module.exports = {
   hasTable,
   initEquipmentInstanceEnhancements,
+  migrateLegacyMilestones,
   tableColumns,
 };

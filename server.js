@@ -33,18 +33,17 @@ loadRolePermissions(db);
 // 根路由 + favicon + SPA fallback (无需 auth)
 require('./routes/root').register(app);
 
-// P1-2: 查询性能统计
-// P0-2 OWASP A04 修复: db-stats 加 admin gate (之前在 publicPaths 白名单里)
-//     2026-07-11 OWASP 审计: /api/debug/db-stats 公开泄露 db uptime/QPS/调用次数
-app.get("/api/debug/db-stats", requirePermission('settings:read'), (_req, res) => {
-  try { const { profileStats } = require("./db"); res.json(profileStats()); }
-  catch(e) { res.json({ error: e.message }); }
-});
-
 // auth 白名单: /api/health 和 /api/auth/login
 app.use('/api', authMiddleware);
 app.use('/api', apiPermissionMiddleware);
 app.use('/api', require('./app/middleware/auditTrail')(db));
+
+// P1-2: 查询性能统计。必须挂在 authMiddleware 之后，否则 requirePermission
+// 看不到 req.user，合法管理员也会被误判为 401。
+app.get("/api/debug/db-stats", requirePermission('settings:read'), (_req, res) => {
+  try { const { profileStats } = require("./db"); res.json(profileStats()); }
+  catch(e) { res.status(500).json({ error: e.message }); }
+});
 require('./routes/auth').register(app, db);
 require('./routes/health').register(app, db);
 require('./routes/settings').register(app, db);

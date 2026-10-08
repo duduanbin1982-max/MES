@@ -255,9 +255,15 @@ const loadDispatchable = async () => {
 const loadWorkersAndStations = async () => {
   try {
     const allWorkers = await Api.get('/resources/workers')
-    workers.value = (allWorkers || []).filter((w: any) => w.availability !== 'offline')
+    // F-bug-fix: /resources/workers returns {workers, summary}; unwrap defensively
+    const workersArr = Array.isArray(allWorkers) ? allWorkers : (allWorkers?.workers || [])
+    workers.value = workersArr.filter((w: any) => w.availability !== 'offline')
     workstations.value = await Api.workstations()
-  } catch (_) {}
+  } catch (error: any) {
+    workers.value = []
+    workstations.value = []
+    ElMessage.error(error?.message || '人员与工位加载失败')
+  }
 }
 
 const onTabChange = (name: string | number) => {

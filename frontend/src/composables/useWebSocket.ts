@@ -84,6 +84,14 @@ function pushEvent(c: WsClient, event: string, payload: any) {
   c.recentEvents.value = arr
 }
 
+function invokeHandler(handler: WsEventHandler, payload: any, event: string) {
+  try {
+    handler(payload)
+  } catch (error) {
+    console.warn(`[WebSocket] 事件处理器执行失败: ${event}`, error)
+  }
+}
+
 function startPing(c: WsClient) {
   if (c.pingTimer) clearInterval(c.pingTimer)
   c.pingTimer = setInterval(() => {
@@ -97,7 +105,9 @@ function startPing(c: WsClient) {
           c.latency.value = Date.now() - start
           c.ws?.removeEventListener("message", onMsg)
         }
-      } catch (_e) {}
+      } catch (_error) {
+        return
+      }
     }
     c.ws?.addEventListener("message", onMsg)
   }, 15000)
@@ -123,14 +133,16 @@ function connect(c: WsClient) {
       } else if (msg.type === "event") {
         pushEvent(c, msg.event, msg.payload)
         const set = c.handlers.get(msg.event)
-        if (set) for (const h of set) try { h(msg.payload) } catch (_e) {}
+        if (set) for (const handler of set) invokeHandler(handler, msg.payload, msg.event)
         const prefix = msg.event.split(".").slice(0, -1).join(".") + ".*"
         const set2 = c.handlers.get(prefix)
-        if (set2) for (const h of set2) try { h(msg.payload) } catch (_e) {}
+        if (set2) for (const handler of set2) invokeHandler(handler, msg.payload, prefix)
         const setAll = c.handlers.get("*")
-        if (setAll) for (const h of setAll) try { h({ event: msg.event, payload: msg.payload }) } catch (_e) {}
+        if (setAll) for (const handler of setAll) invokeHandler(handler, { event: msg.event, payload: msg.payload }, "*")
       }
-    } catch (_e) {}
+    } catch (error) {
+      console.warn('[WebSocket] 无法解析服务端消息', error)
+    }
   }
   c.ws.onerror = () => { c.status.value = "error" }
   c.ws.onclose = () => {
@@ -169,7 +181,7 @@ export function useWebSocket(events: string | string[], handler: WsEventHandler)
   const off = () => {
     for (const ev of eventList) c.handlers.get(ev)?.delete(handler)
   }
-  onUnmounted(() => { /* off by caller */ })
+  onUnmounted(off)
   return { status: c.status, clientId: c.clientId, latency: c.latency, eventCount: c.eventCount, recentEvents: c.recentEvents, connectedAt: c.connectedAt, off }
 }
 

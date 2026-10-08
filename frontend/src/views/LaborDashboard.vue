@@ -16,7 +16,8 @@
 
     <el-tabs v-model="activeTab" type="border-card">
       <!-- Tab 1: 工人列表 -->
-      <el-tab-pane label="<el-icon><User /></el-icon> 工人名录" name="workers">
+      <el-tab-pane name="workers">
+        <template #label><span class="tab-label"><el-icon><User /></el-icon>工人名录</span></template>
         <el-table :data="dash.workers" size="small" max-height="400">
           <el-table-column prop="full_name" label="姓名" width="100" />
           <el-table-column prop="role_code" label="角色" width="80">
@@ -35,7 +36,8 @@
       </el-tab-pane>
 
       <!-- Tab 2: 证书 -->
-      <el-tab-pane label="<el-icon><Memo /></el-icon> 资质证书" name="certs">
+      <el-tab-pane name="certs">
+        <template #label><span class="tab-label"><el-icon><Memo /></el-icon>资质证书</span></template>
         <div style="margin-bottom:8px">
           <el-button size="small" type="primary" @click="showAddCert=true">添加证书</el-button>
           <el-checkbox v-model="showExpiringOnly" style="margin-left:12px">仅看临期</el-checkbox>
@@ -62,7 +64,8 @@
       </el-tab-pane>
 
       <!-- Tab 3: 技能矩阵 -->
-      <el-tab-pane label="<el-icon><Aim /></el-icon> 技能矩阵" name="skills">
+      <el-tab-pane name="skills">
+        <template #label><span class="tab-label"><el-icon><Aim /></el-icon>技能矩阵</span></template>
         <div style="margin-bottom:8px">
           <el-select v-model="skillCategory" placeholder="技能分类" clearable size="small" style="width:160px">
             <el-option v-for="c in skillCategories" :key="c" :label="c" :value="c" />
@@ -86,7 +89,8 @@
       </el-tab-pane>
 
       <!-- Tab 4: 培训记录 -->
-      <el-tab-pane label="<el-icon><Reading /></el-icon> 培训记录" name="training">
+      <el-tab-pane name="training">
+        <template #label><span class="tab-label"><el-icon><Reading /></el-icon>培训记录</span></template>
         <el-table :data="trainings" size="small" max-height="400" @row-click="(r:any)=>{}">
           <el-table-column prop="full_name" label="姓名" width="80" />
           <el-table-column prop="training_name" label="培训名称" min-width="180" />
@@ -229,4 +233,5 @@ onMounted(refresh)
 .page { padding: 16px; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .page-title { font-size: 18px; font-weight: 600; }
+.tab-label { display: inline-flex; align-items: center; gap: 6px; }
 </style>

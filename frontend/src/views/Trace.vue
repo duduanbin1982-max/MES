@@ -235,7 +235,14 @@ import type { ApiRecord } from '../types/api'
 
 const tab = ref('forward')
 const instances = ref<ApiRecord[]>([])
-onMounted(async () => { try { instances.value = await Api.instances() } catch(_){} })
+onMounted(async () => {
+  try {
+    instances.value = await Api.instances()
+  } catch (error: any) {
+    instances.value = []
+    ElMessage.error(error?.message || '装备实例加载失败')
+  }
+})
 
 const fw = reactive<{ lot_no: string; loading: boolean; result: ApiRecord | null }>({ lot_no: '', loading: false, result: null })
 const doForward = async () => { if(!fw.lot_no) return; fw.loading=true; try { fw.result = await Api.get('/trace/forward',{params:{lot_no:fw.lot_no}}) } catch(_){ fw.result=null } finally { fw.loading=false } }
@@ -337,7 +344,18 @@ const createNdt = async () => {
   await loadRecordWorkspace()
 }
 
-const doMatrix = async () => { if(!bw.instance_id) return; bw.mloading=true; try { bw.matrix = await Api.get('/trace/matrix',{params:{instance_id:bw.instance_id}}) } catch(_){} finally { bw.mloading=false } }
+const doMatrix = async () => {
+  if (!bw.instance_id) return
+  bw.mloading = true
+  try {
+    bw.matrix = await Api.get('/trace/matrix', { params: { instance_id: bw.instance_id } })
+  } catch (error: any) {
+    bw.matrix = null
+    ElMessage.error(error?.message || '追溯矩阵加载失败')
+  } finally {
+    bw.mloading = false
+  }
+}
 </script>
 
 <style scoped>.page{padding:16px 24px}.page-header{margin-bottom:16px}.page-title{font-size:20px;font-weight:600}.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px}.record-lists{margin-top:16px}@media print {

@@ -14,11 +14,11 @@ function createInstanceFactory({ db, all, get, run, ApiError, nextInstanceCode, 
   }
 
   function createDefaultMilestones(instanceId, plannedStart, plannedEnd) {
-    const existing = get("SELECT COUNT(*) AS count FROM equipment_instance_milestones WHERE project_id = ?", instanceId).count;
+    const existing = get("SELECT COUNT(*) AS count FROM instance_milestones WHERE equipment_instance_id = ?", instanceId).count;
     if (existing > 0) return;
     const statement = db.prepare(`
-      INSERT INTO equipment_instance_milestones
-        (project_id, phase_code, phase_name, sequence, planned_start, planned_end, status, notes)
+      INSERT INTO instance_milestones
+        (equipment_instance_id, phase_code, phase_name, sequence, planned_start, planned_end, status, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const [code, name, sequence] of DEFAULT_MILESTONES) {
@@ -51,11 +51,11 @@ function createInstanceFactory({ db, all, get, run, ApiError, nextInstanceCode, 
   }
 
   function copyMilestones(templateId, instanceId, plannedStart, plannedEnd) {
-    const rows = all("SELECT * FROM equipment_instance_milestones WHERE project_id = ? ORDER BY sequence, id", templateId);
+    const rows = all("SELECT * FROM instance_milestones WHERE equipment_instance_id = ? ORDER BY sequence, id", templateId);
     if (!rows.length) return createDefaultMilestones(instanceId, plannedStart, plannedEnd);
     const statement = db.prepare(`
-      INSERT INTO equipment_instance_milestones
-        (project_id, phase_code, phase_name, sequence, planned_start, planned_end, status, notes)
+      INSERT INTO instance_milestones
+        (equipment_instance_id, phase_code, phase_name, sequence, planned_start, planned_end, status, notes)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const row of rows) {

@@ -50,7 +50,7 @@ withDefaults(defineProps<{
   margin-bottom: var(--space-lg);
   padding: var(--space-md);
   border: 1px solid var(--el-border-color-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--el-bg-color-overlay);
   box-shadow: var(--shadow-sm);
 }
@@ -106,7 +106,7 @@ withDefaults(defineProps<{
   color: var(--el-text-color-primary);
   font-size: 20px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   line-height: 1.25;
 }
 

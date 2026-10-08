@@ -26,7 +26,7 @@
     <!-- Legend -->
     <div class="dt-legend">
       <div class="dt-legend-title">部件图例</div>
-      <div v-for="p in parts" :key="p.id" class="dt-legend-item" @click="focusPart(p)" :style="{borderLeftColor: p.color_hex}">
+      <div v-for="p in parts" :key="p.id" class="dt-legend-item" role="button" tabindex="0" @click="focusPart(p)" @keydown.enter.prevent="focusPart(p)" @keydown.space.prevent="focusPart(p)" :style="{borderLeftColor: p.color_hex}">
         <span :style="{color: p.color_hex}">●</span> {{ p.part_name }}
       </div>
     </div>

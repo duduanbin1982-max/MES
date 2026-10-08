@@ -1,12 +1,14 @@
 <template>
   <div class="page">
-    <div class="page-header">
-      <div>
-        <div class="page-title">项目交付看板</div>
-        <div class="page-subtitle">合同到验收的项目级进度、风险与业务断点</div>
-      </div>
-      <el-button :icon="Refresh" size="small" :loading="loading" @click="loadAll">刷新</el-button>
-    </div>
+    <PageToolbar
+      title="项目交付看板"
+      subtitle="合同到验收的项目级进度、风险与业务断点"
+      aria-label="项目交付看板工具栏"
+    >
+      <template #actions>
+        <el-button :icon="Refresh" :loading="loading" @click="loadAll">刷新</el-button>
+      </template>
+    </PageToolbar>
 
     <el-row :gutter="16" class="kpi-row">
       <el-col :span="6">
@@ -75,7 +77,7 @@
                 <div class="wf-project-name">{{ project.instance_name }}</div>
               </td>
               <td v-for="key in workflowKeys" :key="`${project.id}-${key}`">
-                <div class="flow-cell" :class="`flow-${stageByKey(project, key).status}`" @click="openStage(project, stageByKey(project, key))">
+                <div class="flow-cell" role="button" tabindex="0" :aria-label="`${project.instance_code} ${workflowLabel(key)} ${statusLabel(stageByKey(project, key).status)}`" :class="`flow-${stageByKey(project, key).status}`" @click="openStage(project, stageByKey(project, key))" @keydown.enter.prevent="openStage(project, stageByKey(project, key))" @keydown.space.prevent="openStage(project, stageByKey(project, key))">
                   <div class="flow-cell-head">
                     <span>{{ stageByKey(project, key).percent }}%</span>
                     <el-tag v-if="stageByKey(project, key).blocker_count" size="small" type="danger">{{ stageByKey(project, key).blocker_count }}</el-tag>
@@ -170,7 +172,7 @@
             <el-divider />
             <div class="section-title">交付闭环</div>
             <div class="stage-list">
-              <div v-for="s in selected.stages" :key="s.label" class="stage-item" @click="go(s.path)">
+            <div v-for="s in selected.stages" :key="s.label" class="stage-item" role="button" tabindex="0" @click="go(s.path)" @keydown.enter.prevent="go(s.path)" @keydown.space.prevent="go(s.path)">
                 <div class="stage-head">
                   <span>{{ s.label }}</span>
                   <span>{{ s.done }}/{{ s.total }}</span>
@@ -191,7 +193,7 @@
             <el-divider />
             <div class="section-title">优先处理</div>
             <el-empty v-if="!selected.top_exceptions.length" description="暂无异常" :image-size="48" />
-            <div v-for="item in selected.top_exceptions" :key="item.id" class="exception-line" @click="go(item.source_path)">
+            <div v-for="item in selected.top_exceptions" :key="item.id" class="exception-line" role="button" tabindex="0" @click="go(item.source_path)" @keydown.enter.prevent="go(item.source_path)" @keydown.space.prevent="go(item.source_path)">
               <el-tag :type="severityTag(item.severity)" size="small">{{ severityLabel(item.severity) }}</el-tag>
               <span class="exception-title">{{ item.title }}</span>
             </div>
@@ -215,6 +217,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
+import PageToolbar from '../components/PageToolbar.vue'
 import { Api } from '../api'
 import DeliveryLineageDrawer from './delivery/DeliveryLineageDrawer.vue'
 import DeliveryRiskDrawer from './delivery/DeliveryRiskDrawer.vue'

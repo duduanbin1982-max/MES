@@ -53,7 +53,7 @@
       <el-card v-if="subsystems.length > 0" class="overview-card" style="margin-bottom: 16px">
         <div style="font-weight: 600; margin-bottom: 8px">子系统分布</div>
         <div class="subsystem-bars">
-          <div v-for="s in subsystems" :key="s.id" class="sub-bar" @click="scrollToCard(s.id)">
+          <div v-for="s in subsystems" :key="s.id" class="sub-bar" role="button" tabindex="0" @click="scrollToCard(s.id)" @keydown.enter.prevent="scrollToCard(s.id)" @keydown.space.prevent="scrollToCard(s.id)">
             <div class="sub-bar-color" :style="{ background: s.color }"></div>
             <span class="sub-bar-name">{{ s.name_zh }}</span>
             <span class="sub-bar-count">{{ s.completed }}/{{ s.total }}</span>

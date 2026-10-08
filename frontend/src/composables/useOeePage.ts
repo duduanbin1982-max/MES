@@ -54,7 +54,12 @@ export function useOeePage() {
 
   const instances = ref<any[]>([])
   const loadInstances = async () => {
-    try { instances.value = await Api.instances() } catch (_) {}
+    try {
+      instances.value = await Api.instances()
+    } catch (error: any) {
+      instances.value = []
+      ElMessage.error(error?.message || '装备实例加载失败')
+    }
   }
 
   const lossCategories = [
@@ -151,7 +156,9 @@ export function useOeePage() {
           yAxis: { type: 'value', name: '分钟' },
           series: [{ type: 'bar', data: vals, itemStyle: { color: 'var(--el-color-danger)' } }]
         }, true)
-      } catch (_) {}
+      } catch (error: any) {
+        ElMessage.warning(error?.message || '损失柏拉图加载失败')
+      }
     }
   }
 
@@ -248,7 +255,9 @@ export function useOeePage() {
           ]
         }, true)
       }
-    } catch (_) {}
+    } catch (error: any) {
+      ElMessage.error(error?.message || 'OEE 趋势加载失败')
+    }
     finally { trendLoading.value = false }
   }
 

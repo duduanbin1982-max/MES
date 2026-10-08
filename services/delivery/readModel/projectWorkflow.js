@@ -174,14 +174,14 @@ function createProjectWorkflowReadModel(ctx, helpers) {
     const qcTotal = countByInstance("qc_inspections");
     const qcPass = has("qc_inspections", "result") ? count("qc_inspections", "equipment_instance_id = ? AND result IN ('pass', 'passed', '合格')", [id]) : 0;
 
-    const costTable = ["cost_rollups", "cost_allocations", "project_costs", "cost_items"].find(tableExists);
+    const costTable = ["project_cost_entries", "cost_rollups", "cost_allocations", "project_costs", "cost_items"].find(tableExists);
     const costTotal = costTable ? countByInstance(costTable) : 0;
     const costDone = costTotal;
     const cost = costSummaryForInstance(instance);
 
-    const acceptanceTable = ["acceptance_records", "customer_acceptance", "tbm_acceptance"].find(tableExists);
+    const acceptanceTable = ["acceptance_checklists", "acceptance_records", "customer_acceptance", "tbm_acceptance"].find(tableExists);
     const acceptanceTotal = acceptanceTable ? countByInstance(acceptanceTable) : 0;
-    const acceptanceDone = acceptanceTable ? doneByInstance(acceptanceTable, ["accepted", "passed", "closed", "done"]) : 0;
+    const acceptanceDone = acceptanceTable ? doneByInstance(acceptanceTable, ["accepted", "approved", "completed", "passed", "closed", "done"]) : 0;
 
     const contractBlockers = [];
     if (!instance.instance_code) contractBlockers.push(workflowBlocker("contract_no_code", "warning", "缺项目编码", "实例编码是合同、采购、成本归集的主线索引", projectPath("/instances", id, "contract"), "项目经理"));

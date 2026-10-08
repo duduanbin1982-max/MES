@@ -1,11 +1,21 @@
 <template>
   <div class="page">
-    <div class="page-header">
-      <div class="page-title"><el-icon><Search /></el-icon> {{ pageTitle }}</div>
-      <div class="page-subtitle">{{ pageSubtitle }}</div>
-    </div>
+    <PageToolbar :title="pageTitle" :subtitle="pageSubtitle" aria-label="质量管理工具栏">
+      <template #icon><el-icon><Search /></el-icon></template>
+      <template #actions>
+        <el-button :loading="loading" @click="load">刷新检验记录</el-button>
+      </template>
+    </PageToolbar>
 
-    <el-tabs v-model="activeTab" type="border-card">
+    <PageState
+      v-if="loading && activeTab === 'inspections'"
+      state="loading"
+      compact
+      title="正在加载质量数据"
+      description="正在读取检验记录、NCR 和质量指标。"
+    />
+
+    <el-tabs v-else v-model="activeTab" type="border-card">
       <el-tab-pane label="检验记录" name="inspections">
         <QualityInspectionsTab
           :stats="stats"
@@ -63,7 +73,8 @@
         />
       </el-tab-pane>
 
-      <el-tab-pane label="<el-icon><DataAnalysis /></el-icon> 质量仪表板" name="dashboard">
+      <el-tab-pane name="dashboard">
+        <template #label><span class="tab-label"><el-icon><DataAnalysis /></el-icon>质量仪表板</span></template>
         <QualityDashboardTab :dash="dash" :spc-dash="spcDash" />
       </el-tab-pane>
     </el-tabs>
@@ -115,6 +126,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import PageState from '../components/PageState.vue'
+import PageToolbar from '../components/PageToolbar.vue'
 import QualityInspectionsTab from './quality/QualityInspectionsTab.vue'
 import QualityNcrTab from './quality/QualityNcrTab.vue'
 import QualityCapaTab from './quality/QualityCapaTab.vue'
@@ -207,6 +220,10 @@ const pageSubtitle = computed(() => (
     : 'NCR、CAPA、检验模板与质量看板统一管理'
 ))
 </script>
+
+<style scoped>
+.tab-label { display: inline-flex; align-items: center; gap: 6px; }
+</style>
 
 <style scoped>
 .page{padding:16px 24px}

@@ -68,20 +68,16 @@ function registerInspectionRoutes({ app, helpers, ApiError }) {
     const template = get("SELECT * FROM inspection_templates WHERE id = ?", [req.params.id]);
     if (!template) throw ApiError.notFound("Template not found");
     let checkItems = [];
-    try { checkItems = JSON.parse(template.check_items || "[]"); } catch (_error) {}
+    try {
+      checkItems = JSON.parse(template.check_items || "[]");
+    } catch (_error) {
+      checkItems = [];
+    }
     res.json({ ...template, check_items: checkItems });
   }));
 
   app.post("/api/qc/incoming-inspection", wrap((req, res) => {
-    const { purchase_order_id, material_id, lot_number, supplier, inspector_id, result, defect_desc, defect_qty, notes } = req.body;
-    if (!material_id || !result) throw ApiError.validation("material_id and result required");
-    const created = run("INSERT INTO qc_inspections (equipment_instance_id, work_order_id, inspection_type, result, inspector_id, notes) VALUES (?,?,?,?,?,?)",
-      [null, null, "incoming", result, inspector_id || null, JSON.stringify({ purchase_order_id, material_id, supplier, defect_desc, defect_qty, lot_number, notes })]);
-    if (result === "fail") {
-      run("INSERT INTO ncr_reports (ncr_code, source_type, source_id, part_name, defect_desc, defect_qty, severity, created_by) VALUES (?,?,?,?,?,?,?,?)",
-        [nextNcrCode(get), "incoming", created.lastInsertRowid, "Material #" + material_id, defect_desc || "Incoming inspection failed", defect_qty || 1, "major", inspector_id || null]);
-    }
-    res.json({ id: created.lastInsertRowid, result });
+    throw ApiError.validation("旧来料检验入口已停用，请从采购管理的待检收货批次发起检验");
   }));
 
   app.get("/api/qc/incoming-inspection", wrap((_req, res) => {

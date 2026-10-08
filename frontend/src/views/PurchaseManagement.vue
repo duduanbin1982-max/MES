@@ -1,8 +1,8 @@
 <template>
   <div class="page">
-    <div class="page-header">
-      <div class="page-title"><el-icon><Document /></el-icon> 采购管理</div>
-    </div>
+    <PageToolbar title="采购管理" subtitle="供应商、采购订单、跟催与来料协同统一处理" aria-label="采购管理工具栏">
+      <template #icon><el-icon><Document /></el-icon></template>
+    </PageToolbar>
 
     <el-tabs v-model="tab">
       <PurchaseSuppliersTab
@@ -36,6 +36,7 @@
         :po-status-tag="poStatusTag"
         :orders="orders"
         :o-loading="oLoading"
+        :order-error="orderError"
         :order-dlg="orderDlg"
         :order-form="orderForm"
         :suppliers="suppliers"
@@ -91,6 +92,7 @@
       <PurchaseSupplierCollabTab
         :collab-overview="collabOverview"
         :incoming-form="incomingForm"
+        :pending-receipts="pendingReceipts"
         :suppliers="suppliers"
         :supplier-name="supplierName"
         :materials="materials"
@@ -118,6 +120,7 @@ import PurchaseFollowupTab from './purchase/PurchaseFollowupTab.vue'
 import PurchaseQuoteTab from './purchase/PurchaseQuoteTab.vue'
 import PurchaseSupplierCollabTab from './purchase/PurchaseSupplierCollabTab.vue'
 import { usePurchaseManagement } from './purchase/usePurchaseManagement'
+import PageToolbar from '../components/PageToolbar.vue'
 
 const {
   tab,
@@ -155,6 +158,7 @@ const {
   poStatusTag,
   orders,
   oLoading,
+  orderError,
   orderFilter,
   orderDlg,
   orderForm,
@@ -186,6 +190,7 @@ const {
   compareQuotes,
   collabLoading,
   collabOverview,
+  pendingReceipts,
   incomingInspections,
   outsourcingOrders,
   scorecards,

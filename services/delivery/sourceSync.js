@@ -85,10 +85,8 @@ function createSourceSync({ db, tableExists, safeAll, safeGet, safeRun, ensureCo
       return { ok: true, linked: true };
     }
     if (source.type === "mdm") {
-      try {
-        const masterDataService = require("../masterDataService");
-        if (masterDataService && typeof masterDataService.waiveIssue === "function") masterDataService.waiveIssue(db, source.id, note || "异常中心关闭");
-      } catch (_error) {}
+      const masterDataService = require("../masterDataService");
+      masterDataService.waiveIssue(db, source.id, note || "异常中心关闭");
       return { ok: true, linked: true };
     }
     if (source.type === "ncr" && tableExists("ncr_reports")) {
@@ -114,10 +112,8 @@ function createSourceSync({ db, tableExists, safeAll, safeGet, safeRun, ensureCo
       safeRun("UPDATE ncr_reports SET closed_at = NULL WHERE id = ?", [source.id]);
     }
     if (source.type === "mdm") {
-      try {
-        const masterDataService = require("../masterDataService");
-        if (masterDataService && typeof masterDataService.reopenIssue === "function") masterDataService.reopenIssue(db, source.id);
-      } catch (_error) {}
+      const masterDataService = require("../masterDataService");
+      masterDataService.reopenIssue(db, source.id);
     }
   }
 

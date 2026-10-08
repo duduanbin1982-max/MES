@@ -28,17 +28,14 @@
         <el-card shadow="never" style="margin-bottom: 12px">
           <template #header><strong>来料检验闭环</strong></template>
           <el-form :inline="true" :model="incomingForm">
-            <el-form-item label="供应商">
-              <el-select v-model="incomingForm.supplier_id" filterable placeholder="供应商" style="width: 180px">
-                <el-option v-for="s in suppliers" :key="s.id" :label="supplierName(s)" :value="s.id" />
+            <el-form-item label="待检收货">
+              <el-select v-model="incomingForm.receiving_id" filterable placeholder="选择采购收货批次" style="width: 360px" @change="selectReceiving">
+                <el-option v-for="row in pendingReceipts" :key="row.receiving_id" :label="`${row.po_no} / ${row.material_code} ${row.material_name} / ${row.lot_no}`" :value="row.receiving_id" />
               </el-select>
             </el-form-item>
-            <el-form-item label="物料">
-              <el-select v-model="incomingForm.material_id" filterable placeholder="物料" style="width: 220px">
-                <el-option v-for="m in materials" :key="m.id" :label="m.material_code + ' ' + m.material_name" :value="m.id" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="批次"><el-input v-model="incomingForm.lot_no" placeholder="lot no" style="width: 130px" /></el-form-item>
+            <el-form-item label="供应商"><el-input :model-value="selectedReceipt?.supplier_name || '-'" disabled style="width: 180px" /></el-form-item>
+            <el-form-item label="物料"><el-input :model-value="selectedReceipt ? `${selectedReceipt.material_code} ${selectedReceipt.material_name}` : '-'" disabled style="width: 220px" /></el-form-item>
+            <el-form-item label="批次"><el-input :model-value="selectedReceipt?.lot_no || '-'" disabled style="width: 130px" /></el-form-item>
             <el-form-item label="结果">
               <el-select v-model="incomingForm.result" style="width: 100px">
                 <el-option label="合格" value="pass" />
@@ -111,9 +108,12 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
   collabOverview: any
   incomingForm: any
+  pendingReceipts: any[]
   suppliers: any[]
   supplierName: (row: any) => string
   materials: any[]
@@ -126,6 +126,19 @@ defineProps<{
   outsourceStatusLabel: (value: string) => string
   scoreGradeTag: (value: string) => string
 }>()
+
+const selectedReceipt = computed(() => props.pendingReceipts.find((row) => Number(row.receiving_id) === Number(props.incomingForm.receiving_id)))
+
+function selectReceiving(receivingId: number) {
+  const receipt = props.pendingReceipts.find((row) => Number(row.receiving_id) === Number(receivingId))
+  if (!receipt) return
+  Object.assign(props.incomingForm, {
+    purchase_order_id: receipt.purchase_order_id,
+    supplier_id: receipt.supplier_id,
+    material_id: receipt.material_id,
+    lot_no: receipt.lot_no,
+  })
+}
 
 const emit = defineEmits<{
   (event: 'save-incoming-inspection'): void

@@ -10,7 +10,6 @@ const PUBLIC_PATHS = new Set([
   "/auth/refresh",
   "/health",
   "/workflow/definitions",
-  "/debug/db-stats",
 ]);
 
 function exact(path, methods, permissions) {
@@ -25,6 +24,7 @@ const READ = ["GET"];
 const WRITE = ["POST", "PUT", "PATCH", "DELETE"];
 
 const RULES = [
+  exact("/debug/db-stats", READ, ["settings:read"]),
   match(/^\/setup(?:\/.*)?$/, READ, ["settings:read", "report:read"]),
   match(/^\/help\/manual$/, READ, ["shopfloor:read", "document:read", "work_order:read", "material:read", "equipment:read", "report:read", "quality:read", "purchase:read", "settings:read", "user:read"]),
   match(/^\/shopfloor\/overview$/, READ, ["shopfloor:read"]),
@@ -64,14 +64,14 @@ const RULES = [
   match(/^\/dashboard(?:\/alerts|\/delays|\/delays\/summary)?$/, READ, ["report:read"]),
   match(/^\/reports(?:\/.*)?$/, READ.concat(["POST", "PUT", "DELETE"]), ["report:read"]),
 
-  match(/^\/equipment(?:\/live_status)?$/, READ, ["equipment:read"]),
+  match(/^\/equipment(?:\/(?:live_status|oee))?$/, READ, ["equipment:read", "report:read"]),
   match(/^\/equipment_(?:types|models|subsystems)(?:\/\d+)?$/, READ, ["equipment:read"]),
   match(/^\/equipment_instances(?:\/\d+)?$/, READ, ["equipment:read"]),
   match(/^\/equipment_instances\/(?:code-preview|lifecycle-options)$/, READ, ["equipment:read"]),
   match(/^\/equipment_instance_templates(?:\/.*)?$/, READ, ["equipment:read"]),
   match(/^\/equipment_instance_templates(?:\/.*)?$/, WRITE, ["equipment:write"]),
   match(/^\/equipment_instances(?:\/\d+)?$/, WRITE, ["equipment:write"]),
-  match(/^\/equipment_instances\/\d+\/(?:dashboard|overview|gantt|schedule|critical_path|subsystems|cross_subsystem_deps|parts_tree|parts_tree\/path|bom|bom\/health|bom\/levels|bom\/cost|bom\/validate|bom\/compare|material_alerts|kit_check|milestones|eco|cost_rollup|cost_rollup\/breakdown)$/, READ, ["equipment:read"]),
+  match(/^\/equipment_instances\/\d+\/(?:dashboard|overview|gantt|schedule|critical_path|process_progress|subsystems|cross_subsystem_deps|parts_tree|parts_tree\/path|bom|bom\/health|bom\/levels|bom\/cost|bom\/validate|bom\/compare|material_alerts|kit_check|milestones|eco|cost_rollup|cost_rollup\/breakdown)$/, READ, ["equipment:read"]),
   match(/^\/equipment_instances\/\d+\/(?:schedule|lifecycle|freeze|archive|process_tree\/generate|bom|bom\/import|bom\/init-minimum|milestones\/auto-generate|eco)$/, WRITE, ["equipment:write"]),
   match(/^\/milestones\/\d+$/, WRITE, ["equipment:write"]),
   match(/^\/bom\/\d+$/, WRITE, ["equipment:write"]),

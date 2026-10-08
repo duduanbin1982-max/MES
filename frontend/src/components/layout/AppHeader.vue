@@ -1,8 +1,19 @@
 <template>
   <el-header class="top-header">
-    <div class="top-title">
-      <span>当前位置</span>
-      <strong>{{ title }}</strong>
+    <div class="header-leading">
+      <el-button
+        v-if="showMenuButton"
+        class="menu-toggle"
+        :icon="Menu"
+        circle
+        aria-label="打开主导航"
+        title="打开主导航"
+        @click="emit('toggle-menu')"
+      />
+      <div class="top-title">
+        <span>{{ sectionTitle }}</span>
+        <strong>{{ title }}</strong>
+      </div>
     </div>
     <div class="top-actions">
       <span
@@ -11,18 +22,24 @@
         :class="`ws-indicator--${wsStatus}`"
         aria-label="WebSocket 连接状态"
       ></span>
-      <el-button :icon="isDark ? Sunny : Moon" circle size="small" @click="emit('toggle-theme')" :title="isDark ? '切换亮色' : '切换暗色'" />
+      <el-button class="theme-toggle" :icon="isDark ? Sunny : Moon" circle @click="emit('toggle-theme')" :title="isDark ? '切换亮色' : '切换暗色'" />
       <router-link to="/help/manual" class="manual-link">操作手册</router-link>
       <router-link to="/scan" class="scan-link">扫码报工</router-link>
       <span class="clock">{{ now }}</span>
       <el-dropdown @command="emit('command', $event)" trigger="click">
-        <span class="user-trigger" tabindex="0">
+        <button type="button" class="user-trigger">
           <el-avatar :size="28" class="user-avatar">{{ user?.full_name?.[0] || '?' }}</el-avatar>
           <span class="user-name">{{ user?.full_name || '未登录' }}</span>
-          <el-tag size="small">{{ user?.role || '-' }}</el-tag>
-        </span>
+          <el-tag class="role-tag" size="small">{{ user?.role || '-' }}</el-tag>
+        </button>
         <template #dropdown>
           <el-dropdown-menu>
+            <el-dropdown-item command="manual">
+              <el-icon><Document /></el-icon>操作手册
+            </el-dropdown-item>
+            <el-dropdown-item command="scan">
+              <el-icon><Operation /></el-icon>扫码报工
+            </el-dropdown-item>
             <el-dropdown-item command="logout" divided>
               <el-icon><SwitchButton /></el-icon>登出
             </el-dropdown-item>
@@ -34,17 +51,19 @@
 </template>
 
 <script setup>
-import { Moon, Sunny, SwitchButton } from '@element-plus/icons-vue'
+import { Document, Menu, Moon, Operation, Sunny, SwitchButton } from '@element-plus/icons-vue'
 
 defineProps({
   isDark: { type: Boolean, default: false },
   now: { type: String, default: '' },
+  sectionTitle: { type: String, default: '当前位置' },
+  showMenuButton: { type: Boolean, default: false },
   title: { type: String, default: 'TBM-MES' },
   user: { type: Object, default: null },
   wsStatus: { type: String, default: 'closed' },
 })
 
-const emit = defineEmits(['command', 'toggle-theme'])
+const emit = defineEmits(['command', 'toggle-menu', 'toggle-theme'])
 </script>
 
 <style scoped>
@@ -57,26 +76,43 @@ const emit = defineEmits(['command', 'toggle-theme'])
   justify-content: space-between;
   padding: 0 var(--space-lg);
   height: 60px;
+  flex: 0 0 60px;
+  min-width: 0;
+}
+
+.header-leading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.menu-toggle {
+  display: none;
+  flex: 0 0 40px;
 }
 
 .top-title {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 
 .top-title span {
   color: var(--color-text-tertiary);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .top-title strong {
   color: var(--el-text-color-primary);
   font-size: 17px;
   font-weight: 760;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-actions,
@@ -87,6 +123,7 @@ const emit = defineEmits(['command', 'toggle-theme'])
 
 .top-actions {
   gap: 12px;
+  min-width: 0;
 }
 
 .ws-indicator {
@@ -111,6 +148,12 @@ const emit = defineEmits(['command', 'toggle-theme'])
 .user-trigger {
   cursor: pointer;
   gap: 6px;
+  min-height: 40px;
+  padding: 4px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
 }
 
 .user-avatar {
@@ -146,5 +189,55 @@ const emit = defineEmits(['command', 'toggle-theme'])
 .clock {
   color: var(--el-text-color-secondary);
   font-size: 13px;
+}
+
+@media (max-width: 1024px) {
+  .menu-toggle {
+    display: inline-flex;
+  }
+
+  .top-header {
+    padding: 0 var(--space-md);
+  }
+}
+
+@media (max-width: 820px) {
+  .clock {
+    display: none;
+  }
+
+  .top-actions {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 680px) {
+  .manual-link,
+  .scan-link,
+  .user-name,
+  .role-tag {
+    display: none;
+  }
+
+  .top-header {
+    height: 56px;
+    flex-basis: 56px;
+    padding: 0 10px;
+  }
+
+  .menu-toggle,
+  .theme-toggle,
+  .user-trigger {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .top-title span {
+    display: none;
+  }
+
+  .top-title strong {
+    font-size: 15px;
+  }
 }
 </style>

@@ -42,17 +42,6 @@ function runMigration(db) {
       reported_by INTEGER,
       reported_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-    CREATE TABLE IF NOT EXISTS process_node_hours (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      process_node_id INTEGER NOT NULL UNIQUE,
-      standard_hours_assembly REAL DEFAULT 0,
-      standard_hours_welding REAL DEFAULT 0,
-      standard_hours_machining REAL DEFAULT 0,
-      standard_hours_testing REAL DEFAULT 0,
-      estimated_workers INTEGER DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
     CREATE INDEX IF NOT EXISTS idx_wrd_wo ON work_report_details(work_order_id);
     CREATE INDEX IF NOT EXISTS idx_wrd_worker ON work_report_details(worker_id);
     CREATE INDEX IF NOT EXISTS idx_wrd_node ON work_report_details(process_node_id);
@@ -73,7 +62,7 @@ function registerStandardHours(app, db) {
   const { all, get, run } = makeHelpers(db);
 
   app.get("/api/process/nodes/:id/hours", wrap((req, res) => {
-    const node = get("SELECT id, operation_name, operation_name FROM process_nodes WHERE id=?", [req.params.id]);
+    const node = get("SELECT id, operation_name FROM process_nodes WHERE id=?", [req.params.id]);
     if (!node) throw ApiError.notFound("Process node not found")
     const hours = all("SELECT * FROM process_standard_hours WHERE process_node_id=? ORDER BY work_type", [req.params.id]);
     const sum = get("SELECT SUM(standard_hours*worker_count) AS total FROM process_standard_hours WHERE process_node_id=?", [req.params.id]);

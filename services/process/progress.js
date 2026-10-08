@@ -8,8 +8,8 @@ const get = (db, sql, params = []) => db.prepare(sql).get(params);
 const run = (db, sql, params = []) => db.prepare(sql).run(params);
 
 
-function getProcessProgress(req, res, db) {
-  const instanceId = req.params.id;
+function getProcessProgress(req, res, db, explicitInstanceId) {
+  const instanceId = explicitInstanceId || req.params.id || req.params.instanceId;
   const stats = all(db, 
     "SELECT operation_type, status, count(*) c FROM process_nodes WHERE equipment_instance_id = ? GROUP BY operation_type, status",
     instanceId
@@ -47,7 +47,12 @@ function getProcessProgress(req, res, db) {
     by_status: byStatus,
     by_type: byType,
     by_phase: byPhase.map(p => ({ ...p, pct: p.total ? Math.round(p.completed * 100 / p.total) : 0 })),
-    hours: { estimated: hours?.est || 0, actual: hours?.act || 0, efficiency: hours?.est ? Math.round((hours.est / hours.act) * 100) : 0 }
+    hours: {
+      estimated: hours?.est || 0,
+      actual: hours?.act || 0,
+      efficiency: (hours.act > 0 && hours.est > 0) ? Math.round((hours.est / hours.act) * 100) : null,
+      efficiency_basis: hours.act > 0 ? 'computed' : 'no_actual_hours',
+    }
   });
 }
 

@@ -99,7 +99,7 @@ const resolvedDescription = computed(() => {
   min-height: 280px;
   padding: var(--space-xl);
   border: 1px solid var(--el-border-color-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--el-bg-color-overlay);
   color: var(--el-text-color-primary);
   text-align: center;

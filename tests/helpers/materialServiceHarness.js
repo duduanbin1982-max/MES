@@ -1,7 +1,6 @@
 'use strict';
 
 const Database = require('better-sqlite3');
-const path = require('path');
 
 function freshDb() {
   const db = new Database(':memory:');
@@ -16,8 +15,6 @@ function freshDb() {
 }
 
 function makeApp(db) {
-  const fakePath = path.resolve(__dirname, '../../db');
-  require.cache[fakePath] = { exports: db, loaded: true, id: fakePath, filename: fakePath, children: [], paths: [] };
   const material = require('../../services/material');
   const materialService = require('../../services/materialService');
   const routes = {};
@@ -43,14 +40,6 @@ function mkReqRes(body, opts = {}) {
   return { req, res, getResult: () => ({ status, json }) };
 }
 
-function resetDbCache() {
-  for (const key of Object.keys(require.cache)) {
-    if (key.includes('/db') && !key.includes('better-sqlite3') && !key.includes('node_modules')) {
-      delete require.cache[key];
-    }
-  }
-}
-
 function seedDefaultMaterialLot(db) {
   db.prepare('INSERT INTO materials (id, material_code, material_name) VALUES (?, ?, ?)').run(1, 'T-001', '测试物料');
   db.prepare('INSERT INTO material_lots (id, material_id, lot_no, quantity) VALUES (?, ?, ?, ?)').run(1, 1, 'LOT-001', 100);
@@ -60,6 +49,5 @@ module.exports = {
   freshDb,
   makeApp,
   mkReqRes,
-  resetDbCache,
   seedDefaultMaterialLot,
 };

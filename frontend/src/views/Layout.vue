@@ -2,8 +2,11 @@
   <a class="skip-link" href="#main-content">跳到主内容</a>
   <el-container class="app-shell">
     <AppSidebar
+      class="desktop-sidebar"
       v-model:menu-keyword="menuKeyword"
       :active-menu-index="activeMenuIndex"
+      :api-status="apiStatus"
+      :db-status="dbStatus"
       :favorite-items="favoriteItems"
       :filtered-sections="filteredSections"
       :is-favorite="isFavorite"
@@ -13,16 +16,48 @@
       :recent-items="recentItems"
       :show-quick-nav="showQuickNav"
       :toggle-favorite="toggleFavorite"
+      :ws-status="wsStatus"
     />
 
-    <el-container>
+    <el-drawer
+      v-model="mobileMenuOpen"
+      class="mobile-nav-drawer"
+      direction="ltr"
+      size="min(88vw, 320px)"
+      :show-close="false"
+      :with-header="false"
+    >
+      <AppSidebar
+        v-model:menu-keyword="menuKeyword"
+        :active-menu-index="activeMenuIndex"
+        :api-status="apiStatus"
+        :db-status="dbStatus"
+        :favorite-items="favoriteItems"
+        :filtered-sections="filteredSections"
+        :is-favorite="isFavorite"
+        :is-menu-item-active="isMenuItemActive"
+        :menu-key="menuKey"
+        :opened-sections="openedSections"
+        :recent-items="recentItems"
+        :show-quick-nav="showQuickNav"
+        :toggle-favorite="toggleFavorite"
+        :ws-status="wsStatus"
+        mobile
+        @navigate="mobileMenuOpen = false"
+      />
+    </el-drawer>
+
+    <el-container direction="vertical" class="app-body">
       <AppHeader
         :is-dark="isDark"
         :now="now"
-        :title="$route.meta?.title || 'TBM-MES'"
+        :section-title="currentSectionTitle"
+        :show-menu-button="true"
+        :title="currentPageTitle"
         :user="auth.user"
         :ws-status="wsStatus"
         @command="onCmd"
+        @toggle-menu="mobileMenuOpen = true"
         @toggle-theme="toggleTheme"
       />
 
@@ -44,6 +79,7 @@ import WsPanel from '../components/WsPanel.vue'
 import { MENU_SECTIONS, type MenuItem } from '../config/menuCatalog'
 import { filterMenuSections } from '../config/menuPolicy'
 import { useShellNotifications } from '../composables/useShellNotifications'
+import { closeWebSocket } from '../composables/useWebSocket'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
@@ -51,11 +87,15 @@ const route = useRoute()
 const auth = useAuthStore()
 const now = ref('')
 const isDark = ref(false)
+const mobileMenuOpen = ref(false)
 const menuKeyword = ref('')
 const favoriteKeys = ref<string[]>([])
 const recentKeys = ref<string[]>([])
 const storageReady = ref(false)
+const apiStatus = ref<'checking' | 'online' | 'offline'>('checking')
+const dbStatus = ref<'checking' | 'online' | 'offline'>('checking')
 let timer: ReturnType<typeof setInterval> | null = null
+let healthTimer: ReturnType<typeof setInterval> | null = null
 
 const FAVORITE_STORAGE_KEY = 'tbm-menu-favorites'
 const RECENT_STORAGE_KEY = 'tbm-menu-recent'
@@ -69,9 +109,14 @@ type NavMenuItem = MenuItem & {
 
 const onCmd = (cmd: string) => {
   if (cmd === 'logout') {
+    closeWebSocket()
     auth.logout()
     ElMessage.success('已登出')
     router.push('/login')
+  } else if (cmd === 'manual') {
+    router.push('/help/manual')
+  } else if (cmd === 'scan') {
+    router.push('/scan')
   }
 }
 
@@ -127,6 +172,10 @@ const currentSectionKey = computed(() => {
     section.items.some((item) => item.to === active || item.to.split('?')[0] === route.path),
   )?.key
 })
+
+const currentMenuItem = computed(() => findCurrentMenuItem())
+const currentPageTitle = computed(() => currentMenuItem.value?.title || String(route.meta?.title || 'TBM-MES'))
+const currentSectionTitle = computed(() => currentMenuItem.value?.sectionTitle || 'TBM-MES')
 
 const openedSections = computed(() => {
   if (normalizedMenuKeyword.value) return filteredSections.value.map((section) => section.key)
@@ -195,6 +244,20 @@ const update = () => {
   now.value = new Date().toLocaleString('zh-CN')
 }
 
+async function refreshHealth() {
+  try {
+    const response = await fetch('/api/health', { cache: 'no-store' })
+    const payload = response.ok ? await response.json() : null
+    apiStatus.value = response.ok ? 'online' : 'offline'
+    dbStatus.value = response.ok && (payload?.components?.database === 'online' || payload?.status === 'ok')
+      ? 'online'
+      : 'offline'
+  } catch {
+    apiStatus.value = 'offline'
+    dbStatus.value = 'offline'
+  }
+}
+
 const { status: wsStatus } = useShellNotifications()
 
 onMounted(() => {
@@ -211,12 +274,17 @@ onMounted(() => {
   }
   applyTheme()
   update()
+  refreshHealth()
   timer = setInterval(update, 1000)
+  healthTimer = setInterval(refreshHealth, 30000)
 })
 
 watch(
   () => [route.fullPath, visibleItems.value.map((item) => item.key).join('|')],
-  () => recordRecent(),
+  () => {
+    mobileMenuOpen.value = false
+    recordRecent()
+  },
 )
 
 function applyTheme() {
@@ -226,16 +294,29 @@ function applyTheme() {
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  if (healthTimer) clearInterval(healthTimer)
 })
 </script>
 
 <style scoped>
 .app-shell {
   height: 100vh;
+  width: 100%;
+  overflow: hidden;
   background: var(--el-bg-color-page);
 }
 
+.app-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .layout-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
   padding: 0;
   background: var(--el-bg-color-page);
   overflow: auto;
@@ -257,5 +338,16 @@ onUnmounted(() => {
 
 .skip-link:focus {
   transform: translateY(0);
+}
+
+:global(.mobile-nav-drawer .el-drawer__body) {
+  padding: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .desktop-sidebar {
+    display: none;
+  }
 }
 </style>

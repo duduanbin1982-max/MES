@@ -18,10 +18,13 @@ function createEquipmentOverview({ db, ApiError, lifecycle }) {
     const shortages = get("SELECT count(*) total, sum(CASE WHEN status IN ('open','following') THEN 1 ELSE 0 END) open FROM shortage_cases WHERE equipment_instance_id = ?", id) || {};
     const ncr = get("SELECT count(*) total, sum(CASE WHEN closed_at IS NULL THEN 1 ELSE 0 END) open FROM ncr_reports WHERE equipment_instance_id = ?", id) || {};
     const purchase = get("SELECT count(*) total, sum(CASE WHEN status NOT IN ('closed','completed','cancelled') THEN 1 ELSE 0 END) open FROM purchase_orders WHERE equipment_instance_id = ?", id) || {};
-    const milestones = all("SELECT * FROM equipment_instance_milestones WHERE project_id = ? ORDER BY sequence, id", id);
+    const milestones = all("SELECT * FROM instance_milestones WHERE equipment_instance_id = ? ORDER BY sequence, id", id);
     const lifecycleLogs = all("SELECT * FROM equipment_instance_lifecycle_logs WHERE equipment_instance_id = ? ORDER BY id DESC LIMIT 20", id);
     const materialCost = sumOrZero("SELECT SUM(COALESCE(unit_price,0) * COALESCE(quantity,0)) v FROM instance_bom WHERE equipment_instance_id = ?", [id]);
     const ledgerCost = sumOrZero("SELECT SUM(COALESCE(debit_amount,0) - COALESCE(credit_amount,0)) v FROM erp_cost_ledger WHERE equipment_instance_id = ?", [id]);
+    const projectCostCount = countOrZero("SELECT COUNT(*) c FROM project_cost_entries WHERE equipment_instance_id = ? AND deleted_at IS NULL AND COALESCE(status, 'posted') NOT IN ('void','cancelled')", [id]);
+    const projectCost = sumOrZero("SELECT SUM(COALESCE(amount,0)) v FROM project_cost_entries WHERE equipment_instance_id = ? AND deleted_at IS NULL AND COALESCE(status, 'posted') NOT IN ('void','cancelled')", [id]);
+    const actualCost = projectCostCount > 0 ? projectCost : ledgerCost;
     const risks = [];
     if ((shortages.open || 0) > 0) risks.push({ type: "shortage", level: "high", title: `缺料未闭环 ${shortages.open} 项` });
     if ((ncr.open || 0) > 0) risks.push({ type: "quality", level: "high", title: `NCR 未闭环 ${ncr.open} 项` });
@@ -42,7 +45,7 @@ function createEquipmentOverview({ db, ApiError, lifecycle }) {
         kit: shortages,
         work_orders: wo,
         quality: { inspections: qc, ncr },
-        cost: { material_estimate: materialCost, ledger_cost: ledgerCost, total: materialCost + ledgerCost },
+        cost: { material_estimate: materialCost, project_cost: projectCost, ledger_cost: ledgerCost, actual: actualCost, source: projectCostCount > 0 ? "project_cost_entries" : "erp_cost_ledger", total: actualCost },
         risks: { total: risks.length, items: risks },
       },
       freeze: {

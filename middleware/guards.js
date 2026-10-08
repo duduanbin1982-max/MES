@@ -15,4 +15,11 @@ function onlyWelder(req, res, next) {
   next();
 }
 
-module.exports = { onlyForemanOrAdmin, onlyWelder };
+function foremanOrWorker(req, res, next) {
+  if (!['admin', 'foreman', 'welder', 'worker'].includes(req.user?.role)) {
+    throw new ApiError(403, '???????????');
+  }
+  next();
+}
+
+module.exports = { onlyForemanOrAdmin, onlyWelder, foremanOrWorker };

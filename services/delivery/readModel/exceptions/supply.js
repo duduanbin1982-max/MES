@@ -42,7 +42,9 @@ function collectSupplyExceptions({ ctx, instanceById, items, now, pushException 
         });
       }
     }
-  } catch (_error) {}
+  } catch (error) {
+    console.warn('[delivery] 主数据异常读取失败:', error.message);
+  }
 
   if (tableExists("purchase_orders") && has("purchase_orders", "expected_date")) {
     const rows = safeAll(`

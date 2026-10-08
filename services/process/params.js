@@ -88,7 +88,11 @@ function register(app, db) {
       const spec = get("SELECT custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY id DESC LIMIT 1", [node.id]);
       if (!spec) continue;
       let spcSpec = {};
-      try { spcSpec = JSON.parse(spec.custom_json).spc || {}; } catch(e) {}
+      try {
+        spcSpec = JSON.parse(spec.custom_json).spc || {};
+      } catch (_error) {
+        spcSpec = {};
+      }
       if (Object.keys(spcSpec).length === 0) continue;
 
       const lastParam = db.prepare("SELECT * FROM process_params WHERE process_node_id = ? ORDER BY recorded_at DESC LIMIT 1").get(node.id);

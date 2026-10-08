@@ -1,5 +1,5 @@
 <template>
-  <el-aside width="260px" class="sidebar">
+  <el-aside :width="mobile ? '100%' : '260px'" class="sidebar" :class="{ 'sidebar--mobile': mobile }">
     <div class="logo">
       <div class="logo-brand">
         <span class="logo-mark">MES</span>
@@ -8,9 +8,19 @@
           <div class="logo-sub">成套装备生产管理 v2.3</div>
         </div>
       </div>
-      <div class="logo-status">
-        <span class="status-dot"></span>
-        <span>生产在线</span>
+      <div class="system-status" aria-label="系统连接状态">
+        <span class="status-item" :title="`API ${statusLabel(apiStatus)}`">
+          <span class="status-dot" :class="`status-dot--${apiStatus}`"></span>
+          API
+        </span>
+        <span class="status-item" :title="`数据库 ${statusLabel(dbStatus)}`">
+          <span class="status-dot" :class="`status-dot--${dbStatus}`"></span>
+          DB
+        </span>
+        <span class="status-item" :title="`实时通道 ${statusLabel(wsStatus)}`">
+          <span class="status-dot" :class="`status-dot--${wsStatus}`"></span>
+          实时
+        </span>
       </div>
     </div>
     <div class="menu-search">
@@ -38,6 +48,7 @@
             class="quick-link"
             :class="{ 'is-active': isMenuItemActive(item) }"
             :title="`${item.sectionTitle} / ${item.title}`"
+            @click="emit('navigate')"
           >
             <el-icon><component :is="item.icon" /></el-icon>
             <span>{{ item.title }}</span>
@@ -59,6 +70,7 @@
             class="quick-link"
             :class="{ 'is-active': isMenuItemActive(item) }"
             :title="`${item.sectionTitle} / ${item.title}`"
+            @click="emit('navigate')"
           >
             <el-icon><component :is="item.icon" /></el-icon>
             <span>{{ item.title }}</span>
@@ -79,6 +91,7 @@
       unique-opened
       router
       aria-label="主导航"
+      @select="emit('navigate')"
     >
       <el-sub-menu v-for="section in filteredSections" :key="section.key" :index="section.key">
         <template #title>
@@ -116,25 +129,40 @@ import { Clock, Search, Star, StarFilled } from '@element-plus/icons-vue'
 
 defineProps({
   activeMenuIndex: { type: String, required: true },
+  apiStatus: { type: String, default: 'checking' },
+  dbStatus: { type: String, default: 'checking' },
   favoriteItems: { type: Array, default: () => [] },
   filteredSections: { type: Array, default: () => [] },
   isFavorite: { type: Function, required: true },
   isMenuItemActive: { type: Function, required: true },
   menuKey: { type: String, required: true },
   menuKeyword: { type: String, default: '' },
+  mobile: { type: Boolean, default: false },
   openedSections: { type: Array, default: () => [] },
   recentItems: { type: Array, default: () => [] },
   showQuickNav: { type: Boolean, default: true },
   toggleFavorite: { type: Function, required: true },
+  wsStatus: { type: String, default: 'closed' },
 })
 
-const emit = defineEmits(['update:menuKeyword'])
+const emit = defineEmits(['navigate', 'update:menuKeyword'])
+
+const statusLabel = (status) => ({
+  online: '在线',
+  open: '已连接',
+  connecting: '连接中',
+  checking: '检查中',
+  offline: '离线',
+  closed: '未连接',
+  error: '异常',
+}[status] || '未知')
 </script>
 
 <style scoped>
 .el-menu { border-right: 0; }
 
 .sidebar {
+  height: 100vh;
   background: var(--color-sidebar-bg);
   color: var(--color-sidebar-text);
   border-right: 1px solid rgba(15, 23, 42, 0.18);
@@ -142,6 +170,12 @@ const emit = defineEmits(['update:menuKeyword'])
   flex-direction: column;
   overflow: hidden;
   box-shadow: 8px 0 24px rgba(15, 23, 42, 0.08);
+}
+
+.sidebar--mobile {
+  height: 100%;
+  border-right: 0;
+  box-shadow: none;
 }
 
 .logo {
@@ -164,7 +198,7 @@ const emit = defineEmits(['update:menuKeyword'])
   width: 42px;
   height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   color: #F8FAFC;
   background:
     linear-gradient(135deg, rgba(79, 127, 168, 0.72), rgba(214, 164, 91, 0.62)),
@@ -188,12 +222,12 @@ const emit = defineEmits(['update:menuKeyword'])
   margin-top: 4px;
 }
 
-.logo-status {
-  display: inline-flex;
+.system-status {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   margin-top: 12px;
-  padding: 5px 9px;
+  padding: 6px 9px;
   border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: 999px;
   color: rgba(231, 237, 245, 0.78);
@@ -202,12 +236,28 @@ const emit = defineEmits(['update:menuKeyword'])
   line-height: 1;
 }
 
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
+  background: var(--color-danger);
+  box-shadow: none;
+}
+
+.status-dot--online,
+.status-dot--open {
   background: var(--color-success);
-  box-shadow: 0 0 0 4px rgba(67, 133, 107, 0.18);
+}
+
+.status-dot--checking,
+.status-dot--connecting {
+  background: var(--color-warning);
 }
 
 .menu-search {
@@ -217,7 +267,7 @@ const emit = defineEmits(['update:menuKeyword'])
 .menu-search :deep(.el-input__wrapper) {
   background: rgba(255, 255, 255, 0.075);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 11px;
+  border-radius: var(--radius-md);
   box-shadow: none;
 }
 
@@ -264,7 +314,7 @@ const emit = defineEmits(['update:menuKeyword'])
   max-width: 124px;
   padding: 6px 9px;
   border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   color: rgba(231, 237, 245, 0.84);
   background: rgba(255, 255, 255, 0.05);
   font-size: 12px;
@@ -302,7 +352,7 @@ const emit = defineEmits(['update:menuKeyword'])
 .app-menu :deep(.el-sub-menu__title),
 .app-menu :deep(.el-menu-item) {
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   margin: 2px 0;
 }
 
@@ -378,9 +428,9 @@ const emit = defineEmits(['update:menuKeyword'])
 .favorite-toggle {
   display: inline-grid;
   place-items: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
@@ -407,5 +457,19 @@ const emit = defineEmits(['update:menuKeyword'])
   background: rgba(255, 255, 255, 0.06);
   font-size: 13px;
   text-align: center;
+}
+
+@media (max-width: 1024px) {
+  .app-menu :deep(.el-sub-menu__title),
+  .app-menu :deep(.el-menu-item) {
+    min-height: 44px;
+    height: 44px;
+  }
+
+  .favorite-toggle {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+  }
 }
 </style>

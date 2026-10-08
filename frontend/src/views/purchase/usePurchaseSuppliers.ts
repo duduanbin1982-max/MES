@@ -96,7 +96,10 @@ export function usePurchaseSuppliers(saving: Ref<boolean>) {
       await Api.del(`/suppliers/${row.id}`)
       ElMessage.success('已删除')
       await Promise.all([loadSuppliers(), loadSupplierSetup()])
-    } catch (_) { }
+    } catch (error: any) {
+      if (error === 'cancel' || error === 'close') return
+      ElMessage.error(error?.message || '供应商删除失败')
+    }
   }
 
   const syncSupplierCategory = () => {

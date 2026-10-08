@@ -2,7 +2,21 @@
   <div class="page">
     <div class="page-header"><div class="page-title"><el-icon><DataAnalysis /></el-icon> SPC 统计过程控制</div></div>
 
-    <el-tabs v-model="activeTab" type="border-card">
+    <PageState
+      v-if="nodesLoading"
+      state="loading"
+      title="正在加载 SPC 工序"
+      description="正在读取可分析的工序与过程参数。"
+    />
+    <PageState
+      v-else-if="nodesError"
+      state="error"
+      title="SPC 工序加载失败"
+      :description="nodesError"
+      @retry="loadNodes"
+    />
+
+    <el-tabs v-else v-model="activeTab" type="border-card">
       <!-- Tab 1: SPC 分析 (existing) -->
       <el-tab-pane label="SPC 分析" name="analyze">
         <div class="toolbar">
@@ -15,6 +29,7 @@
           <el-input-number aria-label="子组大小" v-model="sel.ss" :min="2" :max="20" style="width:100px" placeholder="子组大小" />
           <el-button type="primary" @click="analyze" :loading="loading">分析</el-button>
         </div>
+        <el-alert v-if="analysisError" type="error" show-icon :closable="false" class="spc-error" :title="analysisError" />
 
         <div v-if="data" class="result-area">
           <el-row :gutter="16" style="margin-bottom:16px">
@@ -94,31 +109,50 @@ import { Api } from '../api'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import type { ApiRecord } from '../types/api'
+import PageState from '../components/PageState.vue'
 
 const activeTab = ref('analyze')
 
 // ========== Tab 1: SPC Analysis (existing) ==========
 const nodes = ref<ApiRecord[]>([])
+const nodesLoading = ref(true)
+const nodesError = ref('')
 const params = [{code:'temperature_c',label:'温度 (°C)'},{code:'current_amp',label:'电流 (A)'},{code:'voltage_v',label:'电压 (V)'},{code:'speed_mm_min',label:'速度 (mm/min)'},{code:'pressure_mpa',label:'压力 (MPa)'},{code:'feed_rate',label:'进给率'}]
 const sel = reactive<{ node: number | null; param: string; ss: number }>({ node: null, param: 'temperature_c', ss: 5 })
 const loading = ref(false)
+const analysisError = ref('')
 const data = ref<ApiRecord | null>(null)
 const chartRef = ref<HTMLElement | null>(null)
 let chartInst: echarts.ECharts | null = null
 
-onMounted(async () => {
-  try { nodes.value = await Api.get('/spc/nodes-with-params') } catch (_) { nodes.value = [] }
-})
+const loadNodes = async () => {
+  nodesLoading.value = true
+  nodesError.value = ''
+  try {
+    nodes.value = await Api.get('/spc/nodes-with-params')
+  } catch (error: any) {
+    nodes.value = []
+    nodesError.value = error?.response?.data?.message || error?.message || '无法读取 SPC 工序，请稍后重试。'
+  } finally {
+    nodesLoading.value = false
+  }
+}
+
+onMounted(loadNodes)
 
 const onNodeChange = () => {}
 
 const analyze = async () => {
   if (!sel.node || !sel.param) return
   loading.value = true
+  analysisError.value = ''
   try {
     data.value = await Api.get('/spc/analyze', { params: { process_node_id: sel.node, param: sel.param, subgroup_size: sel.ss } })
     await nextTick(); renderChart()
-  } catch (_) { data.value = null } finally { loading.value = false }
+  } catch (error: any) {
+    data.value = null
+    analysisError.value = error?.response?.data?.message || error?.message || 'SPC 分析失败，请重试。'
+  } finally { loading.value = false }
 }
 
 const renderChart = () => {
@@ -305,6 +339,9 @@ const loadInstances = async () => {
 }
 onMounted(() => { loadInstances() })
 </script>
+<style scoped>
+.spc-error { margin-bottom: 12px; }
+</style>
 
 <style scoped>
 .page{padding:16px 24px}

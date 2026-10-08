@@ -7,8 +7,15 @@
           </el-select>
           <el-button type="primary" @click="emit('open-order-dialog')">+ 新建PO</el-button>
         </div>
+        <el-alert v-if="orderError" class="order-error" type="error" :closable="false" show-icon>
+          <template #title>采购订单加载失败</template>
+          <div class="order-error__body">
+            <span>{{ orderError }}</span>
+            <el-button size="small" @click="emit('load-orders')">重试</el-button>
+          </div>
+        </el-alert>
         <el-table :data="orders" v-loading="oLoading" size="small" max-height="500" stripe>
-          <el-table-column prop="po_code" label="PO编号" width="140" />
+          <el-table-column prop="po_no" label="PO编号" width="160" />
           <el-table-column prop="supplier_name" label="供应商" min-width="160" />
           <el-table-column label="状态" width="110">
             <template #default="{ row }">
@@ -22,14 +29,14 @@
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
               <el-button size="small" link type="primary" @click="emit('show-order-detail', row)">详情</el-button>
-              <el-button v-if="row.status === 'pending'" size="small" link type="success" @click="emit('approve-order', row)">审批</el-button>
-              <el-button v-if="row.status === 'approved'" size="small" link type="warning" @click="emit('open-receive-dialog', row)">收货</el-button>
+              <el-button v-if="['draft', 'submitted'].includes(row.status)" size="small" link type="success" @click="emit('approve-order', row)">确认</el-button>
+              <el-button v-if="['confirmed', 'in_transit', 'partially_received'].includes(row.status)" size="small" link type="warning" @click="emit('open-receive-dialog', row)">收货</el-button>
             </template>
           </el-table-column>
         </el-table>
 
         <!-- New PO Dialog -->
-        <el-dialog v-model="orderDlg.visible" title="新建采购订单" width="650px" @closed="emit('reset-order-form')">
+        <el-dialog v-model="orderDlg.visible" title="新建采购订单" width="min(650px, calc(100vw - 24px))" @closed="emit('reset-order-form')">
           <el-form :model="orderForm" label-width="80px">
             <el-form-item label="供应商" required>
               <el-select v-model="orderForm.supplier_id" filterable style="width:100%" placeholder="选择供应商">
@@ -60,10 +67,10 @@
         </el-dialog>
 
         <!-- PO Detail Dialog -->
-        <el-dialog v-model="detailDlg.visible" title="PO详情" width="650px">
+        <el-dialog v-model="detailDlg.visible" title="PO详情" width="min(650px, calc(100vw - 24px))">
           <template v-if="detailPo">
             <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="PO编号">{{ detailPo.po_code }}</el-descriptions-item>
+              <el-descriptions-item label="PO编号">{{ detailPo.po_no }}</el-descriptions-item>
               <el-descriptions-item label="供应商">{{ detailPo.supplier_name }}</el-descriptions-item>
               <el-descriptions-item label="状态">
                 <el-tag :type="poStatusTag(detailPo.status)" size="small">{{ poStatusLabel(detailPo.status) }}</el-tag>
@@ -73,7 +80,7 @@
               <el-descriptions-item label="备注">{{ detailPo.notes || '-' }}</el-descriptions-item>
             </el-descriptions>
             <el-divider>物料明细</el-divider>
-            <el-table :data="detailPo.items || []" size="small" max-height="250">
+            <el-table :data="detailPo.lines || []" size="small" max-height="250">
               <el-table-column prop="material_name" label="物料" min-width="160" />
               <el-table-column prop="quantity" label="数量" width="80" />
               <el-table-column prop="unit_price" label="单价" width="100">
@@ -96,15 +103,15 @@
         </el-dialog>
 
         <!-- Receive Dialog -->
-        <el-dialog v-model="receiveDlg.visible" title="收货入库" width="500px">
+        <el-dialog v-model="receiveDlg.visible" title="收货入库" width="min(500px, calc(100vw - 24px))">
           <template v-if="receivePo">
             <el-descriptions :column="2" border size="small" style="margin-bottom:16px">
-              <el-descriptions-item label="PO编号">{{ receivePo.po_code }}</el-descriptions-item>
+              <el-descriptions-item label="PO编号">{{ receivePo.po_no }}</el-descriptions-item>
               <el-descriptions-item label="供应商">{{ receivePo.supplier_name }}</el-descriptions-item>
             </el-descriptions>
             <div v-for="(item, idx) in receiveItems" :key="idx" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
               <span style="flex:1">{{ item.material_name }}</span>
-              <span style="width:100px;color:#999">未收: {{ item.remaining || item.quantity }}</span>
+              <span class="remaining-qty">未收: {{ item.remaining || item.quantity }}</span>
               <el-input-number v-model="item.receive_qty" :min="0" :max="item.remaining || item.quantity" style="width:110px" />
             </div>
           </template>
@@ -124,6 +131,7 @@ defineProps<{
   poStatusTag: (value: string) => string
   orders: any[]
   oLoading: boolean
+  orderError: string
   orderDlg: any
   orderForm: any
   suppliers: any[]
@@ -152,4 +160,7 @@ const emit = defineEmits<{
 
 <style scoped>
 .tb { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+.order-error { margin-bottom: 12px; }
+.order-error__body { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.remaining-qty { width: 100px; color: var(--el-text-color-secondary); }
 </style>

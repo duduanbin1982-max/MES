@@ -1,6 +1,6 @@
 "use strict";
 
-const { onlyForemanOrAdmin, onlyWelder } = require("../../middleware/guards");
+const { onlyForemanOrAdmin, onlyWelder, foremanOrWorker } = require("../../middleware/guards");
 
 const MESA_SERVICES = [
   { name: "andonService", module: "./andonService", schemaVersion: 1 },
@@ -22,7 +22,7 @@ const MESA_SERVICES = [
   { name: "oeeService", module: "./oeeService", schemaVersion: 1 },
   { name: "pickService", module: "./pickService", schemaVersion: 1 },
   { name: "process", module: "./process", schemaVersion: 1 },
-  { name: "processHoursService", module: "./processHoursService", schemaVersion: 1 },
+  { name: "processHoursService", module: "./processHoursService", schemaVersion: 2 },
   { name: "processMasterService", module: "./processMasterService", schemaVersion: 1 },
   { name: "processRouteService", module: "./processRouteService", schemaVersion: 1 },
   { name: "processTree", module: "./processTree", schemaVersion: 2 },
@@ -32,7 +32,7 @@ const MESA_SERVICES = [
   { name: "spcService", module: "./spcService", schemaVersion: 1 },
   { name: "tbmAdvanced", module: "./tbmAdvanced", schemaVersion: 1 },
   { name: "traceService", module: "./traceService", schemaVersion: 2 },
-  { name: "workOrderService", module: "./workOrderService", schemaVersion: 1, deps: { onlyForemanOrAdmin, onlyWelder } },
+  { name: "workOrderService", module: "./workOrderService", schemaVersion: 1, deps: { onlyForemanOrAdmin, onlyWelder, foremanOrWorker } },
 ];
 
 module.exports = { MESA_SERVICES };

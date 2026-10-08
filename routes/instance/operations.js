@@ -14,6 +14,7 @@ function register(app, db) {
   app.post('/api/scan/execute', requirePermission('equipment:write'), wrap((req, res) => scanExecute(req, res, db)));
 
   app.get('/api/process/progress/:instanceId', requirePermission('equipment:read'), wrap((req, res) => getProcessProgress(req, res, db, req.params.instanceId)));
+  app.get('/api/equipment_instances/:id/process_progress', requirePermission('equipment:read'), wrap((req, res) => getProcessProgress(req, res, db, req.params.id)));
 }
 
 module.exports = { register };

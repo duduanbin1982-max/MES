@@ -8,6 +8,17 @@
 //   - 改用 buildWebhookUrl() 统一构造, sendWebhook() 统一发送
 
 const { buildWebhookUrl, sendWebhook } = require('./webhookValidator');
+const fs = require('fs');
+
+const QUEUE_LOG = '/home/dubin/factory-mes/data/feishu_queue.log';
+
+function appendAuditLine(line) {
+  try {
+    fs.appendFileSync(QUEUE_LOG, line + '\n');
+  } catch (error) {
+    console.warn('[feishuNotify] 审计日志写入失败:', error.message);
+  }
+}
 
 // 延迟 require 避免循环依赖（systemSettings.js require feishuNotify）
 let _settings = null;
@@ -55,11 +66,7 @@ async function feishuNotify(title, content) {
   if (!enabled || !hook) {
     const msg = '[feishuNotify] 飞书未启用或 webhook 未配置；消息未发送。已写入审计日志。';
     console.warn(msg);
-    try {
-      const fs2 = require('fs');
-      fs2.appendFileSync('/home/dubin/factory-mes/data/feishu_queue.log',
-        '[NO_HOOK] ' + auditLine + '\n');
-    } catch (e) {}
+    appendAuditLine('[NO_HOOK] ' + auditLine);
     return { ok: false, skipped: true, error: '飞书未启用或 webhook 未配置' };
   }
 
@@ -67,11 +74,7 @@ async function feishuNotify(title, content) {
   const { url, error: urlError } = buildWebhookUrl(hook, { platform: 'feishu' });
   if (urlError) {
     console.warn('[feishuNotify] URL 构造失败:', urlError);
-    try {
-      const fs2 = require('fs');
-      fs2.appendFileSync('/home/dubin/factory-mes/data/feishu_queue.log',
-        '[BAD_URL] ' + auditLine + ' | ' + urlError + '\n');
-    } catch (e) {}
+    appendAuditLine('[BAD_URL] ' + auditLine + ' | ' + urlError);
     return { ok: false, error: 'webhook URL 校验失败: ' + urlError };
   }
 
@@ -87,12 +90,8 @@ async function feishuNotify(title, content) {
   const result = await sendWebhook(url, payload, { timeout: timeoutMs });
 
   // 审计日志
-  try {
-    const fs2 = require('fs');
-    const tag = result.ok ? 'OK' : (result.error === 'timeout' ? 'TIMEOUT' : 'FAIL_' + result.status);
-    fs2.appendFileSync('/home/dubin/factory-mes/data/feishu_queue.log',
-      '[' + tag + '] ' + auditLine + (result.ok ? '' : ' | ' + (result.error || 'http ' + result.status)) + '\n');
-  } catch (e) {}
+  const tag = result.ok ? 'OK' : (result.error === 'timeout' ? 'TIMEOUT' : 'FAIL_' + result.status);
+  appendAuditLine('[' + tag + '] ' + auditLine + (result.ok ? '' : ' | ' + (result.error || 'http ' + result.status)));
 
   return result;
 }

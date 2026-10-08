@@ -165,7 +165,10 @@ async function issueDwg(id: number) {
     const name = await ElMessageBox.prompt('签批人', '签发图纸', {confirmButtonText:'签发'})
     await Api.put(`/api/plm/drawings/${id}/issue`, { approved_by: name.value })
     ElMessage.success('签发成功'); await refresh()
-  } catch {}
+  } catch (error: any) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error(error?.message || '图纸签发失败')
+  }
 }
 
 async function reviseDwg(row: any) {

@@ -56,7 +56,10 @@ function createDeliveryDbContext(db) {
     try {
       db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
       columnCache.delete(table);
-    } catch (_error) {}
+    } catch (error) {
+      columnCache.delete(table);
+      if (!has(table, column)) throw error;
+    }
   }
 
   return { columns, ensureColumn, has, safeAll, safeGet, safeRun, tableExists };

@@ -17,7 +17,19 @@ function register(app, db, auth) {
   const { createEngine } = require("../app/workflow/engine");
   const wf = createEngine(db);
 
-  
+  // Static routes must be registered before /:id, otherwise Express treats
+  // "definitions" as a workflow instance id.
+  app.get("/api/workflow/definitions", wrap((_req, res) => {
+    const list = Object.entries(definitions).map(([name, def]) => ({
+      name,
+      display_name: def.display_name,
+      entity_type: def.entity_type,
+      description: def.description,
+      states: def.states,
+      transitions_count: def.transitions.length,
+    }));
+    res.json(list);
+  }));
 
   // 启动工作流
   app.post("/api/workflow/start", wrap((req, res) => {
@@ -60,20 +72,6 @@ function register(app, db, auth) {
   app.get("/api/workflow/entity/:type/:id", wrap((req, res) => {
     const instances = wf.getInstancesByEntity(req.params.type, Number(req.params.id));
     res.json(instances);
-  }));
-
-  // 列出可用工作流定义
-  app.get("/api/workflow/definitions", wrap((_req, res) => {
-    const { definitions } = require("../app/workflow/definitions");
-    const list = Object.entries(definitions).map(([name, def]) => ({
-      name,
-      display_name: def.display_name,
-      entity_type: def.entity_type,
-      description: def.description,
-      states: def.states,
-      transitions_count: def.transitions.length,
-    }));
-    res.json(list);
   }));
 
   // 查询某实例的可用动作

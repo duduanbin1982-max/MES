@@ -144,9 +144,18 @@ function attachWebSocket(httpServer) {
   // 心跳: 30s ping 所有, 60s 无响应踢出
   const heartbeat = setInterval(() => {
     for (const ws of clients) {
-      if (ws._alive === false) { try { ws.terminate(); } catch (_e) {}; clients.delete(ws); continue; }
+      if (ws._alive === false) {
+        try { ws.terminate(); } catch (_error) { ws._closed = true; }
+        clients.delete(ws);
+        continue;
+      }
       ws._alive = false;
-      try { ws.ping(); } catch (_e) {}
+      try {
+        ws.ping();
+      } catch (_error) {
+        ws._closed = true;
+        clients.delete(ws);
+      }
     }
   }, 30000);
   httpServer.on('close', () => clearInterval(heartbeat));

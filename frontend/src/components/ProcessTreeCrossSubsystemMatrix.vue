@@ -1,6 +1,6 @@
 <template>
   <div class="xsub-matrix">
-    <div class="xsub-header" @click="expanded = !expanded">
+    <div class="xsub-header" role="button" tabindex="0" :aria-expanded="expanded" @click="expanded = !expanded" @keydown.enter.prevent="expanded = !expanded" @keydown.space.prevent="expanded = !expanded">
       <span class="xsub-toggle">{{ expanded ? '▼' : '▶' }}</span>
       <span class="xsub-title">跨子系统依赖矩阵</span>
       <span class="xsub-hint">{{ hint }}</span>

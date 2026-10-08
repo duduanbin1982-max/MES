@@ -9,7 +9,7 @@
     @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
-    <div class="card-header" @click="collapsed = !collapsed">
+    <div class="card-header" role="button" tabindex="0" :aria-expanded="!collapsed" @click="collapsed = !collapsed" @keydown.enter.prevent="collapsed = !collapsed" @keydown.space.prevent="collapsed = !collapsed">
       <div class="color-bar"></div>
       <div class="title-block">
         <div class="title">

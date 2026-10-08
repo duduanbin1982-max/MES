@@ -79,7 +79,7 @@ function registerInstanceRoutes({
     if (!instance) throw ApiError.notFound("not found");
     const workOrders = get("SELECT count(*) as total, sum(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending, sum(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress, sum(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed, sum(CASE WHEN status = 'issue' THEN 1 ELSE 0 END) as issue FROM work_orders WHERE equipment_instance_id = ?", req.params.id);
     const processNodes = get("SELECT count(*) as total, sum(CASE WHEN status = 'ready' THEN 1 ELSE 0 END) as ready, sum(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END) as in_progress, sum(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed FROM process_nodes WHERE equipment_instance_id = ?", req.params.id);
-    const milestones = all("SELECT * FROM equipment_instance_milestones WHERE project_id = ? ORDER BY sequence, id", req.params.id);
+    const milestones = all("SELECT * FROM instance_milestones WHERE equipment_instance_id = ? ORDER BY sequence, id", req.params.id);
     const bomCount = get("SELECT count(*) AS count FROM instance_bom WHERE equipment_instance_id = ?", req.params.id).count;
     res.json({ instance, work_orders: workOrders, process_nodes: processNodes, milestones, bom_count: bomCount });
   }));

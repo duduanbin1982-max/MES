@@ -11,7 +11,8 @@
 
     <el-tabs v-model="activeTab">
       <!-- Tab: 成本台账 -->
-      <el-tab-pane label="<el-icon><Notebook /></el-icon> 成本台账" name="ledger">
+      <el-tab-pane name="ledger">
+        <template #label><span class="tab-label"><el-icon><Notebook /></el-icon>成本台账</span></template>
         <el-form :inline="true" size="small" style="margin-bottom:8px">
           <el-form-item label="实例"><el-select v-model="filterInstance" clearable style="width:180px" @change="loadLedger"><el-option v-for="i in instances" :key="i.id" :label="i.instance_code" :value="i.id"/></el-select></el-form-item>
           <el-form-item label="状态"><el-select v-model="filterStatus" clearable style="width:120px" @change="loadLedger"><el-option label="待导出" value="pending"/><el-option label="已导出" value="exported"/></el-select></el-form-item>
@@ -29,7 +30,8 @@
       </el-tab-pane>
 
       <!-- Tab: 汇总 -->
-      <el-tab-pane label="<el-icon><DataAnalysis /></el-icon> 科目汇总" name="summary">
+      <el-tab-pane name="summary">
+        <template #label><span class="tab-label"><el-icon><DataAnalysis /></el-icon>科目汇总</span></template>
         <el-form :inline="true" size="small" style="margin-bottom:8px">
           <el-form-item label="实例"><el-select v-model="sumInstance" clearable style="width:180px" @change="loadSummary"><el-option v-for="i in instances" :key="i.id" :label="i.instance_code" :value="i.id"/></el-select></el-form-item>
           <el-form-item><el-button type="primary" size="small" @click="loadSummary">查询</el-button></el-form-item>
@@ -48,7 +50,8 @@
       </el-tab-pane>
 
       <!-- Tab: GL 科目 -->
-      <el-tab-pane label="<el-icon><Document /></el-icon> GL 科目表" name="gl">
+      <el-tab-pane name="gl">
+        <template #label><span class="tab-label"><el-icon><Document /></el-icon>GL 科目表</span></template>
         <el-button type="primary" size="small" style="margin-bottom:8px" @click="showAddGl=true">+ 添加科目</el-button>
         <el-table :data="glAccounts" size="small">
           <el-table-column prop="account_code" label="编码" width="100" />
@@ -60,7 +63,8 @@
       </el-tab-pane>
 
       <!-- Tab: 导出日志 -->
-      <el-tab-pane label="<el-icon><Upload /></el-icon> 导出日志" name="export">
+      <el-tab-pane name="export">
+        <template #label><span class="tab-label"><el-icon><Upload /></el-icon>导出日志</span></template>
         <el-table :data="exportLogs" size="small" empty-text="无导出记录">
           <el-table-column prop="export_type" label="类型" width="140" />
           <el-table-column prop="record_count" label="记录数" width="80" />
@@ -155,4 +159,5 @@ onMounted(refresh)
 .page { padding: 16px }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px }
 .page-title { font-size: 20px; font-weight: 700 }
+.tab-label { display: inline-flex; align-items: center; gap: 6px; }
 </style>

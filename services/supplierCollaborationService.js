@@ -105,10 +105,13 @@ function createNcr(db, inspection, userId) {
     ? get(db, "SELECT material_code, material_name FROM materials WHERE id = ?", [inspection.material_id])
     : null;
   const partName = material ? `${material.material_code} ${material.material_name}` : (inspection.lot_no || "来料物料");
+  const purchaseOrder = inspection.purchase_order_id
+    ? get(db, "SELECT equipment_instance_id FROM purchase_orders WHERE id = ?", [inspection.purchase_order_id])
+    : null;
   const result = run(db, `
     INSERT INTO ncr_reports (ncr_code, source_type, source_id, equipment_instance_id, part_name, defect_desc, defect_qty, severity, created_by)
-    VALUES (?, 'incoming', ?, NULL, ?, ?, ?, 'major', ?)
-  `, [ncrCode, inspection.id, partName, inspection.defect_desc || "来料检验不合格", inspection.defect_qty || 1, userId || null]);
+    VALUES (?, 'incoming', ?, ?, ?, ?, ?, 'major', ?)
+  `, [ncrCode, inspection.id, purchaseOrder?.equipment_instance_id || null, partName, inspection.defect_desc || "来料检验不合格", inspection.defect_qty || 1, userId || null]);
   return { id: result.lastInsertRowid, ncr_code: ncrCode };
 }
 
@@ -118,6 +121,20 @@ function findReceiving(db, body) {
     return get(db, "SELECT * FROM purchase_receiving WHERE po_id = ? AND lot_no = ? ORDER BY id DESC LIMIT 1", [body.purchase_order_id, body.lot_no]);
   }
   return null;
+}
+
+function getReceivingContext(db, receivingId) {
+  return get(db, `
+    SELECT pr.*, po.po_no, po.supplier_id, po.equipment_instance_id,
+           pl.material_id, pl.line_no, m.material_code, m.material_name,
+           s.supplier_code, s.supplier_name
+      FROM purchase_receiving pr
+      JOIN purchase_orders po ON po.id = pr.po_id
+      JOIN po_lines pl ON pl.id = pr.po_item_id AND pl.po_id = po.id
+      JOIN materials m ON m.id = pl.material_id
+      LEFT JOIN suppliers s ON s.id = po.supplier_id
+     WHERE pr.id = ?
+  `, [receivingId]);
 }
 
 function applyIncomingInspectionResult(db, receiving, inspectionId, result, inspectorId) {
@@ -202,6 +219,24 @@ function scoreSupplier(db, supplierId, period = new Date().toISOString().slice(0
 function register(app, db) {
   ensureSchema(db);
 
+  app.get("/api/supplier-collab/pending-receipts", wrap((_req, res) => {
+    res.json(all(db, `
+      SELECT pr.id AS receiving_id, pr.po_id AS purchase_order_id, pr.received_qty,
+             pr.quality_status, pr.lot_no, pr.warehouse_location, pr.received_at,
+             po.po_no, po.supplier_id, po.equipment_instance_id,
+             pl.material_id, pl.line_no, m.material_code, m.material_name,
+             s.supplier_code, s.supplier_name
+        FROM purchase_receiving pr
+        JOIN purchase_orders po ON po.id = pr.po_id
+        JOIN po_lines pl ON pl.id = pr.po_item_id AND pl.po_id = po.id
+        JOIN materials m ON m.id = pl.material_id
+        LEFT JOIN suppliers s ON s.id = po.supplier_id
+       WHERE pr.inspection_id IS NULL
+         AND COALESCE(pr.quality_status, 'pending') = 'pending'
+       ORDER BY pr.received_at, pr.id
+    `));
+  }));
+
   app.get("/api/supplier-collab/incoming-inspections", wrap((req, res) => {
     const { supplier_id, result } = req.query;
     const params = [];
@@ -222,13 +257,15 @@ function register(app, db) {
 
   app.post("/api/supplier-collab/incoming-inspections", wrap((req, res) => {
     const body = req.body || {};
-    if (!body.supplier_id || !body.material_id || !body.result) {
-      throw ApiError.validation("supplier_id / material_id / result 必填");
-    }
+    if (!body.receiving_id || !body.result) throw ApiError.validation("receiving_id / result 必填");
     if (!["pass", "fail"].includes(body.result)) throw ApiError.validation("result 必须是 pass/fail");
-    const receiving = findReceiving(db, body);
-    if (body.receiving_id && !receiving) throw ApiError.notFound("收货记录不存在");
-    if (receiving && Number(receiving.po_id) !== Number(body.purchase_order_id || receiving.po_id)) throw ApiError.validation("收货记录与采购单不匹配");
+    const receiving = getReceivingContext(db, body.receiving_id);
+    if (!receiving) throw ApiError.notFound("收货记录不存在");
+    if (receiving.inspection_id || receiving.quality_status !== "pending") throw ApiError.conflict("该收货批次已经完成检验");
+    if (body.purchase_order_id && Number(body.purchase_order_id) !== Number(receiving.po_id)) throw ApiError.validation("收货记录与采购单不匹配");
+    if (body.supplier_id && Number(body.supplier_id) !== Number(receiving.supplier_id)) throw ApiError.validation("收货记录与供应商不匹配");
+    if (body.material_id && Number(body.material_id) !== Number(receiving.material_id)) throw ApiError.validation("收货记录与物料不匹配");
+    if (body.lot_no && String(body.lot_no) !== String(receiving.lot_no)) throw ApiError.validation("收货记录与批次不匹配");
     const inspectionNo = body.inspection_no || nextNo(db, "incoming_inspections", "inspection_no", "IQC");
     const tx = db.transaction(() => {
       const result = run(db, `
@@ -237,8 +274,8 @@ function register(app, db) {
           inspector_id, sample_qty, defect_qty, result, defect_desc, disposition, notes
         ) VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        body.purchase_order_id || null, body.supplier_id, body.material_id, body.lot_no || null, inspectionNo,
-        body.inspection_date || null, receiving?.id || null, body.inspector_id || req.user?.sub || req.user?.uid || null,
+        receiving.po_id, receiving.supplier_id, receiving.material_id, receiving.lot_no, inspectionNo,
+        body.inspection_date || null, receiving.id, body.inspector_id || req.user?.sub || req.user?.uid || null,
         Number(body.sample_qty || 0), Number(body.defect_qty || 0), body.result,
         body.defect_desc || null, body.disposition || null, body.notes || null,
       ]);
@@ -249,7 +286,7 @@ function register(app, db) {
         ncr = createNcr(db, inspection, body.inspector_id || req.user?.sub || req.user?.uid);
         run(db, "UPDATE incoming_inspections SET ncr_id = ?, updated_at = datetime('now') WHERE id = ?", [ncr.id, inspection.id]);
       }
-      scoreSupplier(db, body.supplier_id);
+      if (receiving.supplier_id) scoreSupplier(db, receiving.supplier_id);
       return { id: inspection.id, inspection_no: inspectionNo, receiving: release, ncr };
     });
     res.json(tx());
@@ -325,4 +362,4 @@ function register(app, db) {
   console.log("[supplierCollaborationService] registered");
 }
 
-module.exports = { applyIncomingInspectionResult, ensureSchema, findReceiving, register };
+module.exports = { applyIncomingInspectionResult, ensureSchema, findReceiving, getReceivingContext, register };

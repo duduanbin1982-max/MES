@@ -41,9 +41,35 @@ function register(app, db) {
     try {
       const j = JSON.parse(row.custom_json);
       if (j.spc && j.spc[param]) return j.spc[param];
-    } catch (_e) {}
+    } catch (_error) {
+      return { usl: null, lsl: null };
+    }
     return { usl: null, lsl: null };
   }
+
+  app.get("/api/spc/nodes-with-params", wrap((_req, res) => {
+    const nodes = all(`
+      SELECT
+        pn.id,
+        pn.operation_name,
+        pn.equipment_instance_id,
+        ei.instance_code,
+        COUNT(pp.id) AS measurement_count,
+        MAX(pp.recorded_at) AS latest_measurement_at
+      FROM process_nodes pn
+      JOIN process_params pp ON pp.process_node_id = pn.id
+      LEFT JOIN equipment_instances ei ON ei.id = pn.equipment_instance_id
+      WHERE pp.current_amp IS NOT NULL
+         OR pp.voltage_v IS NOT NULL
+         OR pp.speed_mm_min IS NOT NULL
+         OR pp.temperature_c IS NOT NULL
+         OR pp.pressure_mpa IS NOT NULL
+         OR pp.feed_rate IS NOT NULL
+      GROUP BY pn.id, pn.operation_name, pn.equipment_instance_id, ei.instance_code
+      ORDER BY latest_measurement_at DESC, pn.id DESC
+    `);
+    res.json(nodes);
+  }));
 
   // ====== Full SPC analysis ======
   app.get("/api/spc/analyze", wrap((req, res) => {

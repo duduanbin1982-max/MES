@@ -38,7 +38,10 @@ function analyzeNode(db, node) {
           usl = j.spc[param].usl;
           lsl = j.spc[param].lsl;
         }
-      } catch (_e) {}
+      } catch (_error) {
+        usl = null;
+        lsl = null;
+      }
     }
 
     const xr = xbarR(values, 5, usl, lsl);
@@ -108,7 +111,7 @@ function runMonitor(db) {
       const warnings = analyzeNode(db, node);
       totalCpkWarnings += warnings.length;
     } catch (e) {
-      // skip individual node errors
+      console.warn('[spcMonitor] 节点分析失败:', node.id, e.message);
     }
   }
 
