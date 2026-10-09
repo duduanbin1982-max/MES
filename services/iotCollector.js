@@ -36,6 +36,20 @@ function getSimulatorAlarmRate() {
   return Math.max(0, Math.min(1, rate));
 }
 
+// 周期性日志降噪 (2026-10-10 brooks-sweep P3)
+// simulator 模式下 runCollector 每 5s 打印一行 "Collected ... readings"，
+// 一天约 1.7 万行会淹没 logs/mes.log，也拖慢 append 写盘。
+// 默认静默；需要排障时设 IOT_VERBOSE=1 打开。
+// 启动/停止/模式切换等一次性日志不走这里，仍然始终输出。
+function isVerboseLogging() {
+  const raw = String(process.env.IOT_VERBOSE || "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+function logVerbose(...args) {
+  if (isVerboseLogging()) console.log(...args);
+}
+
 function classifyAlarmSeverity(type, value, threshold, point) {
   const low = Number(point && point.alarm_low);
   const high = Number(point && point.alarm_high);
@@ -221,7 +235,7 @@ function runCollector(db) {
   }
 
   if (totalReadings > 0) {
-    console.log("[iotCollector] Collected " + totalReadings + " readings, " + allAlarms.length + " alarms, " + onlineDeviceIds.length + " devices online");
+    logVerbose("[iotCollector] Collected " + totalReadings + " readings, " + allAlarms.length + " alarms, " + onlineDeviceIds.length + " devices online");
 
     // WebSocket 推送: 仪表板汇总
     emit(Events.IOT_DASHBOARD, {
@@ -285,4 +299,4 @@ function triggerCollect(db) {
   return { ok: true };
 }
 
-module.exports = { start, stop, triggerCollect, runCollector, simulateModbusValue, insertAlarmIfNeeded, getAlarmCooldownMinutes, getSimulatorAlarmRate, classifyAlarmSeverity, getMode };
+module.exports = { start, stop, triggerCollect, runCollector, simulateModbusValue, insertAlarmIfNeeded, getAlarmCooldownMinutes, getSimulatorAlarmRate, classifyAlarmSeverity, getMode, isVerboseLogging, logVerbose };

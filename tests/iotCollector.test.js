@@ -81,3 +81,117 @@ test("iot collector defaults to production mode", () => {
   if (oldMode === undefined) delete process.env.IOT_MODE;
   else process.env.IOT_MODE = oldMode;
 });
+
+// P3 (2026-10-10): simulator 模式下 runCollector 每 5s 一行日志会把 mes.log 淹没。
+// 默认必须静默，只有 IOT_VERBOSE=1 才输出。
+function makeCollectorDb() {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE iot_devices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_code TEXT NOT NULL,
+      device_name TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      status TEXT,
+      last_seen_at TEXT,
+      updated_at TEXT
+    );
+    CREATE TABLE iot_data_points (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id INTEGER NOT NULL,
+      point_code TEXT NOT NULL,
+      point_name TEXT,
+      unit TEXT,
+      alarm_low REAL,
+      alarm_high REAL,
+      is_active INTEGER NOT NULL DEFAULT 1
+    );
+    CREATE TABLE iot_readings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id INTEGER NOT NULL,
+      point_id INTEGER NOT NULL,
+      value REAL,
+      quality TEXT,
+      source TEXT,
+      read_at TEXT
+    );
+    CREATE TABLE iot_alarms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id INTEGER NOT NULL,
+      point_id INTEGER,
+      alarm_type TEXT NOT NULL,
+      threshold_value REAL,
+      actual_value REAL,
+      message TEXT,
+      severity TEXT NOT NULL DEFAULT 'warning',
+      acknowledged INTEGER NOT NULL DEFAULT 0,
+      acknowledged_by INTEGER,
+      acknowledged_at TEXT,
+      source TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `);
+  db.prepare("INSERT INTO iot_devices (id, device_code, device_name) VALUES (1, 'DEV-1', '测试设备')").run();
+  db.prepare(
+    "INSERT INTO iot_data_points (device_id, point_code, point_name, unit, alarm_low, alarm_high) VALUES (1, 'pressure', '压力', 'kPa', 0, 100)"
+  ).run();
+  return db;
+}
+
+function captureConsoleLog(run) {
+  const lines = [];
+  const original = console.log;
+  console.log = (...args) => {
+    lines.push(args.join(" "));
+  };
+  try {
+    run();
+  } finally {
+    console.log = original;
+  }
+  return lines;
+}
+
+test("periodic collection log stays silent unless IOT_VERBOSE is on", () => {
+  const oldMode = process.env.IOT_MODE;
+  const oldVerbose = process.env.IOT_VERBOSE;
+  process.env.IOT_MODE = "simulator";
+  delete process.env.IOT_VERBOSE;
+  const db = makeCollectorDb();
+  try {
+    const quiet = captureConsoleLog(() => iotCollector.runCollector(db));
+    assert.deepEqual(quiet, [], "periodic collector log must be silent by default");
+    assert.ok(
+      db.prepare("SELECT COUNT(*) c FROM iot_readings").get().c > 0,
+      "silencing the log must not stop readings from being written"
+    );
+
+    process.env.IOT_VERBOSE = "1";
+    const loud = captureConsoleLog(() => iotCollector.runCollector(db));
+    assert.equal(loud.length, 1);
+    assert.match(loud[0], /^\[iotCollector\] Collected \d+ readings, \d+ alarms, \d+ devices online$/);
+  } finally {
+    if (oldMode === undefined) delete process.env.IOT_MODE;
+    else process.env.IOT_MODE = oldMode;
+    if (oldVerbose === undefined) delete process.env.IOT_VERBOSE;
+    else process.env.IOT_VERBOSE = oldVerbose;
+    db.close();
+  }
+});
+
+test("isVerboseLogging accepts only common truthy spellings", () => {
+  const old = process.env.IOT_VERBOSE;
+  try {
+    for (const value of ["1", "true", "TRUE", " yes ", "on"]) {
+      process.env.IOT_VERBOSE = value;
+      assert.equal(iotCollector.isVerboseLogging(), true, `expected true for ${JSON.stringify(value)}`);
+    }
+    for (const value of ["", "0", "false", "no", "off", "verbose", "2"]) {
+      process.env.IOT_VERBOSE = value;
+      assert.equal(iotCollector.isVerboseLogging(), false, `expected false for ${JSON.stringify(value)}`);
+    }
+  } finally {
+    if (old === undefined) delete process.env.IOT_VERBOSE;
+    else process.env.IOT_VERBOSE = old;
+  }
+});
