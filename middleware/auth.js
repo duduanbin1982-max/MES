@@ -14,41 +14,17 @@ const crypto = require('crypto');
 const jwt = require('../app/jwt');
 const rateLimit = require('express-rate-limit');
 const { ApiError } = require('../app/errors');
-const { DEFAULT_ROLE_PERMISSIONS, hasPermission } = require('../app/permissions');
+const { hasPermission } = require('../app/permissions');
 
 // SECRET 校验在 app/jwt.js 模块加载时已做
 const LOGIN_RATE_LIMIT_WINDOW_MS = parseInt(process.env.LOGIN_RATE_LIMIT_WINDOW_MS || '60000', 10);
 const LOGIN_RATE_LIMIT_MAX = parseInt(process.env.LOGIN_RATE_LIMIT_MAX || '10', 10);
 
 // P0-1: 内存缓存 role permissions
-//   Map<role_code, permissions_array>
-const ROLE_PERMS_CACHE = new Map();
-
-function loadRolePermissions(db) {
-  if (!db) return;
-  try {
-    const rows = db.prepare("SELECT role_code, permissions FROM roles").all();
-    ROLE_PERMS_CACHE.clear();
-    for (const r of rows) {
-      let perms = [];
-      try { perms = JSON.parse(r.permissions || '[]'); } catch (_e) { perms = []; }
-      ROLE_PERMS_CACHE.set(r.role_code, perms);
-    }
-    console.log(`[auth] 已加载 ${ROLE_PERMS_CACHE.size} 个角色权限`);
-  } catch (e) {
-    console.error('[auth] 加载角色权限失败:', e.message);
-  }
-}
-
-function getRolePermissions(roleCode) {
-  if (ROLE_PERMS_CACHE.has(roleCode)) {
-    const perms = ROLE_PERMS_CACHE.get(roleCode);
-    // DB 存了非空数组 → 用 DB 的; DB 是空/[] → 走 default
-    if (Array.isArray(perms) && perms.length > 0) return perms;
-  }
-  // 兜底: 旧角色或 DB 空 → DEFAULT_ROLE_PERMISSIONS
-  return DEFAULT_ROLE_PERMISSIONS[roleCode] || [];
-}
+// 2026-10-10 (静态分析 v1 #5): 缓存实现抽到 app/rolePermissions.js，
+//   让 services/userManagement.js 这类写路径复用同一份缓存并主动 reload，
+//   不再依赖"只在启动时加载一次"。此处 require + 重新导出，对外 API 不变。
+const { loadRolePermissions, getRolePermissions } = require('../app/rolePermissions');
 
 // P0-2: 用新 jwt 模块 (旧函数名保留, 业务层零改动)
 function makeToken(uid, role, extra = {}) {

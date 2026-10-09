@@ -3,7 +3,7 @@
 /**
  * rbac.test.js
  * P0-1 RBAC permissions 重构测试
- * 11 用例:
+ * 13 用例:
  *  1. hasPermission '*' 全部通过
  *  2. hasPermission 精确匹配
  *  3. hasPermission 资源通配 'material:*' 匹配 'material:write'
@@ -15,6 +15,8 @@
  *  9. loadRolePermissions DB NULL 走 default
  * 10. getRolePermissions 未知 role 返回 []
  * 11. token payload permissions 字段
+ * 12. setRolePermissions 写库后立即刷新缓存 (v1 #5)
+ * 13. 空权限写入后回落内置默认值
  */
 
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
@@ -102,4 +104,41 @@ test('P0-1.RBAC.11 token payload 含 permissions', () => {
   assert.equal(payload.uid, 99);
   assert.equal(payload.role, 'foreman');
   assert.deepEqual(payload.permissions, ['material:read', 'work_order:write']);
+});
+
+// 2026-10-10 (静态分析 v1 #5): 角色权限缓存必须随写路径刷新。
+// routes/roles.js 已有 reload；这里守住 services/userManagement.js#setRolePermissions，
+// 它曾经只写库不刷缓存 → 角色降权后新签发的 token 仍带旧权限，直到服务重启。
+test('P0-1.RBAC.12 setRolePermissions 写库后立即刷新权限缓存', () => {
+  const db = freshDb();
+  db.prepare('INSERT INTO roles (id, role_code, role_name, permissions) VALUES (?, ?, ?, ?)')
+    .run(1, 'planner', '计划员', JSON.stringify(['work_order:read']));
+  loadRolePermissions(db);
+  assert.deepEqual(getRolePermissions('planner'), ['work_order:read']);
+
+  const userManagement = require('../services/userManagement');
+  userManagement.setDb(db);
+  const result = userManagement.setRolePermissions(1, ['work_order:read', 'material:read']);
+  assert.equal(result.ok, true);
+  assert.deepEqual(getRolePermissions('planner'), ['material:read', 'work_order:read']);
+  assert.deepEqual(
+    JSON.parse(db.prepare('SELECT permissions FROM roles WHERE id = 1').get().permissions),
+    ['material:read', 'work_order:read']
+  );
+});
+
+test('P0-1.RBAC.13 空权限写入后回落内置默认值而非残留旧权限', () => {
+  const db = freshDb();
+  db.prepare('INSERT INTO roles (id, role_code, role_name, permissions) VALUES (?, ?, ?, ?)')
+    .run(1, 'foreman', '车间主任', JSON.stringify(['material:read']));
+  loadRolePermissions(db);
+  assert.deepEqual(getRolePermissions('foreman'), ['material:read']);
+
+  const userManagement = require('../services/userManagement');
+  userManagement.setDb(db);
+  userManagement.setRolePermissions(1, []);
+  // DB 变空数组 → getRolePermissions 回落 DEFAULT_ROLE_PERMISSIONS，不能保留已撤销的 material:read-only 集
+  const perms = getRolePermissions('foreman');
+  assert.ok(perms.length > 0, '空权限应回落内置默认，而不是空数组');
+  assert.ok(hasPermission(perms, 'work_order:write'), '默认 foreman 权限应生效');
 });

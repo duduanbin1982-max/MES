@@ -2,6 +2,7 @@
 const { ApiError } = require('../app/errors');
 const { wrap } = require('../middleware/asyncHandler');
 const { PERMISSIONS } = require('../app/permissions');
+const { loadRolePermissions } = require('../app/rolePermissions');
 // services/userManagement.js
 // 用户/角色/角色组管理 service
 
@@ -160,6 +161,9 @@ function setRolePermissions(roleId, permissions) {
   if (!role) return { ok: false, error: 'role not found' };
   const arr = normalizePermissions(permissions);
   db.prepare('UPDATE roles SET permissions = ? WHERE id = ?').run(JSON.stringify(arr), roleId);
+  // 2026-10-10 (静态分析 v1 #5): 写完必须刷新内存权限缓存，
+  // 否则新签发的 token 会一直带着旧权限，直到服务重启。
+  loadRolePermissions(db);
   return { ok: true, count: arr.length };
 }
 
