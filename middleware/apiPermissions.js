@@ -9,8 +9,28 @@ const PUBLIC_PATHS = new Set([
   "/auth/login",
   "/auth/refresh",
   "/health",
-  "/workflow/definitions",
 ]);
+
+// 2026-10-10 (静态分析 v1 #6): /workflow/definitions 不再匿名可读。
+// 它只被登录后的前端 WorkflowEngine.vue 调用；若直接落到下面通用的
+// /workflow 规则(需要 work_order:read)，welder/planner/purchaser/sales
+// 这些真实角色会被 403。这里给出"任一角色都持有其一"的只读权限集，
+// 效果 = 登录即可读，未登录 401。
+const AUTHENTICATED_READ_PERMISSIONS = [
+  "shopfloor:read",
+  "document:read",
+  "work_order:read",
+  "material:read",
+  "equipment:read",
+  "report:read",
+  "quality:read",
+  "purchase:read",
+  "settings:read",
+  "user:read",
+  "inventory:read",
+  "process:read",
+  "help:read",
+];
 
 function exact(path, methods, permissions) {
   return { test: (req) => path === req.path && methods.includes(req.method), permissions };
@@ -25,6 +45,7 @@ const WRITE = ["POST", "PUT", "PATCH", "DELETE"];
 
 const RULES = [
   exact("/debug/db-stats", READ, ["settings:read"]),
+  exact("/workflow/definitions", READ, AUTHENTICATED_READ_PERMISSIONS),
   match(/^\/setup(?:\/.*)?$/, READ, ["settings:read", "report:read"]),
   match(/^\/help\/manual$/, READ, ["shopfloor:read", "document:read", "work_order:read", "material:read", "equipment:read", "report:read", "quality:read", "purchase:read", "settings:read", "user:read"]),
   match(/^\/shopfloor\/overview$/, READ, ["shopfloor:read"]),

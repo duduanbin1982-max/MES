@@ -44,10 +44,13 @@ function authMiddleware(req, res, next) {
   //   现在: 显式列白名单, 其它 /api/* 全部走 token + requirePermission
   //   删除: /debug/db-stats (R3 dup - 业务数据走 admin gate)
   //   保留: /auth/login, /auth/refresh, /health (外部探活)
-  //   保留: /workflow/definitions (lookup 端点, 业务需要无 auth 查)
+  //   2026-10-10 (静态分析 v1 #6): 移除 /workflow/definitions —— 它只被登录后的
+  //     前端 WorkflowEngine.vue 调用, 匿名暴露工作流状态机词汇没有必要。
+  //     nginx 侧 4 个月日志里只有 1 次匿名探测(且 404), 无真实匿名调用方。
+  //     改为登录可读: apiPermissions.js 里有对应的全角色只读规则。
   //   /api/auth/me + /api/auth/logout: 不放 publicPaths, 但 auth.js 内部 next() 跳过中间件
   //   /api/help/manual: 加 requirePermission('help:read') in route handler
-  const publicPaths = ['/auth/login', '/auth/refresh', '/health', '/workflow/definitions'];
+  const publicPaths = ['/auth/login', '/auth/refresh', '/health'];
   if (publicPaths.includes(req.path)) return next();
   const auth = req.headers.authorization || '';
   const token = auth.replace(/^Bearer /, '');
