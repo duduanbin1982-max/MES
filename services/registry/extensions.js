@@ -1,7 +1,7 @@
 "use strict";
 
 const EXTENSION_SERVICES = [
-  { name: "aiPredictionService", module: "./aiPredictionService", schemaVersion: 1 },
+  { name: "aiPredictionService", module: "./aiPredictionService", schemaVersion: 2 },
   { name: "digitalTwinService", module: "./digitalTwinService", schemaVersion: 1 },
   { name: "erpService", module: "./erpService", schemaVersion: 1 },
   { name: "iotService", module: "./iotService", schemaVersion: 2 },

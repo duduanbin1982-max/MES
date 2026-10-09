@@ -2,8 +2,8 @@
   "version": 1,
   "services": {
     "aiPredictionService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "4bce14e4e50567dc30f54f1bf3c67f183ba6bca5b5978c85ed51325c14413027",
+      "schemaVersion": 2,
+      "ddlFingerprint": "903dd043cc38c412d37f7bcfa5b1ecb1c34f2dc1734385b03699d830a8345aff",
       "ddlStatements": 3
     },
     "andonService": {

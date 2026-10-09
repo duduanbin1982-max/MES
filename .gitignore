@@ -89,3 +89,9 @@ logs/
 # root one-off maintenance/debug scripts
 /_*.js
 /mes.db
+
+# 废弃/占位数据库标记 (0 字节哨兵文件, 防止误连旧库)
+*.stale-do-not-use
+
+# 根目录一次性维护脚本的临时变体 (scripts/check-* 为正式脚本, 不受影响)
+/check_*.js
