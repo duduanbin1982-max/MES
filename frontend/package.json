@@ -7,7 +7,9 @@
     "dev": "vite --host 0.0.0.0 --port 3891",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "test:domain": "node --test tests/domain/*.test.ts",
+    "build:safe": "vite build --outDir dist.next --emptyOutDir && rm -rf dist.prev && (mv dist dist.prev 2>/dev/null || true) && mv dist.next dist && rm -rf dist.prev"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",

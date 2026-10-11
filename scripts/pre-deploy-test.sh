@@ -87,6 +87,22 @@ if [ "$SYNTAX_ERR" = "1" ]; then
   exit 1
 fi
 
+# 前端 domain 层单测 (无浏览器: Node 22 原生 TS 类型擦除 + node:test)
+if [ -d "$ROOT/frontend/node_modules" ]; then
+  log "前端 domain 单测 (frontend/tests/domain) ..."
+  FE_LOG="$LOG_DIR/frontend-domain-$ts.log"
+  if (cd "$ROOT/frontend" && node --test tests/domain/*.test.ts) > "$FE_LOG" 2>&1; then
+    FE_PASS=$(grep -E '^# pass ' "$FE_LOG" | awk '{print $3}' || echo "?")
+    log "  前端 domain: ${FE_PASS}/${FE_PASS} ✅"
+  else
+    log "  ❌ 前端 domain 单测失败, 阻断部署. 完整日志: $FE_LOG"
+    grep -E '^(not ok|  error)' "$FE_LOG" | head -10 | sed 's/^/  /'
+    exit 1
+  fi
+else
+  log "  跳过前端 domain 单测 (frontend/node_modules 不存在)"
+fi
+
 # 总结
 log "$PASS_LINE"
 log "✅ 部署前检查全部通过"

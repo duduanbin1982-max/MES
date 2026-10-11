@@ -50,6 +50,12 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js"
 import Api from "../api"
 import { ElMessage } from "element-plus"
+import { buildTBMModel, explodeOffsetFor } from "../domain/digitalTwin/tbmModel"
+import {
+  metricColor as metricColorOf,
+  pickFirstModel,
+  resolveInstanceById,
+} from "../domain/digitalTwin/viewModel"
 
 const containerRef = ref<HTMLElement>()
 const selectedId = ref(1)
@@ -68,109 +74,7 @@ let partMeshes: Map<string, THREE.Mesh> = new Map()
 let raycaster: THREE.Raycaster, mouse: THREE.Vector2
 let animationId: number
 
-// ===== Procedural TBM Model =====
-function buildTBMModel() {
-  const group = new THREE.Group()
-  group.name = "TBM"
-
-  const materials = {
-    cutterhead: new THREE.MeshPhongMaterial({ color: 0xcc3333, specular: 0x222222, shininess: 30 }),
-    mainDrive: new THREE.MeshPhongMaterial({ color: 0x3366cc, specular: 0x222222, shininess: 30 }),
-    shield: new THREE.MeshPhongMaterial({ color: 0x888888, specular: 0x333333, shininess: 50 }),
-    screw: new THREE.MeshPhongMaterial({ color: 0xff9933, specular: 0x111111, shininess: 20 }),
-    erector: new THREE.MeshPhongMaterial({ color: 0x33aa55, specular: 0x222222, shininess: 30 }),
-    gantry: new THREE.MeshPhongMaterial({ color: 0x666699, specular: 0x222222, shininess: 20 }),
-    segment: new THREE.MeshPhongMaterial({ color: 0xaaaaaa, specular: 0x111111, shininess: 10 }),
-  }
-
-  // Cutterhead (front disk)
-  const cutterGeo = new THREE.CylinderGeometry(2.1, 2.1, 0.5, 48)
-  const cutter = new THREE.Mesh(cutterGeo, materials.cutterhead)
-  cutter.position.set(0, 0, 4)
-  cutter.name = "cutterhead"
-  cutter.userData = { part_name: "刀盘", assembly_step: 1, color: "#cc3333" }
-  group.add(cutter)
-  partMeshes.set("cutterhead", cutter)
-
-  // Cutter teeth
-  for (let i = 0; i < 24; i++) {
-    const angle = (i / 24) * Math.PI * 2
-    const toothGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.4, 8)
-    const tooth = new THREE.Mesh(toothGeo, new THREE.MeshPhongMaterial({ color: 0xffdd00 }))
-    tooth.position.set(Math.cos(angle) * 2.0, Math.sin(angle) * 2.0, 4.3)
-    cutter.add(tooth)
-  }
-
-  // Main Drive
-  const driveGeo = new THREE.CylinderGeometry(1.6, 1.8, 2.5, 32)
-  const drive = new THREE.Mesh(driveGeo, materials.mainDrive)
-  drive.position.set(0, 0, 2.7)
-  drive.name = "main_drive"
-  drive.userData = { part_name: "主驱动", assembly_step: 2, color: "#3366cc" }
-  group.add(drive)
-  partMeshes.set("main_drive", drive)
-
-  // Shield body (front)
-  const shieldGeo = new THREE.CylinderGeometry(2.0, 2.1, 8, 32)
-  const shield = new THREE.Mesh(shieldGeo, materials.shield)
-  shield.position.set(0, 0, -2)
-  shield.name = "shield"
-  shield.userData = { part_name: "盾体", assembly_step: 3, color: "#888888" }
-  group.add(shield)
-  partMeshes.set("shield", shield)
-
-  // Screw Conveyor
-  const screwGeo = new THREE.CylinderGeometry(0.4, 0.5, 6, 16)
-  const screw = new THREE.Mesh(screwGeo, materials.screw)
-  screw.rotation.x = Math.PI / 6
-  screw.position.set(0, -0.8, -3)
-  screw.name = "screw"
-  screw.userData = { part_name: "螺旋输送机", assembly_step: 4, color: "#ff9933" }
-  group.add(screw)
-  partMeshes.set("screw", screw)
-
-  // Segment Erector
-  const erectorGeo = new THREE.TorusGeometry(1.8, 0.2, 16, 32)
-  const erector = new THREE.Mesh(erectorGeo, materials.erector)
-  erector.position.set(0, 0, -5)
-  erector.name = "erector"
-  erector.userData = { part_name: "管片拼装机", assembly_step: 5, color: "#33aa55" }
-  group.add(erector)
-  partMeshes.set("erector", erector)
-
-  // Segments ring
-  for (let i = 0; i < 8; i++) {
-    const angle = (i / 8) * Math.PI * 2
-    const segGeo = new THREE.BoxGeometry(0.5, 0.3, 1.2)
-    const seg = new THREE.Mesh(segGeo, materials.segment)
-    seg.position.set(Math.cos(angle) * 1.8, Math.sin(angle) * 1.8, -5)
-    seg.rotation.z = angle
-    group.add(seg)
-  }
-
-  // Gantry (trailing cars) - simplified
-  for (let i = 0; i < 3; i++) {
-    const gantryGeo = new THREE.BoxGeometry(3.5, 2.5, 4)
-    const gantry = new THREE.Mesh(gantryGeo, materials.gantry)
-    gantry.position.set(0, -0.5, -9 - i * 4.5)
-    gantry.name = `gantry_${i}`
-    gantry.userData = { part_name: `后配套拖车 ${i+1}`, assembly_step: 6 + i, color: "#666699" }
-    group.add(gantry)
-    partMeshes.set(`gantry_${i}`, gantry)
-  }
-
-  // Ground plane
-  const groundGeo = new THREE.PlaneGeometry(20, 30)
-  const groundMat = new THREE.MeshPhongMaterial({ color: 0x333333, side: THREE.DoubleSide })
-  const ground = new THREE.Mesh(groundGeo, groundMat)
-  ground.rotation.x = -Math.PI / 2
-  ground.position.set(0, -3.5, -5)
-  group.add(ground)
-
-  return group
-}
-
-// ===== Scene Setup =====
+// buildTBMModel 已抽到 ../domain/digitalTwin/tbmModel.ts// ===== Scene Setup =====
 function initScene() {
   if (!containerRef.value) return
 
@@ -278,7 +182,7 @@ function renderSelectedModel() {
     }, undefined, () => ElMessage.error('GLB 加载失败，请检查文件'))
     return
   }
-  const reference = buildTBMModel()
+  const reference = buildTBMModel(partMeshes)
   reference.name = "tbm_group"
   scene.add(reference)
 }
@@ -354,14 +258,10 @@ function toggleExplode() {
   explode.value = !explode.value
   const factor = explode.value ? 2.5 : 1
   partMeshes.forEach((m, name) => {
-    if (name === "cutterhead") m.position.z = 4 * factor
-    else if (name === "main_drive") m.position.z = 2.7 * factor
-    else if (name === "screw") m.position.y = -0.8 * factor
-    else if (name === "erector") m.position.z = -5 * factor
-    else if (name.startsWith("gantry")) {
-      const idx = parseInt(name.split("_")[1])
-      m.position.z = (-9 - idx * 4.5) * factor
-    }
+    const offset = explodeOffsetFor(name, factor)
+    if (!offset) return
+    if (offset.axis === "y") m.position.y = offset.value
+    else m.position.z = offset.value
   })
 }
 
@@ -376,22 +276,18 @@ function focusPart(part: any) {
 }
 
 function metricColor(m: any) {
-  if (!m) return "var(--el-color-white)"
-  const v = m.metric_value
-  if (m.metric_name?.includes("temp")) return v > 80 ? "var(--el-color-danger)" : v > 60 ? "var(--el-color-warning)" : "var(--el-color-success)"
-  if (m.metric_name?.includes("vibration")) return v > 7 ? "var(--el-color-danger)" : "var(--el-color-success)"
-  return "var(--el-color-primary)"
+  return metricColorOf(m)
 }
 
 async function onInstanceChange() {
-  const inst = instances.value.find(i => i.id === selectedId.value)
+  const inst = resolveInstanceById(instances.value, selectedId.value)
   selectedInstance.value = inst
   await loadTwinData()
 }
 
 async function loadTwinData() {
   const modelRows = await Api.get("/dt/models", { params: { instance_id: selectedId.value } })
-  const model = (modelRows.items || modelRows || [])[0]
+  const model = pickFirstModel(modelRows)
   if (!model) {
     parts.value = []
     currentModel.value = null
