@@ -22,8 +22,8 @@
       "ddlStatements": 4
     },
     "cost": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "0a989cf37594654f8bce8e4f3a328308f42b9c89774709a04ee8fe2311640a24",
+      "schemaVersion": 2,
+      "ddlFingerprint": "7655b6fb1e59cc39b42294d598dd05583c6c77b39eec6b984b529d19282c86e5",
       "ddlStatements": 3
     },
     "criticalPartsService": {
