@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Database = require("better-sqlite3");
-const supplierCollaboration = require("../services/supplierCollaborationService");
+const supplierCollaboration = require("../services/supplierCollaboration");
 
 function makeDb() {
   const db = new Database(":memory:");

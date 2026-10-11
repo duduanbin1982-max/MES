@@ -10,8 +10,8 @@ const EXTENSION_SERVICES = [
   { name: "supplierDashboardService", module: "./supplierDashboardService", schemaVersion: 1 },
   {
     name: "supplierCollaborationService",
-    module: "./supplierCollaborationService",
-    schemaVersion: 1,
+    module: "./supplierCollaboration",
+    schemaVersion: 2,
     dependsOn: ["purchase"],
   },
 ];

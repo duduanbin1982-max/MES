@@ -217,8 +217,8 @@
       "ddlStatements": 0
     },
     "supplierCollaborationService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "fd71838f8bf096e3db5d4b8c542efb0cb4eb0a39c5fd6740e5a0e7bfec745349",
+      "schemaVersion": 2,
+      "ddlFingerprint": "fefc424d58652c2846b0de3012d4acacf47b7dbf5b72264556a4493896fa74f5",
       "ddlStatements": 3
     },
     "supplierDashboardService": {
