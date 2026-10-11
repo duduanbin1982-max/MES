@@ -6,11 +6,13 @@ const service = require('./service');
 const multiInstanceScheduler = require('./multiInstanceScheduler');
 const workstationOee = require('./oee');
 
+const logger = require("../../app/logger").createLogger("equipment");
+
 function register(app, db) {
   service.register(app, db);
   multiInstanceScheduler.register(app, db);
   workstationOee.register(app, db);
-  console.log('[equipment] Registered: instances + types + multi-scheduler + workstation OEE');
+  logger.info('[equipment] Registered: instances + types + multi-scheduler + workstation OEE');
 }
 
 module.exports = { register };

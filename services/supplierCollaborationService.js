@@ -5,6 +5,8 @@
 const { wrap } = require("../middleware/asyncHandler");
 const { ApiError } = require("../app/errors");
 
+const logger = require("../app/logger").createLogger("supplierCollaborationService");
+
 function addColumn(db, table, column, definition) {
   const columns = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((item) => item.name));
   if (!columns.has(column)) db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
@@ -360,7 +362,7 @@ function register(app, db) {
     res.json({ incoming, outsourcing, weakest_suppliers: scores.map((row) => ({ ...row, metrics: parseJson(row.metrics_json, {}) })) });
   }));
 
-  console.log("[supplierCollaborationService] registered");
+  logger.info("[supplierCollaborationService] registered");
 }
 
 module.exports = { applyIncomingInspectionResult, ensureSchema, findReceiving, getReceivingContext, register };

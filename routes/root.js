@@ -9,6 +9,8 @@
 const path = require('path');
 const { DIST, DIST_EXISTS } = require('../app');
 
+const logger = require("../app/logger").createLogger("frontend");
+
 function register(app) {
   app.get('/', (req, res) => {
     res.json({
@@ -27,7 +29,7 @@ function register(app) {
     app.get(/^(?!\/api).*/, (req, res) => {
       res.sendFile(path.join(DIST, 'index.html'));
     });
-    console.log('[frontend] serving from', DIST);
+    logger.info('[frontend] serving from', DIST);
   }
 }
 

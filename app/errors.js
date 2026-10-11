@@ -6,6 +6,9 @@
 // Author: 三狗子 | Date: 2026-06-25
 
 // 标准错误码 (前端可 switch)
+
+const logger = require("./logger").createLogger("errors");
+
 const ErrorCode = {
   // 4xx
   VALIDATION: 'VALIDATION_ERROR',          // 400 通用校验失败
@@ -46,7 +49,7 @@ class ApiError extends Error {
 function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-vars
   // ApiError: 业务抛的, 直接用
   if (err instanceof ApiError) {
-    if (err.status >= 500) console.error(`[${req.id}] ${err.code}: ${err.message}`, err.details || '');
+    if (err.status >= 500) logger.error(`[${req.id}] ${err.code}: ${err.message}`, err.details || '');
     return res.status(err.status).json({ code: err.code, message: err.message, details: err.details, requestId: req.id });
   }
   // 兼容旧业务: throw new Error() + e.status (我刚加的 wrap 逻辑)
@@ -59,7 +62,7 @@ function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-va
     });
   }
   // 兜底
-  console.error(`[${req.id}] UNHANDLED:`, err);
+  logger.error(`[${req.id}] UNHANDLED:`, err);
   res.status(500).json({
     code: ErrorCode.INTERNAL,
     message: '服务内部错误',

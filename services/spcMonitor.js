@@ -7,6 +7,8 @@
 const { xbarR, capability, wecoRules } = require("../app/spc/engine");
 const { emit, Events } = require("../app/ws/EventBus");
 
+const logger = require("../app/logger").createLogger("spcMonitor");
+
 const PARAM_COLS = ["current_amp", "voltage_v", "speed_mm_min", "temperature_c", "pressure_mpa", "feed_rate"];
 const PARAM_LABELS = {
   current_amp: "电流(A)", voltage_v: "电压(V)", speed_mm_min: "速度(mm/min)",
@@ -53,7 +55,7 @@ function analyzeNode(db, node) {
     // WECO 规则报警
     if (alerts.length > 0) {
       const alertDesc = alerts.map(a => a.desc).join("; ");
-      console.log("[spcMonitor] ALERT:", node.operation_name, param, alertDesc);
+      logger.info("[spcMonitor] ALERT:", node.operation_name, param, alertDesc);
       
       // 检查这个组合在最近 5 分钟内是否已经报过
       const recentAlert = db.prepare(
@@ -111,7 +113,7 @@ function runMonitor(db) {
       const warnings = analyzeNode(db, node);
       totalCpkWarnings += warnings.length;
     } catch (e) {
-      console.warn('[spcMonitor] 节点分析失败:', node.id, e.message);
+      logger.warn('[spcMonitor] 节点分析失败:', node.id, e.message);
     }
   }
 
@@ -135,7 +137,7 @@ function start(db, intervalMs) {
     created_at TEXT DEFAULT (datetime('now'))
   )`);
   
-  console.log("[spcMonitor] Starting SPC monitor every " + (intervalMs || 30000) + "ms");
+  logger.info("[spcMonitor] Starting SPC monitor every " + (intervalMs || 30000) + "ms");
   monitorInterval = setInterval(() => runMonitor(db), intervalMs || 30000);
 }
 
@@ -143,7 +145,7 @@ function stop() {
   if (monitorInterval) {
     clearInterval(monitorInterval);
     monitorInterval = null;
-    console.log("[spcMonitor] Stopped");
+    logger.info("[spcMonitor] Stopped");
   }
 }
 

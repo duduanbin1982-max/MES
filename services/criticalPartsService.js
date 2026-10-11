@@ -7,6 +7,8 @@ const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
 const { hasStoredFile } = require("./documentService/storage");
 
+const logger = require("../app/logger").createLogger("criticalParts");
+
 function ensureSchema(db) {
   const columns = new Set(db.prepare("PRAGMA table_info(critical_part_certificates)").all().map((column) => column.name));
   if (!columns.has("document_id")) db.prepare("ALTER TABLE critical_part_certificates ADD COLUMN document_id INTEGER").run();
@@ -105,7 +107,7 @@ function register(app, db) {
     res.status(201).json({ id: result.lastInsertRowid, created: true });
   }));
 
-  console.log("[criticalParts] Registered");
+  logger.info("[criticalParts] Registered");
 }
 
 module.exports = { ensureSchema, register };

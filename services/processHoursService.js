@@ -3,6 +3,9 @@ const { ApiError } = require('../app/errors');
 const { registerWorkerPerformance } = require("./processHours/analyticsRoutes");
 // services/processHoursService.js
 const { wrap } = require("../middleware/asyncHandler");
+
+const logger = require("../app/logger").createLogger("processHoursService");
+
 // 工时定额 + 工序级报工明细
 //   GET /api/process-hours/worker-performance?from=Y&to=Z  工人效率看板
 //   GET /api/process-hours/overtime?from=Y&to=Z            加班追踪
@@ -176,7 +179,7 @@ function register(app, db, auth) {
   registerStandardHours(app, db);
   registerWorkReport(app, db, auth);
   registerWorkerPerformance(app, db);
-  console.log("[processHoursService] Standard hours + work report + worker performance registered");
+  logger.info("[processHoursService] Standard hours + work report + worker performance registered");
 }
 
 module.exports = { register };

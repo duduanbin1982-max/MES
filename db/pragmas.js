@@ -7,6 +7,9 @@
 //   cache/mmap   : 提升 TBM-MES 大表查询和 IoT 写入吞吐
 // P1: apply 后立即 verify，防止“代码声明”和“实际连接状态”再次漂移。
 
+
+const logger = require("../app/logger").createLogger("pragmas");
+
 const EXPECTED_PRAGMAS = Object.freeze({
   journal_mode: "wal",
   foreign_keys: 1,
@@ -53,7 +56,7 @@ function applyPragmas(db) {
     if (process.env.DB_STRICT_PRAGMAS === "1") {
       throw new Error(msg);
     }
-    console.warn(msg);
+    logger.warn(msg);
   }
   return status;
 }

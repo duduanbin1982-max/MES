@@ -12,6 +12,8 @@ const { makeToken, loginLimiter, getRolePermissions, handleRefresh } = require('
 const jwt = require('../app/jwt');
 const { ApiError } = require('../app/errors');
 
+const logger = require("../app/logger").createLogger("security");
+
 function register(app, db) {
   const { get, run } = require('./_helpers')(db);
 
@@ -33,7 +35,7 @@ function register(app, db) {
         if (valid) {
           const hashed = bcrypt.hashSync(password, 10);
           run('UPDATE users SET password_hash = ? WHERE id = ?', [hashed, user.id]);
-          console.log('[security] 用户', username, '密码已升级为 bcrypt');
+          logger.info('[security] 用户', username, '密码已升级为 bcrypt');
         }
       }
       if (!valid) return next(ApiError.unauthorized('密码错误'));

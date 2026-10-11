@@ -3,6 +3,8 @@
 const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 
+const logger = require("../app/logger").createLogger("scheduleService");
+
 function runMigration(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schedule_assignments (
@@ -331,7 +333,7 @@ function register(app, db) {
     res.json({ tasks: unique });
   }));
 
-  console.log("[scheduleService] Dispatch scheduling registered");
+  logger.info("[scheduleService] Dispatch scheduling registered");
 }
 
 module.exports = { register };

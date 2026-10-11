@@ -2,6 +2,8 @@
 
 const { ApiError } = require("../../app/errors");
 
+const logger = require("../../app/logger").createLogger("reportScheduler");
+
 let schedulerTimer = null;
 
 function parseField(field, min, max) {
@@ -74,7 +76,7 @@ function startScheduler(db, generateReport) {
   if (schedulerTimer) clearInterval(schedulerTimer);
   schedulerTimer = setInterval(() => {
     const results = runDueReports(db, generateReport);
-    if (results.length) console.log(`[reportScheduler] executed ${results.length} scheduled report(s)`);
+    if (results.length) logger.info(`[reportScheduler] executed ${results.length} scheduled report(s)`);
   }, 60_000);
   schedulerTimer.unref?.();
 }

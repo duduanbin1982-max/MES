@@ -21,6 +21,9 @@
  *   - error?: string
  * @returns {number|null} 插入的 id, 失败 null
  */
+
+const logger = require("./logger").createLogger("audit");
+
 function record(db, req, entry) {
   if (!db) return null;
   const user = req?.user || {};
@@ -49,7 +52,7 @@ function record(db, req, entry) {
     const r = stmt.run(row);
     return Number(r.lastInsertRowid);
   } catch (e) {
-    console.error('[audit] 写入失败:', e.message, 'action:', entry.action);
+    logger.error('[audit] 写入失败:', e.message, 'action:', entry.action);
     return null;
   }
 }
@@ -85,7 +88,7 @@ function query(db, q = {}) {
     const total = db.prepare(`SELECT count(*) AS c FROM audit_logs ${whereSql}`).get(params).c;
     return { rows, total };
   } catch (e) {
-    console.error('[audit] 查询失败:', e.message);
+    logger.error('[audit] 查询失败:', e.message);
     return { rows: [], total: 0 };
   }
 }

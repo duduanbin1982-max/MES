@@ -6,6 +6,8 @@
 const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 
+const logger = require("../app/logger").createLogger("iotLifecycleService");
+
 const DEFAULT_RAW_READING_DAYS = Number(process.env.IOT_RAW_READING_RETENTION_DAYS || 7);
 const DEFAULT_ACKED_ALARM_DAYS = Number(process.env.IOT_ACKED_ALARM_RETENTION_DAYS || 30);
 const DEFAULT_BATCH_LIMIT = Number(process.env.IOT_LIFECYCLE_BATCH_LIMIT || 200000);
@@ -242,7 +244,7 @@ function register(app, db) {
     res.json(db.prepare(sql).all(...params));
   }));
 
-  console.log("[iotLifecycleService] IoT lifecycle governance registered");
+  logger.info("[iotLifecycleService] IoT lifecycle governance registered");
 }
 
 function start(db, intervalHours = DEFAULT_RUN_INTERVAL_HOURS) {
@@ -251,9 +253,9 @@ function start(db, intervalHours = DEFAULT_RUN_INTERVAL_HOURS) {
   lifecycleTimer = setInterval(() => {
     try {
       const result = runLifecycle(db);
-      console.log(`[iotLifecycleService] scheduled run deleted ${result.deletedReadings} readings and ${result.deletedAlarms} alarms`);
+      logger.info(`[iotLifecycleService] scheduled run deleted ${result.deletedReadings} readings and ${result.deletedAlarms} alarms`);
     } catch (error) {
-      console.error("[iotLifecycleService] scheduled run failed:", error.message);
+      logger.error("[iotLifecycleService] scheduled run failed:", error.message);
     }
   }, hours * 60 * 60 * 1000);
   lifecycleTimer.unref?.();

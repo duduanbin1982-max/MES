@@ -7,6 +7,8 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+const logger = require("../app/logger").createLogger("plmService");
+
 function runMigration(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS plm_drawings (
@@ -267,7 +269,7 @@ function register(app, db) {
   registerEco(app, db);
   registerCadMeta(app, db);
   registerDashboard(app, db);
-  console.log("[plmService] PLM integration registered (Drawings + ECO + CAD Meta + Dashboard)");
+  logger.info("[plmService] PLM integration registered (Drawings + ECO + CAD Meta + Dashboard)");
 }
 
 module.exports = { register };

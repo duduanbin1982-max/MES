@@ -5,6 +5,8 @@ const { ApiError } = require('../../app/errors');
 
 const { wrap } = require('../../middleware/asyncHandler');
 
+const logger = require("../../app/logger").createLogger("tbmAdvanced");
+
 function registerRoutes(app, db) {
   const all = (sql, p) => db.prepare(sql).all(...(p||[]));
   const get = (sql, p) => db.prepare(sql).get(...(p||[]));
@@ -52,7 +54,7 @@ function registerRoutes(app, db) {
     res.json({success:true});
   }));
 
-  console.log('[tbmAdvanced] Critical parts + Purchase tracking + Project dashboard + Acceptance + Fault KB registered');
+  logger.info('[tbmAdvanced] Critical parts + Purchase tracking + Project dashboard + Acceptance + Fault KB registered');
 }
 
 module.exports = { registerRoutes };

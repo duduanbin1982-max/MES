@@ -4,6 +4,8 @@
 const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
 
+const logger = require("../app/logger").createLogger("supplierDashboard");
+
 function register(app, db) {
   const { get, all, run } = makeDbHelpers(db);
 
@@ -76,7 +78,7 @@ function register(app, db) {
     });
   }));
 
-  console.log("[supplierDashboard] Registered");
+  logger.info("[supplierDashboard] Registered");
 }
 
 module.exports = { register };

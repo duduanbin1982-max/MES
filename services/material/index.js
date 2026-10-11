@@ -3,9 +3,11 @@
 
 const inventory = require('./inventory');
 
+const logger = require("../../app/logger").createLogger("material");
+
 function register(app, db) {
   inventory.register(app, db);
-  console.log('[material] Registered: inventory + movements');
+  logger.info('[material] Registered: inventory + movements');
 }
 
 module.exports = { register };

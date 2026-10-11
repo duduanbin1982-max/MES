@@ -3,6 +3,8 @@
 // MESA #8: Process parameter management + trend + monitoring dashboard
 const { ApiError } = require("../../app/errors");
 
+const logger = require("../../app/logger").createLogger("process/params");
+
 function register(app, db) {
   const { wrap } = require("../../middleware/asyncHandler");
   const all = (sql, p) => db.prepare(sql).all(p || []);
@@ -116,7 +118,7 @@ function register(app, db) {
     res.json({ total: deviations.length, items: deviations.slice(0, limit || 50) });
   }));
 
-  console.log("[process/params] Process params + monitor registered");
+  logger.info("[process/params] Process params + monitor registered");
 }
 
 module.exports = { register };

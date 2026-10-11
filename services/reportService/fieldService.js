@@ -7,6 +7,8 @@ const { wrap } = require("../../middleware/asyncHandler");
 const { ensureFieldServiceSchema } = require("../fieldServiceSchema");
 const fieldServiceCore = require("../fieldServiceCore");
 
+const logger = require("../../app/logger").createLogger("fieldService");
+
 function runMigration(db) {
   ensureFieldServiceSchema(db);
 }
@@ -92,7 +94,7 @@ function register(app, db) {
     res.json(fieldServiceCore.completeMaintenancePlan(db, req.params.id));
   }));
 
-  console.log("[fieldService:legacy] compatibility routes registered");
+  logger.info("[fieldService:legacy] compatibility routes registered");
 }
 
 module.exports = { register };

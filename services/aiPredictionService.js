@@ -2,6 +2,9 @@
 const { ApiError } = require('../app/errors');
 const { wrap } = require('../middleware/asyncHandler');
 const modelTraining = require("./ai/modelTraining");
+
+const logger = require("../app/logger").createLogger("aiPredictionService");
+
 // services/aiPredictionService.js
 // P2-5 AI Prediction: Fault probability + Quality trend + Anomaly detection
 // Lightweight statistical approach (no heavy ML libs)
@@ -250,7 +253,7 @@ function register(app, db) {
   registerQualityPrediction(app, db);
   registerAnomalyDetection(app, db);
   registerDashboard(app, db);
-  console.log("[aiPredictionService] AI Prediction registered (Training + Fault + Quality + Anomaly + Dashboard)");
+  logger.info("[aiPredictionService] AI Prediction registered (Training + Fault + Quality + Anomaly + Dashboard)");
 }
 
 module.exports = { register };

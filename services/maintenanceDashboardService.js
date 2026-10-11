@@ -6,6 +6,8 @@ const { ApiError } = require("../app/errors");
 const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
 
+const logger = require("../app/logger").createLogger("maintenanceDashboard");
+
 function register(app, db) {
   const { get, all, run } = makeDbHelpers(db);
 
@@ -87,7 +89,7 @@ function register(app, db) {
     res.json({ ok: true, completed: true });
   }));
 
-  console.log("[maintenanceDashboard] Registered");
+  logger.info("[maintenanceDashboard] Registered");
 }
 
 module.exports = { register };

@@ -1,5 +1,8 @@
 "use strict";
 
+
+const logger = require("../../../../app/logger").createLogger("delivery");
+
 function collectSupplyExceptions({ ctx, instanceById, items, now, pushException }) {
   const { db, tableExists, has, safeAll } = ctx;
 
@@ -43,7 +46,7 @@ function collectSupplyExceptions({ ctx, instanceById, items, now, pushException 
       }
     }
   } catch (error) {
-    console.warn('[delivery] 主数据异常读取失败:', error.message);
+    logger.warn('[delivery] 主数据异常读取失败:', error.message);
   }
 
   if (tableExists("purchase_orders") && has("purchase_orders", "expected_date")) {

@@ -6,6 +6,7 @@
 // Fix: 2026-06-26 - 修复设备全offline bug + 报警泛滥
 
 const { emit, Events } = require("../app/ws/EventBus");
+const logger = require("../app/logger").createLogger("iotCollector");
 
 // 全局开关: 采集器是否运行
 let collectorInterval = null;
@@ -39,15 +40,17 @@ function getSimulatorAlarmRate() {
 // 周期性日志降噪 (2026-10-10 brooks-sweep P3)
 // simulator 模式下 runCollector 每 5s 打印一行 "Collected ... readings"，
 // 一天约 1.7 万行会淹没 logs/mes.log，也拖慢 append 写盘。
-// 默认静默；需要排障时设 IOT_VERBOSE=1 打开。
+// 默认静默；需要排障时设 IOT_VERBOSE=1 打开（另一道闸门是全局 LOG_LEVEL）。
 // 启动/停止/模式切换等一次性日志不走这里，仍然始终输出。
 function isVerboseLogging() {
   const raw = String(process.env.IOT_VERBOSE || "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
+// 2026-10-11: 走统一 logger，但保留 IOT_VERBOSE 这道模块级闸门
+// (LOG_LEVEL 管全局，IOT_VERBOSE 只管这一条周期性日志)。
 function logVerbose(...args) {
-  if (isVerboseLogging()) console.log(...args);
+  if (isVerboseLogging()) logger.info(...args);
 }
 
 function classifyAlarmSeverity(type, value, threshold, point) {
@@ -188,7 +191,7 @@ function collectDevice(db, device) {
   try {
     tx();
   } catch (e) {
-    console.error("[iotCollector] Transaction error:", e.message);
+    logger.error("[iotCollector] Transaction error:", e.message);
     return { readings: 0, alarms: [] };
   }
 
@@ -216,7 +219,7 @@ function runCollector(db) {
       allAlarms.push(...result.alarms);
       onlineDeviceIds.push(device.id);
     } catch (e) {
-      console.error("[iotCollector] Device " + device.device_code + " error:", e.message);
+      logger.error("[iotCollector] Device " + device.device_code + " error:", e.message);
     }
   }
 
@@ -230,7 +233,7 @@ function runCollector(db) {
         "UPDATE iot_devices SET status = 'online', last_seen_at = datetime('now'), updated_at = datetime('now') WHERE id IN (" + placeholders + ")"
       ).run(...onlineDeviceIds);
     } catch (e) {
-      console.error("[iotCollector] Batch heartbeat UPDATE failed:", e.message);
+      logger.error("[iotCollector] Batch heartbeat UPDATE failed:", e.message);
     }
   }
 
@@ -256,7 +259,7 @@ function start(db, intervalMs) {
   if (collectorInterval) stop();
 
   if (getMode() !== "simulator") {
-    console.log("[iotCollector] Production mode: simulator is disabled");
+    logger.info("[iotCollector] Production mode: simulator is disabled");
     return false;
   }
 
@@ -268,12 +271,12 @@ function start(db, intervalMs) {
     db.prepare(
       "UPDATE iot_devices SET status = 'online', last_seen_at = datetime('now') WHERE is_active = 1"
     ).run();
-    console.log("[iotCollector] Marked all active devices as online");
+    logger.info("[iotCollector] Marked all active devices as online");
   } catch (e) {
     // ignore
   }
 
-  console.log("[iotCollector] Starting collector every " + interval + "ms");
+  logger.info("[iotCollector] Starting collector every " + interval + "ms");
 
   // 立即运行一次
   runCollector(db);
@@ -288,7 +291,7 @@ function stop() {
   if (collectorInterval) {
     clearInterval(collectorInterval);
     collectorInterval = null;
-    console.log("[iotCollector] Stopped");
+    logger.info("[iotCollector] Stopped");
   }
 }
 

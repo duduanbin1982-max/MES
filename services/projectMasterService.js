@@ -2,6 +2,8 @@
 
 const { wrap } = require("../middleware/asyncHandler");
 
+const logger = require("../app/logger").createLogger("projectMasterService");
+
 function objectType(db, name) {
   return db.prepare("SELECT type FROM sqlite_master WHERE name=?").get(name)?.type || null;
 }
@@ -50,7 +52,7 @@ function register(app, db) {
       migration,
     });
   }));
-  console.log("[projectMasterService] equipment_instances is the canonical project master");
+  logger.info("[projectMasterService] equipment_instances is the canonical project master");
 }
 
 module.exports = { migrateLegacyProjectTables, register };

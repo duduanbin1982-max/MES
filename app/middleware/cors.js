@@ -8,6 +8,8 @@
 
 const cors = require('cors');
 
+const logger = require("../logger").createLogger("cors");
+
 const DEFAULT_ALLOWED = [
   // 内网 IP + localhost, 配合 nginx 443 反代
   'http://192.168.1.73',
@@ -41,7 +43,7 @@ function corsMiddleware(app) {
     maxAge: 600,
   }));
   // 记录一次启动配置, 便于排查
-  console.log('[cors] allowed origins:', allowed.join(', '));
+  logger.info('[cors] allowed origins:', allowed.join(', '));
 }
 
 module.exports = corsMiddleware;

@@ -4,6 +4,8 @@
 const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 
+const logger = require("../app/logger").createLogger("laborService");
+
 function runMigration(db) {
   db.exec("CREATE TABLE IF NOT EXISTS worker_certificates (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, cert_type TEXT NOT NULL, cert_name TEXT NOT NULL, cert_number TEXT, issuing_authority TEXT, issued_date TEXT, expiry_date TEXT, cert_level TEXT, attachment_path TEXT, status TEXT NOT NULL DEFAULT 'valid', notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id))");
   db.exec("CREATE INDEX IF NOT EXISTS idx_worker_certs_user ON worker_certificates(user_id)");
@@ -146,7 +148,7 @@ function register(app, db) {
   registerAssignmentValidation(app, db);
   checkCertExpiry(db);
   registerDashboard(app, db);
-  console.log("[laborService] Labor management registered");
+  logger.info("[laborService] Labor management registered");
 }
 
 module.exports = { register, runMigration };

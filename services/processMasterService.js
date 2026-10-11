@@ -7,13 +7,15 @@ const { registerOperationRoutes } = require("./processMaster/operationRoutes");
 const { registerOverviewRoutes } = require("./processMaster/overviewRoutes");
 const { registerPositionRoutes } = require("./processMaster/positionRoutes");
 
+const logger = require("../app/logger").createLogger("processMasterService");
+
 function register(app, db) {
   runMigration(db);
   registerOverviewRoutes(app, db);
   registerPositionRoutes(app, db);
   registerOperationRoutes(app, db);
   registerDocumentRoutes(app, db);
-  console.log("[processMasterService] Process operation/position master data registered");
+  logger.info("[processMasterService] Process operation/position master data registered");
 }
 
 module.exports = {

@@ -22,10 +22,12 @@
 
 const crypto = require('crypto');
 
+const logger = require("./logger").createLogger("auth");
+
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET || SECRET.length < 32) {
   const msg = '[app/jwt] FATAL: JWT_SECRET 缺失或太短（<32字符）。请检查 .env。所有需要鉴权的 API 将返回 401，直到配置正确。';
-  console.error(msg);
+  logger.error(msg);
   try {
     const notify = require('./services/feishuNotify');
     notify.feishuNotify('❌ MES JWT 配置错误', msg);

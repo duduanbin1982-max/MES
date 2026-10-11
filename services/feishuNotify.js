@@ -10,13 +10,15 @@
 const { buildWebhookUrl, sendWebhook } = require('./webhookValidator');
 const fs = require('fs');
 
+const logger = require("../app/logger").createLogger("feishuNotify");
+
 const QUEUE_LOG = '/home/dubin/factory-mes/data/feishu_queue.log';
 
 function appendAuditLine(line) {
   try {
     fs.appendFileSync(QUEUE_LOG, line + '\n');
   } catch (error) {
-    console.warn('[feishuNotify] 审计日志写入失败:', error.message);
+    logger.warn('[feishuNotify] 审计日志写入失败:', error.message);
   }
 }
 
@@ -61,11 +63,11 @@ async function feishuNotify(title, content) {
   // 审计日志：所有调用都落盘
   const auditLine = '[' + new Date().toISOString() + '] ' +
     title + ' | to=' + (receiver || '-') + ' | content=' + content;
-  console.log('[feishuNotify]', auditLine);
+  logger.info('[feishuNotify]', auditLine);
 
   if (!enabled || !hook) {
     const msg = '[feishuNotify] 飞书未启用或 webhook 未配置；消息未发送。已写入审计日志。';
-    console.warn(msg);
+    logger.warn(msg);
     appendAuditLine('[NO_HOOK] ' + auditLine);
     return { ok: false, skipped: true, error: '飞书未启用或 webhook 未配置' };
   }
@@ -73,7 +75,7 @@ async function feishuNotify(title, content) {
   // P0-1: 统一 webhook URL 构造 (SSRF 校验在 buildWebhookUrl 内部)
   const { url, error: urlError } = buildWebhookUrl(hook, { platform: 'feishu' });
   if (urlError) {
-    console.warn('[feishuNotify] URL 构造失败:', urlError);
+    logger.warn('[feishuNotify] URL 构造失败:', urlError);
     appendAuditLine('[BAD_URL] ' + auditLine + ' | ' + urlError);
     return { ok: false, error: 'webhook URL 校验失败: ' + urlError };
   }

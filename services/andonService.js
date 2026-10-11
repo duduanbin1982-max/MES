@@ -21,6 +21,8 @@ const { queryLowStock } = require("./material/core");
 // P0-3 SSRF 防御
 const { validateWebhookUrl, validateWebhookUrlSync } = require("./webhookValidator");
 
+const logger = require("../app/logger").createLogger("andonService");
+
 function register(app, db) {
   const all = (sql, p = []) => db.prepare(sql).all(p);
   const get = (sql, p = []) => db.prepare(sql).get(p);
@@ -74,7 +76,7 @@ function register(app, db) {
     // 2. 用 buildWebhookUrl 校验 + 构造 (channel 存的是完整 URL, 标 fullUrl: true)
     const v = buildWebhookUrl(channel.webhook_url, { fullUrl: true, platform: channel.channel_type });
     if (v.error) {
-      console.warn('[andon notify] SSRF blocked:', channel.webhook_url, v.error);
+      logger.warn('[andon notify] SSRF blocked:', channel.webhook_url, v.error);
       return { ok: false, error: 'webhook_url 被 SSRF 防护拦截: ' + v.error };
     }
 
@@ -87,8 +89,8 @@ function register(app, db) {
     for (const ch of channels) {
       try {
         const result = await sendNotification(ch, { title, text: message, severity });
-        console.log("[andon notify] channel:", ch.channel_name, "ok:", result.ok);
-      } catch (e) { console.error("[andon notify] error:", ch.channel_name, e.message); }
+        logger.info("[andon notify] channel:", ch.channel_name, "ok:", result.ok);
+      } catch (e) { logger.error("[andon notify] error:", ch.channel_name, e.message); }
     }
   }
 

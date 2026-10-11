@@ -7,6 +7,8 @@ const { registerWorkstationRoutes } = require("./resourceService/workstationRout
 const { registerSummaryRoutes } = require("./resourceService/summaryRoutes");
 const { registerAllocationRoutes } = require("./resourceService/allocationRoutes");
 
+const logger = require("../app/logger").createLogger("resourceService");
+
 function register(app, db) {
   runMigration(db);
   const context = createDbContext(db);
@@ -14,7 +16,7 @@ function register(app, db) {
   registerWorkstationRoutes(app, context);
   registerSummaryRoutes(app, context);
   registerAllocationRoutes(app, context);
-  console.log("[resourceService] Resource management registered");
+  logger.info("[resourceService] Resource management registered");
 }
 
 module.exports = { register };

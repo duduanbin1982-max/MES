@@ -8,6 +8,8 @@ const path = require("path");
 const crypto = require("node:crypto");
 const express = require("express");
 
+const logger = require("../app/logger").createLogger("digitalTwinService");
+
 const MODEL_ROOT = path.resolve("/home/dubin/factory-mes/data/uploads/digital-twin");
 
 function modelFilePath(filePath) {
@@ -283,7 +285,7 @@ function register(app, db) {
   registerAssembly(app, db);
   registerOverlay(app, db);
   registerDashboard(app, db);
-  console.log("[digitalTwinService] Digital Twin registered (Models + Parts + Assembly + Overlay + Scene)");
+  logger.info("[digitalTwinService] Digital Twin registered (Models + Parts + Assembly + Overlay + Scene)");
 }
 
 module.exports = { modelFilePath, register, runMigration, validateGlb };

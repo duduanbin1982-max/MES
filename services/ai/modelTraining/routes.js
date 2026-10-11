@@ -7,6 +7,8 @@ const { runMigration } = require("./schema");
 const { modelRow } = require("./_helpers");
 const { ApiError } = require("../../../app/errors");
 
+const logger = require("../../../app/logger").createLogger("aiModelTraining");
+
 function register(app, db) {
   runMigration(db);
 
@@ -46,7 +48,7 @@ function register(app, db) {
     res.status(201).json(result);
   }));
 
-  console.log("[aiModelTraining] Model training/versioning registered");
+  logger.info("[aiModelTraining] Model training/versioning registered");
 }
 
 module.exports = { register };

@@ -12,6 +12,8 @@
 
 const { DEFAULT_ROLE_PERMISSIONS } = require("./permissions");
 
+const logger = require("./logger").createLogger("auth");
+
 // Map<role_code, permissions_array>
 const ROLE_PERMS_CACHE = new Map();
 
@@ -29,10 +31,10 @@ function loadRolePermissions(db) {
       try { perms = JSON.parse(r.permissions || "[]"); } catch (_e) { perms = []; }
       ROLE_PERMS_CACHE.set(r.role_code, perms);
     }
-    console.log(`[auth] 已加载 ${ROLE_PERMS_CACHE.size} 个角色权限`);
+    logger.info(`[auth] 已加载 ${ROLE_PERMS_CACHE.size} 个角色权限`);
     return ROLE_PERMS_CACHE.size;
   } catch (e) {
-    console.error("[auth] 加载角色权限失败:", e.message);
+    logger.error("[auth] 加载角色权限失败:", e.message);
     return null;
   }
 }

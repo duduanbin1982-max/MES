@@ -9,6 +9,8 @@ const path = require("path");
 const { registerIngestionRoutes } = require("./iot/ingestionRoutes");
 const { runMigration } = require("./iot/schema");
 
+const logger = require("../app/logger").createLogger("iotService");
+
 function validateThresholds(input) {
   const low = input.alarm_low === null || input.alarm_low === undefined || input.alarm_low === "" ? null : Number(input.alarm_low);
   const high = input.alarm_high === null || input.alarm_high === undefined || input.alarm_high === "" ? null : Number(input.alarm_high);
@@ -269,7 +271,7 @@ function register(app, db) {
   registerAlarms(app, db);
   registerDashboard(app, db);
   registerIngestionRoutes(app, db, { deviceReadiness });
-  console.log("[iotService] IoT/SCADA integration registered (Devices + Readings + Alarms + Dashboard)");
+  logger.info("[iotService] IoT/SCADA integration registered (Devices + Readings + Alarms + Dashboard)");
 
 }
 

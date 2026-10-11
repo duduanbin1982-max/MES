@@ -4,6 +4,8 @@
 const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 
+const logger = require("../app/logger").createLogger("attendanceService");
+
 function runMigration(db) {
   db.exec("CREATE TABLE IF NOT EXISTS worker_attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, attendance_date TEXT NOT NULL, clock_in TEXT, clock_out TEXT, hours_worked REAL, status TEXT NOT NULL DEFAULT 'present', workstation_id INTEGER, notes TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), FOREIGN KEY (user_id) REFERENCES users(id), UNIQUE(user_id, attendance_date))");
   db.exec("CREATE INDEX IF NOT EXISTS idx_attendance_user ON worker_attendance(user_id)");
@@ -73,7 +75,7 @@ function register(app, db) {
     res.json({ from, to, total: rows.length, user_stats: Object.values(userStats), records: rows });
   }));
 
-  console.log("[attendanceService] Attendance tracking registered");
+  logger.info("[attendanceService] Attendance tracking registered");
 }
 
 module.exports = { register, runMigration };

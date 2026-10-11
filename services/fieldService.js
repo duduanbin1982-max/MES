@@ -6,6 +6,8 @@ const { wrap } = require("../middleware/asyncHandler");
 const { ensureFieldServiceSchema } = require("./fieldServiceSchema");
 const fieldServiceCore = require("./fieldServiceCore");
 
+const logger = require("../app/logger").createLogger("fieldService");
+
 function register(app, db) {
   const all = (sql, params) => db.prepare(sql).all(params || []);
   const get = (sql, params) => db.prepare(sql).get(params || []);
@@ -158,7 +160,7 @@ function register(app, db) {
     });
   }));
 
-  console.log("[fieldService] Maintenance management registered (plans + logs + spares + breakdowns + checklists + dashboard)");
+  logger.info("[fieldService] Maintenance management registered (plans + logs + spares + breakdowns + checklists + dashboard)");
 }
 
 module.exports = { register };

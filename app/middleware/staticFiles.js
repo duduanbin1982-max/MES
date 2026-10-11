@@ -8,11 +8,13 @@
 const express = require('express');
 const { DIST, DIST_EXISTS } = require('../config/paths');
 
+const logger = require("../logger").createLogger("app");
+
 function staticFiles(app) {
   if (DIST_EXISTS) {
     app.use(express.static(DIST));
   } else {
-    console.warn('[app.js] frontend/dist 不存在; 跳过 static. SPA fallback 会降级.');
+    logger.warn('[app.js] frontend/dist 不存在; 跳过 static. SPA fallback 会降级.');
   }
 }
 

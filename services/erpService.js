@@ -6,6 +6,8 @@ const { wrap } = require("../middleware/asyncHandler");
 const fs = require("fs");
 const path = require("path");
 
+const logger = require("../app/logger").createLogger("erpService");
+
 function runMigration(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS erp_gl_accounts (
@@ -253,7 +255,7 @@ function register(app, db) {
   registerLedger(app, db);
   registerExport(app, db);
   registerCostRollup(app, db);
-  console.log("[erpService] ERP integration registered (GL + Ledger + Export + CostRollup)");
+  logger.info("[erpService] ERP integration registered (GL + Ledger + Export + CostRollup)");
 }
 
 module.exports = { register };

@@ -4,6 +4,8 @@
 
 const { wrap } = require("../middleware/asyncHandler");
 
+const logger = require("../app/logger").createLogger("setupWizardService");
+
 function tableExists(db, name) {
   return !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(name);
 }
@@ -264,7 +266,7 @@ function register(app, db) {
   app.get("/api/setup/status", wrap((req, res) => {
     res.json(buildSetupStatus(db));
   }));
-  console.log("[setupWizardService] registered");
+  logger.info("[setupWizardService] registered");
 }
 
 module.exports = { register, buildSetupStatus };

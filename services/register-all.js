@@ -7,6 +7,8 @@ const schemaManifest = require("../db/service-schema-manifest.json");
 const { withServiceSchemaVersion } = require("../db/serviceMigrations");
 const { SERVICES } = require("./registry");
 
+const logger = require("../app/logger").createLogger("register-all");
+
 function registerAll(app, db) {
   for (const entry of SERVICES) {
     const mod = require(entry.module);
@@ -27,7 +29,7 @@ function registerAll(app, db) {
         return mod.register(app, serviceDb);
       }
     );
-    console.log("[register-all]", entry.name, `schema=${migration.status}`, Object.prototype.hasOwnProperty.call(entry, "deps") ? "(with extra deps)" : "");
+    logger.info("[register-all]", entry.name, `schema=${migration.status}`, Object.prototype.hasOwnProperty.call(entry, "deps") ? "(with extra deps)" : "");
   }
 }
 
