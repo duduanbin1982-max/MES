@@ -20,6 +20,33 @@ const ALLOWED_TABLES = new Set([
   "instance_eco",
   "inventory",
   "acceptance_checklists",
+  // 2026-10-11 P0 修复: 9859cda 加这道守卫时名单不全, 导致 /api/delivery/overview
+  // 与 /api/delivery/projects/:id 在生产上直接 500。下面这些是 delivery 读模型
+  // 真实会传给 columns()/has() 的表:
+  //   work_order_operations —— projectWorkflow/projectLineage 里
+  //     ["work_order_operations","process_reports","operation_reports","process_work_reports"]
+  //     .find(tableExists) 的命中项 (另外 3 个目前不存在, 一并登记以防将来建表即崩)
+  //   materials/suppliers/users/workstations —— 子读模型的 join 与权限过滤
+  "work_order_operations",
+  "process_reports",
+  "operation_reports",
+  "process_work_reports",
+  "materials",
+  "suppliers",
+  "users",
+  "workstations",
+  // 同一类隐患: projectWorkflow/projectLineage 里的候选表数组
+  //   ["project_cost_entries","cost_rollups","cost_allocations","project_costs","cost_items"]
+  //   ["acceptance_checklists","acceptance_records","customer_acceptance","tbm_acceptance"]
+  // 目前只有第一项存在, 但候选一旦被建出来就会走 has()/columns();
+  // tests/deliveryDbContextWhitelist.test.js DBCTX.4 会把这类数组全部纳入守卫。
+  "cost_rollups",
+  "cost_allocations",
+  "project_costs",
+  "cost_items",
+  "acceptance_records",
+  "customer_acceptance",
+  "tbm_acceptance",
 ]);
 
 function createDeliveryDbContext(db) {
@@ -88,4 +115,4 @@ function createDeliveryDbContext(db) {
   return { columns, ensureColumn, has, safeAll, safeGet, safeRun, tableExists };
 }
 
-module.exports = { createDeliveryDbContext };
+module.exports = { createDeliveryDbContext, ALLOWED_TABLES };

@@ -565,3 +565,20 @@ CREATE INDEX idx_inventory_lot ON inventory(material_lot_id);
 CREATE INDEX idx_inv_lot_loc ON inventory(material_lot_id, location);
 
 CREATE INDEX idx_inv_status ON inventory(status) WHERE status != 'available';
+
+CREATE TABLE work_order_operations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_order_id INTEGER NOT NULL,
+  operator_id INTEGER,
+  action TEXT NOT NULL,                        -- start/pause/resume/complete/note
+  timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+  hours_worked REAL,
+  notes TEXT,
+  photos TEXT, quantity_completed INTEGER DEFAULT 0, defect_quantity INTEGER DEFAULT 0,                                 -- JSON 数组, 文件路径
+  FOREIGN KEY (work_order_id) REFERENCES work_orders(id) ON DELETE CASCADE,
+  FOREIGN KEY (operator_id) REFERENCES users(id)
+);
+
+CREATE INDEX idx_wo_ops_wo ON work_order_operations(work_order_id);
+
+CREATE INDEX idx_wo_ops_operator ON work_order_operations(operator_id);
