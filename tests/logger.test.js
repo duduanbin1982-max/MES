@@ -169,7 +169,11 @@ test("LOG.7 setLevel 运行时生效，且级别关闭时不做格式化", () =>
 
 test("LOG.8 后端目录不再直接使用 console.*（统一日志出口）", () => {
   const BACKEND_DIRS = ["services", "routes", "app", "db", "middleware", "utils"];
-  // 目前没有豁免；将来确有必要时应在此登记并写明原因
+  // 根目录下的生产入口（server.js 是被 systemd 拉起的那一个）
+  const PRODUCTION_FILES = ["server.js"];
+  // 目前没有豁免；将来确有必要时应在此登记并写明原因。
+  // 说明: 根目录的 migrate.js / seed-*.js / inspect-nodes.js 是一次性 CLI，
+  //       输出到操作者终端（不是服务日志），因此不在守卫范围内。
   const ALLOWED = new Set();
 
   const walk = (dir) =>
@@ -179,24 +183,31 @@ test("LOG.8 后端目录不再直接使用 console.*（统一日志出口）", (
       return entry.name.endsWith(".js") ? [full] : [];
     });
 
-  const offenders = [];
+  const candidates = [];
   for (const directory of BACKEND_DIRS) {
     const root = path.join(PROJECT_ROOT, directory);
-    if (!fs.existsSync(root)) continue;
-    for (const file of walk(root)) {
-      const relative = path.relative(PROJECT_ROOT, file).split(path.sep).join("/");
-      if (ALLOWED.has(relative)) continue;
-      const code = fs
-        .readFileSync(file, "utf8")
-        .split("\n")
-        .filter((line) => {
-          const trimmed = line.trim();
-          return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
-        })
-        .join("\n");
-      if (/console\s*\.\s*(log|error|warn|info|debug|trace)\s*\(/.test(code)) offenders.push(relative);
-    }
+    if (fs.existsSync(root)) candidates.push(...walk(root));
   }
+  for (const file of PRODUCTION_FILES) {
+    const full = path.join(PROJECT_ROOT, file);
+    if (fs.existsSync(full)) candidates.push(full);
+  }
+
+  const offenders = [];
+  for (const file of candidates) {
+    const relative = path.relative(PROJECT_ROOT, file).split(path.sep).join("/");
+    if (ALLOWED.has(relative)) continue;
+    const code = fs
+      .readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+      })
+      .join("\n");
+    if (/console\s*\.\s*(log|error|warn|info|debug|trace)\s*\(/.test(code)) offenders.push(relative);
+  }
+  assert.ok(candidates.length > 40, "守卫应覆盖整个后端目录树");
   assert.deepEqual(offenders, [], "这些文件应改用 require(...).createLogger(...)，见 app/logger.js");
 });
 

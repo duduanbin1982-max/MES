@@ -4,7 +4,8 @@
 // 端口 3890 (绑 127.0.0.1, nginx 443 反代)
 // Author: 三狗子 | Date: 2026-06-24
 
-require('dotenv').config();
+// quiet: true 关掉 dotenv 启动横幅（否则 logs/mes.log 里混进一行非 JSON）
+require('dotenv').config({ quiet: true });
 
 const http = require('http')
 const path = require('path');
@@ -15,6 +16,8 @@ const { authMiddleware } = require('./middleware/auth');
 const { apiPermissionMiddleware } = require('./middleware/apiPermissions');
 const { requirePermission } = require('./middleware/auth');  // P0-2 OWASP: db-stats 加权限
 const { onlyForemanOrAdmin, onlyWelder } = require('./routes/guards');
+// 必须放在 dotenv.config() 之后: app/logger.js 在模块加载时读取 LOG_LEVEL
+const logger = require('./app/logger').createLogger('server');
 
 const app = createApp();
 const express = require('express');
@@ -86,7 +89,7 @@ app.use(express.static(frontendDist, {
 app.get(/^(?!\/api\/|\/ws|\/uploads).*$/, (req, res) => {
   res.sendFile(path.join(frontendDist, 'index.html'));
 });
-console.log('[spa] Frontend SPA served from ' + frontendDist);
+logger.info('[spa] Frontend SPA served from ' + frontendDist);
 
 // P0-3 统一错误响应: notFoundHandler + errorHandler (必须在所有 route 之后)
 app._mountErrorHandlers();
@@ -95,8 +98,8 @@ app._mountErrorHandlers();
 const httpServer = http.createServer(app);
 attachWebSocket(httpServer);
 httpServer.listen(PORT, '127.0.0.1', () => {
-  console.log('✓ TBM-MES v2.3 listening on 127.0.0.1:' + PORT + ' (经 nginx 443 反代暴露)');
-  console.log('  Phase: phase-1 (Equipment-Centric + Process Tree + Settings)');
-  console.log('  Routes: routes/ + services/');
-  console.log('  Health: http://localhost:' + PORT + '/api/health');
+  logger.info('✓ TBM-MES v2.3 listening on 127.0.0.1:' + PORT + ' (经 nginx 443 反代暴露)');
+  logger.info('  Phase: phase-1 (Equipment-Centric + Process Tree + Settings)');
+  logger.info('  Routes: routes/ + services/');
+  logger.info('  Health: http://localhost:' + PORT + '/api/health');
 });
