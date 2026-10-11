@@ -216,6 +216,19 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Api } from '../../api'
+import {
+  applyHistoryTemplate,
+  applyTemplateScope,
+  buildCreatePayload,
+  buildTemplatePayload,
+  defaultNewInstanceForm,
+  defaultTemplateForm,
+  deriveProjectNo,
+  deriveSerialNo,
+  resetForSourceMode,
+  scopeCopyListFor,
+  validateWizardStep,
+} from '../../domain/equipmentInstanceCreate'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -251,28 +264,7 @@ const templateScopeOptions = ref<any[]>([
 const creating = ref(false)
 const wizardStep = ref(0)
 const codeYear = ref(new Date().getFullYear())
-const defaultNewInst = () => ({
-  instance_code: '',
-  project_no: '',
-  instance_name: '',
-  equipment_type_id: undefined,
-  equipment_model_id: undefined,
-  customer_name: '',
-  customer_contact: '',
-  site_location: '',
-  contract_no: '',
-  serial_no: '',
-  contract_amount: undefined,
-  template_id: undefined,
-  template_instance_id: undefined,
-  generate_milestones: true,
-  create_bom_shell: true,
-  create_doc_dirs: true,
-  copy_template_bom: false,
-  copy_template_process: false,
-  copy_template_milestones: false,
-  notes: '',
-})
+const defaultNewInst = defaultNewInstanceForm
 const newInst = reactive<any>(defaultNewInst())
 const dateRange = ref<[string, string] | null>(null)
 const templateSourceMode = ref<'template' | 'history' | 'none'>('template')
@@ -286,17 +278,8 @@ const hasTemplateCopySource = computed(() => {
 const showTemplateForm = ref(false)
 const templateSaving = ref(false)
 const templateFormSourceMode = ref<'empty' | 'instance'>('empty')
-const defaultTemplateForm = () => ({
-  template_code: '',
-  template_name: '',
-  category: 'TBM',
-  version: 'A0',
-  source_instance_id: undefined,
-  status: 'published',
-  copy_scope: ['milestones', 'bom_shell', 'doc_dirs'],
-  description: '',
-})
-const templateForm = reactive<any>(defaultTemplateForm())
+const defaultTemplateFormDefault = defaultTemplateForm
+const templateForm = reactive<any>(defaultTemplateFormDefault())
 
 const loadTemplates = async () => {
   try { templates.value = await Api.equipmentInstanceTemplates({ status: 'published' }) } catch (error: any) { ElMessage.error('加载项目模板失败: ' + (error?.message || error)) }
@@ -335,20 +318,17 @@ const refreshCode = async () => {
   try {
     const result: any = await Api.instanceCodePreview({ customer: newInst.customer_name, year: codeYear.value })
     newInst.instance_code = result.code
-    if (!newInst.project_no) newInst.project_no = `PRJ-${codeYear.value}-${result.code.split('-').pop()}`
-    if (!newInst.serial_no) newInst.serial_no = `SN-${codeYear.value}-${result.code.split('-').pop()}`
+    if (!newInst.project_no) newInst.project_no = deriveProjectNo(result.code, codeYear.value)
+    if (!newInst.serial_no) newInst.serial_no = deriveSerialNo(result.code, codeYear.value)
   } catch (error: any) {
     ElMessage.error('生成编码失败: ' + (error?.message || error))
   }
 }
 
 const nextStep = () => {
-  if (wizardStep.value === 0 && (!newInst.instance_code || !newInst.customer_name || !newInst.instance_name)) {
-    ElMessage.warning('请先填写客户、项目装备编码和项目装备名称')
-    return
-  }
-  if (wizardStep.value === 1 && !newInst.equipment_model_id) {
-    ElMessage.warning('请选择产品类型和型号')
+  const problem = validateWizardStep(wizardStep.value, newInst)
+  if (problem) {
+    ElMessage.warning(problem)
     return
   }
   wizardStep.value++
@@ -357,17 +337,10 @@ const nextStep = () => {
 const createInstance = async () => {
   creating.value = true
   try {
-    const payload: any = { ...newInst, wizard: true }
-    if (templateSourceMode.value === 'none') {
-      delete payload.template_id
-      delete payload.template_instance_id
-      payload.copy_template_bom = false
-      payload.copy_template_process = false
-      payload.copy_template_milestones = false
-    }
-    if (templateSourceMode.value === 'history') delete payload.template_id
-    if (dateRange.value) { payload.planned_start = dateRange.value[0]; payload.planned_end = dateRange.value[1] }
-    delete payload.equipment_type_id
+    const payload: any = buildCreatePayload(newInst, {
+      sourceMode: templateSourceMode.value,
+      dateRange: dateRange.value,
+    })
     const result: any = await Api.post('/equipment_instances', payload)
     ElMessage.success('创建成功，已生成默认交付骨架')
     visible.value = false
@@ -379,14 +352,7 @@ const createInstance = async () => {
 
 const handleTemplateModeChange = () => {
   if (templateSourceMode.value === 'none') {
-    newInst.template_id = undefined
-    newInst.template_instance_id = undefined
-    newInst.generate_milestones = true
-    newInst.create_bom_shell = true
-    newInst.create_doc_dirs = true
-    newInst.copy_template_bom = false
-    newInst.copy_template_process = false
-    newInst.copy_template_milestones = false
+    resetForSourceMode(newInst)
     return
   }
   if (templateSourceMode.value === 'history') {
@@ -402,38 +368,24 @@ const handleTemplateModeChange = () => {
 const applySelectedTemplate = () => {
   const tpl = selectedTemplate.value
   if (!tpl) return
-  const scope = tpl.copy_scope || {}
-  newInst.template_instance_id = tpl.source_instance_id || undefined
-  newInst.generate_milestones = scope.milestones !== false
-  newInst.create_bom_shell = !!scope.bom_shell
-  newInst.create_doc_dirs = scope.doc_dirs !== false
-  newInst.copy_template_bom = !!tpl.source_instance_id && !!scope.bom
-  newInst.copy_template_process = !!tpl.source_instance_id && !!scope.process
-  newInst.copy_template_milestones = !!tpl.source_instance_id && !!scope.milestones
+  applyTemplateScope(newInst, tpl)
 }
 
 const handleHistoryTemplateChange = () => {
-  newInst.generate_milestones = true
-  newInst.create_bom_shell = false
-  newInst.create_doc_dirs = true
-  newInst.copy_template_bom = !!newInst.template_instance_id
-  newInst.copy_template_process = !!newInst.template_instance_id
-  newInst.copy_template_milestones = !!newInst.template_instance_id
+  applyHistoryTemplate(newInst)
 }
 
 const scopeLabel = (key: string) => templateScopeOptions.value.find((option: any) => option.key === key)?.label || key
 
 const openTemplateDialog = () => {
-  Object.assign(templateForm, defaultTemplateForm())
+  Object.assign(templateForm, defaultTemplateFormDefault())
   templateFormSourceMode.value = 'empty'
   showTemplateForm.value = true
 }
 
 const handleTemplateFormSourceChange = () => {
   templateForm.source_instance_id = undefined
-  templateForm.copy_scope = templateFormSourceMode.value === 'instance'
-    ? ['milestones', 'bom', 'process', 'doc_dirs']
-    : ['milestones', 'bom_shell', 'doc_dirs']
+  templateForm.copy_scope = scopeCopyListFor(templateFormSourceMode.value)
 }
 
 const saveTemplate = async () => {
@@ -447,10 +399,7 @@ const saveTemplate = async () => {
   }
   templateSaving.value = true
   try {
-    const payload = {
-      ...templateForm,
-      source_instance_id: templateFormSourceMode.value === 'instance' ? templateForm.source_instance_id : undefined,
-    }
+    const payload = buildTemplatePayload(templateForm, templateFormSourceMode.value)
     const result: any = await Api.createEquipmentInstanceTemplate(payload)
     ElMessage.success('项目装备模板已创建')
     showTemplateForm.value = false
