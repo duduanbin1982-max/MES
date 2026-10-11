@@ -3,7 +3,7 @@
 const { onlyForemanOrAdmin, onlyWelder, foremanOrWorker } = require("../../middleware/guards");
 
 const MESA_SERVICES = [
-  { name: "andonService", module: "./andonService", schemaVersion: 1 },
+  { name: "andonService", module: "./andon", schemaVersion: 2 },
   { name: "attendanceService", module: "./attendanceService", schemaVersion: 1 },
   { name: "bomService", module: "./bomService", schemaVersion: 1 },
   {

@@ -1,98 +1,25 @@
 "use strict";
-const { wrap } = require('../middleware/asyncHandler');
-const { ApiError } = require('../app/errors');
-// services/andonService.js
-// P1 ANDON 安灯系统: 告警触发 / 确认 / 解决 / 查询 / 规则管理
-//   GET    /api/andon/alerts              活跃告警列表
-//   GET    /api/andon/alerts/:id           告警详情
-//   POST   /api/andon/alerts/:id/ack       确认告警
-//   POST   /api/andon/alerts/:id/resolve   解决告警
-//   GET    /api/andon/stats                告警统计
-//   POST   /api/andon/trigger              手动/外部触发告警
-//   GET    /api/andon/rules                规则列表
-//   POST   /api/andon/rules                新建规则
-//   PUT    /api/andon/rules/:id            更新规则
-//   POST   /api/andon/scan                 扫描所有规则 (批量检查)
-// Author: 三狗子 | Date: 2026-06-26
-// 2026-07-11 OWASP A10 P0-3: webhook URL 校验, 防 SSRF
+// services/andon/routes.js
+// HTTP 路由: 告警查询/确认/解决/统计/触发、规则管理、批量扫描、通知渠道、升级规则。
+// (原 services/andonService.js 第 26、97-341 行)
 
-const { emit, Events } = require("../app/ws/EventBus");
-const { queryLowStock } = require("./material/core");
-// P0-3 SSRF 防御
-const { validateWebhookUrl, validateWebhookUrlSync } = require("./webhookValidator");
-
-const logger = require("../app/logger").createLogger("andonService");
+const { wrap } = require("../../middleware/asyncHandler");
+const { ApiError } = require("../../app/errors");
+const { emit, Events } = require("../../app/ws/EventBus");
+const { queryLowStock } = require("../material/core");
+const { validateWebhookUrlSync } = require("../webhookValidator");
+const { makeDbHelpers } = require("./_helpers");
+const { ensureSchema } = require("./schema");
+const { createAlertEngine } = require("./alerts");
+const { createNotifier } = require("./notify");
 
 function register(app, db) {
-  const all = (sql, p = []) => db.prepare(sql).all(p);
-  const get = (sql, p = []) => db.prepare(sql).get(p);
-  const run = (sql, p = []) => db.prepare(sql).run(p);
+  const { all, get, run } = makeDbHelpers(db);
 
-  // ====== 安灯通知渠道 & 升级规则表 ======
-  run("CREATE TABLE IF NOT EXISTS andon_notify_channels (id INTEGER PRIMARY KEY, channel_type TEXT NOT NULL, channel_name TEXT, webhook_url TEXT, secret TEXT, is_active INTEGER DEFAULT 1, notify_severities TEXT DEFAULT 'critical,warning', created_at TEXT DEFAULT (datetime('now')))");
-  run("CREATE TABLE IF NOT EXISTS andon_escalation_rules (id INTEGER PRIMARY KEY, andon_type TEXT, severity TEXT, escalate_after_minutes INTEGER, escalate_to_role TEXT, notify_channel_ids TEXT, is_active INTEGER DEFAULT 1)");
-  
+  ensureSchema(db);
 
-  /**
-   * 告警去重: 同一 source_type + source_id + alert_type 在 cooldown 内不重复触发
-   */
-  function isDuplicate(alertType, sourceType, sourceId, cooldownMin) {
-    const recent = get(
-      "SELECT id FROM andon_alerts WHERE alert_type = ? AND source_type = ? AND source_id = ? AND created_at > datetime('now','-' || ? || ' minutes') LIMIT 1",
-      [alertType, sourceType, sourceId, cooldownMin || 60]
-    );
-    return !!recent;
-  }
-
-  /**
-   * 触发告警
-   */
-  function triggerAlert(alertType, sourceType, sourceId, title, message, severity, data, cooldownMin) {
-    if (isDuplicate(alertType, sourceType, sourceId || 0, cooldownMin)) return null;
-    const r = run(
-      `INSERT INTO andon_alerts (alert_type, source_type, source_id, title, message, severity, triggered_by, data_json)
-       VALUES (?, ?, ?, ?, ?, ?, 'system', ?)`,
-      [alertType, sourceType, sourceId || null, title, message || title, severity || "warning", data ? JSON.stringify(data) : null]
-    );
-    const id = Number(r.lastInsertRowid);
-    emit(Events.ANDON_TRIGGERED, { alert_id: id, alert_type: alertType, severity, title, source_type: sourceType, source_id: sourceId });
-    return id;
-  }
-
-  async function sendNotification(channel, message) {
-    // P0-1 brooks-lint: 用统一的 buildWebhookUrl + sendWebhook (R3 dup 收编)
-    const { buildWebhookUrl, sendWebhook } = require('./webhookValidator');
-
-    // 1. 构造 payload (按 channel_type 选)
-    let payload;
-    if (channel.channel_type === 'dingtalk') {
-      payload = JSON.stringify({ msgtype: 'markdown', markdown: { title: message.title, text: message.text } });
-    } else if (channel.channel_type === 'feishu') {
-      payload = JSON.stringify({ msg_type: 'interactive', card: { header: { title: { tag: 'plain_text', content: message.title } }, elements: [{ tag: 'markdown', content: message.text }] } });
-    } else {
-      return { ok: false, error: 'unsupported channel_type: ' + channel.channel_type };
-    }
-
-    // 2. 用 buildWebhookUrl 校验 + 构造 (channel 存的是完整 URL, 标 fullUrl: true)
-    const v = buildWebhookUrl(channel.webhook_url, { fullUrl: true, platform: channel.channel_type });
-    if (v.error) {
-      logger.warn('[andon notify] SSRF blocked:', channel.webhook_url, v.error);
-      return { ok: false, error: 'webhook_url 被 SSRF 防护拦截: ' + v.error };
-    }
-
-    // 3. 统一发送
-    return await sendWebhook(v.url, payload, { timeout: 5000 });
-  }
-
-  async function notifyChannels(alertType, severity, title, message) {
-    const channels = all("SELECT * FROM andon_notify_channels WHERE is_active = 1 AND ',' || notify_severities || ',' LIKE '%' || ? || '%'", severity);
-    for (const ch of channels) {
-      try {
-        const result = await sendNotification(ch, { title, text: message, severity });
-        logger.info("[andon notify] channel:", ch.channel_name, "ok:", result.ok);
-      } catch (e) { logger.error("[andon notify] error:", ch.channel_name, e.message); }
-    }
-  }
+  const { triggerAlert } = createAlertEngine({ get, run, emit, Events });
+  const { sendNotification, notifyChannels } = createNotifier({ all });
 
   // ====== 告警查询 ======
   app.get("/api/andon/alerts", wrap((req, res) => {

@@ -7,8 +7,8 @@
       "ddlStatements": 3
     },
     "andonService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "a9bae054f3e2d02dc8d6b41b472c61d4ac9d630909abf8853c7577e81a8e099b",
+      "schemaVersion": 2,
+      "ddlFingerprint": "a10889dc3ec906122f098dc31917c1a16485786e3ab86ae7e926f6a1e44a2d09",
       "ddlStatements": 2
     },
     "attendanceService": {
