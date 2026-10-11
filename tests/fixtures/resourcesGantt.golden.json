@@ -1,0 +1,1920 @@
+{
+  "unfiltered": {
+    "start_date": "2026-10-12",
+    "end_date": "2026-10-19",
+    "num_days": 7,
+    "filter": {
+      "instance_id": null,
+      "compare": false
+    },
+    "workstations": [
+      {
+        "id": 10,
+        "name": "工位A",
+        "workshop": "机加车间",
+        "capacity_per_day": 1,
+        "max_workers": 1,
+        "shift": "day",
+        "daily_capacity_hours": 8
+      },
+      {
+        "id": 11,
+        "name": "工位B",
+        "workshop": "机加车间",
+        "capacity_per_day": 2,
+        "max_workers": 2,
+        "shift": "day",
+        "daily_capacity_hours": 16
+      },
+      {
+        "id": 13,
+        "name": "工位C",
+        "workshop": "装配车间",
+        "capacity_per_day": 1,
+        "max_workers": 1,
+        "shift": "day",
+        "daily_capacity_hours": 8
+      }
+    ],
+    "summary": {
+      "total_items": 7,
+      "total_hours": 56,
+      "instance_count": 2,
+      "workstation_count": 3,
+      "conflict_count": 3
+    },
+    "heatmap": {
+      "days": [
+        "2026-10-12",
+        "2026-10-13",
+        "2026-10-14",
+        "2026-10-15",
+        "2026-10-16",
+        "2026-10-17",
+        "2026-10-18"
+      ],
+      "grid": [
+        {
+          "ws_id": 10,
+          "name": "工位A",
+          "workshop": "机加车间",
+          "daily_capacity_hours": 8,
+          "total_busy_hours": 36,
+          "avg_utilization_pct": 64,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 36,
+              "capacity_hours": 8,
+              "utilization_pct": 450,
+              "level": "overload"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        },
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "daily_capacity_hours": 16,
+          "total_busy_hours": 8,
+          "avg_utilization_pct": 7,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 4,
+              "capacity_hours": 16,
+              "utilization_pct": 25,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 4,
+              "capacity_hours": 16,
+              "utilization_pct": 25,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        },
+        {
+          "ws_id": 13,
+          "name": "工位C",
+          "workshop": "装配车间",
+          "daily_capacity_hours": 8,
+          "total_busy_hours": 6,
+          "avg_utilization_pct": 11,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 6,
+              "capacity_hours": 8,
+              "utilization_pct": 75,
+              "level": "normal"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        }
+      ]
+    },
+    "instance_breakdown": [
+      {
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "item_count": 4,
+        "total_hours": 42,
+        "workstation_count": 1,
+        "workstations": [
+          10
+        ]
+      },
+      {
+        "instance_id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "item_count": 3,
+        "total_hours": 14,
+        "workstation_count": 2,
+        "workstations": [
+          11,
+          13
+        ]
+      }
+    ],
+    "workstation_utilization": [
+      {
+        "ws_id": 10,
+        "name": "工位A",
+        "workshop": "机加车间",
+        "daily_capacity_hours": 8,
+        "total_busy_hours": 36,
+        "avg_utilization_pct": 64,
+        "peak_day": {
+          "day": "2026-10-12",
+          "busy_hours": 36,
+          "capacity_hours": 8,
+          "utilization_pct": 450,
+          "level": "overload"
+        },
+        "peak_utilization_pct": 450
+      },
+      {
+        "ws_id": 13,
+        "name": "工位C",
+        "workshop": "装配车间",
+        "daily_capacity_hours": 8,
+        "total_busy_hours": 6,
+        "avg_utilization_pct": 11,
+        "peak_day": {
+          "day": "2026-10-13",
+          "busy_hours": 6,
+          "capacity_hours": 8,
+          "utilization_pct": 75,
+          "level": "normal"
+        },
+        "peak_utilization_pct": 75
+      },
+      {
+        "ws_id": 11,
+        "name": "工位B",
+        "workshop": "机加车间",
+        "daily_capacity_hours": 16,
+        "total_busy_hours": 8,
+        "avg_utilization_pct": 7,
+        "peak_day": {
+          "day": "2026-10-13",
+          "busy_hours": 4,
+          "capacity_hours": 16,
+          "utilization_pct": 25,
+          "level": "idle"
+        },
+        "peak_utilization_pct": 25
+      }
+    ],
+    "items": [
+      {
+        "id": "wo_1",
+        "source_id": 1,
+        "type": "work_order",
+        "name": "WO-1 焊接",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 00:00:00",
+        "end": "2026-10-12 08:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-12",
+        "status": "in_progress",
+        "hours": 8,
+        "calendar_hours": 8
+      },
+      {
+        "id": "wo_2",
+        "source_id": 2,
+        "type": "work_order",
+        "name": "WO-2 装配",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 08:00:00",
+        "end": "2026-10-12 20:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-12",
+        "status": "completed",
+        "hours": 16,
+        "calendar_hours": 12
+      },
+      {
+        "id": "wo_3",
+        "source_id": 3,
+        "type": "work_order",
+        "name": "WO-3 喷涂",
+        "workstation": "工位B",
+        "ws_id": 11,
+        "instance_id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "start": "2026-10-15 00:00:00",
+        "end": "2026-10-15 04:00:00",
+        "start_date": "2026-10-15",
+        "end_date": "2026-10-15",
+        "status": "pending",
+        "hours": 4,
+        "calendar_hours": 4
+      },
+      {
+        "id": "wo_5",
+        "source_id": 5,
+        "type": "work_order",
+        "name": "WO-5 总装",
+        "workstation": "工位C",
+        "ws_id": 13,
+        "instance_id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "start": "2026-10-13 00:00:00",
+        "end": "2026-10-13 06:00:00",
+        "start_date": "2026-10-13",
+        "end_date": "2026-10-13",
+        "status": "pending",
+        "hours": 6,
+        "calendar_hours": 6
+      },
+      {
+        "id": "pn_1",
+        "source_id": 1,
+        "type": "process_node",
+        "name": "钻孔",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 00:00:00",
+        "end": "2026-10-13 00:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-13",
+        "status": "pending",
+        "hours": 12,
+        "calendar_hours": 24
+      },
+      {
+        "id": "pn_2",
+        "source_id": 2,
+        "type": "process_node",
+        "name": "打磨",
+        "workstation": "工位B",
+        "ws_id": 11,
+        "instance_id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "start": "2026-10-13 00:00:00",
+        "end": "2026-10-13 04:00:00",
+        "start_date": "2026-10-13",
+        "end_date": "2026-10-13",
+        "status": "pending",
+        "hours": 4,
+        "calendar_hours": 4
+      },
+      {
+        "id": "pn_3",
+        "source_id": 3,
+        "type": "process_node",
+        "name": "检验",
+        "workstation": "未分配",
+        "ws_id": null,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-14 09:00:00",
+        "end": "2026-10-14 15:00:00",
+        "start_date": "2026-10-14",
+        "end_date": "2026-10-14",
+        "status": "in_progress",
+        "hours": 6,
+        "calendar_hours": 6
+      }
+    ],
+    "conflicts": [
+      {
+        "type": "same_workstation",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "items": [
+          {
+            "id": "wo_1",
+            "name": "WO-1 焊接",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-12 08:00:00"
+          },
+          {
+            "id": "pn_1",
+            "name": "钻孔",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-13 00:00:00"
+          }
+        ],
+        "overlap_hours": 8
+      },
+      {
+        "type": "same_workstation",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "items": [
+          {
+            "id": "pn_1",
+            "name": "钻孔",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-13 00:00:00"
+          },
+          {
+            "id": "wo_2",
+            "name": "WO-2 装配",
+            "instance": "TBM-1",
+            "start": "2026-10-12 08:00:00",
+            "end": "2026-10-12 20:00:00"
+          }
+        ],
+        "overlap_hours": 12
+      },
+      {
+        "type": "capacity_overload",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "day": "2026-10-12",
+        "busy_hours": 36,
+        "capacity_hours": 8,
+        "utilization_pct": 450,
+        "overlap_hours": 28
+      }
+    ]
+  },
+  "filtered": {
+    "start_date": "2026-10-12",
+    "end_date": "2026-10-19",
+    "num_days": 7,
+    "filter": {
+      "instance_id": 1,
+      "compare": true
+    },
+    "workstations": [
+      {
+        "id": 10,
+        "name": "工位A",
+        "workshop": "机加车间",
+        "capacity_per_day": 1,
+        "max_workers": 1,
+        "shift": "day",
+        "daily_capacity_hours": 8
+      },
+      {
+        "id": 11,
+        "name": "工位B",
+        "workshop": "机加车间",
+        "capacity_per_day": 2,
+        "max_workers": 2,
+        "shift": "day",
+        "daily_capacity_hours": 16
+      },
+      {
+        "id": 13,
+        "name": "工位C",
+        "workshop": "装配车间",
+        "capacity_per_day": 1,
+        "max_workers": 1,
+        "shift": "day",
+        "daily_capacity_hours": 8
+      }
+    ],
+    "summary": {
+      "total_items": 4,
+      "total_hours": 42,
+      "instance_count": 1,
+      "workstation_count": 3,
+      "conflict_count": 3
+    },
+    "heatmap": {
+      "days": [
+        "2026-10-12",
+        "2026-10-13",
+        "2026-10-14",
+        "2026-10-15",
+        "2026-10-16",
+        "2026-10-17",
+        "2026-10-18"
+      ],
+      "grid": [
+        {
+          "ws_id": 10,
+          "name": "工位A",
+          "workshop": "机加车间",
+          "daily_capacity_hours": 8,
+          "total_busy_hours": 36,
+          "avg_utilization_pct": 64,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 36,
+              "capacity_hours": 8,
+              "utilization_pct": 450,
+              "level": "overload"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        },
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "daily_capacity_hours": 16,
+          "total_busy_hours": 0,
+          "avg_utilization_pct": 0,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        },
+        {
+          "ws_id": 13,
+          "name": "工位C",
+          "workshop": "装配车间",
+          "daily_capacity_hours": 8,
+          "total_busy_hours": 0,
+          "avg_utilization_pct": 0,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        }
+      ]
+    },
+    "instance_breakdown": [
+      {
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "item_count": 4,
+        "total_hours": 42,
+        "workstation_count": 1,
+        "workstations": [
+          10
+        ]
+      }
+    ],
+    "workstation_utilization": [
+      {
+        "ws_id": 10,
+        "name": "工位A",
+        "workshop": "机加车间",
+        "daily_capacity_hours": 8,
+        "total_busy_hours": 36,
+        "avg_utilization_pct": 64,
+        "peak_day": {
+          "day": "2026-10-12",
+          "busy_hours": 36,
+          "capacity_hours": 8,
+          "utilization_pct": 450,
+          "level": "overload"
+        },
+        "peak_utilization_pct": 450
+      },
+      {
+        "ws_id": 11,
+        "name": "工位B",
+        "workshop": "机加车间",
+        "daily_capacity_hours": 16,
+        "total_busy_hours": 0,
+        "avg_utilization_pct": 0,
+        "peak_day": {
+          "day": "",
+          "busy_hours": 0,
+          "utilization_pct": 0
+        },
+        "peak_utilization_pct": 0
+      },
+      {
+        "ws_id": 13,
+        "name": "工位C",
+        "workshop": "装配车间",
+        "daily_capacity_hours": 8,
+        "total_busy_hours": 0,
+        "avg_utilization_pct": 0,
+        "peak_day": {
+          "day": "",
+          "busy_hours": 0,
+          "utilization_pct": 0
+        },
+        "peak_utilization_pct": 0
+      }
+    ],
+    "items": [
+      {
+        "id": "wo_1",
+        "source_id": 1,
+        "type": "work_order",
+        "name": "WO-1 焊接",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 00:00:00",
+        "end": "2026-10-12 08:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-12",
+        "status": "in_progress",
+        "hours": 8,
+        "calendar_hours": 8
+      },
+      {
+        "id": "wo_2",
+        "source_id": 2,
+        "type": "work_order",
+        "name": "WO-2 装配",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 08:00:00",
+        "end": "2026-10-12 20:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-12",
+        "status": "completed",
+        "hours": 16,
+        "calendar_hours": 12
+      },
+      {
+        "id": "pn_1",
+        "source_id": 1,
+        "type": "process_node",
+        "name": "钻孔",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 00:00:00",
+        "end": "2026-10-13 00:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-13",
+        "status": "pending",
+        "hours": 12,
+        "calendar_hours": 24
+      },
+      {
+        "id": "pn_3",
+        "source_id": 3,
+        "type": "process_node",
+        "name": "检验",
+        "workstation": "未分配",
+        "ws_id": null,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-14 09:00:00",
+        "end": "2026-10-14 15:00:00",
+        "start_date": "2026-10-14",
+        "end_date": "2026-10-14",
+        "status": "in_progress",
+        "hours": 6,
+        "calendar_hours": 6
+      }
+    ],
+    "conflicts": [
+      {
+        "type": "same_workstation",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "items": [
+          {
+            "id": "wo_1",
+            "name": "WO-1 焊接",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-12 08:00:00"
+          },
+          {
+            "id": "pn_1",
+            "name": "钻孔",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-13 00:00:00"
+          }
+        ],
+        "overlap_hours": 8
+      },
+      {
+        "type": "same_workstation",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "items": [
+          {
+            "id": "pn_1",
+            "name": "钻孔",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-13 00:00:00"
+          },
+          {
+            "id": "wo_2",
+            "name": "WO-2 装配",
+            "instance": "TBM-1",
+            "start": "2026-10-12 08:00:00",
+            "end": "2026-10-12 20:00:00"
+          }
+        ],
+        "overlap_hours": 12
+      },
+      {
+        "type": "capacity_overload",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "day": "2026-10-12",
+        "busy_hours": 36,
+        "capacity_hours": 8,
+        "utilization_pct": 450,
+        "overlap_hours": 28
+      }
+    ]
+  },
+  "defaultDays": {
+    "start_date": "2026-10-12",
+    "end_date": "2026-11-11",
+    "num_days": 30,
+    "filter": {
+      "instance_id": null,
+      "compare": false
+    },
+    "workstations": [
+      {
+        "id": 10,
+        "name": "工位A",
+        "workshop": "机加车间",
+        "capacity_per_day": 1,
+        "max_workers": 1,
+        "shift": "day",
+        "daily_capacity_hours": 8
+      },
+      {
+        "id": 11,
+        "name": "工位B",
+        "workshop": "机加车间",
+        "capacity_per_day": 2,
+        "max_workers": 2,
+        "shift": "day",
+        "daily_capacity_hours": 16
+      },
+      {
+        "id": 13,
+        "name": "工位C",
+        "workshop": "装配车间",
+        "capacity_per_day": 1,
+        "max_workers": 1,
+        "shift": "day",
+        "daily_capacity_hours": 8
+      }
+    ],
+    "summary": {
+      "total_items": 7,
+      "total_hours": 56,
+      "instance_count": 2,
+      "workstation_count": 3,
+      "conflict_count": 3
+    },
+    "heatmap": {
+      "days": [
+        "2026-10-12",
+        "2026-10-13",
+        "2026-10-14",
+        "2026-10-15",
+        "2026-10-16",
+        "2026-10-17",
+        "2026-10-18",
+        "2026-10-19",
+        "2026-10-20",
+        "2026-10-21",
+        "2026-10-22",
+        "2026-10-23",
+        "2026-10-24",
+        "2026-10-25",
+        "2026-10-26",
+        "2026-10-27",
+        "2026-10-28",
+        "2026-10-29",
+        "2026-10-30",
+        "2026-10-31",
+        "2026-11-01",
+        "2026-11-02",
+        "2026-11-03",
+        "2026-11-04",
+        "2026-11-05",
+        "2026-11-06",
+        "2026-11-07",
+        "2026-11-08",
+        "2026-11-09",
+        "2026-11-10"
+      ],
+      "grid": [
+        {
+          "ws_id": 10,
+          "name": "工位A",
+          "workshop": "机加车间",
+          "daily_capacity_hours": 8,
+          "total_busy_hours": 36,
+          "avg_utilization_pct": 15,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 36,
+              "capacity_hours": 8,
+              "utilization_pct": 450,
+              "level": "overload"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-19",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-20",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-21",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-22",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-23",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-24",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-25",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-26",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-27",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-28",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-29",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-30",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-31",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-01",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-02",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-03",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-04",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-05",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-06",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-07",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-08",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-09",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-10",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        },
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "daily_capacity_hours": 16,
+          "total_busy_hours": 8,
+          "avg_utilization_pct": 2,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 4,
+              "capacity_hours": 16,
+              "utilization_pct": 25,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 4,
+              "capacity_hours": 16,
+              "utilization_pct": 25,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-19",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-20",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-21",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-22",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-23",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-24",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-25",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-26",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-27",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-28",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-29",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-30",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-31",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-01",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-02",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-03",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-04",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-05",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-06",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-07",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-08",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-09",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-10",
+              "busy_hours": 0,
+              "capacity_hours": 16,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        },
+        {
+          "ws_id": 13,
+          "name": "工位C",
+          "workshop": "装配车间",
+          "daily_capacity_hours": 8,
+          "total_busy_hours": 6,
+          "avg_utilization_pct": 3,
+          "cells": [
+            {
+              "day": "2026-10-12",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-13",
+              "busy_hours": 6,
+              "capacity_hours": 8,
+              "utilization_pct": 75,
+              "level": "normal"
+            },
+            {
+              "day": "2026-10-14",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-15",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-16",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-17",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-18",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-19",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-20",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-21",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-22",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-23",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-24",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-25",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-26",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-27",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-28",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-29",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-30",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-10-31",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-01",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-02",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-03",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-04",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-05",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-06",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-07",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-08",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-09",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            },
+            {
+              "day": "2026-11-10",
+              "busy_hours": 0,
+              "capacity_hours": 8,
+              "utilization_pct": 0,
+              "level": "idle"
+            }
+          ]
+        }
+      ]
+    },
+    "instance_breakdown": [
+      {
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "item_count": 4,
+        "total_hours": 42,
+        "workstation_count": 1,
+        "workstations": [
+          10
+        ]
+      },
+      {
+        "instance_id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "item_count": 3,
+        "total_hours": 14,
+        "workstation_count": 2,
+        "workstations": [
+          11,
+          13
+        ]
+      }
+    ],
+    "workstation_utilization": [
+      {
+        "ws_id": 10,
+        "name": "工位A",
+        "workshop": "机加车间",
+        "daily_capacity_hours": 8,
+        "total_busy_hours": 36,
+        "avg_utilization_pct": 15,
+        "peak_day": {
+          "day": "2026-10-12",
+          "busy_hours": 36,
+          "capacity_hours": 8,
+          "utilization_pct": 450,
+          "level": "overload"
+        },
+        "peak_utilization_pct": 450
+      },
+      {
+        "ws_id": 13,
+        "name": "工位C",
+        "workshop": "装配车间",
+        "daily_capacity_hours": 8,
+        "total_busy_hours": 6,
+        "avg_utilization_pct": 3,
+        "peak_day": {
+          "day": "2026-10-13",
+          "busy_hours": 6,
+          "capacity_hours": 8,
+          "utilization_pct": 75,
+          "level": "normal"
+        },
+        "peak_utilization_pct": 75
+      },
+      {
+        "ws_id": 11,
+        "name": "工位B",
+        "workshop": "机加车间",
+        "daily_capacity_hours": 16,
+        "total_busy_hours": 8,
+        "avg_utilization_pct": 2,
+        "peak_day": {
+          "day": "2026-10-13",
+          "busy_hours": 4,
+          "capacity_hours": 16,
+          "utilization_pct": 25,
+          "level": "idle"
+        },
+        "peak_utilization_pct": 25
+      }
+    ],
+    "items": [
+      {
+        "id": "wo_1",
+        "source_id": 1,
+        "type": "work_order",
+        "name": "WO-1 焊接",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 00:00:00",
+        "end": "2026-10-12 08:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-12",
+        "status": "in_progress",
+        "hours": 8,
+        "calendar_hours": 8
+      },
+      {
+        "id": "wo_2",
+        "source_id": 2,
+        "type": "work_order",
+        "name": "WO-2 装配",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 08:00:00",
+        "end": "2026-10-12 20:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-12",
+        "status": "completed",
+        "hours": 16,
+        "calendar_hours": 12
+      },
+      {
+        "id": "wo_3",
+        "source_id": 3,
+        "type": "work_order",
+        "name": "WO-3 喷涂",
+        "workstation": "工位B",
+        "ws_id": 11,
+        "instance_id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "start": "2026-10-15 00:00:00",
+        "end": "2026-10-15 04:00:00",
+        "start_date": "2026-10-15",
+        "end_date": "2026-10-15",
+        "status": "pending",
+        "hours": 4,
+        "calendar_hours": 4
+      },
+      {
+        "id": "wo_5",
+        "source_id": 5,
+        "type": "work_order",
+        "name": "WO-5 总装",
+        "workstation": "工位C",
+        "ws_id": 13,
+        "instance_id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "start": "2026-10-13 00:00:00",
+        "end": "2026-10-13 06:00:00",
+        "start_date": "2026-10-13",
+        "end_date": "2026-10-13",
+        "status": "pending",
+        "hours": 6,
+        "calendar_hours": 6
+      },
+      {
+        "id": "pn_1",
+        "source_id": 1,
+        "type": "process_node",
+        "name": "钻孔",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-12 00:00:00",
+        "end": "2026-10-13 00:00:00",
+        "start_date": "2026-10-12",
+        "end_date": "2026-10-13",
+        "status": "pending",
+        "hours": 12,
+        "calendar_hours": 24
+      },
+      {
+        "id": "pn_2",
+        "source_id": 2,
+        "type": "process_node",
+        "name": "打磨",
+        "workstation": "工位B",
+        "ws_id": 11,
+        "instance_id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "start": "2026-10-13 00:00:00",
+        "end": "2026-10-13 04:00:00",
+        "start_date": "2026-10-13",
+        "end_date": "2026-10-13",
+        "status": "pending",
+        "hours": 4,
+        "calendar_hours": 4
+      },
+      {
+        "id": "pn_3",
+        "source_id": 3,
+        "type": "process_node",
+        "name": "检验",
+        "workstation": "未分配",
+        "ws_id": null,
+        "instance_id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "start": "2026-10-14 09:00:00",
+        "end": "2026-10-14 15:00:00",
+        "start_date": "2026-10-14",
+        "end_date": "2026-10-14",
+        "status": "in_progress",
+        "hours": 6,
+        "calendar_hours": 6
+      }
+    ],
+    "conflicts": [
+      {
+        "type": "same_workstation",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "items": [
+          {
+            "id": "wo_1",
+            "name": "WO-1 焊接",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-12 08:00:00"
+          },
+          {
+            "id": "pn_1",
+            "name": "钻孔",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-13 00:00:00"
+          }
+        ],
+        "overlap_hours": 8
+      },
+      {
+        "type": "same_workstation",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "items": [
+          {
+            "id": "pn_1",
+            "name": "钻孔",
+            "instance": "TBM-1",
+            "start": "2026-10-12 00:00:00",
+            "end": "2026-10-13 00:00:00"
+          },
+          {
+            "id": "wo_2",
+            "name": "WO-2 装配",
+            "instance": "TBM-1",
+            "start": "2026-10-12 08:00:00",
+            "end": "2026-10-12 20:00:00"
+          }
+        ],
+        "overlap_hours": 12
+      },
+      {
+        "type": "capacity_overload",
+        "workstation": "工位A",
+        "ws_id": 10,
+        "day": "2026-10-12",
+        "busy_hours": 36,
+        "capacity_hours": 8,
+        "utilization_pct": 450,
+        "overlap_hours": 28
+      }
+    ]
+  }
+}
