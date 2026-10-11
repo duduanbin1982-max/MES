@@ -1,0 +1,4523 @@
+{
+  "instances": [
+    {
+      "id": 1,
+      "instance_code": "TBM-1",
+      "instance_name": "一号机",
+      "status": "manufacturing",
+      "lifecycle_stage": "manufacturing",
+      "progress_pct": 50,
+      "customer_name": "甲客户",
+      "planned_end": "2026-12-31",
+      "contract_amount": 100,
+      "contract_amount_unit": "wan",
+      "contract_no": "C-1",
+      "project_no": "P-1",
+      "serial_no": "SN-1"
+    },
+    {
+      "id": 2,
+      "instance_code": "TBM-2",
+      "instance_name": "二号机",
+      "status": "completed",
+      "lifecycle_stage": "delivered",
+      "progress_pct": 100,
+      "customer_name": "乙客户",
+      "planned_end": "2026-06-30",
+      "contract_amount": 500000,
+      "contract_amount_unit": "yuan",
+      "contract_no": "C-2",
+      "project_no": "P-2",
+      "serial_no": "SN-2"
+    },
+    {
+      "id": 3,
+      "instance_code": "TBM-3",
+      "instance_name": "三号机",
+      "status": "manufacturing",
+      "lifecycle_stage": "manufacturing",
+      "progress_pct": 0,
+      "customer_name": "丙客户",
+      "planned_end": "2027-03-31",
+      "contract_amount": 80,
+      "contract_amount_unit": "wan",
+      "contract_no": "C-3",
+      "project_no": "P-3",
+      "serial_no": "SN-3"
+    }
+  ],
+  "exception_count": 4,
+  "exceptions": [
+    {
+      "id": "wo_overdue_20",
+      "type": "delivery_delay",
+      "severity": "critical",
+      "title": "工单延期 WO-20",
+      "message": "TBM-1 焊接 已延期 N 天",
+      "instance_id": 1,
+      "instance_code": "TBM-1",
+      "source": "work_orders",
+      "source_path": "/work-orders",
+      "owner": null,
+      "due_at": "2026-09-30",
+      "created_at": null,
+      "action_label": "处理工单",
+      "case_status": "open",
+      "owner_id": null,
+      "owner_name": null,
+      "priority": "critical",
+      "action_count": 0
+    },
+    {
+      "id": "shortage_100",
+      "type": "kit_shortage",
+      "severity": "critical",
+      "title": "缺料 M-10",
+      "message": "TBM-1 / WO-20 缺 钢材 5，状态 open",
+      "instance_id": 1,
+      "instance_code": "TBM-1",
+      "source": "shortage_cases",
+      "source_path": "/kit-closure",
+      "owner": null,
+      "due_at": null,
+      "created_at": "2026-09-19 10:00:00",
+      "action_label": "处理缺料",
+      "case_status": "open",
+      "owner_id": null,
+      "owner_name": null,
+      "priority": "critical",
+      "action_count": 0
+    },
+    {
+      "id": "ncr_200",
+      "type": "quality_ncr",
+      "severity": "high",
+      "title": "NCR NCR-200",
+      "message": "TBM-1 钢材：裂纹（待处置）",
+      "instance_id": 1,
+      "instance_code": "TBM-1",
+      "source": "ncr_reports",
+      "source_path": "/quality",
+      "owner": null,
+      "due_at": null,
+      "created_at": "2026-09-18 10:00:00",
+      "action_label": "处理 NCR",
+      "case_status": "open",
+      "owner_id": null,
+      "owner_name": null,
+      "priority": "high",
+      "action_count": 0
+    },
+    {
+      "id": "po_overdue_40",
+      "type": "purchase_delay",
+      "severity": "high",
+      "title": "采购延期 PO-40",
+      "message": "供应商 预计到货已超期",
+      "instance_id": 1,
+      "instance_code": "TBM-1",
+      "source": "purchase_orders",
+      "source_path": "/purchase",
+      "owner": null,
+      "due_at": "2026-09-01",
+      "created_at": null,
+      "action_label": "采购跟催",
+      "case_status": "open",
+      "owner_id": null,
+      "owner_name": null,
+      "priority": "high",
+      "action_count": 0
+    }
+  ],
+  "exception_summary": {
+    "ok": {
+      "total": 4,
+      "all_total": 4,
+      "by_severity": {
+        "critical": 2,
+        "high": 2,
+        "warning": 0,
+        "info": 0
+      },
+      "by_type": {
+        "delivery_delay": 1,
+        "kit_shortage": 1,
+        "quality_ncr": 1,
+        "purchase_delay": 1
+      },
+      "by_status": {
+        "open": 4,
+        "assigned": 0,
+        "processing": 0,
+        "closed": 0
+      }
+    }
+  },
+  "projects": [
+    {
+      "ok": {
+        "id": 1,
+        "instance_code": "TBM-1",
+        "instance_name": "一号机",
+        "customer_name": "甲客户",
+        "status": "manufacturing",
+        "lifecycle_stage": "manufacturing",
+        "progress_pct": 50,
+        "risk_score": 20,
+        "risk_level": "critical",
+        "workflow_status": "blocked",
+        "workflow_blockers": [
+          {
+            "type": "bom_missing",
+            "severity": "high",
+            "title": "未建立BOM",
+            "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+            "path": "/bom?instance_id=1&from=delivery&stage=bom",
+            "owner_role": "工程/设计",
+            "stage_key": "bom",
+            "stage_label": "BOM"
+          },
+          {
+            "type": "doc_missing",
+            "severity": "high",
+            "title": "未上传图纸/工艺文件",
+            "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+            "path": "/documents?instance_id=1&from=delivery&stage=documents",
+            "owner_role": "工程/文控",
+            "stage_key": "documents",
+            "stage_label": "图纸"
+          },
+          {
+            "type": "route_no_components",
+            "severity": "high",
+            "title": "无法按部件建立工艺",
+            "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+            "path": "/bom?instance_id=1&from=delivery&stage=bom",
+            "owner_role": "工程/工艺",
+            "stage_key": "process",
+            "stage_label": "工艺"
+          },
+          {
+            "type": "po_overdue",
+            "severity": "high",
+            "title": "1项采购延期",
+            "message": "采购延期会直接影响齐套和排程",
+            "path": "/purchase?instance_id=1&from=delivery&stage=purchase",
+            "owner_role": "采购",
+            "stage_key": "purchase",
+            "stage_label": "采购"
+          },
+          {
+            "type": "purchase_followup_open",
+            "severity": "high",
+            "title": "1项采购跟催未达受控",
+            "message": "1项已逾期",
+            "path": "/purchase?tab=followup&instance_id=1",
+            "owner_role": "采购",
+            "stage_key": "purchase",
+            "stage_label": "采购"
+          },
+          {
+            "type": "kit_shortage",
+            "severity": "high",
+            "title": "1项缺料未闭环",
+            "message": "缺料需要进入采购跟催或替代料评审",
+            "path": "/kit-closure?instance_id=1&from=delivery&stage=kit",
+            "owner_role": "仓库/采购",
+            "stage_key": "kit",
+            "stage_label": "齐套"
+          },
+          {
+            "type": "wo_delay",
+            "severity": "high",
+            "title": "1个工单延期",
+            "message": "需要重新排程或升级资源冲突",
+            "path": "/work-orders?instance_id=1&from=delivery&stage=work_orders",
+            "owner_role": "生产计划",
+            "stage_key": "work_orders",
+            "stage_label": "工单"
+          },
+          {
+            "type": "report_missing",
+            "severity": "warning",
+            "title": "工单未形成报工明细",
+            "message": "车间需要按工序扫码报工，沉淀实际工时",
+            "path": "/process-hours?instance_id=1&from=delivery&stage=report",
+            "owner_role": "车间班组",
+            "stage_key": "report",
+            "stage_label": "报工"
+          },
+          {
+            "type": "qc_missing",
+            "severity": "warning",
+            "title": "未登记质检记录",
+            "message": "关键件、过程检和出厂检需要形成电子记录",
+            "path": "/quality?instance_id=1&from=delivery&stage=quality",
+            "owner_role": "质量",
+            "stage_key": "quality",
+            "stage_label": "质检"
+          },
+          {
+            "type": "ncr_open",
+            "severity": "high",
+            "title": "1个NCR未闭环",
+            "message": "NCR需完成处置、CAPA、复检和关闭",
+            "path": "/quality?instance_id=1&from=delivery&stage=quality",
+            "owner_role": "质量",
+            "stage_key": "quality",
+            "stage_label": "质检"
+          },
+          {
+            "type": "cost_variance",
+            "severity": "critical",
+            "title": "成本偏差 60%",
+            "message": "实际成本相对挣值预算偏离，需要复核材料、人工、外协和返工",
+            "path": "/cost?instance_id=1&from=delivery&stage=cost",
+            "owner_role": "财务/项目",
+            "stage_key": "cost",
+            "stage_label": "成本"
+          }
+        ],
+        "workflow_blocker_count": 11,
+        "exception_count": 4,
+        "risk_breakdown": {
+          "score": 20,
+          "risk_level": "critical",
+          "by_type": {
+            "delivery_delay": 1,
+            "kit_shortage": 1,
+            "quality_ncr": 1,
+            "purchase_delay": 1
+          },
+          "by_severity": {
+            "critical": 2,
+            "high": 2,
+            "warning": 0,
+            "info": 0
+          },
+          "exception_count": 4,
+          "shortage_count": 1,
+          "purchase_followup_count": 1,
+          "purchase_followup_blocking": 1,
+          "purchase_followup_overdue": 1,
+          "ncr_count": 1,
+          "cost_risk_level": "critical",
+          "cost_variance_pct": 60,
+          "quick_actions": [
+            {
+              "type": "kit_shortage",
+              "label": "处理缺料",
+              "path": "/kit-closure?instance_id=1&from=delivery&segment=kit",
+              "count": 1
+            },
+            {
+              "type": "purchase_followup",
+              "label": "采购跟催",
+              "path": "/purchase?tab=followup&instance_id=1",
+              "count": 1
+            },
+            {
+              "type": "quality_ncr",
+              "label": "关闭NCR",
+              "path": "/quality?instance_id=1&from=delivery&segment=quality",
+              "count": 1
+            },
+            {
+              "type": "cost_variance",
+              "label": "复核成本",
+              "path": "/cost?instance_id=1&from=delivery&segment=cost",
+              "count": 1
+            }
+          ]
+        },
+        "oee_30d": 68.8,
+        "metrics": {
+          "contract": {
+            "total": 1,
+            "done": 1
+          },
+          "bom": {
+            "total": 0,
+            "done": 0,
+            "tier0": 0,
+            "tier1": 0,
+            "tier2": 0
+          },
+          "documents": {
+            "total": 0,
+            "issued": 0,
+            "done": 0
+          },
+          "process_route": {
+            "component_count": 0,
+            "complete_count": 0,
+            "operation_count": 0,
+            "standard_man_hours": 0,
+            "blockers": [
+              {
+                "type": "route_no_components",
+                "severity": "high",
+                "title": "无法按部件建立工艺",
+                "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                "path": "/bom?instance_id=1&from=delivery&stage=bom",
+                "owner_role": "工程/工艺"
+              }
+            ]
+          },
+          "purchase": {
+            "total": 1,
+            "done": 0
+          },
+          "purchase_followup": {
+            "total": 1,
+            "overdue": 1
+          },
+          "kit": {
+            "total": 1,
+            "done": 0
+          },
+          "work_orders": {
+            "total": 1,
+            "done": 0,
+            "by_status": {
+              "in_progress": 1
+            }
+          },
+          "process_nodes": {
+            "total": 0,
+            "done": 0,
+            "by_status": {}
+          },
+          "report": {
+            "total": 0,
+            "done": 0
+          },
+          "quality": {
+            "total": 0,
+            "pass": 0,
+            "done": 0
+          },
+          "cost": {
+            "total": 3,
+            "done": 3,
+            "variance_pct": 60,
+            "actual_amount": 800000
+          },
+          "acceptance": {
+            "total": 0,
+            "done": 0
+          }
+        },
+        "stages": [
+          {
+            "key": "contract",
+            "label": "合同/项目",
+            "done": 1,
+            "total": 1,
+            "percent": 100,
+            "status": "done",
+            "path": "/instances?instance_id=1&from=delivery&stage=contract",
+            "owner_role": "项目经理",
+            "action_label": "补项目档案",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "bom",
+            "label": "BOM",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/bom?instance_id=1&from=delivery&stage=bom",
+            "owner_role": "工程/设计",
+            "action_label": "维护BOM",
+            "blockers": [
+              {
+                "type": "bom_missing",
+                "severity": "high",
+                "title": "未建立BOM",
+                "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+                "path": "/bom?instance_id=1&from=delivery&stage=bom",
+                "owner_role": "工程/设计"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "documents",
+            "label": "图纸",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/documents?instance_id=1&from=delivery&stage=documents",
+            "owner_role": "工程/文控",
+            "action_label": "签发图纸",
+            "blockers": [
+              {
+                "type": "doc_missing",
+                "severity": "high",
+                "title": "未上传图纸/工艺文件",
+                "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+                "path": "/documents?instance_id=1&from=delivery&stage=documents",
+                "owner_role": "工程/文控"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "process",
+            "label": "工艺",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/process-tree?instance_id=1&from=delivery&stage=process",
+            "owner_role": "工艺/生产",
+            "action_label": "补工艺路线",
+            "blockers": [
+              {
+                "type": "route_no_components",
+                "severity": "high",
+                "title": "无法按部件建立工艺",
+                "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                "path": "/bom?instance_id=1&from=delivery&stage=bom",
+                "owner_role": "工程/工艺"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "purchase",
+            "label": "采购",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/purchase?instance_id=1&from=delivery&stage=purchase",
+            "owner_role": "采购",
+            "action_label": "采购跟催",
+            "blockers": [
+              {
+                "type": "po_overdue",
+                "severity": "high",
+                "title": "1项采购延期",
+                "message": "采购延期会直接影响齐套和排程",
+                "path": "/purchase?instance_id=1&from=delivery&stage=purchase",
+                "owner_role": "采购"
+              },
+              {
+                "type": "purchase_followup_open",
+                "severity": "high",
+                "title": "1项采购跟催未达受控",
+                "message": "1项已逾期",
+                "path": "/purchase?tab=followup&instance_id=1",
+                "owner_role": "采购"
+              }
+            ],
+            "blocker_count": 2
+          },
+          {
+            "key": "kit",
+            "label": "齐套",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/kit-closure?instance_id=1&from=delivery&stage=kit",
+            "owner_role": "仓库/采购",
+            "action_label": "处理缺料",
+            "blockers": [
+              {
+                "type": "kit_shortage",
+                "severity": "high",
+                "title": "1项缺料未闭环",
+                "message": "缺料需要进入采购跟催或替代料评审",
+                "path": "/kit-closure?instance_id=1&from=delivery&stage=kit",
+                "owner_role": "仓库/采购"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "work_orders",
+            "label": "工单",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/work-orders?instance_id=1&from=delivery&stage=work_orders",
+            "owner_role": "生产计划",
+            "action_label": "派发工单",
+            "blockers": [
+              {
+                "type": "wo_delay",
+                "severity": "high",
+                "title": "1个工单延期",
+                "message": "需要重新排程或升级资源冲突",
+                "path": "/work-orders?instance_id=1&from=delivery&stage=work_orders",
+                "owner_role": "生产计划"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "report",
+            "label": "报工",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "warning",
+            "path": "/process-hours?instance_id=1&from=delivery&stage=report",
+            "owner_role": "车间班组",
+            "action_label": "扫码报工",
+            "blockers": [
+              {
+                "type": "report_missing",
+                "severity": "warning",
+                "title": "工单未形成报工明细",
+                "message": "车间需要按工序扫码报工，沉淀实际工时",
+                "path": "/process-hours?instance_id=1&from=delivery&stage=report",
+                "owner_role": "车间班组"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "quality",
+            "label": "质检",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/quality?instance_id=1&from=delivery&stage=quality",
+            "owner_role": "质量",
+            "action_label": "处理质检",
+            "blockers": [
+              {
+                "type": "qc_missing",
+                "severity": "warning",
+                "title": "未登记质检记录",
+                "message": "关键件、过程检和出厂检需要形成电子记录",
+                "path": "/quality?instance_id=1&from=delivery&stage=quality",
+                "owner_role": "质量"
+              },
+              {
+                "type": "ncr_open",
+                "severity": "high",
+                "title": "1个NCR未闭环",
+                "message": "NCR需完成处置、CAPA、复检和关闭",
+                "path": "/quality?instance_id=1&from=delivery&stage=quality",
+                "owner_role": "质量"
+              }
+            ],
+            "blocker_count": 2
+          },
+          {
+            "key": "cost",
+            "label": "成本",
+            "done": 3,
+            "total": 3,
+            "percent": 100,
+            "status": "blocked",
+            "path": "/cost?instance_id=1&from=delivery&stage=cost",
+            "owner_role": "财务/项目",
+            "action_label": "复核成本",
+            "blockers": [
+              {
+                "type": "cost_variance",
+                "severity": "critical",
+                "title": "成本偏差 60%",
+                "message": "实际成本相对挣值预算偏离，需要复核材料、人工、外协和返工",
+                "path": "/cost?instance_id=1&from=delivery&stage=cost",
+                "owner_role": "财务/项目"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "acceptance",
+            "label": "验收",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "pending",
+            "path": "/tbm-advanced?instance_id=1&from=delivery&stage=acceptance",
+            "owner_role": "项目/售后",
+            "action_label": "登记验收",
+            "blockers": [],
+            "blocker_count": 0
+          }
+        ],
+        "top_exceptions": [
+          {
+            "id": "wo_overdue_20",
+            "type": "delivery_delay",
+            "severity": "critical",
+            "title": "工单延期 WO-20",
+            "message": "TBM-1 焊接 已延期 N 天",
+            "instance_id": 1,
+            "instance_code": "TBM-1",
+            "source": "work_orders",
+            "source_path": "/work-orders",
+            "owner": null,
+            "due_at": "2026-09-30",
+            "created_at": null,
+            "action_label": "处理工单",
+            "case_status": "open",
+            "owner_id": null,
+            "owner_name": null,
+            "priority": "critical",
+            "action_count": 0
+          },
+          {
+            "id": "shortage_100",
+            "type": "kit_shortage",
+            "severity": "critical",
+            "title": "缺料 M-10",
+            "message": "TBM-1 / WO-20 缺 钢材 5，状态 open",
+            "instance_id": 1,
+            "instance_code": "TBM-1",
+            "source": "shortage_cases",
+            "source_path": "/kit-closure",
+            "owner": null,
+            "due_at": null,
+            "created_at": "2026-09-19 10:00:00",
+            "action_label": "处理缺料",
+            "case_status": "open",
+            "owner_id": null,
+            "owner_name": null,
+            "priority": "critical",
+            "action_count": 0
+          },
+          {
+            "id": "ncr_200",
+            "type": "quality_ncr",
+            "severity": "high",
+            "title": "NCR NCR-200",
+            "message": "TBM-1 钢材：裂纹（待处置）",
+            "instance_id": 1,
+            "instance_code": "TBM-1",
+            "source": "ncr_reports",
+            "source_path": "/quality",
+            "owner": null,
+            "due_at": null,
+            "created_at": "2026-09-18 10:00:00",
+            "action_label": "处理 NCR",
+            "case_status": "open",
+            "owner_id": null,
+            "owner_name": null,
+            "priority": "high",
+            "action_count": 0
+          },
+          {
+            "id": "po_overdue_40",
+            "type": "purchase_delay",
+            "severity": "high",
+            "title": "采购延期 PO-40",
+            "message": "供应商 预计到货已超期",
+            "instance_id": 1,
+            "instance_code": "TBM-1",
+            "source": "purchase_orders",
+            "source_path": "/purchase",
+            "owner": null,
+            "due_at": "2026-09-01",
+            "created_at": null,
+            "action_label": "采购跟催",
+            "case_status": "open",
+            "owner_id": null,
+            "owner_name": null,
+            "priority": "high",
+            "action_count": 0
+          }
+        ]
+      }
+    },
+    {
+      "ok": {
+        "id": 2,
+        "instance_code": "TBM-2",
+        "instance_name": "二号机",
+        "customer_name": "乙客户",
+        "status": "completed",
+        "lifecycle_stage": "delivered",
+        "progress_pct": 100,
+        "risk_score": 0,
+        "risk_level": "normal",
+        "workflow_status": "blocked",
+        "workflow_blockers": [
+          {
+            "type": "bom_missing",
+            "severity": "high",
+            "title": "未建立BOM",
+            "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+            "path": "/bom?instance_id=2&from=delivery&stage=bom",
+            "owner_role": "工程/设计",
+            "stage_key": "bom",
+            "stage_label": "BOM"
+          },
+          {
+            "type": "doc_missing",
+            "severity": "high",
+            "title": "未上传图纸/工艺文件",
+            "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+            "path": "/documents?instance_id=2&from=delivery&stage=documents",
+            "owner_role": "工程/文控",
+            "stage_key": "documents",
+            "stage_label": "图纸"
+          },
+          {
+            "type": "route_no_components",
+            "severity": "high",
+            "title": "无法按部件建立工艺",
+            "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+            "path": "/bom?instance_id=2&from=delivery&stage=bom",
+            "owner_role": "工程/工艺",
+            "stage_key": "process",
+            "stage_label": "工艺"
+          },
+          {
+            "type": "wo_missing",
+            "severity": "warning",
+            "title": "未生成工单",
+            "message": "BOM和工艺确认后应生成工单并派发到工位/人员",
+            "path": "/work-orders?instance_id=2&from=delivery&stage=work_orders",
+            "owner_role": "生产计划",
+            "stage_key": "work_orders",
+            "stage_label": "工单"
+          },
+          {
+            "type": "acceptance_missing",
+            "severity": "warning",
+            "title": "未建立客户验收记录",
+            "message": "总装/调试后应形成客户验收、整改和交付记录",
+            "path": "/tbm-advanced?instance_id=2&from=delivery&stage=acceptance",
+            "owner_role": "项目/售后",
+            "stage_key": "acceptance",
+            "stage_label": "验收"
+          }
+        ],
+        "workflow_blocker_count": 5,
+        "exception_count": 0,
+        "risk_breakdown": {
+          "score": 0,
+          "risk_level": "normal",
+          "by_type": {},
+          "by_severity": {
+            "critical": 0,
+            "high": 0,
+            "warning": 0,
+            "info": 0
+          },
+          "exception_count": 0,
+          "shortage_count": 0,
+          "purchase_followup_count": 0,
+          "purchase_followup_blocking": 0,
+          "purchase_followup_overdue": 0,
+          "ncr_count": 0,
+          "cost_risk_level": "normal",
+          "cost_variance_pct": -99.4,
+          "quick_actions": []
+        },
+        "oee_30d": 33.3,
+        "metrics": {
+          "contract": {
+            "total": 1,
+            "done": 1
+          },
+          "bom": {
+            "total": 0,
+            "done": 0,
+            "tier0": 0,
+            "tier1": 0,
+            "tier2": 0
+          },
+          "documents": {
+            "total": 0,
+            "issued": 0,
+            "done": 0
+          },
+          "process_route": {
+            "component_count": 0,
+            "complete_count": 0,
+            "operation_count": 0,
+            "standard_man_hours": 0,
+            "blockers": [
+              {
+                "type": "route_no_components",
+                "severity": "high",
+                "title": "无法按部件建立工艺",
+                "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                "path": "/bom?instance_id=2&from=delivery&stage=bom",
+                "owner_role": "工程/工艺"
+              }
+            ]
+          },
+          "purchase": {
+            "total": 0,
+            "done": 0
+          },
+          "purchase_followup": {
+            "total": 0,
+            "overdue": 0
+          },
+          "kit": {
+            "total": 1,
+            "done": 1
+          },
+          "work_orders": {
+            "total": 0,
+            "done": 0,
+            "by_status": {}
+          },
+          "process_nodes": {
+            "total": 0,
+            "done": 0,
+            "by_status": {}
+          },
+          "report": {
+            "total": 0,
+            "done": 0
+          },
+          "quality": {
+            "total": 0,
+            "pass": 0,
+            "done": 0
+          },
+          "cost": {
+            "total": 0,
+            "done": 0,
+            "variance_pct": -99.4,
+            "actual_amount": 3000
+          },
+          "acceptance": {
+            "total": 0,
+            "done": 0
+          }
+        },
+        "stages": [
+          {
+            "key": "contract",
+            "label": "合同/项目",
+            "done": 1,
+            "total": 1,
+            "percent": 100,
+            "status": "done",
+            "path": "/instances?instance_id=2&from=delivery&stage=contract",
+            "owner_role": "项目经理",
+            "action_label": "补项目档案",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "bom",
+            "label": "BOM",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/bom?instance_id=2&from=delivery&stage=bom",
+            "owner_role": "工程/设计",
+            "action_label": "维护BOM",
+            "blockers": [
+              {
+                "type": "bom_missing",
+                "severity": "high",
+                "title": "未建立BOM",
+                "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+                "path": "/bom?instance_id=2&from=delivery&stage=bom",
+                "owner_role": "工程/设计"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "documents",
+            "label": "图纸",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/documents?instance_id=2&from=delivery&stage=documents",
+            "owner_role": "工程/文控",
+            "action_label": "签发图纸",
+            "blockers": [
+              {
+                "type": "doc_missing",
+                "severity": "high",
+                "title": "未上传图纸/工艺文件",
+                "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+                "path": "/documents?instance_id=2&from=delivery&stage=documents",
+                "owner_role": "工程/文控"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "process",
+            "label": "工艺",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/process-tree?instance_id=2&from=delivery&stage=process",
+            "owner_role": "工艺/生产",
+            "action_label": "补工艺路线",
+            "blockers": [
+              {
+                "type": "route_no_components",
+                "severity": "high",
+                "title": "无法按部件建立工艺",
+                "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                "path": "/bom?instance_id=2&from=delivery&stage=bom",
+                "owner_role": "工程/工艺"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "purchase",
+            "label": "采购",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "pending",
+            "path": "/purchase?instance_id=2&from=delivery&stage=purchase",
+            "owner_role": "采购",
+            "action_label": "采购跟催",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "kit",
+            "label": "齐套",
+            "done": 1,
+            "total": 1,
+            "percent": 100,
+            "status": "done",
+            "path": "/kit-closure?instance_id=2&from=delivery&stage=kit",
+            "owner_role": "仓库/采购",
+            "action_label": "处理缺料",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "work_orders",
+            "label": "工单",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "warning",
+            "path": "/work-orders?instance_id=2&from=delivery&stage=work_orders",
+            "owner_role": "生产计划",
+            "action_label": "派发工单",
+            "blockers": [
+              {
+                "type": "wo_missing",
+                "severity": "warning",
+                "title": "未生成工单",
+                "message": "BOM和工艺确认后应生成工单并派发到工位/人员",
+                "path": "/work-orders?instance_id=2&from=delivery&stage=work_orders",
+                "owner_role": "生产计划"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "report",
+            "label": "报工",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "pending",
+            "path": "/process-hours?instance_id=2&from=delivery&stage=report",
+            "owner_role": "车间班组",
+            "action_label": "扫码报工",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "quality",
+            "label": "质检",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "pending",
+            "path": "/quality?instance_id=2&from=delivery&stage=quality",
+            "owner_role": "质量",
+            "action_label": "处理质检",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "cost",
+            "label": "成本",
+            "done": 1,
+            "total": 1,
+            "percent": 100,
+            "status": "done",
+            "path": "/cost?instance_id=2&from=delivery&stage=cost",
+            "owner_role": "财务/项目",
+            "action_label": "复核成本",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "acceptance",
+            "label": "验收",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "warning",
+            "path": "/tbm-advanced?instance_id=2&from=delivery&stage=acceptance",
+            "owner_role": "项目/售后",
+            "action_label": "登记验收",
+            "blockers": [
+              {
+                "type": "acceptance_missing",
+                "severity": "warning",
+                "title": "未建立客户验收记录",
+                "message": "总装/调试后应形成客户验收、整改和交付记录",
+                "path": "/tbm-advanced?instance_id=2&from=delivery&stage=acceptance",
+                "owner_role": "项目/售后"
+              }
+            ],
+            "blocker_count": 1
+          }
+        ],
+        "top_exceptions": []
+      }
+    },
+    {
+      "ok": {
+        "id": 3,
+        "instance_code": "TBM-3",
+        "instance_name": "三号机",
+        "customer_name": "丙客户",
+        "status": "manufacturing",
+        "lifecycle_stage": "manufacturing",
+        "progress_pct": 0,
+        "risk_score": 0,
+        "risk_level": "normal",
+        "workflow_status": "blocked",
+        "workflow_blockers": [
+          {
+            "type": "bom_missing",
+            "severity": "high",
+            "title": "未建立BOM",
+            "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+            "path": "/bom?instance_id=3&from=delivery&stage=bom",
+            "owner_role": "工程/设计",
+            "stage_key": "bom",
+            "stage_label": "BOM"
+          },
+          {
+            "type": "doc_missing",
+            "severity": "high",
+            "title": "未上传图纸/工艺文件",
+            "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+            "path": "/documents?instance_id=3&from=delivery&stage=documents",
+            "owner_role": "工程/文控",
+            "stage_key": "documents",
+            "stage_label": "图纸"
+          },
+          {
+            "type": "route_no_components",
+            "severity": "high",
+            "title": "无法按部件建立工艺",
+            "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+            "path": "/bom?instance_id=3&from=delivery&stage=bom",
+            "owner_role": "工程/工艺",
+            "stage_key": "process",
+            "stage_label": "工艺"
+          },
+          {
+            "type": "wo_missing",
+            "severity": "warning",
+            "title": "未生成工单",
+            "message": "BOM和工艺确认后应生成工单并派发到工位/人员",
+            "path": "/work-orders?instance_id=3&from=delivery&stage=work_orders",
+            "owner_role": "生产计划",
+            "stage_key": "work_orders",
+            "stage_label": "工单"
+          }
+        ],
+        "workflow_blocker_count": 4,
+        "exception_count": 0,
+        "risk_breakdown": {
+          "score": 0,
+          "risk_level": "normal",
+          "by_type": {},
+          "by_severity": {
+            "critical": 0,
+            "high": 0,
+            "warning": 0,
+            "info": 0
+          },
+          "exception_count": 0,
+          "shortage_count": 0,
+          "purchase_followup_count": 0,
+          "purchase_followup_blocking": 0,
+          "purchase_followup_overdue": 0,
+          "ncr_count": 0,
+          "cost_risk_level": "normal",
+          "cost_variance_pct": 0.6,
+          "quick_actions": []
+        },
+        "oee_30d": null,
+        "metrics": {
+          "contract": {
+            "total": 1,
+            "done": 1
+          },
+          "bom": {
+            "total": 0,
+            "done": 0,
+            "tier0": 0,
+            "tier1": 0,
+            "tier2": 0
+          },
+          "documents": {
+            "total": 0,
+            "issued": 0,
+            "done": 0
+          },
+          "process_route": {
+            "component_count": 0,
+            "complete_count": 0,
+            "operation_count": 0,
+            "standard_man_hours": 0,
+            "blockers": [
+              {
+                "type": "route_no_components",
+                "severity": "high",
+                "title": "无法按部件建立工艺",
+                "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                "path": "/bom?instance_id=3&from=delivery&stage=bom",
+                "owner_role": "工程/工艺"
+              }
+            ]
+          },
+          "purchase": {
+            "total": 0,
+            "done": 0
+          },
+          "purchase_followup": {
+            "total": 0,
+            "overdue": 0
+          },
+          "kit": {
+            "total": 1,
+            "done": 1
+          },
+          "work_orders": {
+            "total": 0,
+            "done": 0,
+            "by_status": {}
+          },
+          "process_nodes": {
+            "total": 0,
+            "done": 0,
+            "by_status": {}
+          },
+          "report": {
+            "total": 0,
+            "done": 0
+          },
+          "quality": {
+            "total": 0,
+            "pass": 0,
+            "done": 0
+          },
+          "cost": {
+            "total": 0,
+            "done": 0,
+            "variance_pct": 0.6,
+            "actual_amount": 5000
+          },
+          "acceptance": {
+            "total": 0,
+            "done": 0
+          }
+        },
+        "stages": [
+          {
+            "key": "contract",
+            "label": "合同/项目",
+            "done": 1,
+            "total": 1,
+            "percent": 100,
+            "status": "done",
+            "path": "/instances?instance_id=3&from=delivery&stage=contract",
+            "owner_role": "项目经理",
+            "action_label": "补项目档案",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "bom",
+            "label": "BOM",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/bom?instance_id=3&from=delivery&stage=bom",
+            "owner_role": "工程/设计",
+            "action_label": "维护BOM",
+            "blockers": [
+              {
+                "type": "bom_missing",
+                "severity": "high",
+                "title": "未建立BOM",
+                "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+                "path": "/bom?instance_id=3&from=delivery&stage=bom",
+                "owner_role": "工程/设计"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "documents",
+            "label": "图纸",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/documents?instance_id=3&from=delivery&stage=documents",
+            "owner_role": "工程/文控",
+            "action_label": "签发图纸",
+            "blockers": [
+              {
+                "type": "doc_missing",
+                "severity": "high",
+                "title": "未上传图纸/工艺文件",
+                "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+                "path": "/documents?instance_id=3&from=delivery&stage=documents",
+                "owner_role": "工程/文控"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "process",
+            "label": "工艺",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/process-tree?instance_id=3&from=delivery&stage=process",
+            "owner_role": "工艺/生产",
+            "action_label": "补工艺路线",
+            "blockers": [
+              {
+                "type": "route_no_components",
+                "severity": "high",
+                "title": "无法按部件建立工艺",
+                "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                "path": "/bom?instance_id=3&from=delivery&stage=bom",
+                "owner_role": "工程/工艺"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "purchase",
+            "label": "采购",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "pending",
+            "path": "/purchase?instance_id=3&from=delivery&stage=purchase",
+            "owner_role": "采购",
+            "action_label": "采购跟催",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "kit",
+            "label": "齐套",
+            "done": 1,
+            "total": 1,
+            "percent": 100,
+            "status": "done",
+            "path": "/kit-closure?instance_id=3&from=delivery&stage=kit",
+            "owner_role": "仓库/采购",
+            "action_label": "处理缺料",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "work_orders",
+            "label": "工单",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "warning",
+            "path": "/work-orders?instance_id=3&from=delivery&stage=work_orders",
+            "owner_role": "生产计划",
+            "action_label": "派发工单",
+            "blockers": [
+              {
+                "type": "wo_missing",
+                "severity": "warning",
+                "title": "未生成工单",
+                "message": "BOM和工艺确认后应生成工单并派发到工位/人员",
+                "path": "/work-orders?instance_id=3&from=delivery&stage=work_orders",
+                "owner_role": "生产计划"
+              }
+            ],
+            "blocker_count": 1
+          },
+          {
+            "key": "report",
+            "label": "报工",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "pending",
+            "path": "/process-hours?instance_id=3&from=delivery&stage=report",
+            "owner_role": "车间班组",
+            "action_label": "扫码报工",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "quality",
+            "label": "质检",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "pending",
+            "path": "/quality?instance_id=3&from=delivery&stage=quality",
+            "owner_role": "质量",
+            "action_label": "处理质检",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "cost",
+            "label": "成本",
+            "done": 1,
+            "total": 1,
+            "percent": 100,
+            "status": "done",
+            "path": "/cost?instance_id=3&from=delivery&stage=cost",
+            "owner_role": "财务/项目",
+            "action_label": "复核成本",
+            "blockers": [],
+            "blocker_count": 0
+          },
+          {
+            "key": "acceptance",
+            "label": "验收",
+            "done": 0,
+            "total": 1,
+            "percent": 0,
+            "status": "pending",
+            "path": "/tbm-advanced?instance_id=3&from=delivery&stage=acceptance",
+            "owner_role": "项目/售后",
+            "action_label": "登记验收",
+            "blockers": [],
+            "blocker_count": 0
+          }
+        ],
+        "top_exceptions": []
+      }
+    }
+  ],
+  "drilldowns": [
+    {
+      "ok": {
+        "project": {
+          "id": 1,
+          "instance_code": "TBM-1",
+          "instance_name": "一号机",
+          "customer_name": "甲客户",
+          "planned_end": "2026-12-31",
+          "progress_pct": 50
+        },
+        "summary": {
+          "score": 20,
+          "risk_level": "critical",
+          "by_type": {
+            "delivery_delay": 1,
+            "kit_shortage": 1,
+            "quality_ncr": 1,
+            "purchase_delay": 1
+          },
+          "by_severity": {
+            "critical": 2,
+            "high": 2,
+            "warning": 0,
+            "info": 0
+          },
+          "exception_count": 4,
+          "shortage_count": 1,
+          "purchase_followup_count": 1,
+          "purchase_followup_blocking": 1,
+          "purchase_followup_overdue": 1,
+          "ncr_count": 1,
+          "cost_risk_level": "critical",
+          "cost_variance_pct": 60,
+          "quick_actions": [
+            {
+              "type": "kit_shortage",
+              "label": "处理缺料",
+              "path": "/kit-closure?instance_id=1&from=delivery&segment=kit",
+              "count": 1
+            },
+            {
+              "type": "purchase_followup",
+              "label": "采购跟催",
+              "path": "/purchase?tab=followup&instance_id=1",
+              "count": 1
+            },
+            {
+              "type": "quality_ncr",
+              "label": "关闭NCR",
+              "path": "/quality?instance_id=1&from=delivery&segment=quality",
+              "count": 1
+            },
+            {
+              "type": "cost_variance",
+              "label": "复核成本",
+              "path": "/cost?instance_id=1&from=delivery&segment=cost",
+              "count": 1
+            }
+          ]
+        },
+        "milestones": [
+          {
+            "key": "exceptions",
+            "label": "异常待办",
+            "value": 4,
+            "level": "critical"
+          },
+          {
+            "key": "shortage",
+            "label": "缺料项",
+            "value": 1,
+            "level": "critical"
+          },
+          {
+            "key": "ncr",
+            "label": "未闭环NCR",
+            "value": 1,
+            "level": "high"
+          },
+          {
+            "key": "cost",
+            "label": "成本偏差",
+            "value": 60,
+            "suffix": "%",
+            "level": "critical"
+          }
+        ],
+        "exceptions": [
+          {
+            "id": "wo_overdue_20",
+            "type": "delivery_delay",
+            "severity": "critical",
+            "title": "工单延期 WO-20",
+            "message": "TBM-1 焊接 已延期 N 天",
+            "instance_id": 1,
+            "instance_code": "TBM-1",
+            "source": "work_orders",
+            "source_path": "/work-orders",
+            "owner": null,
+            "due_at": "2026-09-30",
+            "created_at": null,
+            "action_label": "处理工单",
+            "case_status": "open",
+            "owner_id": null,
+            "owner_name": null,
+            "priority": "critical",
+            "action_count": 0
+          },
+          {
+            "id": "shortage_100",
+            "type": "kit_shortage",
+            "severity": "critical",
+            "title": "缺料 M-10",
+            "message": "TBM-1 / WO-20 缺 钢材 5，状态 open",
+            "instance_id": 1,
+            "instance_code": "TBM-1",
+            "source": "shortage_cases",
+            "source_path": "/kit-closure",
+            "owner": null,
+            "due_at": null,
+            "created_at": "2026-09-19 10:00:00",
+            "action_label": "处理缺料",
+            "case_status": "open",
+            "owner_id": null,
+            "owner_name": null,
+            "priority": "critical",
+            "action_count": 0
+          },
+          {
+            "id": "ncr_200",
+            "type": "quality_ncr",
+            "severity": "high",
+            "title": "NCR NCR-200",
+            "message": "TBM-1 钢材：裂纹（待处置）",
+            "instance_id": 1,
+            "instance_code": "TBM-1",
+            "source": "ncr_reports",
+            "source_path": "/quality",
+            "owner": null,
+            "due_at": null,
+            "created_at": "2026-09-18 10:00:00",
+            "action_label": "处理 NCR",
+            "case_status": "open",
+            "owner_id": null,
+            "owner_name": null,
+            "priority": "high",
+            "action_count": 0
+          },
+          {
+            "id": "po_overdue_40",
+            "type": "purchase_delay",
+            "severity": "high",
+            "title": "采购延期 PO-40",
+            "message": "供应商 预计到货已超期",
+            "instance_id": 1,
+            "instance_code": "TBM-1",
+            "source": "purchase_orders",
+            "source_path": "/purchase",
+            "owner": null,
+            "due_at": "2026-09-01",
+            "created_at": null,
+            "action_label": "采购跟催",
+            "case_status": "open",
+            "owner_id": null,
+            "owner_name": null,
+            "priority": "high",
+            "action_count": 0
+          }
+        ],
+        "shortages": [
+          {
+            "id": 100,
+            "work_order_id": 20,
+            "equipment_instance_id": 1,
+            "material_id": 10,
+            "shortage_qty": 5,
+            "required_qty": null,
+            "available_qty": null,
+            "unit": null,
+            "status": "open",
+            "owner_id": 30,
+            "owner_name": null,
+            "expected_date": null,
+            "purchase_request_no": null,
+            "priority": "critical",
+            "last_note": null,
+            "closed_at": null,
+            "created_at": "2026-09-19 10:00:00",
+            "updated_at": "2026-09-20 10:00:00",
+            "material_code": "M-10",
+            "material_name": "钢材",
+            "wo_code": "WO-20",
+            "work_order_title": "焊接",
+            "owner_full_name": "张三"
+          }
+        ],
+        "purchase_followups": [
+          {
+            "id": 500,
+            "source_type": "purchase_order",
+            "source_ref_id": 40,
+            "po_no": null,
+            "purchase_request_no": null,
+            "planned_delivery": "2026-09-01",
+            "actual_delivery": null,
+            "delay_days": 10,
+            "tracking_status": "following",
+            "urgent_tags": null,
+            "owner_name": "李四",
+            "remarks": null,
+            "risk_level": null,
+            "item_name": "钢材",
+            "linked_shortage_count": 0,
+            "linked_work_order_count": 0,
+            "source_path": "/purchase?tab=followup&instance_id=1",
+            "has_owner": true,
+            "has_eta": true,
+            "is_overdue": true,
+            "blocking_reason": "已逾期",
+            "is_blocking": true,
+            "is_controlled": false
+          }
+        ],
+        "ncrs": [
+          {
+            "id": 200,
+            "ncr_code": "NCR-200",
+            "source_type": null,
+            "source_id": null,
+            "equipment_instance_id": 1,
+            "part_name": "钢材",
+            "defect_desc": "裂纹",
+            "defect_qty": 1,
+            "severity": "major",
+            "disposition": "pending",
+            "disposition_by": null,
+            "disposition_at": null,
+            "root_cause": null,
+            "created_by": 30,
+            "created_at": "2026-09-18 10:00:00",
+            "closed_at": null,
+            "created_by_name": "张三",
+            "open_capa_count": 1,
+            "pass_recheck_count": 1
+          }
+        ],
+        "cost": {
+          "budget_amount": 1000000,
+          "progress_pct": 50,
+          "earned_budget": 500000,
+          "actual_amount": 800000,
+          "variance_amount": 300000,
+          "variance_pct": 60,
+          "risk_level": "critical",
+          "source": "project_cost_entries",
+          "by_account": [
+            {
+              "gl_account_code": "material",
+              "source_type": "purchase_order_item",
+              "amount": 600000,
+              "entry_count": 1
+            },
+            {
+              "gl_account_code": "labor",
+              "source_type": "work_order",
+              "amount": 200000,
+              "entry_count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ok": {
+        "project": {
+          "id": 2,
+          "instance_code": "TBM-2",
+          "instance_name": "二号机",
+          "customer_name": "乙客户",
+          "planned_end": "2026-06-30",
+          "progress_pct": 100
+        },
+        "summary": {
+          "score": 0,
+          "risk_level": "normal",
+          "by_type": {},
+          "by_severity": {
+            "critical": 0,
+            "high": 0,
+            "warning": 0,
+            "info": 0
+          },
+          "exception_count": 0,
+          "shortage_count": 0,
+          "purchase_followup_count": 0,
+          "purchase_followup_blocking": 0,
+          "purchase_followup_overdue": 0,
+          "ncr_count": 0,
+          "cost_risk_level": "normal",
+          "cost_variance_pct": -99.4,
+          "quick_actions": []
+        },
+        "milestones": [
+          {
+            "key": "exceptions",
+            "label": "异常待办",
+            "value": 0,
+            "level": "normal"
+          },
+          {
+            "key": "shortage",
+            "label": "缺料项",
+            "value": 0,
+            "level": "normal"
+          },
+          {
+            "key": "ncr",
+            "label": "未闭环NCR",
+            "value": 0,
+            "level": "normal"
+          },
+          {
+            "key": "cost",
+            "label": "成本偏差",
+            "value": -99.4,
+            "suffix": "%",
+            "level": "normal"
+          }
+        ],
+        "exceptions": [],
+        "shortages": [],
+        "purchase_followups": [],
+        "ncrs": [],
+        "cost": {
+          "budget_amount": 500000,
+          "progress_pct": 100,
+          "earned_budget": 500000,
+          "actual_amount": 3000,
+          "variance_amount": -497000,
+          "variance_pct": -99.4,
+          "risk_level": "normal",
+          "source": "erp_cost_ledger",
+          "by_account": [
+            {
+              "gl_account_code": "5001",
+              "source_type": "manual",
+              "amount": 3000,
+              "entry_count": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ok": {
+        "project": {
+          "id": 3,
+          "instance_code": "TBM-3",
+          "instance_name": "三号机",
+          "customer_name": "丙客户",
+          "planned_end": "2027-03-31",
+          "progress_pct": 0
+        },
+        "summary": {
+          "score": 0,
+          "risk_level": "normal",
+          "by_type": {},
+          "by_severity": {
+            "critical": 0,
+            "high": 0,
+            "warning": 0,
+            "info": 0
+          },
+          "exception_count": 0,
+          "shortage_count": 0,
+          "purchase_followup_count": 0,
+          "purchase_followup_blocking": 0,
+          "purchase_followup_overdue": 0,
+          "ncr_count": 0,
+          "cost_risk_level": "normal",
+          "cost_variance_pct": 0.6,
+          "quick_actions": []
+        },
+        "milestones": [
+          {
+            "key": "exceptions",
+            "label": "异常待办",
+            "value": 0,
+            "level": "normal"
+          },
+          {
+            "key": "shortage",
+            "label": "缺料项",
+            "value": 0,
+            "level": "normal"
+          },
+          {
+            "key": "ncr",
+            "label": "未闭环NCR",
+            "value": 0,
+            "level": "normal"
+          },
+          {
+            "key": "cost",
+            "label": "成本偏差",
+            "value": 0.6,
+            "suffix": "%",
+            "level": "normal"
+          }
+        ],
+        "exceptions": [],
+        "shortages": [],
+        "purchase_followups": [],
+        "ncrs": [],
+        "cost": {
+          "budget_amount": 800000,
+          "progress_pct": 0,
+          "earned_budget": 0,
+          "actual_amount": 5000,
+          "variance_amount": 5000,
+          "variance_pct": 0.6,
+          "risk_level": "normal",
+          "source": "erp_cost_ledger",
+          "by_account": [
+            {
+              "gl_account_code": "5002",
+              "source_type": "manual",
+              "amount": 5000,
+              "entry_count": 1
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "lineages": [
+    {
+      "ok": {
+        "project": {
+          "id": 1,
+          "instance_code": "TBM-1",
+          "instance_name": "一号机",
+          "customer_name": "甲客户",
+          "contract_no": "C-1",
+          "project_no": "P-1",
+          "serial_no": "SN-1",
+          "progress_pct": 50
+        },
+        "score": 17,
+        "level": "critical",
+        "summary": {
+          "gap_count": 13,
+          "severe_gap_count": 4,
+          "by_severity": {
+            "critical": 1,
+            "high": 3,
+            "warning": 7,
+            "info": 2
+          }
+        },
+        "link_keys": [
+          "project_id/equipment_instance_id",
+          "bom_node_id",
+          "work_order_id",
+          "material_id",
+          "lot_id/serial_no"
+        ],
+        "segments": [
+          {
+            "key": "contract",
+            "label": "合同/项目",
+            "total": 5,
+            "linked": 5,
+            "percent": 100,
+            "status": "ok",
+            "path": "/instances",
+            "action_path": "/instances?instance_id=1&from=delivery-lineage&segment=contract",
+            "fix_entry": {
+              "module": "装备实例",
+              "label": "完善项目档案",
+              "path": "/instances?instance_id=1&from=delivery-lineage&segment=contract",
+              "owner_role": "项目经理",
+              "checklist": [
+                "补齐项目编码/合同号/序列号",
+                "确认客户与计划节点",
+                "保存后返回交付看板复检"
+              ]
+            },
+            "owner_role": "项目经理",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "bom",
+            "label": "BOM结构",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/bom",
+            "action_path": "/bom?instance_id=1&from=delivery-lineage&segment=bom",
+            "fix_entry": {
+              "module": "BOM 管理",
+              "label": "修复 BOM 结构",
+              "path": "/bom?instance_id=1&from=delivery-lineage&segment=bom",
+              "owner_role": "工程/设计",
+              "checklist": [
+                "建立 0级整机、1级部件、2级零件",
+                "补齐物料或图号",
+                "校验层级和虚拟件"
+              ]
+            },
+            "owner_role": "工程/设计",
+            "gap_count": 1,
+            "severe_gap_count": 1
+          },
+          {
+            "key": "documents",
+            "label": "图纸/文档",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/documents",
+            "action_path": "/documents?instance_id=1&from=delivery-lineage&segment=documents",
+            "fix_entry": {
+              "module": "文档/图纸",
+              "label": "上传/签发/绑定图纸",
+              "path": "/documents?instance_id=1&from=delivery-lineage&segment=documents",
+              "owner_role": "工程/文控",
+              "checklist": [
+                "上传图纸/SOP/检验标准",
+                "绑定装备实例和 BOM 节点",
+                "签发并要求现场签收"
+              ]
+            },
+            "owner_role": "工程/文控",
+            "gap_count": 1,
+            "severe_gap_count": 1
+          },
+          {
+            "key": "process",
+            "label": "工艺路线",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/process-tree",
+            "action_path": "/process-tree?instance_id=1&from=delivery-lineage&segment=process",
+            "fix_entry": {
+              "module": "工艺路线",
+              "label": "补工艺路线/工时/工位",
+              "path": "/process-tree?instance_id=1&from=delivery-lineage&segment=process",
+              "owner_role": "工艺",
+              "checklist": [
+                "按 1级部件建立工序",
+                "补标准工时",
+                "指定装配/焊接/检验工位"
+              ]
+            },
+            "owner_role": "工艺",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "purchase",
+            "label": "采购链路",
+            "total": 1,
+            "linked": 1,
+            "percent": 100,
+            "status": "warning",
+            "path": "/purchase",
+            "action_path": "/purchase?tab=followup&instance_id=1&from=delivery-lineage&segment=purchase",
+            "fix_entry": {
+              "module": "采购跟催",
+              "label": "生成采购/跟催",
+              "path": "/purchase?tab=followup&instance_id=1&from=delivery-lineage&segment=purchase",
+              "owner_role": "采购",
+              "checklist": [
+                "由 BOM 生成采购需求",
+                "补物料和 BOM 关联",
+                "指定 ETA 与跟催责任人"
+              ]
+            },
+            "owner_role": "采购",
+            "gap_count": 1,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "kit",
+            "label": "齐套/缺料",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "warning",
+            "path": "/kit-closure",
+            "action_path": "/kit-closure?instance_id=1&from=delivery-lineage&segment=kit",
+            "fix_entry": {
+              "module": "齐套缺料",
+              "label": "处理缺料闭环",
+              "path": "/kit-closure?instance_id=1&from=delivery-lineage&segment=kit",
+              "owner_role": "仓库/采购",
+              "checklist": [
+                "分派缺料责任人",
+                "回写预计到货日期",
+                "生成或关联采购催办"
+              ]
+            },
+            "owner_role": "仓库/采购",
+            "gap_count": 2,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "work_orders",
+            "label": "工单/派工",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "warning",
+            "path": "/work-orders",
+            "action_path": "/work-orders?instance_id=1&from=delivery-lineage&segment=work_orders",
+            "fix_entry": {
+              "module": "工单管理",
+              "label": "生成/派发工单",
+              "path": "/work-orders?instance_id=1&from=delivery-lineage&segment=work_orders",
+              "owner_role": "生产计划",
+              "checklist": [
+                "由工艺路线生成工单",
+                "指定工位和人员",
+                "补预计工时"
+              ]
+            },
+            "owner_role": "生产计划",
+            "gap_count": 3,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "report",
+            "label": "工时/报工",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "warning",
+            "path": "/process-hours",
+            "action_path": "/process-hours?instance_id=1&from=delivery-lineage&segment=report",
+            "fix_entry": {
+              "module": "工时与报工",
+              "label": "补工序级报工",
+              "path": "/process-hours?instance_id=1&from=delivery-lineage&segment=report",
+              "owner_role": "车间班组",
+              "checklist": [
+                "扫码或录入工序报工",
+                "补实际工时",
+                "同步完工进度"
+              ]
+            },
+            "owner_role": "车间班组",
+            "gap_count": 1,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "quality",
+            "label": "质量闭环",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/quality",
+            "action_path": "/quality?instance_id=1&from=delivery-lineage&segment=quality",
+            "fix_entry": {
+              "module": "质检管理",
+              "label": "补检验/NCR 闭环",
+              "path": "/quality?instance_id=1&from=delivery-lineage&segment=quality",
+              "owner_role": "质量",
+              "checklist": [
+                "录入来料/过程/出厂检验",
+                "关闭 NCR/CAPA",
+                "绑定工单和批次"
+              ]
+            },
+            "owner_role": "质量",
+            "gap_count": 2,
+            "severe_gap_count": 1
+          },
+          {
+            "key": "cost",
+            "label": "成本归集",
+            "total": 2,
+            "linked": 2,
+            "percent": 100,
+            "status": "blocked",
+            "path": "/cost",
+            "action_path": "/cost?instance_id=1&from=delivery-lineage&segment=cost",
+            "fix_entry": {
+              "module": "成本归集",
+              "label": "补成本归集",
+              "path": "/cost?instance_id=1&from=delivery-lineage&segment=cost",
+              "owner_role": "财务/项目",
+              "checklist": [
+                "归集材料/人工/外协/折旧",
+                "绑定项目/BOM 节点",
+                "复核成本偏差"
+              ]
+            },
+            "owner_role": "财务/项目",
+            "gap_count": 1,
+            "severe_gap_count": 1
+          },
+          {
+            "key": "trace",
+            "label": "批次/谱系",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "warning",
+            "path": "/trace",
+            "action_path": "/trace?instance_id=1&from=delivery-lineage&segment=trace",
+            "fix_entry": {
+              "module": "端到端追溯",
+              "label": "补批次谱系",
+              "path": "/trace?instance_id=1&from=delivery-lineage&segment=trace",
+              "owner_role": "仓库/质量",
+              "checklist": [
+                "记录 lot_id/serial_no",
+                "绑定发料、工单和装配位置",
+                "支持正反向追溯"
+              ]
+            },
+            "owner_role": "仓库/质量",
+            "gap_count": 1,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "acceptance",
+            "label": "客户验收",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/tbm-advanced?tab=accept",
+            "action_path": "/tbm-advanced?tab=accept&instance_id=1&from=delivery-lineage&segment=acceptance",
+            "fix_entry": {
+              "module": "客户验收",
+              "label": "补验收记录",
+              "path": "/tbm-advanced?tab=accept&instance_id=1&from=delivery-lineage&segment=acceptance",
+              "owner_role": "项目/售后",
+              "checklist": [
+                "建立客户验收单",
+                "记录整改项",
+                "完成交付/运维移交"
+              ]
+            },
+            "owner_role": "项目/售后",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          }
+        ],
+        "gaps": [
+          {
+            "id": "bom_1",
+            "segment": "bom",
+            "severity": "high",
+            "title": "未建立 BOM",
+            "message": "盾构机项目必须先建立 0级整机、1级部件、2级零件/外购件，后续采购/齐套/成本都依赖 BOM",
+            "path": "/bom",
+            "action_path": "/bom?instance_id=1&from=delivery-lineage&segment=bom",
+            "fix_entry": {
+              "module": "BOM 管理",
+              "label": "修复 BOM 结构",
+              "path": "/bom?instance_id=1&from=delivery-lineage&segment=bom",
+              "owner_role": "工程/设计",
+              "checklist": [
+                "建立 0级整机、1级部件、2级零件",
+                "补齐物料或图号",
+                "校验层级和虚拟件"
+              ]
+            },
+            "owner_role": "工程/设计",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "documents_2",
+            "segment": "documents",
+            "severity": "high",
+            "title": "未上传图纸/工艺文件",
+            "message": "现场执行需要图纸、SOP、检验标准电子化签发，不能只靠线下文件",
+            "path": "/documents",
+            "action_path": "/documents?instance_id=1&from=delivery-lineage&segment=documents",
+            "fix_entry": {
+              "module": "文档/图纸",
+              "label": "上传/签发/绑定图纸",
+              "path": "/documents?instance_id=1&from=delivery-lineage&segment=documents",
+              "owner_role": "工程/文控",
+              "checklist": [
+                "上传图纸/SOP/检验标准",
+                "绑定装备实例和 BOM 节点",
+                "签发并要求现场签收"
+              ]
+            },
+            "owner_role": "工程/文控",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "purchase_3",
+            "segment": "purchase",
+            "severity": "info",
+            "title": "采购明细未绑定 BOM 节点",
+            "message": "建议采购行绑定 bom_node_id，便于从风险部件钻取采购单",
+            "path": "/purchase",
+            "action_path": "/purchase?tab=followup&instance_id=1&from=delivery-lineage&segment=purchase",
+            "fix_entry": {
+              "module": "采购跟催",
+              "label": "生成采购/跟催",
+              "path": "/purchase?tab=followup&instance_id=1&from=delivery-lineage&segment=purchase",
+              "owner_role": "采购",
+              "checklist": [
+                "由 BOM 生成采购需求",
+                "补物料和 BOM 关联",
+                "指定 ETA 与跟催责任人"
+              ]
+            },
+            "owner_role": "采购",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "kit_4",
+            "segment": "kit",
+            "severity": "warning",
+            "title": "缺料缺 ETA",
+            "message": "缺料没有预计到货日，无法判断对工单和里程碑的影响",
+            "path": "/kit-closure",
+            "action_path": "/kit-closure?instance_id=1&from=delivery-lineage&segment=kit",
+            "fix_entry": {
+              "module": "齐套缺料",
+              "label": "处理缺料闭环",
+              "path": "/kit-closure?instance_id=1&from=delivery-lineage&segment=kit",
+              "owner_role": "采购",
+              "checklist": [
+                "分派缺料责任人",
+                "回写预计到货日期",
+                "生成或关联采购催办"
+              ]
+            },
+            "owner_role": "采购",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "kit_5",
+            "segment": "kit",
+            "severity": "warning",
+            "title": "缺料未生成采购催办",
+            "message": "缺料应进入采购跟催列表或替代料评审",
+            "path": "/kit-closure",
+            "action_path": "/kit-closure?instance_id=1&from=delivery-lineage&segment=kit",
+            "fix_entry": {
+              "module": "齐套缺料",
+              "label": "处理缺料闭环",
+              "path": "/kit-closure?instance_id=1&from=delivery-lineage&segment=kit",
+              "owner_role": "仓库/采购",
+              "checklist": [
+                "分派缺料责任人",
+                "回写预计到货日期",
+                "生成或关联采购催办"
+              ]
+            },
+            "owner_role": "仓库/采购",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "work_orders_6",
+            "segment": "work_orders",
+            "severity": "warning",
+            "title": "工单缺工位",
+            "message": "工单应明确装配、焊接、机加或检验工位",
+            "path": "/work-orders",
+            "action_path": "/work-orders?instance_id=1&from=delivery-lineage&segment=work_orders",
+            "fix_entry": {
+              "module": "工单管理",
+              "label": "生成/派发工单",
+              "path": "/work-orders?instance_id=1&from=delivery-lineage&segment=work_orders",
+              "owner_role": "生产计划",
+              "checklist": [
+                "由工艺路线生成工单",
+                "指定工位和人员",
+                "补预计工时"
+              ]
+            },
+            "owner_role": "生产计划",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "work_orders_7",
+            "segment": "work_orders",
+            "severity": "warning",
+            "title": "工单未派人",
+            "message": "工单未分派班组/人员，现场无法执行",
+            "path": "/work-orders",
+            "action_path": "/work-orders?instance_id=1&from=delivery-lineage&segment=work_orders",
+            "fix_entry": {
+              "module": "工单管理",
+              "label": "生成/派发工单",
+              "path": "/work-orders?instance_id=1&from=delivery-lineage&segment=work_orders",
+              "owner_role": "生产计划",
+              "checklist": [
+                "由工艺路线生成工单",
+                "指定工位和人员",
+                "补预计工时"
+              ]
+            },
+            "owner_role": "生产计划",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "work_orders_8",
+            "segment": "work_orders",
+            "severity": "info",
+            "title": "工单缺预计工时",
+            "message": "预计工时用于排程与人工成本归集",
+            "path": "/work-orders",
+            "action_path": "/work-orders?instance_id=1&from=delivery-lineage&segment=work_orders",
+            "fix_entry": {
+              "module": "工单管理",
+              "label": "生成/派发工单",
+              "path": "/work-orders?instance_id=1&from=delivery-lineage&segment=work_orders",
+              "owner_role": "生产计划",
+              "checklist": [
+                "由工艺路线生成工单",
+                "指定工位和人员",
+                "补预计工时"
+              ]
+            },
+            "owner_role": "生产计划",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "report_9",
+            "segment": "report",
+            "severity": "warning",
+            "title": "缺工序级报工明细",
+            "message": "车间需要按工序扫码报工，沉淀实际工时和进度",
+            "path": "/process-hours",
+            "action_path": "/process-hours?instance_id=1&from=delivery-lineage&segment=report",
+            "fix_entry": {
+              "module": "工时与报工",
+              "label": "补工序级报工",
+              "path": "/process-hours?instance_id=1&from=delivery-lineage&segment=report",
+              "owner_role": "车间班组",
+              "checklist": [
+                "扫码或录入工序报工",
+                "补实际工时",
+                "同步完工进度"
+              ]
+            },
+            "owner_role": "车间班组",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "quality_10",
+            "segment": "quality",
+            "severity": "warning",
+            "title": "缺质检记录",
+            "message": "关键件、过程检、出厂检应形成电子检验记录",
+            "path": "/quality",
+            "action_path": "/quality?instance_id=1&from=delivery-lineage&segment=quality",
+            "fix_entry": {
+              "module": "质检管理",
+              "label": "补检验/NCR 闭环",
+              "path": "/quality?instance_id=1&from=delivery-lineage&segment=quality",
+              "owner_role": "质量",
+              "checklist": [
+                "录入来料/过程/出厂检验",
+                "关闭 NCR/CAPA",
+                "绑定工单和批次"
+              ]
+            },
+            "owner_role": "质量",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "quality_11",
+            "segment": "quality",
+            "severity": "high",
+            "title": "NCR 未闭环",
+            "message": "NCR 需要完成处置、CAPA、复检和关闭",
+            "path": "/quality",
+            "action_path": "/quality?instance_id=1&from=delivery-lineage&segment=quality",
+            "fix_entry": {
+              "module": "质检管理",
+              "label": "补检验/NCR 闭环",
+              "path": "/quality?instance_id=1&from=delivery-lineage&segment=quality",
+              "owner_role": "质量",
+              "checklist": [
+                "录入来料/过程/出厂检验",
+                "关闭 NCR/CAPA",
+                "绑定工单和批次"
+              ]
+            },
+            "owner_role": "质量",
+            "count": 1,
+            "samples": [
+              "NCR-200"
+            ]
+          },
+          {
+            "id": "cost_12",
+            "segment": "cost",
+            "severity": "critical",
+            "title": "成本偏差 60%",
+            "message": "实际成本与按进度预算偏离，需要复核材料、外协、折旧和返工",
+            "path": "/cost",
+            "action_path": "/cost?instance_id=1&from=delivery-lineage&segment=cost",
+            "fix_entry": {
+              "module": "成本归集",
+              "label": "补成本归集",
+              "path": "/cost?instance_id=1&from=delivery-lineage&segment=cost",
+              "owner_role": "财务/项目",
+              "checklist": [
+                "归集材料/人工/外协/折旧",
+                "绑定项目/BOM 节点",
+                "复核成本偏差"
+              ]
+            },
+            "owner_role": "财务/项目",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "trace_13",
+            "segment": "trace",
+            "severity": "warning",
+            "title": "缺批次发料/装配关系记录",
+            "message": "要做到端到端追溯，需要记录 lot_id/serial_no 发到哪个工单、装到哪个部件",
+            "path": "/trace",
+            "action_path": "/trace?instance_id=1&from=delivery-lineage&segment=trace",
+            "fix_entry": {
+              "module": "端到端追溯",
+              "label": "补批次谱系",
+              "path": "/trace?instance_id=1&from=delivery-lineage&segment=trace",
+              "owner_role": "仓库/质量",
+              "checklist": [
+                "记录 lot_id/serial_no",
+                "绑定发料、工单和装配位置",
+                "支持正反向追溯"
+              ]
+            },
+            "owner_role": "仓库/质量",
+            "count": 1,
+            "samples": []
+          }
+        ],
+        "project_snapshot": {
+          "id": 1,
+          "instance_code": "TBM-1",
+          "instance_name": "一号机",
+          "customer_name": "甲客户",
+          "status": "manufacturing",
+          "lifecycle_stage": "manufacturing",
+          "progress_pct": 50,
+          "risk_score": 20,
+          "risk_level": "critical",
+          "workflow_status": "blocked",
+          "workflow_blockers": [
+            {
+              "type": "bom_missing",
+              "severity": "high",
+              "title": "未建立BOM",
+              "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+              "path": "/bom?instance_id=1&from=delivery&stage=bom",
+              "owner_role": "工程/设计",
+              "stage_key": "bom",
+              "stage_label": "BOM"
+            },
+            {
+              "type": "doc_missing",
+              "severity": "high",
+              "title": "未上传图纸/工艺文件",
+              "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+              "path": "/documents?instance_id=1&from=delivery&stage=documents",
+              "owner_role": "工程/文控",
+              "stage_key": "documents",
+              "stage_label": "图纸"
+            },
+            {
+              "type": "route_no_components",
+              "severity": "high",
+              "title": "无法按部件建立工艺",
+              "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+              "path": "/bom?instance_id=1&from=delivery&stage=bom",
+              "owner_role": "工程/工艺",
+              "stage_key": "process",
+              "stage_label": "工艺"
+            },
+            {
+              "type": "po_overdue",
+              "severity": "high",
+              "title": "1项采购延期",
+              "message": "采购延期会直接影响齐套和排程",
+              "path": "/purchase?instance_id=1&from=delivery&stage=purchase",
+              "owner_role": "采购",
+              "stage_key": "purchase",
+              "stage_label": "采购"
+            },
+            {
+              "type": "purchase_followup_open",
+              "severity": "high",
+              "title": "1项采购跟催未达受控",
+              "message": "1项已逾期",
+              "path": "/purchase?tab=followup&instance_id=1",
+              "owner_role": "采购",
+              "stage_key": "purchase",
+              "stage_label": "采购"
+            },
+            {
+              "type": "kit_shortage",
+              "severity": "high",
+              "title": "1项缺料未闭环",
+              "message": "缺料需要进入采购跟催或替代料评审",
+              "path": "/kit-closure?instance_id=1&from=delivery&stage=kit",
+              "owner_role": "仓库/采购",
+              "stage_key": "kit",
+              "stage_label": "齐套"
+            },
+            {
+              "type": "wo_delay",
+              "severity": "high",
+              "title": "1个工单延期",
+              "message": "需要重新排程或升级资源冲突",
+              "path": "/work-orders?instance_id=1&from=delivery&stage=work_orders",
+              "owner_role": "生产计划",
+              "stage_key": "work_orders",
+              "stage_label": "工单"
+            },
+            {
+              "type": "report_missing",
+              "severity": "warning",
+              "title": "工单未形成报工明细",
+              "message": "车间需要按工序扫码报工，沉淀实际工时",
+              "path": "/process-hours?instance_id=1&from=delivery&stage=report",
+              "owner_role": "车间班组",
+              "stage_key": "report",
+              "stage_label": "报工"
+            },
+            {
+              "type": "qc_missing",
+              "severity": "warning",
+              "title": "未登记质检记录",
+              "message": "关键件、过程检和出厂检需要形成电子记录",
+              "path": "/quality?instance_id=1&from=delivery&stage=quality",
+              "owner_role": "质量",
+              "stage_key": "quality",
+              "stage_label": "质检"
+            },
+            {
+              "type": "ncr_open",
+              "severity": "high",
+              "title": "1个NCR未闭环",
+              "message": "NCR需完成处置、CAPA、复检和关闭",
+              "path": "/quality?instance_id=1&from=delivery&stage=quality",
+              "owner_role": "质量",
+              "stage_key": "quality",
+              "stage_label": "质检"
+            },
+            {
+              "type": "cost_variance",
+              "severity": "critical",
+              "title": "成本偏差 60%",
+              "message": "实际成本相对挣值预算偏离，需要复核材料、人工、外协和返工",
+              "path": "/cost?instance_id=1&from=delivery&stage=cost",
+              "owner_role": "财务/项目",
+              "stage_key": "cost",
+              "stage_label": "成本"
+            }
+          ],
+          "workflow_blocker_count": 11,
+          "exception_count": 4,
+          "risk_breakdown": {
+            "score": 20,
+            "risk_level": "critical",
+            "by_type": {
+              "delivery_delay": 1,
+              "kit_shortage": 1,
+              "quality_ncr": 1,
+              "purchase_delay": 1
+            },
+            "by_severity": {
+              "critical": 2,
+              "high": 2,
+              "warning": 0,
+              "info": 0
+            },
+            "exception_count": 4,
+            "shortage_count": 1,
+            "purchase_followup_count": 1,
+            "purchase_followup_blocking": 1,
+            "purchase_followup_overdue": 1,
+            "ncr_count": 1,
+            "cost_risk_level": "critical",
+            "cost_variance_pct": 60,
+            "quick_actions": [
+              {
+                "type": "kit_shortage",
+                "label": "处理缺料",
+                "path": "/kit-closure?instance_id=1&from=delivery&segment=kit",
+                "count": 1
+              },
+              {
+                "type": "purchase_followup",
+                "label": "采购跟催",
+                "path": "/purchase?tab=followup&instance_id=1",
+                "count": 1
+              },
+              {
+                "type": "quality_ncr",
+                "label": "关闭NCR",
+                "path": "/quality?instance_id=1&from=delivery&segment=quality",
+                "count": 1
+              },
+              {
+                "type": "cost_variance",
+                "label": "复核成本",
+                "path": "/cost?instance_id=1&from=delivery&segment=cost",
+                "count": 1
+              }
+            ]
+          },
+          "oee_30d": 68.8,
+          "metrics": {
+            "contract": {
+              "total": 1,
+              "done": 1
+            },
+            "bom": {
+              "total": 0,
+              "done": 0,
+              "tier0": 0,
+              "tier1": 0,
+              "tier2": 0
+            },
+            "documents": {
+              "total": 0,
+              "issued": 0,
+              "done": 0
+            },
+            "process_route": {
+              "component_count": 0,
+              "complete_count": 0,
+              "operation_count": 0,
+              "standard_man_hours": 0,
+              "blockers": [
+                {
+                  "type": "route_no_components",
+                  "severity": "high",
+                  "title": "无法按部件建立工艺",
+                  "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                  "path": "/bom?instance_id=1&from=delivery&stage=bom",
+                  "owner_role": "工程/工艺"
+                }
+              ]
+            },
+            "purchase": {
+              "total": 1,
+              "done": 0
+            },
+            "purchase_followup": {
+              "total": 1,
+              "overdue": 1
+            },
+            "kit": {
+              "total": 1,
+              "done": 0
+            },
+            "work_orders": {
+              "total": 1,
+              "done": 0,
+              "by_status": {
+                "in_progress": 1
+              }
+            },
+            "process_nodes": {
+              "total": 0,
+              "done": 0,
+              "by_status": {}
+            },
+            "report": {
+              "total": 0,
+              "done": 0
+            },
+            "quality": {
+              "total": 0,
+              "pass": 0,
+              "done": 0
+            },
+            "cost": {
+              "total": 3,
+              "done": 3,
+              "variance_pct": 60,
+              "actual_amount": 800000
+            },
+            "acceptance": {
+              "total": 0,
+              "done": 0
+            }
+          },
+          "stages": [
+            {
+              "key": "contract",
+              "label": "合同/项目",
+              "done": 1,
+              "total": 1,
+              "percent": 100,
+              "status": "done",
+              "path": "/instances?instance_id=1&from=delivery&stage=contract",
+              "owner_role": "项目经理",
+              "action_label": "补项目档案",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "bom",
+              "label": "BOM",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/bom?instance_id=1&from=delivery&stage=bom",
+              "owner_role": "工程/设计",
+              "action_label": "维护BOM",
+              "blockers": [
+                {
+                  "type": "bom_missing",
+                  "severity": "high",
+                  "title": "未建立BOM",
+                  "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+                  "path": "/bom?instance_id=1&from=delivery&stage=bom",
+                  "owner_role": "工程/设计"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "documents",
+              "label": "图纸",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/documents?instance_id=1&from=delivery&stage=documents",
+              "owner_role": "工程/文控",
+              "action_label": "签发图纸",
+              "blockers": [
+                {
+                  "type": "doc_missing",
+                  "severity": "high",
+                  "title": "未上传图纸/工艺文件",
+                  "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+                  "path": "/documents?instance_id=1&from=delivery&stage=documents",
+                  "owner_role": "工程/文控"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "process",
+              "label": "工艺",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/process-tree?instance_id=1&from=delivery&stage=process",
+              "owner_role": "工艺/生产",
+              "action_label": "补工艺路线",
+              "blockers": [
+                {
+                  "type": "route_no_components",
+                  "severity": "high",
+                  "title": "无法按部件建立工艺",
+                  "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                  "path": "/bom?instance_id=1&from=delivery&stage=bom",
+                  "owner_role": "工程/工艺"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "purchase",
+              "label": "采购",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/purchase?instance_id=1&from=delivery&stage=purchase",
+              "owner_role": "采购",
+              "action_label": "采购跟催",
+              "blockers": [
+                {
+                  "type": "po_overdue",
+                  "severity": "high",
+                  "title": "1项采购延期",
+                  "message": "采购延期会直接影响齐套和排程",
+                  "path": "/purchase?instance_id=1&from=delivery&stage=purchase",
+                  "owner_role": "采购"
+                },
+                {
+                  "type": "purchase_followup_open",
+                  "severity": "high",
+                  "title": "1项采购跟催未达受控",
+                  "message": "1项已逾期",
+                  "path": "/purchase?tab=followup&instance_id=1",
+                  "owner_role": "采购"
+                }
+              ],
+              "blocker_count": 2
+            },
+            {
+              "key": "kit",
+              "label": "齐套",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/kit-closure?instance_id=1&from=delivery&stage=kit",
+              "owner_role": "仓库/采购",
+              "action_label": "处理缺料",
+              "blockers": [
+                {
+                  "type": "kit_shortage",
+                  "severity": "high",
+                  "title": "1项缺料未闭环",
+                  "message": "缺料需要进入采购跟催或替代料评审",
+                  "path": "/kit-closure?instance_id=1&from=delivery&stage=kit",
+                  "owner_role": "仓库/采购"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "work_orders",
+              "label": "工单",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/work-orders?instance_id=1&from=delivery&stage=work_orders",
+              "owner_role": "生产计划",
+              "action_label": "派发工单",
+              "blockers": [
+                {
+                  "type": "wo_delay",
+                  "severity": "high",
+                  "title": "1个工单延期",
+                  "message": "需要重新排程或升级资源冲突",
+                  "path": "/work-orders?instance_id=1&from=delivery&stage=work_orders",
+                  "owner_role": "生产计划"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "report",
+              "label": "报工",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "warning",
+              "path": "/process-hours?instance_id=1&from=delivery&stage=report",
+              "owner_role": "车间班组",
+              "action_label": "扫码报工",
+              "blockers": [
+                {
+                  "type": "report_missing",
+                  "severity": "warning",
+                  "title": "工单未形成报工明细",
+                  "message": "车间需要按工序扫码报工，沉淀实际工时",
+                  "path": "/process-hours?instance_id=1&from=delivery&stage=report",
+                  "owner_role": "车间班组"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "quality",
+              "label": "质检",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/quality?instance_id=1&from=delivery&stage=quality",
+              "owner_role": "质量",
+              "action_label": "处理质检",
+              "blockers": [
+                {
+                  "type": "qc_missing",
+                  "severity": "warning",
+                  "title": "未登记质检记录",
+                  "message": "关键件、过程检和出厂检需要形成电子记录",
+                  "path": "/quality?instance_id=1&from=delivery&stage=quality",
+                  "owner_role": "质量"
+                },
+                {
+                  "type": "ncr_open",
+                  "severity": "high",
+                  "title": "1个NCR未闭环",
+                  "message": "NCR需完成处置、CAPA、复检和关闭",
+                  "path": "/quality?instance_id=1&from=delivery&stage=quality",
+                  "owner_role": "质量"
+                }
+              ],
+              "blocker_count": 2
+            },
+            {
+              "key": "cost",
+              "label": "成本",
+              "done": 3,
+              "total": 3,
+              "percent": 100,
+              "status": "blocked",
+              "path": "/cost?instance_id=1&from=delivery&stage=cost",
+              "owner_role": "财务/项目",
+              "action_label": "复核成本",
+              "blockers": [
+                {
+                  "type": "cost_variance",
+                  "severity": "critical",
+                  "title": "成本偏差 60%",
+                  "message": "实际成本相对挣值预算偏离，需要复核材料、人工、外协和返工",
+                  "path": "/cost?instance_id=1&from=delivery&stage=cost",
+                  "owner_role": "财务/项目"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "acceptance",
+              "label": "验收",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "pending",
+              "path": "/tbm-advanced?instance_id=1&from=delivery&stage=acceptance",
+              "owner_role": "项目/售后",
+              "action_label": "登记验收",
+              "blockers": [],
+              "blocker_count": 0
+            }
+          ],
+          "top_exceptions": [
+            {
+              "id": "wo_overdue_20",
+              "type": "delivery_delay",
+              "severity": "critical",
+              "title": "工单延期 WO-20",
+              "message": "TBM-1 焊接 已延期 N 天",
+              "instance_id": 1,
+              "instance_code": "TBM-1",
+              "source": "work_orders",
+              "source_path": "/work-orders",
+              "owner": null,
+              "due_at": "2026-09-30",
+              "created_at": null,
+              "action_label": "处理工单",
+              "case_status": "open",
+              "owner_id": null,
+              "owner_name": null,
+              "priority": "critical",
+              "action_count": 0
+            },
+            {
+              "id": "shortage_100",
+              "type": "kit_shortage",
+              "severity": "critical",
+              "title": "缺料 M-10",
+              "message": "TBM-1 / WO-20 缺 钢材 5，状态 open",
+              "instance_id": 1,
+              "instance_code": "TBM-1",
+              "source": "shortage_cases",
+              "source_path": "/kit-closure",
+              "owner": null,
+              "due_at": null,
+              "created_at": "2026-09-19 10:00:00",
+              "action_label": "处理缺料",
+              "case_status": "open",
+              "owner_id": null,
+              "owner_name": null,
+              "priority": "critical",
+              "action_count": 0
+            },
+            {
+              "id": "ncr_200",
+              "type": "quality_ncr",
+              "severity": "high",
+              "title": "NCR NCR-200",
+              "message": "TBM-1 钢材：裂纹（待处置）",
+              "instance_id": 1,
+              "instance_code": "TBM-1",
+              "source": "ncr_reports",
+              "source_path": "/quality",
+              "owner": null,
+              "due_at": null,
+              "created_at": "2026-09-18 10:00:00",
+              "action_label": "处理 NCR",
+              "case_status": "open",
+              "owner_id": null,
+              "owner_name": null,
+              "priority": "high",
+              "action_count": 0
+            },
+            {
+              "id": "po_overdue_40",
+              "type": "purchase_delay",
+              "severity": "high",
+              "title": "采购延期 PO-40",
+              "message": "供应商 预计到货已超期",
+              "instance_id": 1,
+              "instance_code": "TBM-1",
+              "source": "purchase_orders",
+              "source_path": "/purchase",
+              "owner": null,
+              "due_at": "2026-09-01",
+              "created_at": null,
+              "action_label": "采购跟催",
+              "case_status": "open",
+              "owner_id": null,
+              "owner_name": null,
+              "priority": "high",
+              "action_count": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "ok": {
+        "project": {
+          "id": 2,
+          "instance_code": "TBM-2",
+          "instance_name": "二号机",
+          "customer_name": "乙客户",
+          "contract_no": "C-2",
+          "project_no": "P-2",
+          "serial_no": "SN-2",
+          "progress_pct": 100
+        },
+        "score": 75,
+        "level": "high",
+        "summary": {
+          "gap_count": 3,
+          "severe_gap_count": 2,
+          "by_severity": {
+            "critical": 0,
+            "high": 2,
+            "warning": 1,
+            "info": 0
+          }
+        },
+        "link_keys": [
+          "project_id/equipment_instance_id",
+          "bom_node_id",
+          "work_order_id",
+          "material_id",
+          "lot_id/serial_no"
+        ],
+        "segments": [
+          {
+            "key": "contract",
+            "label": "合同/项目",
+            "total": 5,
+            "linked": 5,
+            "percent": 100,
+            "status": "ok",
+            "path": "/instances",
+            "action_path": "/instances?instance_id=2&from=delivery-lineage&segment=contract",
+            "fix_entry": {
+              "module": "装备实例",
+              "label": "完善项目档案",
+              "path": "/instances?instance_id=2&from=delivery-lineage&segment=contract",
+              "owner_role": "项目经理",
+              "checklist": [
+                "补齐项目编码/合同号/序列号",
+                "确认客户与计划节点",
+                "保存后返回交付看板复检"
+              ]
+            },
+            "owner_role": "项目经理",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "bom",
+            "label": "BOM结构",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/bom",
+            "action_path": "/bom?instance_id=2&from=delivery-lineage&segment=bom",
+            "fix_entry": {
+              "module": "BOM 管理",
+              "label": "修复 BOM 结构",
+              "path": "/bom?instance_id=2&from=delivery-lineage&segment=bom",
+              "owner_role": "工程/设计",
+              "checklist": [
+                "建立 0级整机、1级部件、2级零件",
+                "补齐物料或图号",
+                "校验层级和虚拟件"
+              ]
+            },
+            "owner_role": "工程/设计",
+            "gap_count": 1,
+            "severe_gap_count": 1
+          },
+          {
+            "key": "documents",
+            "label": "图纸/文档",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/documents",
+            "action_path": "/documents?instance_id=2&from=delivery-lineage&segment=documents",
+            "fix_entry": {
+              "module": "文档/图纸",
+              "label": "上传/签发/绑定图纸",
+              "path": "/documents?instance_id=2&from=delivery-lineage&segment=documents",
+              "owner_role": "工程/文控",
+              "checklist": [
+                "上传图纸/SOP/检验标准",
+                "绑定装备实例和 BOM 节点",
+                "签发并要求现场签收"
+              ]
+            },
+            "owner_role": "工程/文控",
+            "gap_count": 1,
+            "severe_gap_count": 1
+          },
+          {
+            "key": "process",
+            "label": "工艺路线",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/process-tree",
+            "action_path": "/process-tree?instance_id=2&from=delivery-lineage&segment=process",
+            "fix_entry": {
+              "module": "工艺路线",
+              "label": "补工艺路线/工时/工位",
+              "path": "/process-tree?instance_id=2&from=delivery-lineage&segment=process",
+              "owner_role": "工艺",
+              "checklist": [
+                "按 1级部件建立工序",
+                "补标准工时",
+                "指定装配/焊接/检验工位"
+              ]
+            },
+            "owner_role": "工艺",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "purchase",
+            "label": "采购链路",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/purchase",
+            "action_path": "/purchase?tab=followup&instance_id=2&from=delivery-lineage&segment=purchase",
+            "fix_entry": {
+              "module": "采购跟催",
+              "label": "生成采购/跟催",
+              "path": "/purchase?tab=followup&instance_id=2&from=delivery-lineage&segment=purchase",
+              "owner_role": "采购",
+              "checklist": [
+                "由 BOM 生成采购需求",
+                "补物料和 BOM 关联",
+                "指定 ETA 与跟催责任人"
+              ]
+            },
+            "owner_role": "采购",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "kit",
+            "label": "齐套/缺料",
+            "total": 1,
+            "linked": 1,
+            "percent": 100,
+            "status": "ok",
+            "path": "/kit-closure",
+            "action_path": "/kit-closure?instance_id=2&from=delivery-lineage&segment=kit",
+            "fix_entry": {
+              "module": "齐套缺料",
+              "label": "处理缺料闭环",
+              "path": "/kit-closure?instance_id=2&from=delivery-lineage&segment=kit",
+              "owner_role": "仓库/采购",
+              "checklist": [
+                "分派缺料责任人",
+                "回写预计到货日期",
+                "生成或关联采购催办"
+              ]
+            },
+            "owner_role": "仓库/采购",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "work_orders",
+            "label": "工单/派工",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/work-orders",
+            "action_path": "/work-orders?instance_id=2&from=delivery-lineage&segment=work_orders",
+            "fix_entry": {
+              "module": "工单管理",
+              "label": "生成/派发工单",
+              "path": "/work-orders?instance_id=2&from=delivery-lineage&segment=work_orders",
+              "owner_role": "生产计划",
+              "checklist": [
+                "由工艺路线生成工单",
+                "指定工位和人员",
+                "补预计工时"
+              ]
+            },
+            "owner_role": "生产计划",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "report",
+            "label": "工时/报工",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/process-hours",
+            "action_path": "/process-hours?instance_id=2&from=delivery-lineage&segment=report",
+            "fix_entry": {
+              "module": "工时与报工",
+              "label": "补工序级报工",
+              "path": "/process-hours?instance_id=2&from=delivery-lineage&segment=report",
+              "owner_role": "车间班组",
+              "checklist": [
+                "扫码或录入工序报工",
+                "补实际工时",
+                "同步完工进度"
+              ]
+            },
+            "owner_role": "车间班组",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "quality",
+            "label": "质量闭环",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/quality",
+            "action_path": "/quality?instance_id=2&from=delivery-lineage&segment=quality",
+            "fix_entry": {
+              "module": "质检管理",
+              "label": "补检验/NCR 闭环",
+              "path": "/quality?instance_id=2&from=delivery-lineage&segment=quality",
+              "owner_role": "质量",
+              "checklist": [
+                "录入来料/过程/出厂检验",
+                "关闭 NCR/CAPA",
+                "绑定工单和批次"
+              ]
+            },
+            "owner_role": "质量",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "cost",
+            "label": "成本归集",
+            "total": 1,
+            "linked": 1,
+            "percent": 100,
+            "status": "ok",
+            "path": "/cost",
+            "action_path": "/cost?instance_id=2&from=delivery-lineage&segment=cost",
+            "fix_entry": {
+              "module": "成本归集",
+              "label": "补成本归集",
+              "path": "/cost?instance_id=2&from=delivery-lineage&segment=cost",
+              "owner_role": "财务/项目",
+              "checklist": [
+                "归集材料/人工/外协/折旧",
+                "绑定项目/BOM 节点",
+                "复核成本偏差"
+              ]
+            },
+            "owner_role": "财务/项目",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "trace",
+            "label": "批次/谱系",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/trace",
+            "action_path": "/trace?instance_id=2&from=delivery-lineage&segment=trace",
+            "fix_entry": {
+              "module": "端到端追溯",
+              "label": "补批次谱系",
+              "path": "/trace?instance_id=2&from=delivery-lineage&segment=trace",
+              "owner_role": "仓库/质量",
+              "checklist": [
+                "记录 lot_id/serial_no",
+                "绑定发料、工单和装配位置",
+                "支持正反向追溯"
+              ]
+            },
+            "owner_role": "仓库/质量",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "acceptance",
+            "label": "客户验收",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "warning",
+            "path": "/tbm-advanced?tab=accept",
+            "action_path": "/tbm-advanced?tab=accept&instance_id=2&from=delivery-lineage&segment=acceptance",
+            "fix_entry": {
+              "module": "客户验收",
+              "label": "补验收记录",
+              "path": "/tbm-advanced?tab=accept&instance_id=2&from=delivery-lineage&segment=acceptance",
+              "owner_role": "项目/售后",
+              "checklist": [
+                "建立客户验收单",
+                "记录整改项",
+                "完成交付/运维移交"
+              ]
+            },
+            "owner_role": "项目/售后",
+            "gap_count": 1,
+            "severe_gap_count": 0
+          }
+        ],
+        "gaps": [
+          {
+            "id": "bom_1",
+            "segment": "bom",
+            "severity": "high",
+            "title": "未建立 BOM",
+            "message": "盾构机项目必须先建立 0级整机、1级部件、2级零件/外购件，后续采购/齐套/成本都依赖 BOM",
+            "path": "/bom",
+            "action_path": "/bom?instance_id=2&from=delivery-lineage&segment=bom",
+            "fix_entry": {
+              "module": "BOM 管理",
+              "label": "修复 BOM 结构",
+              "path": "/bom?instance_id=2&from=delivery-lineage&segment=bom",
+              "owner_role": "工程/设计",
+              "checklist": [
+                "建立 0级整机、1级部件、2级零件",
+                "补齐物料或图号",
+                "校验层级和虚拟件"
+              ]
+            },
+            "owner_role": "工程/设计",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "documents_2",
+            "segment": "documents",
+            "severity": "high",
+            "title": "未上传图纸/工艺文件",
+            "message": "现场执行需要图纸、SOP、检验标准电子化签发，不能只靠线下文件",
+            "path": "/documents",
+            "action_path": "/documents?instance_id=2&from=delivery-lineage&segment=documents",
+            "fix_entry": {
+              "module": "文档/图纸",
+              "label": "上传/签发/绑定图纸",
+              "path": "/documents?instance_id=2&from=delivery-lineage&segment=documents",
+              "owner_role": "工程/文控",
+              "checklist": [
+                "上传图纸/SOP/检验标准",
+                "绑定装备实例和 BOM 节点",
+                "签发并要求现场签收"
+              ]
+            },
+            "owner_role": "工程/文控",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "acceptance_3",
+            "segment": "acceptance",
+            "severity": "warning",
+            "title": "缺客户验收记录",
+            "message": "总装/调试后应建立验收、整改、交付和售后接收记录",
+            "path": "/tbm-advanced?tab=accept",
+            "action_path": "/tbm-advanced?tab=accept&instance_id=2&from=delivery-lineage&segment=acceptance",
+            "fix_entry": {
+              "module": "客户验收",
+              "label": "补验收记录",
+              "path": "/tbm-advanced?tab=accept&instance_id=2&from=delivery-lineage&segment=acceptance",
+              "owner_role": "项目/售后",
+              "checklist": [
+                "建立客户验收单",
+                "记录整改项",
+                "完成交付/运维移交"
+              ]
+            },
+            "owner_role": "项目/售后",
+            "count": 1,
+            "samples": []
+          }
+        ],
+        "project_snapshot": {
+          "id": 2,
+          "instance_code": "TBM-2",
+          "instance_name": "二号机",
+          "customer_name": "乙客户",
+          "status": "completed",
+          "lifecycle_stage": "delivered",
+          "progress_pct": 100,
+          "risk_score": 0,
+          "risk_level": "normal",
+          "workflow_status": "blocked",
+          "workflow_blockers": [
+            {
+              "type": "bom_missing",
+              "severity": "high",
+              "title": "未建立BOM",
+              "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+              "path": "/bom?instance_id=2&from=delivery&stage=bom",
+              "owner_role": "工程/设计",
+              "stage_key": "bom",
+              "stage_label": "BOM"
+            },
+            {
+              "type": "doc_missing",
+              "severity": "high",
+              "title": "未上传图纸/工艺文件",
+              "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+              "path": "/documents?instance_id=2&from=delivery&stage=documents",
+              "owner_role": "工程/文控",
+              "stage_key": "documents",
+              "stage_label": "图纸"
+            },
+            {
+              "type": "route_no_components",
+              "severity": "high",
+              "title": "无法按部件建立工艺",
+              "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+              "path": "/bom?instance_id=2&from=delivery&stage=bom",
+              "owner_role": "工程/工艺",
+              "stage_key": "process",
+              "stage_label": "工艺"
+            },
+            {
+              "type": "wo_missing",
+              "severity": "warning",
+              "title": "未生成工单",
+              "message": "BOM和工艺确认后应生成工单并派发到工位/人员",
+              "path": "/work-orders?instance_id=2&from=delivery&stage=work_orders",
+              "owner_role": "生产计划",
+              "stage_key": "work_orders",
+              "stage_label": "工单"
+            },
+            {
+              "type": "acceptance_missing",
+              "severity": "warning",
+              "title": "未建立客户验收记录",
+              "message": "总装/调试后应形成客户验收、整改和交付记录",
+              "path": "/tbm-advanced?instance_id=2&from=delivery&stage=acceptance",
+              "owner_role": "项目/售后",
+              "stage_key": "acceptance",
+              "stage_label": "验收"
+            }
+          ],
+          "workflow_blocker_count": 5,
+          "exception_count": 0,
+          "risk_breakdown": {
+            "score": 0,
+            "risk_level": "normal",
+            "by_type": {},
+            "by_severity": {
+              "critical": 0,
+              "high": 0,
+              "warning": 0,
+              "info": 0
+            },
+            "exception_count": 0,
+            "shortage_count": 0,
+            "purchase_followup_count": 0,
+            "purchase_followup_blocking": 0,
+            "purchase_followup_overdue": 0,
+            "ncr_count": 0,
+            "cost_risk_level": "normal",
+            "cost_variance_pct": -99.4,
+            "quick_actions": []
+          },
+          "oee_30d": 33.3,
+          "metrics": {
+            "contract": {
+              "total": 1,
+              "done": 1
+            },
+            "bom": {
+              "total": 0,
+              "done": 0,
+              "tier0": 0,
+              "tier1": 0,
+              "tier2": 0
+            },
+            "documents": {
+              "total": 0,
+              "issued": 0,
+              "done": 0
+            },
+            "process_route": {
+              "component_count": 0,
+              "complete_count": 0,
+              "operation_count": 0,
+              "standard_man_hours": 0,
+              "blockers": [
+                {
+                  "type": "route_no_components",
+                  "severity": "high",
+                  "title": "无法按部件建立工艺",
+                  "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                  "path": "/bom?instance_id=2&from=delivery&stage=bom",
+                  "owner_role": "工程/工艺"
+                }
+              ]
+            },
+            "purchase": {
+              "total": 0,
+              "done": 0
+            },
+            "purchase_followup": {
+              "total": 0,
+              "overdue": 0
+            },
+            "kit": {
+              "total": 1,
+              "done": 1
+            },
+            "work_orders": {
+              "total": 0,
+              "done": 0,
+              "by_status": {}
+            },
+            "process_nodes": {
+              "total": 0,
+              "done": 0,
+              "by_status": {}
+            },
+            "report": {
+              "total": 0,
+              "done": 0
+            },
+            "quality": {
+              "total": 0,
+              "pass": 0,
+              "done": 0
+            },
+            "cost": {
+              "total": 0,
+              "done": 0,
+              "variance_pct": -99.4,
+              "actual_amount": 3000
+            },
+            "acceptance": {
+              "total": 0,
+              "done": 0
+            }
+          },
+          "stages": [
+            {
+              "key": "contract",
+              "label": "合同/项目",
+              "done": 1,
+              "total": 1,
+              "percent": 100,
+              "status": "done",
+              "path": "/instances?instance_id=2&from=delivery&stage=contract",
+              "owner_role": "项目经理",
+              "action_label": "补项目档案",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "bom",
+              "label": "BOM",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/bom?instance_id=2&from=delivery&stage=bom",
+              "owner_role": "工程/设计",
+              "action_label": "维护BOM",
+              "blockers": [
+                {
+                  "type": "bom_missing",
+                  "severity": "high",
+                  "title": "未建立BOM",
+                  "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+                  "path": "/bom?instance_id=2&from=delivery&stage=bom",
+                  "owner_role": "工程/设计"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "documents",
+              "label": "图纸",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/documents?instance_id=2&from=delivery&stage=documents",
+              "owner_role": "工程/文控",
+              "action_label": "签发图纸",
+              "blockers": [
+                {
+                  "type": "doc_missing",
+                  "severity": "high",
+                  "title": "未上传图纸/工艺文件",
+                  "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+                  "path": "/documents?instance_id=2&from=delivery&stage=documents",
+                  "owner_role": "工程/文控"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "process",
+              "label": "工艺",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/process-tree?instance_id=2&from=delivery&stage=process",
+              "owner_role": "工艺/生产",
+              "action_label": "补工艺路线",
+              "blockers": [
+                {
+                  "type": "route_no_components",
+                  "severity": "high",
+                  "title": "无法按部件建立工艺",
+                  "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                  "path": "/bom?instance_id=2&from=delivery&stage=bom",
+                  "owner_role": "工程/工艺"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "purchase",
+              "label": "采购",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "pending",
+              "path": "/purchase?instance_id=2&from=delivery&stage=purchase",
+              "owner_role": "采购",
+              "action_label": "采购跟催",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "kit",
+              "label": "齐套",
+              "done": 1,
+              "total": 1,
+              "percent": 100,
+              "status": "done",
+              "path": "/kit-closure?instance_id=2&from=delivery&stage=kit",
+              "owner_role": "仓库/采购",
+              "action_label": "处理缺料",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "work_orders",
+              "label": "工单",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "warning",
+              "path": "/work-orders?instance_id=2&from=delivery&stage=work_orders",
+              "owner_role": "生产计划",
+              "action_label": "派发工单",
+              "blockers": [
+                {
+                  "type": "wo_missing",
+                  "severity": "warning",
+                  "title": "未生成工单",
+                  "message": "BOM和工艺确认后应生成工单并派发到工位/人员",
+                  "path": "/work-orders?instance_id=2&from=delivery&stage=work_orders",
+                  "owner_role": "生产计划"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "report",
+              "label": "报工",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "pending",
+              "path": "/process-hours?instance_id=2&from=delivery&stage=report",
+              "owner_role": "车间班组",
+              "action_label": "扫码报工",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "quality",
+              "label": "质检",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "pending",
+              "path": "/quality?instance_id=2&from=delivery&stage=quality",
+              "owner_role": "质量",
+              "action_label": "处理质检",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "cost",
+              "label": "成本",
+              "done": 1,
+              "total": 1,
+              "percent": 100,
+              "status": "done",
+              "path": "/cost?instance_id=2&from=delivery&stage=cost",
+              "owner_role": "财务/项目",
+              "action_label": "复核成本",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "acceptance",
+              "label": "验收",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "warning",
+              "path": "/tbm-advanced?instance_id=2&from=delivery&stage=acceptance",
+              "owner_role": "项目/售后",
+              "action_label": "登记验收",
+              "blockers": [
+                {
+                  "type": "acceptance_missing",
+                  "severity": "warning",
+                  "title": "未建立客户验收记录",
+                  "message": "总装/调试后应形成客户验收、整改和交付记录",
+                  "path": "/tbm-advanced?instance_id=2&from=delivery&stage=acceptance",
+                  "owner_role": "项目/售后"
+                }
+              ],
+              "blocker_count": 1
+            }
+          ],
+          "top_exceptions": []
+        }
+      }
+    },
+    {
+      "ok": {
+        "project": {
+          "id": 3,
+          "instance_code": "TBM-3",
+          "instance_name": "三号机",
+          "customer_name": "丙客户",
+          "contract_no": "C-3",
+          "project_no": "P-3",
+          "serial_no": "SN-3",
+          "progress_pct": 0
+        },
+        "score": 80,
+        "level": "high",
+        "summary": {
+          "gap_count": 2,
+          "severe_gap_count": 2,
+          "by_severity": {
+            "critical": 0,
+            "high": 2,
+            "warning": 0,
+            "info": 0
+          }
+        },
+        "link_keys": [
+          "project_id/equipment_instance_id",
+          "bom_node_id",
+          "work_order_id",
+          "material_id",
+          "lot_id/serial_no"
+        ],
+        "segments": [
+          {
+            "key": "contract",
+            "label": "合同/项目",
+            "total": 5,
+            "linked": 5,
+            "percent": 100,
+            "status": "ok",
+            "path": "/instances",
+            "action_path": "/instances?instance_id=3&from=delivery-lineage&segment=contract",
+            "fix_entry": {
+              "module": "装备实例",
+              "label": "完善项目档案",
+              "path": "/instances?instance_id=3&from=delivery-lineage&segment=contract",
+              "owner_role": "项目经理",
+              "checklist": [
+                "补齐项目编码/合同号/序列号",
+                "确认客户与计划节点",
+                "保存后返回交付看板复检"
+              ]
+            },
+            "owner_role": "项目经理",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "bom",
+            "label": "BOM结构",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/bom",
+            "action_path": "/bom?instance_id=3&from=delivery-lineage&segment=bom",
+            "fix_entry": {
+              "module": "BOM 管理",
+              "label": "修复 BOM 结构",
+              "path": "/bom?instance_id=3&from=delivery-lineage&segment=bom",
+              "owner_role": "工程/设计",
+              "checklist": [
+                "建立 0级整机、1级部件、2级零件",
+                "补齐物料或图号",
+                "校验层级和虚拟件"
+              ]
+            },
+            "owner_role": "工程/设计",
+            "gap_count": 1,
+            "severe_gap_count": 1
+          },
+          {
+            "key": "documents",
+            "label": "图纸/文档",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "blocked",
+            "path": "/documents",
+            "action_path": "/documents?instance_id=3&from=delivery-lineage&segment=documents",
+            "fix_entry": {
+              "module": "文档/图纸",
+              "label": "上传/签发/绑定图纸",
+              "path": "/documents?instance_id=3&from=delivery-lineage&segment=documents",
+              "owner_role": "工程/文控",
+              "checklist": [
+                "上传图纸/SOP/检验标准",
+                "绑定装备实例和 BOM 节点",
+                "签发并要求现场签收"
+              ]
+            },
+            "owner_role": "工程/文控",
+            "gap_count": 1,
+            "severe_gap_count": 1
+          },
+          {
+            "key": "process",
+            "label": "工艺路线",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/process-tree",
+            "action_path": "/process-tree?instance_id=3&from=delivery-lineage&segment=process",
+            "fix_entry": {
+              "module": "工艺路线",
+              "label": "补工艺路线/工时/工位",
+              "path": "/process-tree?instance_id=3&from=delivery-lineage&segment=process",
+              "owner_role": "工艺",
+              "checklist": [
+                "按 1级部件建立工序",
+                "补标准工时",
+                "指定装配/焊接/检验工位"
+              ]
+            },
+            "owner_role": "工艺",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "purchase",
+            "label": "采购链路",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/purchase",
+            "action_path": "/purchase?tab=followup&instance_id=3&from=delivery-lineage&segment=purchase",
+            "fix_entry": {
+              "module": "采购跟催",
+              "label": "生成采购/跟催",
+              "path": "/purchase?tab=followup&instance_id=3&from=delivery-lineage&segment=purchase",
+              "owner_role": "采购",
+              "checklist": [
+                "由 BOM 生成采购需求",
+                "补物料和 BOM 关联",
+                "指定 ETA 与跟催责任人"
+              ]
+            },
+            "owner_role": "采购",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "kit",
+            "label": "齐套/缺料",
+            "total": 1,
+            "linked": 1,
+            "percent": 100,
+            "status": "ok",
+            "path": "/kit-closure",
+            "action_path": "/kit-closure?instance_id=3&from=delivery-lineage&segment=kit",
+            "fix_entry": {
+              "module": "齐套缺料",
+              "label": "处理缺料闭环",
+              "path": "/kit-closure?instance_id=3&from=delivery-lineage&segment=kit",
+              "owner_role": "仓库/采购",
+              "checklist": [
+                "分派缺料责任人",
+                "回写预计到货日期",
+                "生成或关联采购催办"
+              ]
+            },
+            "owner_role": "仓库/采购",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "work_orders",
+            "label": "工单/派工",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/work-orders",
+            "action_path": "/work-orders?instance_id=3&from=delivery-lineage&segment=work_orders",
+            "fix_entry": {
+              "module": "工单管理",
+              "label": "生成/派发工单",
+              "path": "/work-orders?instance_id=3&from=delivery-lineage&segment=work_orders",
+              "owner_role": "生产计划",
+              "checklist": [
+                "由工艺路线生成工单",
+                "指定工位和人员",
+                "补预计工时"
+              ]
+            },
+            "owner_role": "生产计划",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "report",
+            "label": "工时/报工",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/process-hours",
+            "action_path": "/process-hours?instance_id=3&from=delivery-lineage&segment=report",
+            "fix_entry": {
+              "module": "工时与报工",
+              "label": "补工序级报工",
+              "path": "/process-hours?instance_id=3&from=delivery-lineage&segment=report",
+              "owner_role": "车间班组",
+              "checklist": [
+                "扫码或录入工序报工",
+                "补实际工时",
+                "同步完工进度"
+              ]
+            },
+            "owner_role": "车间班组",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "quality",
+            "label": "质量闭环",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/quality",
+            "action_path": "/quality?instance_id=3&from=delivery-lineage&segment=quality",
+            "fix_entry": {
+              "module": "质检管理",
+              "label": "补检验/NCR 闭环",
+              "path": "/quality?instance_id=3&from=delivery-lineage&segment=quality",
+              "owner_role": "质量",
+              "checklist": [
+                "录入来料/过程/出厂检验",
+                "关闭 NCR/CAPA",
+                "绑定工单和批次"
+              ]
+            },
+            "owner_role": "质量",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "cost",
+            "label": "成本归集",
+            "total": 1,
+            "linked": 1,
+            "percent": 100,
+            "status": "ok",
+            "path": "/cost",
+            "action_path": "/cost?instance_id=3&from=delivery-lineage&segment=cost",
+            "fix_entry": {
+              "module": "成本归集",
+              "label": "补成本归集",
+              "path": "/cost?instance_id=3&from=delivery-lineage&segment=cost",
+              "owner_role": "财务/项目",
+              "checklist": [
+                "归集材料/人工/外协/折旧",
+                "绑定项目/BOM 节点",
+                "复核成本偏差"
+              ]
+            },
+            "owner_role": "财务/项目",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "trace",
+            "label": "批次/谱系",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/trace",
+            "action_path": "/trace?instance_id=3&from=delivery-lineage&segment=trace",
+            "fix_entry": {
+              "module": "端到端追溯",
+              "label": "补批次谱系",
+              "path": "/trace?instance_id=3&from=delivery-lineage&segment=trace",
+              "owner_role": "仓库/质量",
+              "checklist": [
+                "记录 lot_id/serial_no",
+                "绑定发料、工单和装配位置",
+                "支持正反向追溯"
+              ]
+            },
+            "owner_role": "仓库/质量",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          },
+          {
+            "key": "acceptance",
+            "label": "客户验收",
+            "total": 1,
+            "linked": 0,
+            "percent": 0,
+            "status": "ok",
+            "path": "/tbm-advanced?tab=accept",
+            "action_path": "/tbm-advanced?tab=accept&instance_id=3&from=delivery-lineage&segment=acceptance",
+            "fix_entry": {
+              "module": "客户验收",
+              "label": "补验收记录",
+              "path": "/tbm-advanced?tab=accept&instance_id=3&from=delivery-lineage&segment=acceptance",
+              "owner_role": "项目/售后",
+              "checklist": [
+                "建立客户验收单",
+                "记录整改项",
+                "完成交付/运维移交"
+              ]
+            },
+            "owner_role": "项目/售后",
+            "gap_count": 0,
+            "severe_gap_count": 0
+          }
+        ],
+        "gaps": [
+          {
+            "id": "bom_1",
+            "segment": "bom",
+            "severity": "high",
+            "title": "未建立 BOM",
+            "message": "盾构机项目必须先建立 0级整机、1级部件、2级零件/外购件，后续采购/齐套/成本都依赖 BOM",
+            "path": "/bom",
+            "action_path": "/bom?instance_id=3&from=delivery-lineage&segment=bom",
+            "fix_entry": {
+              "module": "BOM 管理",
+              "label": "修复 BOM 结构",
+              "path": "/bom?instance_id=3&from=delivery-lineage&segment=bom",
+              "owner_role": "工程/设计",
+              "checklist": [
+                "建立 0级整机、1级部件、2级零件",
+                "补齐物料或图号",
+                "校验层级和虚拟件"
+              ]
+            },
+            "owner_role": "工程/设计",
+            "count": 1,
+            "samples": []
+          },
+          {
+            "id": "documents_2",
+            "segment": "documents",
+            "severity": "high",
+            "title": "未上传图纸/工艺文件",
+            "message": "现场执行需要图纸、SOP、检验标准电子化签发，不能只靠线下文件",
+            "path": "/documents",
+            "action_path": "/documents?instance_id=3&from=delivery-lineage&segment=documents",
+            "fix_entry": {
+              "module": "文档/图纸",
+              "label": "上传/签发/绑定图纸",
+              "path": "/documents?instance_id=3&from=delivery-lineage&segment=documents",
+              "owner_role": "工程/文控",
+              "checklist": [
+                "上传图纸/SOP/检验标准",
+                "绑定装备实例和 BOM 节点",
+                "签发并要求现场签收"
+              ]
+            },
+            "owner_role": "工程/文控",
+            "count": 1,
+            "samples": []
+          }
+        ],
+        "project_snapshot": {
+          "id": 3,
+          "instance_code": "TBM-3",
+          "instance_name": "三号机",
+          "customer_name": "丙客户",
+          "status": "manufacturing",
+          "lifecycle_stage": "manufacturing",
+          "progress_pct": 0,
+          "risk_score": 0,
+          "risk_level": "normal",
+          "workflow_status": "blocked",
+          "workflow_blockers": [
+            {
+              "type": "bom_missing",
+              "severity": "high",
+              "title": "未建立BOM",
+              "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+              "path": "/bom?instance_id=3&from=delivery&stage=bom",
+              "owner_role": "工程/设计",
+              "stage_key": "bom",
+              "stage_label": "BOM"
+            },
+            {
+              "type": "doc_missing",
+              "severity": "high",
+              "title": "未上传图纸/工艺文件",
+              "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+              "path": "/documents?instance_id=3&from=delivery&stage=documents",
+              "owner_role": "工程/文控",
+              "stage_key": "documents",
+              "stage_label": "图纸"
+            },
+            {
+              "type": "route_no_components",
+              "severity": "high",
+              "title": "无法按部件建立工艺",
+              "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+              "path": "/bom?instance_id=3&from=delivery&stage=bom",
+              "owner_role": "工程/工艺",
+              "stage_key": "process",
+              "stage_label": "工艺"
+            },
+            {
+              "type": "wo_missing",
+              "severity": "warning",
+              "title": "未生成工单",
+              "message": "BOM和工艺确认后应生成工单并派发到工位/人员",
+              "path": "/work-orders?instance_id=3&from=delivery&stage=work_orders",
+              "owner_role": "生产计划",
+              "stage_key": "work_orders",
+              "stage_label": "工单"
+            }
+          ],
+          "workflow_blocker_count": 4,
+          "exception_count": 0,
+          "risk_breakdown": {
+            "score": 0,
+            "risk_level": "normal",
+            "by_type": {},
+            "by_severity": {
+              "critical": 0,
+              "high": 0,
+              "warning": 0,
+              "info": 0
+            },
+            "exception_count": 0,
+            "shortage_count": 0,
+            "purchase_followup_count": 0,
+            "purchase_followup_blocking": 0,
+            "purchase_followup_overdue": 0,
+            "ncr_count": 0,
+            "cost_risk_level": "normal",
+            "cost_variance_pct": 0.6,
+            "quick_actions": []
+          },
+          "oee_30d": null,
+          "metrics": {
+            "contract": {
+              "total": 1,
+              "done": 1
+            },
+            "bom": {
+              "total": 0,
+              "done": 0,
+              "tier0": 0,
+              "tier1": 0,
+              "tier2": 0
+            },
+            "documents": {
+              "total": 0,
+              "issued": 0,
+              "done": 0
+            },
+            "process_route": {
+              "component_count": 0,
+              "complete_count": 0,
+              "operation_count": 0,
+              "standard_man_hours": 0,
+              "blockers": [
+                {
+                  "type": "route_no_components",
+                  "severity": "high",
+                  "title": "无法按部件建立工艺",
+                  "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                  "path": "/bom?instance_id=3&from=delivery&stage=bom",
+                  "owner_role": "工程/工艺"
+                }
+              ]
+            },
+            "purchase": {
+              "total": 0,
+              "done": 0
+            },
+            "purchase_followup": {
+              "total": 0,
+              "overdue": 0
+            },
+            "kit": {
+              "total": 1,
+              "done": 1
+            },
+            "work_orders": {
+              "total": 0,
+              "done": 0,
+              "by_status": {}
+            },
+            "process_nodes": {
+              "total": 0,
+              "done": 0,
+              "by_status": {}
+            },
+            "report": {
+              "total": 0,
+              "done": 0
+            },
+            "quality": {
+              "total": 0,
+              "pass": 0,
+              "done": 0
+            },
+            "cost": {
+              "total": 0,
+              "done": 0,
+              "variance_pct": 0.6,
+              "actual_amount": 5000
+            },
+            "acceptance": {
+              "total": 0,
+              "done": 0
+            }
+          },
+          "stages": [
+            {
+              "key": "contract",
+              "label": "合同/项目",
+              "done": 1,
+              "total": 1,
+              "percent": 100,
+              "status": "done",
+              "path": "/instances?instance_id=3&from=delivery&stage=contract",
+              "owner_role": "项目经理",
+              "action_label": "补项目档案",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "bom",
+              "label": "BOM",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/bom?instance_id=3&from=delivery&stage=bom",
+              "owner_role": "工程/设计",
+              "action_label": "维护BOM",
+              "blockers": [
+                {
+                  "type": "bom_missing",
+                  "severity": "high",
+                  "title": "未建立BOM",
+                  "message": "需要先建立0级整机、1级部件、2级零件/外购件",
+                  "path": "/bom?instance_id=3&from=delivery&stage=bom",
+                  "owner_role": "工程/设计"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "documents",
+              "label": "图纸",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/documents?instance_id=3&from=delivery&stage=documents",
+              "owner_role": "工程/文控",
+              "action_label": "签发图纸",
+              "blockers": [
+                {
+                  "type": "doc_missing",
+                  "severity": "high",
+                  "title": "未上传图纸/工艺文件",
+                  "message": "现场不能靠线下文件传递，至少绑定图纸、SOP、检验标准",
+                  "path": "/documents?instance_id=3&from=delivery&stage=documents",
+                  "owner_role": "工程/文控"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "process",
+              "label": "工艺",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "blocked",
+              "path": "/process-tree?instance_id=3&from=delivery&stage=process",
+              "owner_role": "工艺/生产",
+              "action_label": "补工艺路线",
+              "blockers": [
+                {
+                  "type": "route_no_components",
+                  "severity": "high",
+                  "title": "无法按部件建立工艺",
+                  "message": "BOM缺少1级部件，工艺路线无法按装配单元展开",
+                  "path": "/bom?instance_id=3&from=delivery&stage=bom",
+                  "owner_role": "工程/工艺"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "purchase",
+              "label": "采购",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "pending",
+              "path": "/purchase?instance_id=3&from=delivery&stage=purchase",
+              "owner_role": "采购",
+              "action_label": "采购跟催",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "kit",
+              "label": "齐套",
+              "done": 1,
+              "total": 1,
+              "percent": 100,
+              "status": "done",
+              "path": "/kit-closure?instance_id=3&from=delivery&stage=kit",
+              "owner_role": "仓库/采购",
+              "action_label": "处理缺料",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "work_orders",
+              "label": "工单",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "warning",
+              "path": "/work-orders?instance_id=3&from=delivery&stage=work_orders",
+              "owner_role": "生产计划",
+              "action_label": "派发工单",
+              "blockers": [
+                {
+                  "type": "wo_missing",
+                  "severity": "warning",
+                  "title": "未生成工单",
+                  "message": "BOM和工艺确认后应生成工单并派发到工位/人员",
+                  "path": "/work-orders?instance_id=3&from=delivery&stage=work_orders",
+                  "owner_role": "生产计划"
+                }
+              ],
+              "blocker_count": 1
+            },
+            {
+              "key": "report",
+              "label": "报工",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "pending",
+              "path": "/process-hours?instance_id=3&from=delivery&stage=report",
+              "owner_role": "车间班组",
+              "action_label": "扫码报工",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "quality",
+              "label": "质检",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "pending",
+              "path": "/quality?instance_id=3&from=delivery&stage=quality",
+              "owner_role": "质量",
+              "action_label": "处理质检",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "cost",
+              "label": "成本",
+              "done": 1,
+              "total": 1,
+              "percent": 100,
+              "status": "done",
+              "path": "/cost?instance_id=3&from=delivery&stage=cost",
+              "owner_role": "财务/项目",
+              "action_label": "复核成本",
+              "blockers": [],
+              "blocker_count": 0
+            },
+            {
+              "key": "acceptance",
+              "label": "验收",
+              "done": 0,
+              "total": 1,
+              "percent": 0,
+              "status": "pending",
+              "path": "/tbm-advanced?instance_id=3&from=delivery&stage=acceptance",
+              "owner_role": "项目/售后",
+              "action_label": "登记验收",
+              "blockers": [],
+              "blocker_count": 0
+            }
+          ],
+          "top_exceptions": []
+        }
+      }
+    }
+  ]
+}
