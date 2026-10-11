@@ -192,8 +192,8 @@
       "ddlStatements": 1
     },
     "scheduleService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "e420dab5f8d779ced19eecd3d0d50c54b826e1f24482ea302209c28cd51546fa",
+      "schemaVersion": 2,
+      "ddlFingerprint": "f5750c3fa93a1afd326ea048e685caaf871af2eacac12e0d290493dd42ae68f1",
       "ddlStatements": 2
     },
     "setupWizardService": {

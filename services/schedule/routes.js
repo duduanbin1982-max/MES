@@ -1,65 +1,18 @@
 "use strict";
+// services/schedule/routes.js
+// 排程 HTTP 路由: 周视图 / 派工 / 状态流转 / 产能 / 日视图 / 我的任务。
+// (原 services/scheduleService.js 第 57-337 行)
 
-const { ApiError } = require("../app/errors");
-const { wrap } = require("../middleware/asyncHandler");
-
-const logger = require("../app/logger").createLogger("scheduleService");
-
-function runMigration(db) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS schedule_assignments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      process_node_id INTEGER NOT NULL,
-      user_id INTEGER,
-      workstation_id INTEGER,
-      planned_start TEXT,
-      planned_end TEXT,
-      estimated_hours REAL,
-      priority INTEGER DEFAULT 1,
-      status TEXT DEFAULT 'planned',
-      notes TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (process_node_id) REFERENCES process_nodes(id),
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (workstation_id) REFERENCES workstations(id)
-    )
-  `);
-
-  db.exec(`
-    DELETE FROM schedule_assignments
-    WHERE status IN ('assigned', 'in_progress', 'pending')
-      AND id NOT IN (
-        SELECT MAX(id)
-        FROM schedule_assignments
-        WHERE status IN ('assigned', 'in_progress', 'pending')
-        GROUP BY process_node_id
-      );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_assignments_active_node
-      ON schedule_assignments(process_node_id)
-      WHERE status IN ('assigned', 'in_progress', 'pending');
-    CREATE INDEX IF NOT EXISTS idx_schedule_assignments_user_status
-      ON schedule_assignments(user_id, status);
-    CREATE INDEX IF NOT EXISTS idx_schedule_assignments_workstation_dates
-      ON schedule_assignments(workstation_id, planned_start, planned_end);
-  `);
-}
-
-function toInt(value) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeDate(value) {
-  return value ? String(value).slice(0, 19) : null;
-}
+const { ApiError } = require("../../app/errors");
+const { wrap } = require("../../middleware/asyncHandler");
+const logger = require("../../app/logger").createLogger("scheduleService");
+const { makeDbHelpers, toInt, normalizeDate } = require("./_helpers");
+const { runMigration } = require("./schema");
 
 function register(app, db) {
   runMigration(db);
 
-  const all = (sql, ...params) => db.prepare(sql).all(...params);
-  const get = (sql, ...params) => db.prepare(sql).get(...params);
-  const run = (sql, ...params) => db.prepare(sql).run(...params);
+  const { all, get, run } = makeDbHelpers(db);
 
   app.get("/api/schedule/weekly", wrap((req, res) => {
     const refValue = req.query.date || req.query.week;
