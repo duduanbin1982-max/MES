@@ -1,12 +1,12 @@
 "use strict";
-
+// services/equipment/gantt/instanceGantt/gantt.js
 // GET /api/equipment_instances/:id/gantt
 // 单项目甘特：优先使用 process_nodes 的真实 planned_start/planned_end；
 // 未排程节点才按依赖关系和标准工时做只读 fallback，避免 Gantt 与项目排程口径脱节。
+// (原 services/equipment/gantt/instanceGantt.js 第 117-218 行)
 
-const HOURS_PER_WORKDAY = 8;
-const MS_PER_HOUR = 3600 * 1000;
-const MS_PER_DAY = 24 * MS_PER_HOUR;
+const { formatDateTime, parseDate, addHours, hoursBetween, daysBetween, HOURS_PER_WORKDAY } = require("./_time");
+const { nodeWorkHours, buildFallbackScheduler } = require("./_scheduler");
 
 function all(db, sql, ...params) {
   return db.prepare(sql).all(...params);
@@ -14,104 +14,6 @@ function all(db, sql, ...params) {
 
 function get(db, sql, ...params) {
   return db.prepare(sql).get(...params);
-}
-
-function parseDate(value) {
-  if (!value) return null;
-  const raw = String(value).trim();
-  const normalized = raw.length === 10 ? `${raw}T00:00:00` : raw.replace(" ", "T");
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function pad(value) {
-  return String(value).padStart(2, "0");
-}
-
-function formatDateTime(date) {
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate()),
-  ].join("-") + " " + [
-    pad(date.getHours()),
-    pad(date.getMinutes()),
-    pad(date.getSeconds()),
-  ].join(":");
-}
-
-function addHours(date, hours) {
-  return new Date(date.getTime() + Number(hours || 0) * MS_PER_HOUR);
-}
-
-function hoursBetween(start, end) {
-  return Math.max(0, (end.getTime() - start.getTime()) / MS_PER_HOUR);
-}
-
-function daysBetween(start, end) {
-  return Math.max(1, Math.ceil((end.getTime() - start.getTime()) / MS_PER_DAY));
-}
-
-function nodeWorkHours(node) {
-  const estimated = Number(node.estimated_hours || 0);
-  if (estimated > 0) return estimated;
-  const plannedStart = parseDate(node.planned_start);
-  const plannedEnd = parseDate(node.planned_end);
-  if (plannedStart && plannedEnd && plannedEnd > plannedStart) return hoursBetween(plannedStart, plannedEnd);
-  return HOURS_PER_WORKDAY;
-}
-
-function buildFallbackScheduler(nodes, deps, projectStart) {
-  const byId = new Map(nodes.map((node) => [Number(node.id), node]));
-  const predMap = new Map();
-  for (const dep of deps) {
-    const successorId = Number(dep.successor_id);
-    if (!predMap.has(successorId)) predMap.set(successorId, []);
-    predMap.get(successorId).push(Number(dep.predecessor_id));
-  }
-
-  const starts = new Map();
-  const ends = new Map();
-  const visiting = new Set();
-
-  function calcStart(id) {
-    if (starts.has(id)) return starts.get(id);
-    const node = byId.get(Number(id));
-    if (!node) return projectStart;
-
-    const realStart = parseDate(node.planned_start);
-    if (realStart) {
-      starts.set(Number(id), realStart);
-      return realStart;
-    }
-
-    if (visiting.has(Number(id))) return projectStart;
-    visiting.add(Number(id));
-
-    let start = projectStart;
-    for (const predecessorId of predMap.get(Number(id)) || []) {
-      const predEnd = calcEnd(predecessorId);
-      if (predEnd > start) start = predEnd;
-    }
-
-    visiting.delete(Number(id));
-    starts.set(Number(id), start);
-    return start;
-  }
-
-  function calcEnd(id) {
-    if (ends.has(Number(id))) return ends.get(Number(id));
-    const node = byId.get(Number(id));
-    if (!node) return projectStart;
-
-    const realEnd = parseDate(node.planned_end);
-    const start = calcStart(Number(id));
-    const end = realEnd && realEnd > start ? realEnd : addHours(start, nodeWorkHours(node));
-    ends.set(Number(id), end);
-    return end;
-  }
-
-  return { calcStart, calcEnd };
 }
 
 function getInstanceGantt(req, res, db) {

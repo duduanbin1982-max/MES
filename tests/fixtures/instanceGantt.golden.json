@@ -1,0 +1,424 @@
+{
+  "instance1": {
+    "status": 200,
+    "body": {
+      "instance": {
+        "id": 1,
+        "code": "TBM-1",
+        "name": "一号机"
+      },
+      "project_start": "2026-10-05 08:00:00",
+      "project_end": "2026-10-12 16:00:00",
+      "total_hours": 176,
+      "total_days": 8,
+      "total_weeks": 1,
+      "total_work_hours": 40,
+      "scheduled_count": 3,
+      "unscheduled_count": 1,
+      "dependency_count": 0,
+      "status_summary": {
+        "completed": 1,
+        "pending": 2,
+        "in_progress": 1
+      },
+      "bars": [
+        {
+          "id": 101,
+          "name": "总装",
+          "subsystem": "主驱动",
+          "phase_code": "P1",
+          "workstation_id": 1,
+          "workstation_name": "工位A",
+          "start": "2026-10-05 08:00:00",
+          "end": "2026-10-07 08:00:00",
+          "planned_start": "2026-10-05 08:00:00",
+          "planned_end": "2026-10-07 08:00:00",
+          "actual_start": "2026-10-05 09:00:00",
+          "actual_end": "2026-10-07 07:00:00",
+          "duration_days": 2,
+          "duration_hours": 16,
+          "calendar_hours": 48,
+          "status": "completed",
+          "progress": 100,
+          "bom_node_id": 5,
+          "scheduled": true
+        },
+        {
+          "id": 103,
+          "name": "验收",
+          "subsystem": "P2",
+          "phase_code": "P2",
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-05 08:00:00",
+          "end": "2026-10-05 16:00:00",
+          "planned_start": "2026-10-05 08:00:00",
+          "planned_end": "2026-10-05 16:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 8,
+          "calendar_hours": 8,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        },
+        {
+          "id": 102,
+          "name": "调试",
+          "subsystem": "刀盘",
+          "phase_code": "P1",
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-07 08:00:00",
+          "end": "2026-10-08 08:00:00",
+          "planned_start": "2026-10-07 08:00:00",
+          "planned_end": "2026-10-08 08:00:00",
+          "actual_start": "2026-10-07 09:00:00",
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 8,
+          "calendar_hours": 24,
+          "status": "in_progress",
+          "progress": 50,
+          "bom_node_id": null,
+          "scheduled": true
+        },
+        {
+          "id": 104,
+          "name": "零时长",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-12 08:00:00",
+          "end": "2026-10-12 16:00:00",
+          "planned_start": "2026-10-12 08:00:00",
+          "planned_end": "2026-10-12 16:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 8,
+          "calendar_hours": 8,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": true
+        }
+      ]
+    }
+  },
+  "instance2": {
+    "status": 200,
+    "body": {
+      "instance": {
+        "id": 2,
+        "code": "TBM-2",
+        "name": "二号机"
+      },
+      "project_start": "2026-10-06 00:00:00",
+      "project_end": "2026-10-06 18:00:00",
+      "total_hours": 18,
+      "total_days": 1,
+      "total_weeks": 0.1,
+      "total_work_hours": 18,
+      "scheduled_count": 0,
+      "unscheduled_count": 3,
+      "dependency_count": 2,
+      "status_summary": {
+        "pending": 3
+      },
+      "bars": [
+        {
+          "id": 201,
+          "name": "下料",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-06 00:00:00",
+          "end": "2026-10-06 04:00:00",
+          "planned_start": "2026-10-06 00:00:00",
+          "planned_end": "2026-10-06 04:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 4,
+          "calendar_hours": 4,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        },
+        {
+          "id": 202,
+          "name": "焊接",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-06 04:00:00",
+          "end": "2026-10-06 12:00:00",
+          "planned_start": "2026-10-06 04:00:00",
+          "planned_end": "2026-10-06 12:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 8,
+          "calendar_hours": 8,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        },
+        {
+          "id": 203,
+          "name": "打磨",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-06 12:00:00",
+          "end": "2026-10-06 18:00:00",
+          "planned_start": "2026-10-06 12:00:00",
+          "planned_end": "2026-10-06 18:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 6,
+          "calendar_hours": 6,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        }
+      ]
+    }
+  },
+  "instance3": {
+    "status": 200,
+    "body": {
+      "instance": {
+        "id": 3,
+        "code": "TBM-3",
+        "name": "三号机"
+      },
+      "project_start": "2026-10-07 08:00:00",
+      "total_hours": 0,
+      "total_days": 0,
+      "total_weeks": 0,
+      "total_work_hours": 0,
+      "bars": [],
+      "status_summary": {}
+    }
+  },
+  "instance4": {
+    "status": 200,
+    "body": {
+      "instance": {
+        "id": 4,
+        "code": "TBM-4",
+        "name": "四号机"
+      },
+      "project_start": "2026-10-08 08:00:00",
+      "project_end": "2026-10-08 23:00:00",
+      "total_hours": 15,
+      "total_days": 1,
+      "total_weeks": 0.1,
+      "total_work_hours": 15,
+      "scheduled_count": 0,
+      "unscheduled_count": 3,
+      "dependency_count": 3,
+      "status_summary": {
+        "pending": 3
+      },
+      "bars": [
+        {
+          "id": 401,
+          "name": "工序A",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-08 08:00:00",
+          "end": "2026-10-08 13:00:00",
+          "planned_start": "2026-10-08 08:00:00",
+          "planned_end": "2026-10-08 13:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 5,
+          "calendar_hours": 5,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        },
+        {
+          "id": 403,
+          "name": "工序C",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-08 13:00:00",
+          "end": "2026-10-08 18:00:00",
+          "planned_start": "2026-10-08 13:00:00",
+          "planned_end": "2026-10-08 18:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 5,
+          "calendar_hours": 5,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        },
+        {
+          "id": 402,
+          "name": "工序B",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-08 18:00:00",
+          "end": "2026-10-08 23:00:00",
+          "planned_start": "2026-10-08 18:00:00",
+          "planned_end": "2026-10-08 23:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 5,
+          "calendar_hours": 5,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        }
+      ]
+    }
+  },
+  "instance5": {
+    "status": 200,
+    "body": {
+      "instance": {
+        "id": 5,
+        "code": "TBM-5",
+        "name": "五号机"
+      },
+      "project_start": "2026-10-09 08:00:00",
+      "project_end": "2026-10-11 10:00:00",
+      "total_hours": 50,
+      "total_days": 3,
+      "total_weeks": 0.3,
+      "total_work_hours": 17,
+      "scheduled_count": 2,
+      "unscheduled_count": 2,
+      "dependency_count": 0,
+      "status_summary": {
+        "pending": 3,
+        "completed": 1
+      },
+      "bars": [
+        {
+          "id": 501,
+          "name": "带计划无工时",
+          "subsystem": "P3",
+          "phase_code": "P3",
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-09 08:00:00",
+          "end": "2026-10-09 12:00:00",
+          "planned_start": "2026-10-09 08:00:00",
+          "planned_end": "2026-10-09 12:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 4,
+          "calendar_hours": 4,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": true
+        },
+        {
+          "id": 503,
+          "name": "缺工时缺计划",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-09 08:00:00",
+          "end": "2026-10-09 16:00:00",
+          "planned_start": "2026-10-09 08:00:00",
+          "planned_end": "2026-10-09 16:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 8,
+          "calendar_hours": 8,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        },
+        {
+          "id": 502,
+          "name": "只有开始",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-10 08:00:00",
+          "end": "2026-10-10 11:00:00",
+          "planned_start": "2026-10-10 08:00:00",
+          "planned_end": "2026-10-10 11:00:00",
+          "actual_start": null,
+          "actual_end": null,
+          "duration_days": 1,
+          "duration_hours": 3,
+          "calendar_hours": 3,
+          "status": "pending",
+          "progress": 0,
+          "bom_node_id": null,
+          "scheduled": false
+        },
+        {
+          "id": 504,
+          "name": "已完成",
+          "subsystem": "未分组",
+          "phase_code": null,
+          "workstation_id": null,
+          "workstation_name": null,
+          "start": "2026-10-11 08:00:00",
+          "end": "2026-10-11 10:00:00",
+          "planned_start": "2026-10-11 08:00:00",
+          "planned_end": "2026-10-11 10:00:00",
+          "actual_start": "2026-10-11 08:10:00",
+          "actual_end": "2026-10-11 09:50:00",
+          "duration_days": 1,
+          "duration_hours": 2,
+          "calendar_hours": 2,
+          "status": "completed",
+          "progress": 100,
+          "bom_node_id": 9,
+          "scheduled": true
+        }
+      ]
+    }
+  },
+  "missing": {
+    "status": 404,
+    "body": {
+      "error": "instance not found"
+    }
+  },
+  "invalid": {
+    "status": 404,
+    "body": {
+      "error": "instance not found"
+    }
+  }
+}
