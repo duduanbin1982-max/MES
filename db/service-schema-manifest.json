@@ -167,8 +167,8 @@
       "ddlStatements": 4
     },
     "purchase": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "6256d2d96e235b401729753ad2839adfc7893be48fff010d9612f477ddfddf9a",
+      "schemaVersion": 2,
+      "ddlFingerprint": "09cbc62b19822a77c17ac59b9ecbd2e822b2aa957aafad790d3d7673ab159df5",
       "ddlStatements": 21
     },
     "qcService": {
