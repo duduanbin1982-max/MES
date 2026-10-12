@@ -42,8 +42,8 @@
       "ddlStatements": 0
     },
     "deliveryService": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "4e4267ddd9c6eddaab7b96f4b2435249bcb608c50cde2a14c49e7f15c4d3db5c",
+      "schemaVersion": 3,
+      "ddlFingerprint": "d79023485f215d21429e0f7dbfa1c94560401c231af9073d4d585e82f6e76066",
       "ddlStatements": 4
     },
     "digitalTwinService": {
@@ -102,8 +102,8 @@
       "ddlStatements": 0
     },
     "masterDataService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "a0b499e7a32b8aa9dd2c5b0f93762688726ed051586562d0faa9b4a9c68a4157",
+      "schemaVersion": 2,
+      "ddlFingerprint": "66b2e8275fc13c4f747162c77b1306ccb121521f4a8be054c00d13d7ccec4861",
       "ddlStatements": 2
     },
     "material": {
@@ -112,8 +112,8 @@
       "ddlStatements": 0
     },
     "materialPlanner": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "85b077038346b369d70ad9272e08ede9dddb2e0a5773b5995e720100613efea9",
+      "schemaVersion": 2,
+      "ddlFingerprint": "da5b27ad0c20e8f9c969192612eac45de7bee3692651e1e63fb1478d722cefbe",
       "ddlStatements": 1
     },
     "materialService": {
