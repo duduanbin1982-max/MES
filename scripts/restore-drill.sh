@@ -1,4 +1,5 @@
 #!/bin/bash
+# ⚠️ 2026-10-13 起停用（依赖 192.168.1.75）。本地恢复演练请用 scripts/restore-drill-local.sh。
 # P2 恢复演练：从 192.168.1.75 离机备份拉取最新 DB 到临时目录，校验 sha256 和可读性。
 # 不覆盖生产库；默认完成后清理临时目录。设置 RESTORE_DRILL_KEEP=1 可保留现场。
 set -euo pipefail

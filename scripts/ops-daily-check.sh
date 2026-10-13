@@ -42,17 +42,21 @@ DAILY_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'mes.db.20*' ! -name 
 WEEKLY_COUNT=$(find "$BACKUP_DIR/weekly" -maxdepth 1 -type f -name 'mes.db.weekly.*' 2>/dev/null | wc -l)
 log "backup inventory: daily=$DAILY_COUNT weekly=$WEEKLY_COUNT"
 
-# 3) 异地备份最近结果
-if [ -f "$OFFSITE_LOG" ]; then
-  LAST_OFFSITE=$(grep -E '^\[offsite\]' "$OFFSITE_LOG" | tail -1)
-  log "offsite: $LAST_OFFSITE"
-  case "$LAST_OFFSITE" in
+# 3) 恢复演练新鲜度（异地备份已于 2026-10-13 停用，改看本地演练）
+LOCAL_DRILL_LOG="$ROOT/logs/restore-drill-local.log"
+if [ -f "$LOCAL_DRILL_LOG" ]; then
+  LAST_DRILL=$(grep -E '^\[drill-local\]' "$LOCAL_DRILL_LOG" | tail -1)
+  DRILL_DAYS=$(( ( $(date +%s) - $(stat -c %Y "$LOCAL_DRILL_LOG") ) / 86400 ))
+  log "drill(local): age=${DRILL_DAYS}d last=$LAST_DRILL"
+  case "$LAST_DRILL" in
     *success*) ;;
-    *) problems+=("offsite backup last line not success: $LAST_OFFSITE") ;;
+    *) problems+=("local restore drill last run not success") ;;
   esac
+  [ "$DRILL_DAYS" -le 35 ] || problems+=("local restore drill stale: ${DRILL_DAYS}d")
 else
-  problems+=("offsite log missing")
+  problems+=("no local restore drill log yet (运行 scripts/restore-drill-local.sh)")
 fi
+log "offsite: 已停用（决策 2026-10-13，目标机 192.168.1.75 下线）"
 
 # 4) 日志轮转与体积
 if [ -f "$MES_LOG" ]; then

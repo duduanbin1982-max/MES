@@ -3,11 +3,11 @@
 // P0-5 三套工作流定义: BOM 审批 / ECO 变更 / 工单流转
 // Author: 三狗子 | Date: 2026-06-25
 //
-// ⚠️  @deprecated 2026-07-11 (brooks-audit R4 决策 ADR-003)
-//   仅 tests/workflow.test.js 引用, 实际运行链不引
-//   实际工作流业务跑在 services/workflowService.js
-//   保留: 历史快照 + 测试 fixture
-//   未来: Phase 2 cleanup 时评估删除
+// 2026-10-13 决策②（选项 ii）：本文件为**正式启用**的工作流定义来源，
+//   工单流转定义已改为引用 ./workOrderDefinition（与 stateMachine 同源）。
+//   历史：2026-07-11 曾被标为 deprecated（brooks-audit ADR-003），现予解除。
+//   现状：services/workflowService.js 通过 require('./definitions') 读本文件，
+//         engine.js 用它做 (from, action) 匹配；bom_approval / eco_change 保持不变。
 
 /**
  * 状态定义: { id, label, is_terminal?, is_initial? }
@@ -16,6 +16,8 @@
  *   - instance: workflow_instances 行 (含 data)
  *   - extraData: transit 传入的额外数据
  */
+
+const { WORK_ORDER_ENGINE_STATES, WORK_ORDER_ENGINE_TRANSITIONS } = require("./workOrderDefinition");
 
 const definitions = {
 
@@ -70,31 +72,15 @@ const definitions = {
     ],
   },
 
-  // ===================== 工单流转 =====================
+  // ===================== 工单流转（2026-10-13 决策②：以工作流定义为准） =====================
+  // 状态与转换的唯一来源是 app/workflow/workOrderDefinition.js（由 stateMachine 平移而来），
+  // 这里只做注册：states 供前端下拉/查询，transitions 供 engine.transit() 精确匹配 (from, action)。
   "work_order": {
     display_name: "工单流转",
     entity_type: "work_order",
-    description: "工单从创建到完工的标准流程",
-    states: [
-      { id: "created",       label: "新建" },
-      { id: "released",      label: "已下达" },
-      { id: "in_progress",   label: "进行中" },
-      { id: "paused",        label: "暂停" },
-      { id: "completed",     label: "已完工" },
-      { id: "closed",        label: "已关闭", is_terminal: true },
-      { id: "cancelled",     label: "已取消", is_terminal: true },
-    ],
-    transitions: [
-      { from: "created",     to: "released",    action: "release",    label: "下达" },
-      { from: "released",    to: "in_progress", action: "start",      label: "开工" },
-      { from: "in_progress", to: "paused",      action: "pause",      label: "暂停" },
-      { from: "paused",      to: "in_progress", action: "resume",     label: "恢复" },
-      { from: "in_progress", to: "completed",   action: "complete",   label: "完工" },
-      { from: "completed",   to: "closed",      action: "close",      label: "关闭" },
-      { from: "created",     to: "cancelled",   action: "cancel",     label: "取消" },
-      { from: "released",    to: "cancelled",   action: "cancel",     label: "取消" },
-      { from: "paused",      to: "cancelled",   action: "cancel",     label: "取消" },
-    ],
+    description: "工单从待派工到完工/取消的标准流转（与 services/workOrder/stateMachine.js 同源）",
+    states: WORK_ORDER_ENGINE_STATES,
+    transitions: WORK_ORDER_ENGINE_TRANSITIONS,
   },
 };
 

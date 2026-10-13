@@ -104,32 +104,48 @@ test("P5-4 ECO 实施 + 关闭", () => {
 
 // === 工单工作流 ===
 test("P5-5 启动工单工作流 + 完整流转", () => {
+  // 2026-10-13 决策②（选项 ii）：work_order 定义改为与 services/workOrder/stateMachine.js
+  // 同源（pending/dispatched/in_progress/paused/completed/cancelled），
+  // 不再使用旧的 created/released/resume/closed 那套。
   const r = wf.start("work_order", "work_order", 100, { created_by: 1 });
-  assert.equal(r.instance.current_state, "created");
+  assert.equal(r.instance.current_state, "pending");
 
-  // created -> released
-  wf.transit(r.instance.id, "release", 1, "下达");
-  assert.equal(wf.getInstance(r.instance.id).current_state, "released");
+  // pending -> dispatched（派工）
+  wf.transit(r.instance.id, "dispatch", 1, "派工");
+  assert.equal(wf.getInstance(r.instance.id).current_state, "dispatched");
 
-  // released -> in_progress
+  // dispatched -> in_progress（开工）
   wf.transit(r.instance.id, "start", 2, "开工");
   assert.equal(wf.getInstance(r.instance.id).current_state, "in_progress");
 
-  // in_progress -> paused
+  // in_progress -> paused（缺料暂停）
   wf.transit(r.instance.id, "pause", 2, "缺料暂停");
   assert.equal(wf.getInstance(r.instance.id).current_state, "paused");
 
-  // paused -> in_progress (resume)
-  wf.transit(r.instance.id, "resume", 2, "恢复");
-  assert.equal(wf.getInstance(r.instance.id).current_state, "in_progress");
-
-  // in_progress -> completed
+  // paused -> completed（complete 允许 DISPATCHED / IN_PROGRESS / PAUSED）
   wf.transit(r.instance.id, "complete", 2, "完工");
   assert.equal(wf.getInstance(r.instance.id).current_state, "completed");
+});
 
-  // completed -> closed
-  wf.transit(r.instance.id, "close", 1, "关闭归档");
-  assert.equal(wf.getInstance(r.instance.id).current_state, "closed");
+test("P5-5b 工单流转定义与 stateMachine 同源（防漂移）", () => {
+  const sm = require("../services/workOrder/stateMachine");
+  const { definitions } = require("../app/workflow/definitions");
+  const def = definitions.work_order;
+
+  // 状态集合必须一致
+  assert.deepEqual(def.states.map((s) => s.id), Object.values(sm.WO_STATUS));
+
+  // (from, action) 组合必须一致：引擎定义由 from 数组展开，stateMachine 保留 from 数组
+  const enginePairs = def.transitions.map((t) => `${t.from}|${t.action}`).sort();
+  const smPairs = [];
+  for (const [event, t] of Object.entries(sm.TRANSITIONS)) {
+    for (const from of t.from) smPairs.push(`${from}|${event}`);
+  }
+  assert.deepEqual(enginePairs, smPairs.sort());
+
+  // plan() 的结果必须仍是唯一来源（wf 定义直接来自 workOrderDefinition）
+  const woDef = require("../app/workflow/workOrderDefinition");
+  assert.equal(woDef.plan, sm.plan);
 });
 
 test("P5-6 非法迁移应报错", () => {
