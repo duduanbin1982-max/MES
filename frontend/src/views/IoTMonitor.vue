@@ -1,5 +1,13 @@
 <template>
-  <div class="page">
+    <el-alert
+    type="warning"
+    show-icon
+    :closable="false"
+    style="margin-bottom: 12px"
+    title="IoT 尚未接入真实设备"
+    description="当前 IOT_MODE=production，采集器不产生数据（iot_readings=0）。本页仅展示数据结构与界面，待接入 Modbus/OPC-UA 后自动生效。"
+  />
+<div class="page">
     <div class="page-header">
       <div class="page-title"><el-icon><Cellphone /></el-icon> IoT 设备监控</div>
       <div style="display:flex;gap: 8px">

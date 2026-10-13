@@ -345,13 +345,6 @@
           "icon": "Box"
         },
         {
-          "key": "iot",
-          "title": "IoT 设备监控大屏",
-          "path": "/iot",
-          "entry": "/iot",
-          "icon": "Connection"
-        },
-        {
           "key": "digital-twin",
           "title": "数字孪生",
           "path": "/digital-twin",
