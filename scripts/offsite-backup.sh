@@ -16,8 +16,8 @@ OFFSITE_KEY="${OFFSITE_KEY:-/home/dubin/.ssh/factory_mes_offsite_ed25519}"
 DAILY_RETENTION_DAYS="${OFFSITE_DAILY_RETENTION_DAYS:-30}"
 WEEKLY_RETENTION_DAYS="${OFFSITE_WEEKLY_RETENTION_DAYS:-90}"
 
-SSH_OPTS=(-i "$OFFSITE_KEY" -o BatchMode=yes -o ConnectTimeout=10)
-RSYNC_SSH="ssh -i $OFFSITE_KEY -o BatchMode=yes -o ConnectTimeout=10"
+SSH_OPTS=(-i "$OFFSITE_KEY" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
+RSYNC_SSH="ssh -i $OFFSITE_KEY -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT"
@@ -25,6 +25,19 @@ cd "$ROOT"
 log() {
   echo "[offsite] $(date '+%F %T') $*" | tee -a "$LOG"
 }
+
+# 失败可诊断 + 失败必告警（2026-10-13 实施批次一 W1-1）
+# 原脚本只有 set -e，失败时命令的 stderr 会进 cron 邮件而不进日志，
+# 于是 2026-09-14 之后连续 4 周的失败在 offsite-backup.log 里只留下一行 "prepare remote dirs"。
+alert_fail() {
+  local rc=$1 line=$2
+  log "FAILED rc=$rc at line $line"
+  "$NODE" -e "require('$ROOT/services/feishuNotify.js').feishuNotify('❌ MES 异地备份失败','rc=$rc line=$line 详见 logs/offsite-backup.log')" 2>/dev/null || true
+}
+trap 'rc=$?; alert_fail "$rc" "$LINENO"; exit $rc' ERR
+
+# 所有 stderr 追加进日志（含命令替换里的 ssh/rsync）
+exec 2> >(while IFS= read -r _l; do echo "[offsite][stderr] $_l" >> "$LOG"; done)
 
 if [ ! -f "$OFFSITE_KEY" ]; then
   log "ERROR: ssh key not found: $OFFSITE_KEY"

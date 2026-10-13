@@ -14,8 +14,8 @@ RUN_ID=$(date +%Y%m%d_%H%M%S)
 WORK_DIR="${RESTORE_DRILL_WORK_DIR:-/tmp/factory-mes-restore-drill-$RUN_ID}"
 KEEP="${RESTORE_DRILL_KEEP:-0}"
 
-SSH_OPTS=(-i "$OFFSITE_KEY" -o BatchMode=yes -o ConnectTimeout=10)
-RSYNC_SSH="ssh -i $OFFSITE_KEY -o BatchMode=yes -o ConnectTimeout=10"
+SSH_OPTS=(-i "$OFFSITE_KEY" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
+RSYNC_SSH="ssh -i $OFFSITE_KEY -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
 
 mkdir -p "$ROOT/logs" "$WORK_DIR"
 cd "$ROOT"
@@ -23,6 +23,9 @@ cd "$ROOT"
 log() {
   echo "[restore-drill] $(date '+%F %T') $*" | tee -a "$LOG"
 }
+
+# 失败可诊断（2026-10-13 W1-2）：原来 set -e 中断后日志只留一行，无法判断失败在哪一步
+trap 'rc=$?; log "FAILED rc=$rc at line $LINENO"; exit $rc' ERR
 
 cleanup() {
   if [ "$KEEP" != "1" ]; then
@@ -87,4 +90,4 @@ console.log(JSON.stringify({ integrity, tableCount, counts }));
 db.close();
 NODE
 
-log "success db=$DB_NAME work_dir=$WORK_DIR"
+log "success db=$DB_NAME work_dir=$WORK_DIR (sha256 已校验 / integrity_check 已通过，见上方 JSON)"
