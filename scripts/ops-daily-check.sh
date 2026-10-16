@@ -4,7 +4,9 @@
 #                     ② 修正 mes.log 轮转检测的文件名模式，并改为按「最近轮转天数」判定
 #                     ③ 轮转感知：drill/offsite 的「最近一次结果」改为跨轮转副本读取，
 #                        且年龄改由记录自身时间戳计算（R4 生效后原实现会立即误报）
-# 检查：服务状态与健康、备份新鲜度与完整性、异地备份最近结果、日志轮转与体积
+# 2026-10-16 批次四：接入异地副本恢复演练（D 项）结论 + predeploy 日志目录规模（C 项）
+# 检查：服务状态与健康、备份新鲜度与完整性、异地备份最近结果、
+#      本地/异地恢复演练新鲜度、日志轮转与体积、predeploy 目录规模
 # 输出一行 ROSTER 摘要 + 明细；发现问题时通过飞书告警（失败不阻断巡检）。
 set -uo pipefail
 
@@ -96,7 +98,7 @@ DAILY_COUNT=$(find "$BACKUP_DIR" -maxdepth 1 -type f -name 'mes.db.20*' ! -name 
 WEEKLY_COUNT=$(find "$BACKUP_DIR/weekly" -maxdepth 1 -type f -name 'mes.db.weekly.*' 2>/dev/null | wc -l)
 log "backup inventory: daily=$DAILY_COUNT weekly=$WEEKLY_COUNT"
 
-# 3) 恢复演练新鲜度（本地演练；异地副本完整性演练为后续可选项）
+# 3) 恢复演练新鲜度（本地演练 + 异地副本演练；后者为 2026-10-16 批次四 D 项新增）
 LOCAL_DRILL_LOG="$ROOT/logs/restore-drill-local.log"
 LAST_DRILL=$(last_record "$LOCAL_DRILL_LOG" '^\[drill-local\]')
 if [ -n "$LAST_DRILL" ]; then
@@ -127,6 +129,24 @@ if [ -n "$LAST_OFFSITE" ]; then
 else
   problems+=("no offsite backup log yet")
 fi
+# 3c) 异地「副本」恢复演练（2026-10-16 批次四 D 项，每周日 04:50）
+#     回答的是另一个问题：NAS 上那份副本【现在】还能不能真的恢复（本地演练与传输期校验都覆盖不到）
+OFFSITE_DRILL_LOG="$ROOT/logs/restore-drill-offsite.log"
+LAST_ODRILL=$(last_record "$OFFSITE_DRILL_LOG" '^\[drill-offsite\]')
+if [ -n "$LAST_ODRILL" ]; then
+  ODRILL_S=$(record_age_s "$OFFSITE_DRILL_LOG" "$LAST_ODRILL")
+  ODRILL_DAYS=$(( ODRILL_S / 86400 ))
+  log "drill(offsite): age=${ODRILL_DAYS}d last=${LAST_ODRILL:0:140}"
+  case "$LAST_ODRILL" in
+    *success*) ;;
+    *) problems+=("offsite restore drill last run not success") ;;
+  esac
+  [ "$ODRILL_S" -ge 0 ] || problems+=("offsite drill record timestamp unparsable")
+  # 每周一次 → 7 天间隔；10 天可捕获「漏跑一次」
+  [ "$ODRILL_DAYS" -le 10 ] || problems+=("offsite restore drill stale: ${ODRILL_DAYS}d > 10d")
+else
+  problems+=("no offsite restore drill log yet (运行 scripts/restore-drill-offsite.sh)")
+fi
 
 # 4) 日志轮转与体积
 if [ -f "$MES_LOG" ]; then
@@ -151,6 +171,20 @@ if [ -f "$DB-wal" ]; then
   WAL_MB=$(( $(stat -c %s "$DB-wal") / 1048576 ))
   log "wal: ${WAL_MB}MB"
   [ "$WAL_MB" -le 100 ] || problems+=("wal ${WAL_MB}MB > 100MB")
+fi
+
+# 6) predeploy 日志目录规模（2026-10-16 批次四 C 项）
+#   该目录由一次性日志（时间戳命名）累积而成，清理已交由 logs-predeploy-cleanup.sh（每日 06:30）
+#   接管。此处只做「异常增长」告警 —— 用来发现清理任务本身停了。
+PRE_DIR="$ROOT/logs/predeploy"
+if [ -d "$PRE_DIR" ]; then
+  PRE_COUNT=$(find "$PRE_DIR" -maxdepth 1 -type f 2>/dev/null | wc -l)
+  PRE_ZERO=$(find "$PRE_DIR" -maxdepth 1 -type f -size 0 2>/dev/null | wc -l)
+  log "predeploy logs: files=$PRE_COUNT zero_byte=$PRE_ZERO"
+  # 保留期 14 天、日增约 40~50 个 → 稳态约 500~700；800 为宽松上限
+  [ "$PRE_COUNT" -le 800 ] || problems+=("predeploy log dir has ${PRE_COUNT} files (>800，清理任务可能未运行)")
+  # 清理脚本会删掉「0 字节且 >1 小时」的空壳，稳态应接近 0（仅剩最近 1 小时内的）
+  [ "$PRE_ZERO" -le 50 ] || problems+=("predeploy has ${PRE_ZERO} zero-byte shells (>50，清理任务可能未运行)")
 fi
 
 if [ ${#problems[@]} -eq 0 ]; then
