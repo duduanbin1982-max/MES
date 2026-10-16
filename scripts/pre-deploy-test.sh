@@ -15,8 +15,16 @@ set -o pipefail
 ROOT=/home/dubin/factory-mes
 LOG_DIR=/home/dubin/factory-mes/logs/predeploy
 mkdir -p "$LOG_DIR"
-find "$LOG_DIR" -name 'predeploy-*.log' -mtime +3 -delete 2>/dev/null || true
-
+# 清理 predeploy 日志目录 —— 2026-10-16 批次四 C 项
+# 原实现 `find "$LOG_DIR" -name 'predeploy-*.log' -mtime +3 -delete` 有三个缺陷：
+#   ① 只匹配 predeploy-*.log，漏掉 frontend-domain-*.log
+#   ② 只匹配 .log，漏掉全部轮转产物 .log.1.gz / .log.2.gz ...
+#   ③ 只在「恰好发生了一次发布」时才执行 —— 不发布就永不清理
+# 现改为调用统一清理脚本：按 mtime 覆盖目录内全部日志与 0 字节空壳，保留期 14 天，
+# 并由 cron 每日兜底（不再依赖发布动作触发）。
+if [ -f "$ROOT/scripts/logs-predeploy-cleanup.sh" ]; then
+  bash "$ROOT/scripts/logs-predeploy-cleanup.sh" >/dev/null 2>&1 || true
+fi
 QUIET=0
 SKIP_INTEGRATION=0
 for arg in "$@"; do
