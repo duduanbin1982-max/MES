@@ -1,6 +1,6 @@
 #!/bin/bash
-# ⚠️ 2026-10-13 起停用：决策为取消异地备份（目标机 192.168.1.75 已下线）。保留代码以便日后启用。
-# P0-3 离机备份：同步最新 DB 备份、上传文件和恢复配置到 192.168.1.75
+# 2026-10-16 恢复启用：目标机改为 192.168.1.10（Synology NAS，DS918+）。
+# P0-3 离机备份：同步最新 DB 备份、上传文件与恢复配置到异地主机
 
 set -euo pipefail
 
@@ -19,6 +19,16 @@ WEEKLY_RETENTION_DAYS="${OFFSITE_WEEKLY_RETENTION_DAYS:-90}"
 
 SSH_OPTS=(-i "$OFFSITE_KEY" -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
 RSYNC_SSH="ssh -i $OFFSITE_KEY -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
+
+# 远端 rsync 可执行路径适配（2026-10-16 恢复异地备份时新增）
+# 目标 192.168.1.10 为 Synology NAS：其自带 /usr/bin/rsync 带 setuid root 位，
+# 非 root 用户经 SSH 调用无法完成真实数据传输（远端退出码 1、本地 rsync rc=12）。
+# 改用同版本的非 setuid 副本即可正常传输；留空则沿用远端默认 rsync（Linux 目标机行为不变）。
+OFFSITE_RSYNC_PATH="${OFFSITE_RSYNC_PATH:-}"
+RSYNC_PATH_OPT=()
+if [ -n "$OFFSITE_RSYNC_PATH" ]; then
+  RSYNC_PATH_OPT=(--rsync-path="$OFFSITE_RSYNC_PATH")
+fi
 
 mkdir -p "$LOG_DIR"
 cd "$ROOT"
@@ -61,15 +71,15 @@ log "prepare remote dirs on $REMOTE:$OFFSITE_ROOT"
 ssh "${SSH_OPTS[@]}" "$REMOTE" "mkdir -p '$OFFSITE_ROOT/daily' '$OFFSITE_ROOT/weekly' '$OFFSITE_ROOT/uploads' '$OFFSITE_ROOT/config' '$OFFSITE_ROOT/manifests'"
 
 log "sync latest db backup: $(basename "$LATEST_DB")"
-rsync -a --partial --inplace -e "$RSYNC_SSH" "$LATEST_DB" "$REMOTE:$OFFSITE_ROOT/daily/"
+rsync -a "${RSYNC_PATH_OPT[@]}" --partial --inplace -e "$RSYNC_SSH" "$LATEST_DB" "$REMOTE:$OFFSITE_ROOT/daily/"
 
 if [ -d "$BACKUP_DIR/weekly" ]; then
   log "sync weekly snapshots"
-  rsync -a --ignore-existing -e "$RSYNC_SSH" "$BACKUP_DIR/weekly/" "$REMOTE:$OFFSITE_ROOT/weekly/"
+  rsync -a "${RSYNC_PATH_OPT[@]}" --ignore-existing -e "$RSYNC_SSH" "$BACKUP_DIR/weekly/" "$REMOTE:$OFFSITE_ROOT/weekly/"
 fi
 
 log "sync uploads"
-rsync -a --delete -e "$RSYNC_SSH" "$ROOT/data/uploads/" "$REMOTE:$OFFSITE_ROOT/uploads/" 2>/dev/null || true
+rsync -a "${RSYNC_PATH_OPT[@]}" --delete -e "$RSYNC_SSH" "$ROOT/data/uploads/" "$REMOTE:$OFFSITE_ROOT/uploads/" 2>/dev/null || true
 
 CONFIG_TGZ="$WORK_DIR/config-$RUN_ID.tgz"
 tar -czf "$CONFIG_TGZ" \
@@ -81,7 +91,7 @@ tar -czf "$CONFIG_TGZ" \
   docs/deploy.md docs/iot-lifecycle.md 2>/dev/null || true
 chmod 600 "$CONFIG_TGZ"
 log "sync config snapshot"
-rsync -a -e "$RSYNC_SSH" "$CONFIG_TGZ" "$REMOTE:$OFFSITE_ROOT/config/"
+rsync -a "${RSYNC_PATH_OPT[@]}" -e "$RSYNC_SSH" "$CONFIG_TGZ" "$REMOTE:$OFFSITE_ROOT/config/"
 
 MANIFEST="$WORK_DIR/manifest-$RUN_ID.json"
 DB_SHA=$(sha256sum "$LATEST_DB" | awk '{print $1}')
@@ -116,7 +126,7 @@ cat > "$MANIFEST" <<JSON
 }
 JSON
 log "sync manifest"
-rsync -a -e "$RSYNC_SSH" "$MANIFEST" "$REMOTE:$OFFSITE_ROOT/manifests/"
+rsync -a "${RSYNC_PATH_OPT[@]}" -e "$RSYNC_SSH" "$MANIFEST" "$REMOTE:$OFFSITE_ROOT/manifests/"
 
 log "remote retention cleanup"
 ssh "${SSH_OPTS[@]}" "$REMOTE" "
