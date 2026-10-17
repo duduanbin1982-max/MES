@@ -28,7 +28,6 @@
 
 <script setup lang="ts">
 defineProps<{
-  quoteForm: any
   suppliers: any[]
   supplierName: (row: any) => string
   materials: any[]
@@ -37,6 +36,10 @@ defineProps<{
   quoteSuppliers: any[]
   quoteLoaded: boolean
 }>()
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const quoteForm = defineModel<any>('quoteForm', { required: true })
+
 
 const emit = defineEmits<{
   (event: 'compare-quotes'): void

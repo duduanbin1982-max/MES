@@ -112,27 +112,30 @@ import { computed } from 'vue'
 
 const props = defineProps<{
   collabOverview: any
-  incomingForm: any
   pendingReceipts: any[]
   suppliers: any[]
   supplierName: (row: any) => string
   materials: any[]
   collabLoading: boolean
   incomingInspections: any[]
-  outsourceForm: any
   outsourcingOrders: any[]
   scorecards: any[]
   outsourceStatusTag: (value: string) => string
   outsourceStatusLabel: (value: string) => string
   scoreGradeTag: (value: string) => string
 }>()
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const incomingForm = defineModel<any>('incomingForm', { required: true })
+const outsourceForm = defineModel<any>('outsourceForm', { required: true })
 
-const selectedReceipt = computed(() => props.pendingReceipts.find((row) => Number(row.receiving_id) === Number(props.incomingForm.receiving_id)))
+
+const selectedReceipt = computed(() => props.pendingReceipts.find((row) => Number(row.receiving_id) === Number(incomingForm.value.receiving_id)))
 
 function selectReceiving(receivingId: number) {
   const receipt = props.pendingReceipts.find((row) => Number(row.receiving_id) === Number(receivingId))
   if (!receipt) return
-  Object.assign(props.incomingForm, {
+  Object.assign(incomingForm.value, {
     purchase_order_id: receipt.purchase_order_id,
     supplier_id: receipt.supplier_id,
     material_id: receipt.material_id,

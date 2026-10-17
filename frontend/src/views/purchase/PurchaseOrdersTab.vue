@@ -125,26 +125,29 @@
 
 <script setup lang="ts">
 defineProps<{
-  orderFilter: any
   poStatuses: readonly string[]
   poStatusLabel: (value: string) => string
   poStatusTag: (value: string) => string
   orders: any[]
   oLoading: boolean
   orderError: string
-  orderDlg: any
-  orderForm: any
   suppliers: any[]
   supplierName: (row: any) => string
   materials: any[]
   orderTotal: number
   saving: boolean
-  detailDlg: any
   detailPo: any
-  receiveDlg: any
   receivePo: any
   receiveItems: any[]
 }>()
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const orderFilter = defineModel<any>('orderFilter', { required: true })
+const orderDlg = defineModel<any>('orderDlg', { required: true })
+const orderForm = defineModel<any>('orderForm', { required: true })
+const detailDlg = defineModel<any>('detailDlg', { required: true })
+const receiveDlg = defineModel<any>('receiveDlg', { required: true })
+
 
 const emit = defineEmits<{
   (event: 'load-orders'): void

@@ -143,16 +143,19 @@
 <script setup lang="ts">
 defineProps<{
   followUpSummary: any
-  followUpFilter: any
   filteredFollowUps: any[]
   followUpLoading: boolean
   followUpStatusTag: (value: string) => string
   followUpStatusLabel: (value: string) => string
-  followUpDlg: any
   currentFollowUp: any
-  followUpForm: any
   saving: boolean
 }>()
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const followUpFilter = defineModel<any>('followUpFilter', { required: true })
+const followUpDlg = defineModel<any>('followUpDlg', { required: true })
+const followUpForm = defineModel<any>('followUpForm', { required: true })
+
 
 const emit = defineEmits<{
   (event: 'load-purchase-follow-up'): void

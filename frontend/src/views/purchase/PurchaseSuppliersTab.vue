@@ -156,18 +156,21 @@
 defineProps<{
   supplierSetup: any
   missingTemplates: any[]
-  supplierFilter: any
   supplierCategories: any[]
   suppliers: any[]
   sLoading: boolean
-  supplierDlg: any
-  supplierForm: any
   saving: boolean
   supplierName: (row: any) => string
   supplierCategoryLabel: (value: string) => string
   supplierCategoryTag: (value: string) => string
   supplierSetupCount: (category: string) => number
 }>()
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const supplierFilter = defineModel<any>('supplierFilter', { required: true })
+const supplierDlg = defineModel<any>('supplierDlg', { required: true })
+const supplierForm = defineModel<any>('supplierForm', { required: true })
+
 
 const emit = defineEmits<{
   (event: 'load-suppliers'): void
