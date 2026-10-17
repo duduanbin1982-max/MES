@@ -34,8 +34,8 @@ module.exports = function createContext(app, db) {
       const orderDeadline = new Date(projectStart);
       orderDeadline.setDate(orderDeadline.getDate() - leadDays);
       const daysToDeadline = Math.floor((orderDeadline - today) / (1000 * 60 * 60 * 24));
-      let status = 'ok';
-      let warning = '';
+      let status;
+      let warning;
       if (r.in_stock_qty >= r.required_qty) {
         status = 'ready';
         warning = '已备齐, 可直接使用';

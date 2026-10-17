@@ -86,7 +86,7 @@ function getFeishuConfig() {
       receiver_open_id: cache.feishu_receiver_open_id || '',
     };
   }
-  let rows = [];
+  let rows;
   try {
     rows = db.prepare('SELECT key, value FROM system_settings WHERE key IN (?, ?, ?, ?)').all(
       'feishu_enabled', 'feishu_webhook_token', 'feishu_webhook_timeout_ms', 'feishu_receiver_open_id'

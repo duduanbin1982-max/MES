@@ -51,7 +51,7 @@ function registerRoutes(app, db) {
     const { hours, worker, date, notes } = req.body;
     const acl = get("SELECT items FROM acceptance_checklists WHERE id=?", [req.params.id]);
     if (!acl) throw ApiError.notFound('not found')
-    let items = JSON.parse(acl.items||'[]');
+    const items = JSON.parse(acl.items||'[]');
     if (!Array.isArray(items.find(i=>i.type==='debug_hours')?.records)) {
       if (!items.find(i=>i.type==='debug_hours')) items.push({type:'debug_hours',label:'调试工时记录',records:[]});
       else items.find(i=>i.type==='debug_hours').records = [];

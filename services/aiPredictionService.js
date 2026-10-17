@@ -71,7 +71,7 @@ function makeHelpers(db) {
 function mean(arr) { return arr.reduce((a,b)=>a+b,0)/arr.length; }
 function stddev(arr) { const m=mean(arr); return Math.sqrt(arr.reduce((a,b)=>a+(b-m)*(b-m),0)/(arr.length-1||1)); }
 function zscore(val, arr) { const m=mean(arr), s=stddev(arr); return s===0?0:(val-m)/s; }
-function linearRegression(xy) { let sx=0,sy=0,sxx=0,sxy=0,n=xy.length; for(const p of xy) { sx+=p.x; sy+=p.y; sxx+=p.x*p.x; sxy+=p.x*p.y; } const den=n*sxx-sx*sx; if(den===0) return {slope:0,intercept:sy/n}; const slope=(n*sxy-sx*sy)/den; return {slope, intercept:(sy-slope*sx)/n}; }
+function linearRegression(xy) { let sx=0,sy=0,sxx=0,sxy=0; const n=xy.length; for(const p of xy) { sx+=p.x; sy+=p.y; sxx+=p.x*p.x; sxy+=p.x*p.y; } const den=n*sxx-sx*sx; if(den===0) return {slope:0,intercept:sy/n}; const slope=(n*sxy-sx*sy)/den; return {slope, intercept:(sy-slope*sx)/n}; }
 
 // === Equipment Fault Prediction ===
 function registerFaultPrediction(app, db) {

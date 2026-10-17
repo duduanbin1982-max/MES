@@ -1,4 +1,4 @@
-name: tests
+name: ci
 
 on:
   push:
@@ -7,10 +7,15 @@ on:
     branches: [main, master, develop]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  gate:
+    name: lint + 部署闸门 + 前端
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -27,51 +32,53 @@ jobs:
             package-lock.json
             frontend/package-lock.json
 
-      - name: Setup Python (for cross-sub seed DB)
+      - name: Setup Python (集成测试的 seed DB 需要)
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install backend dependencies
+      - name: 安装后端依赖
         run: npm ci
 
-      - name: Install frontend dependencies
+      - name: 安装前端依赖
         run: npm ci --prefix frontend
 
-      - name: Syntax check (services + middleware + utils)
-        run: |
-          set -e
-          ERR=0
-          for f in $(find services middleware utils -name '*.js' 2>/dev/null); do
-            if ! node --check "$f"; then
-              echo "::error file=$f::SyntaxError"
-              ERR=1
-            fi
-          done
-          exit $ERR
+      # 2026-10-17 新增：ESLint（error 阻断；存量 warning 不阻断）
+      - name: ESLint 静态检查
+        run: npm run lint
 
-      - name: Guard service DDL versions
+      - name: 服务 DDL 指纹守卫
         run: node scripts/check-service-schema-versions.js --base=HEAD^
 
-      - name: Guard architecture boundaries
+      - name: 架构分层守卫
         run: node scripts/check-layer-boundaries.js
 
-      - name: Frontend typecheck
+      - name: 路由唯一性守卫
+        run: node scripts/check-duplicate-routes.js
+
+      - name: 模块清单一致性守卫
+        run: node scripts/check-module-manifest.js
+
+      - name: 前端类型检查
         run: npm run typecheck --prefix frontend
 
-      - name: Frontend production build
+      - name: 前端 domain 单测（无浏览器）
+        run: npm run test:domain --prefix frontend
+
+      - name: 前端生产构建
         run: npm run build --prefix frontend
 
-      - name: Run full test suite (incl. integration)
-        run: bash scripts/run-all-tests.sh
+      # 部署闸门（= 本地 pre-commit/pre-push/ExecStartPre 同一套；含 527 条用例）
+      - name: 部署闸门（全套用例 + 语法 + ESLint + 前端 domain）
+        run: bash scripts/pre-deploy-test.sh --quiet
 
-      - name: Upload test logs on failure
+      - name: 失败时上传日志
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-logs
+          name: ci-logs
           path: |
-            data/predeploy-*.log
-            data/nightly-test.log
+            logs/predeploy/*.log
+            logs/*.log
           if-no-files-found: ignore
           retention-days: 7

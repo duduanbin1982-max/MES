@@ -46,7 +46,7 @@ class ApiError extends Error {
 }
 
 // errorHandler 中间件: 必须放在所有 route 之后, 4 个参数 (err, req, res, next)
-function errorHandler(err, req, res, next) { // eslint-disable-line no-unused-vars
+function errorHandler(err, req, res, next) {
   // ApiError: 业务抛的, 直接用
   if (err instanceof ApiError) {
     if (err.status >= 500) logger.error(`[${req.id}] ${err.code}: ${err.message}`, err.details || '');

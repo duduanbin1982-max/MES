@@ -127,7 +127,7 @@ function registerTraceRecordRoutes(app, db) {
     if (!allowed.includes(body.movement_type)) throw ApiError.validation("movement_type 非法");
     const serial = db.prepare("SELECT * FROM serial_numbers WHERE id=?").get(req.params.id);
     if (!serial) throw ApiError.notFound("序列号不存在");
-    let workOrder = null;
+    let workOrder;
     if (body.work_order_id) {
       workOrder = db.prepare("SELECT id, equipment_instance_id FROM work_orders WHERE id=?").get(body.work_order_id);
       if (!workOrder) throw ApiError.notFound("工单不存在");

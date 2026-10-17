@@ -130,7 +130,7 @@ function verify(db, label = "", options = {}) {
     db.prepare("INSERT INTO work_orders (wo_code, equipment_instance_id, title, status) VALUES (?, 1, ?, ?)")
       .run("__W2_CHECK_OK__", "合法状态测试", "in_progress");
     accepted = true;
-  } catch (_) { accepted = false; }
+  } catch (_) { /* 保持 false */ }
   db.exec("ROLLBACK TO w2_ok");
   db.exec("RELEASE w2_ok");
   ok("合法状态可写入", accepted);

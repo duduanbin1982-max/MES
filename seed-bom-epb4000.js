@@ -7,7 +7,7 @@
 const db = require('/home/dubin/factory-mes/db');
 
 const PROJECT_ID = 1;  // TBM-2026-001
-let log = [];
+const log = [];
 
 // ============================================================
 // 1) 创建物料主数据

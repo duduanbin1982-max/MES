@@ -95,6 +95,25 @@ if [ "$SYNTAX_ERR" = "1" ]; then
   exit 1
 fi
 
+# ESLint 静态检查 —— 2026-10-17 落地（方案 W3-5）
+# 规则见 eslint.config.js：error 级阻断部署；warn 级（存量 no-unused-vars）只提示不阻断
+if [ -x "$ROOT/node_modules/.bin/eslint" ]; then
+  log "ESLint 静态检查 ..."
+  ESLINT_LOG="$LOG_DIR/eslint-$ts.log"
+  if (cd "$ROOT" && "$ROOT/node_modules/.bin/eslint" . ) > "$ESLINT_LOG" 2>&1; then
+    ERR_CNT=$(grep -cE '^✖|error' "$ESLINT_LOG" 2>/dev/null || echo 0)
+    WARN_CNT=$(grep -oE '[0-9]+ warning' "$ESLINT_LOG" 2>/dev/null | tail -1 | awk '{print $1}' || true)
+    log "  ESLint: 0 error / ${WARN_CNT:-0} warning (存量 warn 见 docs/lint-and-ci.md)"
+  else
+    log "  ❌ ESLint 有 error，阻断部署。前 10 条:"
+    grep -E '^/|  [0-9]+:[0-9]+' "$ESLINT_LOG" | head -20 | sed 's/^/  /'
+    log "  完整日志: $ESLINT_LOG"
+    exit 1
+  fi
+else
+  log "  跳过 ESLint（node_modules/.bin/eslint 不存在，先 npm ci）"
+fi
+
 # 前端 domain 层单测 (无浏览器: Node 22 原生 TS 类型擦除 + node:test)
 if [ -d "$ROOT/frontend/node_modules" ]; then
   log "前端 domain 单测 (frontend/tests/domain) ..."

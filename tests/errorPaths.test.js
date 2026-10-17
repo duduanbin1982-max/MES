@@ -215,7 +215,7 @@ test('T5-3 materialService.transfer rejects zero quantity', () => {
   }
 
   // 找 transfer-like 函数
-  let transferFn = materialService.transfer ||
+  const transferFn = materialService.transfer ||
     materialService.transferMaterial ||
     materialService.moveStock;
 
@@ -248,7 +248,7 @@ test('T5-4 material.inventory rejects empty movements array', () => {
     inventoryService.setDb(db);
   }
 
-  let applyFn = inventoryService.applyMovements ||
+  const applyFn = inventoryService.applyMovements ||
     inventoryService.recordMovement ||
     inventoryService.create;
 
@@ -306,7 +306,7 @@ test('T5-6 digitalTwinService rejects invalid payload', () => {
     digitalTwinService.setDb(db);
   }
 
-  let createOrUpdateFn = digitalTwinService.create ||
+  const createOrUpdateFn = digitalTwinService.create ||
     digitalTwinService.save ||
     digitalTwinService.upsert ||
     digitalTwinService.createOrUpdate;
@@ -386,7 +386,7 @@ test('T5-8 bom CSV import rejects < 2 lines', () => {
       return;
     }
 
-    let parseFn = csvImport.parseCSV || csvImport.importCSV || csvImport.parse;
+    const parseFn = csvImport.parseCSV || csvImport.importCSV || csvImport.parse;
     if (parseFn) {
       assert.throws(
         () => parseFn(tmpFile),
@@ -415,7 +415,7 @@ test('T5-9 ai modelCore rejects insufficient training samples', () => {
   }
 
   // 找训练函数
-  let trainFn = modelCore.train ||
+  const trainFn = modelCore.train ||
     modelCore.fit ||
     modelCore.trainModel ||
     modelCore.buildModel ||

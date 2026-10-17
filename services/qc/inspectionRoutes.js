@@ -67,7 +67,7 @@ function registerInspectionRoutes({ app, helpers, ApiError }) {
   app.get("/api/qc/inspection-templates/:id", wrap((req, res) => {
     const template = get("SELECT * FROM inspection_templates WHERE id = ?", [req.params.id]);
     if (!template) throw ApiError.notFound("Template not found");
-    let checkItems = [];
+    let checkItems;
     try {
       checkItems = JSON.parse(template.check_items || "[]");
     } catch (_error) {

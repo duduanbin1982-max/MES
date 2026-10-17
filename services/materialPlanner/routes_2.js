@@ -4,7 +4,7 @@
 module.exports = function registerRoutes2(app, db, ctx) {
 const { ApiError } = require('../../app/errors');
 const { wrap } = require('../../middleware/asyncHandler');
-const { all, run } = ctx;
+const { all, get, run } = ctx;
 
   app.post("/api/material-planner/mrp", wrap((req, res) => {
     const { instance_id, demand_date } = req.body;

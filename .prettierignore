@@ -1,0 +1,15 @@
+# Prettier 忽略清单（2026-10-17）
+# 说明：本次只提供服务端格式化入口，**不批量重排存量代码**（避免制造巨大 diff）。
+#       日常用法：npx prettier --write <具体文件>
+node_modules/
+node_modules.before-lint/
+frontend/
+attic/
+archive/
+.codex-backups/
+data/
+logs/
+backups/
+package-lock.json
+frontend/package-lock.json
+*.before-lint

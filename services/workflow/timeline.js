@@ -96,7 +96,7 @@ function getTimeline(db, entityType, entityId) {
 
   let entity = null;
   let current = null;
-  let payload = { instances: [], rows: [] };
+  let payload;
   const sources = [];
 
   if (type === "work_order") {

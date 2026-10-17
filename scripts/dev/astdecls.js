@@ -187,7 +187,7 @@ for (const rel of FILES) {
     entry.node.declarations.some(
       (d) => d.init && d.init.type === "CallExpression" && d.init.callee && d.init.callee.name === "require"
     );
-  let movable = new Set(decls.filter((d) => !isRequireDecl(d) && ![...d.names].some((n) => mutable.has(n))));
+  const movable = new Set(decls.filter((d) => !isRequireDecl(d) && ![...d.names].some((n) => mutable.has(n))));
   let changed = true;
   while (changed) {
     changed = false;

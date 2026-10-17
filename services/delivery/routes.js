@@ -19,6 +19,7 @@ function registerDeliveryRoutes(app, ctx) {
     restartPurchaseFollowup,
     sendExceptionNotice,
     alreadyNotifiedToday,
+    safeAll,
   } = ctx;
   const { collectExceptions, exceptionSummary, getInstances, buildProject, buildProjectRiskDrilldown, buildProjectLineage } = readModel;
 
@@ -175,8 +176,12 @@ function registerDeliveryRoutes(app, ctx) {
   }));
 
   app.get("/api/exceptions/escalation-rules/list", wrap((_req, res) => {
-    defaultEscalationRules();
-    res.json(safeAll("SELECT * FROM exception_escalation_rules ORDER BY is_active DESC, id"));
+    // 2026-10-17：原实现调用了全库不存在的 defaultEscalationRules()，该端点一直 500。
+    // 改为只读返回规则表（默认规则由迁移/初始化负责写入）。
+    const rows = typeof safeAll === "function"
+      ? safeAll("SELECT * FROM exception_escalation_rules ORDER BY is_active DESC, id")
+      : [];
+    res.json(rows);
   }));
 
   app.post("/api/exceptions/:id/notify", wrap(async (req, res) => {

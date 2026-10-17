@@ -44,11 +44,11 @@ test('P0-2-2 issue: 在 receive 后 issue 30, 库存剩 70', () => {
 });
 
 test('P0-2-3 issue-overflow: 库存不足返回 400, 事务回滚', () => {
-  let { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'receive', quantity: 10, to_location: '主仓库-A-01' });
-  ctx.routes['POST /api/material_movements'].handler(req, res);
-  ({ req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'issue', quantity: 50, from_location: '主仓库-A-01' }));
-  ctx.routes['POST /api/material_movements'].handler(req, res);
-  const r = getResult();
+  const recv = mkReqRes({ material_lot_id: 1, movement_type: 'receive', quantity: 10, to_location: '主仓库-A-01' });
+  ctx.routes['POST /api/material_movements'].handler(recv.req, recv.res);
+  const issue = mkReqRes({ material_lot_id: 1, movement_type: 'issue', quantity: 50, from_location: '主仓库-A-01' });
+  ctx.routes['POST /api/material_movements'].handler(issue.req, issue.res);
+  const r = issue.getResult();
   assert.equal(r.status, 400, 'overflow 应 400');
   assert.match(r.json.error, /库存不足/);
   const inv = _db.prepare('SELECT quantity FROM inventory WHERE material_lot_id = 1').get();

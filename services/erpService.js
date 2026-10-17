@@ -202,7 +202,7 @@ function registerCostRollup(app, db) {
   app.post("/api/erp/cost-rollup", wrap((req, res) => {
     const { instance_id } = req.body;
     if (!instance_id) throw ApiError.validation("instance_id required")
-    let entries = [];
+    const entries = [];
 
     // 1. 直接材料 (5001) — PO 已收货
     const poLines = all("SELECT pl.*, po.po_no, m.material_name, m.material_code FROM po_lines pl JOIN purchase_orders po ON pl.po_id=po.id JOIN materials m ON pl.material_id=m.id WHERE po.equipment_instance_id=? AND po.status IN ('received','partially_received')", [instance_id]);

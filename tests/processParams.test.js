@@ -13,7 +13,7 @@ function makeDb() {
 function makeApp() { const r = {}; for (const m of ["get","post","put","delete"]) r[m] = (p, ...hs) => { r[m.toUpperCase() + " " + p] = hs; }; return r; }
 function call(app, method, p, body) {
   const pathTpl = p.replace(/\d+/g, ":id");
-  let hs = app[method.toUpperCase() + " " + p] || app[method.toUpperCase() + " " + pathTpl];
+  const hs = app[method.toUpperCase() + " " + p] || app[method.toUpperCase() + " " + pathTpl];
   if (!hs) throw new Error("no route: " + method + " " + p);
   const m = pathTpl.match(/:([a-zA-Z_]+)/);
   const params = {}; if (m) { const parts = p.split("/"); const idx = pathTpl.split("/").indexOf(":" + m[1]); if (idx >= 0) params[m[1]] = parts[idx]; }

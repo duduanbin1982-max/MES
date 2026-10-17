@@ -89,7 +89,7 @@ function register(app, db) {
     for (const node of nodes) {
       const spec = get("SELECT custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY id DESC LIMIT 1", [node.id]);
       if (!spec) continue;
-      let spcSpec = {};
+      let spcSpec;
       try {
         spcSpec = JSON.parse(spec.custom_json).spc || {};
       } catch (_error) {

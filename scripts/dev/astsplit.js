@@ -124,7 +124,6 @@ function freeNames(subtree) {
         if (node.value) visit(node.value, node, "value");
         if (node.type === "ObjectMethod") visit(node.body, node, "body");
         return;
-      case "MemberExpression":
       case "OptionalMemberExpression":
         visit(node.object, node, "object");
         if (node.computed) visit(node.property, node, "property"); // obj.col 的 col 不是变量

@@ -17,7 +17,7 @@ app.get('/api/suppliers', wrap((req, res) => {
     if (is_active !== undefined) { sql += ' AND is_active = ?'; params.push(parseInt(is_active, 10)) }
     if (categoryFilter) {
       sql += " AND (supplier_category = ? OR business_categories LIKE ?)"
-      params.push(categoryFilter, `%\"${categoryFilter}\"%`)
+      params.push(categoryFilter, `%"${categoryFilter}"%`)
     }
     sql += ' ORDER BY supplier_category, supplier_code'
     res.json(all(sql, params).map(decorate))

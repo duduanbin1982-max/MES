@@ -28,7 +28,7 @@ function validateThresholds(input) {
 
 function deviceReadiness(device, pointCount = 0, addressedPointCount = pointCount) {
   const protocol = String(device.protocol || "").toLowerCase();
-  let connectionReady = false;
+  let connectionReady;
   if (protocol === "modbus") connectionReady = Boolean(device.ip_address && Number(device.port) > 0);
   else connectionReady = Boolean(device.connection_string);
   const pointsReady = Number(pointCount) > 0 && (protocol !== "modbus" || Number(addressedPointCount) === Number(pointCount));

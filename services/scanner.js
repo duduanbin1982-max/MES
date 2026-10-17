@@ -1,5 +1,7 @@
 const { ApiError } = require('../app/errors');
 const { wrap } = require('../middleware/asyncHandler');
+const { feishuNotify } = require('./feishuNotify');
+const { autoUnlockSuccessors } = require('./process/node/_helpers');
 // services/scanner.js
 // 批次 3 重构：从 server.js 抽出
 
@@ -99,7 +101,7 @@ function scanExecute(req, res, db) {
       } else if (action === 'complete' || action === 'qc') {
         run(db, "UPDATE process_nodes SET status = 'completed', actual_end = COALESCE(actual_end, datetime('now')), updated_at = datetime('now') WHERE id = ?", target.id);
         if (action === 'complete' || (action === 'qc' && req.body.result === 'pass')) {
-          if (inst) autoUnlockSuccessors(target.id, inst.equipment_instance_id);
+          if (inst) autoUnlockSuccessors(db, target.id, inst.equipment_instance_id);
         }
         // Update work_order quantity if applicable
         if (target.work_order_id && quantity_completed) {

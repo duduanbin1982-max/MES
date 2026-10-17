@@ -13,10 +13,8 @@ const { get, requirePermission, run } = ctx;
     if (from_unit === to_unit) throw ApiError.validation('from_unit 和 to_unit 不能相同');
     const mat = get('SELECT id, unit FROM materials WHERE id = ?', material_id);
     if (!mat) throw ApiError.notFound('物料不存在');
-    try {
-      run('INSERT INTO material_units (material_id, from_unit, to_unit, factor, notes) VALUES (?, ?, ?, ?, ?)', [material_id, from_unit, to_unit, factor, notes || null]);
-      res.json({ ok: true, id: db.lastInsertRowid, message: '已添加换算 ' + from_unit + ' -> ' + to_unit + ' (×' + factor + ')' });
-    } catch (e) { throw e; }
+    run('INSERT INTO material_units (material_id, from_unit, to_unit, factor, notes) VALUES (?, ?, ?, ?, ?)', [material_id, from_unit, to_unit, factor, notes || null]);
+    res.json({ ok: true, id: db.lastInsertRowid, message: '已添加换算 ' + from_unit + ' -> ' + to_unit + ' (×' + factor + ')' });
   }));
 
   app.delete('/api/material_units/:id', wrap((req, res) => {

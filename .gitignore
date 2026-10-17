@@ -98,3 +98,8 @@ logs/
 
 # 根目录一次性维护脚本的临时变体 (scripts/check-* 为正式脚本, 不受影响)
 /check_*.js
+
+# ESLint 落地时的一次性快照与临时目录（2026-10-17）
+node_modules.before-lint/
+*.before-lint
+.tmp/

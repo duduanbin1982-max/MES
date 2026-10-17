@@ -1,7 +1,7 @@
 "use strict";
 // services/purchase/suppliers.js 的 register() 前置逻辑（AST 版拆分）
 
-const { makeHelpers } = require('../_helpers')
+const { makeHelpers, inferCategory } = require('../_helpers')
 
 module.exports = function createContext(app, db, deps) {
   const { BOOTSTRAP_TEMPLATES, REQUIRED_SUPPLIER_CATEGORIES, SUPPLIER_CATEGORIES, buildSetupSummary, categoryLabel, nextSupplierCode, safeJson } = deps;
