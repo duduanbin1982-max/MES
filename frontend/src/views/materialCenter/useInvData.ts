@@ -1,6 +1,6 @@
 // frontend/src/views/materialCenter/useInvData.ts
 // 库存数据共享: inv / lots / workOrders / movs / alerts, 供 TabInv + TabMov + Dialogs 复用
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive } from 'vue'
 import api from '../../api'
 
 export function useInvData() {

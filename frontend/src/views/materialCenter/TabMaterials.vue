@@ -29,6 +29,6 @@ import api from '../../api'
 defineProps<{ tab: string }>()
 const mats = ref<any[]>([])
 const loading = ref(false)
-const load = async () => { loading.value = true; try { mats.value = await api.materials() } catch(e) { console.error('加载物料失败', e) } finally { loading.value = false } }
+const load = async () => { loading.value = true; try { mats.value = await api.materials() } catch(e) { /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */ } finally { loading.value = false } }
 onMounted(load)
 </script>

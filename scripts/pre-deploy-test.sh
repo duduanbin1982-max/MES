@@ -119,9 +119,9 @@ fi
 if [ -x "$ROOT/frontend/node_modules/.bin/eslint" ]; then
   log "前端 ESLint 静态检查 ..."
   FE_LINT_LOG="$LOG_DIR/frontend-eslint-$ts.log"
-  if (cd "$ROOT/frontend" && "$ROOT/frontend/node_modules/.bin/eslint" . ) > "$FE_LINT_LOG" 2>&1; then
+  if (cd "$ROOT/frontend" && "$ROOT/frontend/node_modules/.bin/eslint" . --max-warnings 0 ) > "$FE_LINT_LOG" 2>&1; then
     FE_WARN=$(grep -oE '[0-9]+ warning' "$FE_LINT_LOG" 2>/dev/null | tail -1 | awk '{print $1}' || true)
-    log "  前端 ESLint: 0 error / ${FE_WARN:-0} warning（存量见 docs/lint-and-ci.md）"
+    log "  前端 ESLint: 0 error / 0 warning（棘轮已收口，任何新增问题都会阻断）"
   else
     log "  ❌ 前端 ESLint 有 error，阻断部署。前 10 条:"
     grep -E '^/|  [0-9]+:[0-9]+' "$FE_LINT_LOG" | head -16 | sed 's/^/  /'
@@ -130,6 +130,26 @@ if [ -x "$ROOT/frontend/node_modules/.bin/eslint" ]; then
   fi
 else
   log "  跳过前端 ESLint（frontend/node_modules/.bin/eslint 不存在）"
+fi
+
+# 前端模板编译检查（2026-10-17 新增）
+# 背景：`vue-tsc` 不报"v-model 绑定在 prop 上"这类模板编译错误，只有 vite build 才会暴露；
+# 而 dist 是发布时单独构建的，等到发布才发现就太晚了。这里把构建产物写到 /tmp（不动 dist）。
+if [ -x "$ROOT/frontend/node_modules/.bin/vite" ]; then
+  log "前端模板编译检查 (vite build → /tmp) ..."
+  FE_BUILD_LOG="$LOG_DIR/frontend-build-$ts.log"
+  FE_OUT="/tmp/factory-mes-fe-build-$ts"
+  if (cd "$ROOT/frontend" && "$ROOT/frontend/node_modules/.bin/vite" build --outDir "$FE_OUT" --emptyOutDir --logLevel error) > "$FE_BUILD_LOG" 2>&1; then
+    rm -rf "$FE_OUT"
+    log "  前端构建: ok"
+  else
+    log "  ❌ 前端模板编译失败，阻断部署。错误摘要:"
+    grep -E "error|SyntaxError|v-model|at .*vue" "$FE_BUILD_LOG" | head -12 | sed 's/^/  /'
+    log "  完整日志: $FE_BUILD_LOG"
+    exit 1
+  fi
+else
+  log "  跳过前端模板编译检查（frontend/node_modules/.bin/vite 不存在）"
 fi
 
 # 前端 domain 层单测 (无浏览器: Node 22 原生 TS 类型擦除 + node:test)

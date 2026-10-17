@@ -203,10 +203,6 @@
 import { useFieldServicePage } from '../composables/useFieldServicePage'
 
 const {
-  route,
-  router,
-  tabNames,
-  routeTab,
   tab,
   saving,
   overdueCount,
@@ -240,13 +236,10 @@ const {
   spareDlg,
   spareForm,
   lowStockCount,
-  loadSpares,
   openSpareAdjustDialog,
   resetSpareForm,
   submitSpareAdjust,
-  loadOverdue,
-  onTabChange,
-} = useFieldServicePage()
+  onTabChange } = useFieldServicePage()
 </script>
 
 <style scoped>

@@ -247,7 +247,7 @@
       v-model:compare-v1="compareV1"
       v-model:compare-v2="compareV2"
       :editing-node="editingNode"
-      :add-form="addForm"
+      v-model:add-form="addForm"
       :all-nodes="allNodes"
       :materials="materials"
       :saving="saving"
@@ -259,7 +259,7 @@
       :selected-risk-component="selectedRiskComponent"
       :selected-risk-item="selectedRiskItem"
       :risk-action-mode="riskActionMode"
-      :risk-action-form="riskActionForm"
+      v-model:risk-action-form="riskActionForm"
       :risk-owners="riskOwners"
       :risk-action-loading="riskActionLoading"
       @reset-add-form="resetAddForm"
@@ -313,7 +313,6 @@ const {
   totalCost,
   allNodes,
   minimumStructureMissing,
-  templateMeta,
   templateColumns,
   docFilter,
   DOC_TYPE_LABEL,
@@ -367,8 +366,7 @@ const {
   openRiskEta,
   submitRiskAction,
   openPurchasePage,
-  openMaterialAlerts,
-} = useBomManagement()
+  openMaterialAlerts } = useBomManagement()
 </script>
 
 <style scoped>

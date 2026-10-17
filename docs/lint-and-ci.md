@@ -20,7 +20,7 @@ npm run lint:strict --prefix frontend   # 棘轮达标后用这个
 覆盖率：
 - 后端：`app/ services/ routes/ middleware/ db/ config/ tests/ scripts/` 下全部 `.js`（515 个文件）→ **0 error / 0 warning**
 - 前端：`frontend/src` + `frontend/tests`（133 个 `.vue` + 55 个 `.ts`）→ `eslint-plugin-vue@10` + `typescript-eslint@8`，
-  **0 error / 237 warning**（存量棘轮，见下）；类型正确性仍由 `vue-tsc` 负责
+  **0 error / 0 warning**；类型正确性仍由 `vue-tsc` 负责，模板编译由闸门里的 `vite build` 检查
 
 ## 二、规则清单（eslint.config.js）
 
@@ -66,16 +66,24 @@ npm run lint:strict --prefix frontend   # 棘轮达标后用这个
 | 1. error 级规则 0 违规，存量降 warn 登记 | ✅ 2026-10-17（`acfdc7d`） |
 | 2. 按目录分批清理 `no-unused-vars` | ✅ 2026-10-17（`ef4f960` services / `24f6190` tests / `6dd430b` 其余） |
 | 3. `no-unused-vars`、`eqeqeq` 升回 error + 闸门 `--max-warnings 0` | ✅ 见本次提交 |
-| 4. 前端接入 `eslint-plugin-vue` + `typescript-eslint` | ✅ 2026-10-17（0 error；237 warning 待棘轮） |
+| 4. 前端接入 `eslint-plugin-vue` + `typescript-eslint` | ✅ 2026-10-17 |
+| 5. 前端 warning 棘轮清零（237 → 0）并全部升 error | ✅ 2026-10-17 |
 
-### 前端棘轮（237 warning，按类别排队）
+### 前端棘轮完成记录（237 → 0，全部规则 error 级）
 
-| 规则 | 数量 | 处置计划 |
+| 规则 | 原数量 | 处置 |
 |---|---|---|
-| `vue/no-mutating-props` | 151 | 约 20 个弹窗组件直接改写传入的 `form` 对象。正确做法：`defineModel`/`emit` 或 local reactive 副本 + watch 同步；**属设计级重构，必须逐组件 GUI 复核**，按目录分批（quality → bom → purchase → resources → …） |
-| `@typescript-eslint/no-unused-vars` | 63 | 与后端同一套办法：删未使用导入/变量，分批清零后升 error |
-| `no-console` | 21 | 前端调试输出；替换为统一提示（`ElMessage`）或删除 |
-| `vue/no-unused-vars` | 2 | 模板里的未使用变量 |
+| `vue/no-mutating-props` | 151 | 分 4 批（`cfc152f` quality 31 / `e089b30` components+bom+documents 54 / `046131d` purchase 51 / `282a4cc` resources 13）全部改为 **defineModel** + 父组件 `v-model:xxx`；补充 `BomDialogs.vue` 包装组件级联修复 |
+| `@typescript-eslint/no-unused-vars` | 63 | 自动清理未使用导入/解构项 |
+| `no-console` | 21 | 移除前端调试输出（错误提示统一走 `ElMessage`） |
+| `vue/no-unused-vars` | 2 | 去掉模板里未使用的 slot/v-for 变量 |
+
+**踩到的两个坑（重要）**
+1. **包装组件级联**：`BomDialogs.vue` 把 `addForm` 这个 **prop** 用 `v-model:add-form` 透传给子组件，
+   而 `v-model` 不能绑在 prop 上 → `vite build` 直接失败（`v-model cannot be used on a prop`）。
+   解法：包装组件也必须 `defineModel`，并让它自己的父级改用 `v-model:xxx`。
+2. **`vue-tsc` 查不出模板编译错误**：上面这个错误 `vue-tsc --noEmit` 是**通过**的，只有 `vite build` 才报。
+   因此闸门新增**前端模板编译检查**（`vite build --outDir /tmp`，不动 dist），CI 本来就有 build 步骤。
 
 前端 lint 的设计取向（写在 `frontend/eslint.config.js` 注释里）：只用 plugin-vue 的 **flat/essential**（正确性），
 **不开** flat/recommended 的缩进/换行类格式规则，避免一次性制造上千条格式告警；TS 侧用非 type-checked 的

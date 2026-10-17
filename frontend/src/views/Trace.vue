@@ -99,7 +99,7 @@
 
       <el-card v-loading="treeLoading" v-if="treeData.length">
         <el-tree :data="treeData" :props="treeProps" node-key="id" default-expand-all ref="treeRef" @node-click="onTreeNodeClick">
-          <template #default="{node,data}">
+          <template #default="{data}">
             <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style="font-weight:500">{{ data.name || data.label }}</span>
               <span v-if="data.material_code" style="color:var(--el-color-info);font-size:12px">{{ data.material_code }}</span>

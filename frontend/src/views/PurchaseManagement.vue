@@ -199,11 +199,9 @@ const {
   scoreGradeTag,
   incomingForm,
   outsourceForm,
-  loadSupplierCollab,
   saveIncomingInspection,
   saveOutsourceOrder,
-  updateOutsource,
-} = usePurchaseManagement()
+  updateOutsource } = usePurchaseManagement()
 </script>
 
 <style scoped>

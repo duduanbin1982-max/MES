@@ -201,7 +201,7 @@ const generateReport = async () => {
     lastResult.value = await Api.post('/reports/generate', { type: instant.type, filters })
   } catch (e: any) {
     ElMessage.error('报表生成失败: ' + (e?.message || e))
-    console.error('[Reports] generate failed:', e)
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
   } finally { genLoading.value = false }
 }
 
@@ -222,7 +222,7 @@ const exportCSV = async () => {
     URL.revokeObjectURL(url)
   } catch (e: any) {
     ElMessage.error('报表导出失败: ' + (e?.message || e))
-    console.error('[Reports] export failed:', e)
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
   }
 }
 
@@ -268,7 +268,7 @@ const saveScheduled = async () => {
     }
     schDlgVisible.value = false
     loadScheduled()
-  } catch (e: any) { ElMessage.error('保存定时报表失败: ' + (e?.message || e)); console.error('[Reports] save scheduled failed:', e) }
+  } catch (e: any) { ElMessage.error('保存定时报表失败: ' + (e?.message || e)); /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */ }
   finally { schSaving.value = false }
 }
 

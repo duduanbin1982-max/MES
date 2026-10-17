@@ -45,7 +45,7 @@
                 <tr>
                   <th class="xsub-corner"></th>
                   <th
-                    v-for="(sub, j) in data.subsystems"
+                    v-for="sub in data.subsystems"
                     :key="sub.key"
                     class="xsub-col-head"
                     :title="sub.name_en"
@@ -189,7 +189,7 @@ async function loadMatrix() {
   } catch (e) {
     error.value = e.message || String(e);
     data.value = null;
-    console.error('cross_subsystem_deps load error', e);
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
   } finally {
     loading.value = false;
   }

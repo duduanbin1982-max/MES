@@ -271,7 +271,6 @@ import PageToolbar from '../components/PageToolbar.vue'
 import { useMaterialAlertsPage } from '../composables/useMaterialAlertsPage'
 
 const {
-  router,
   tab,
   instances,
   selectedInstance,
@@ -295,15 +294,12 @@ const {
   forecast,
   forecastChartRef,
   loadForecast,
-  buildForecastChart,
   leadTimes,
   ltLoading,
   loadLeadTimes,
   startEditLT,
   cancelEditLT,
-  saveLeadTime,
-  startAutoRefresh,
-} = useMaterialAlertsPage()
+  saveLeadTime } = useMaterialAlertsPage()
 </script>
 
 <style scoped>

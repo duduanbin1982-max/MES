@@ -153,7 +153,7 @@ async function loadAll() {
     equipment.value = eq.equipment || eq || []
     workstations.value = ws.workstations || ws || []
   } catch (e: any) {
-    console.error('Failed to load resource data:', e)
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     loadError.value = e?.message || '资源接口暂时不可用，请稍后重试。'
   } finally {
     loading.value = false

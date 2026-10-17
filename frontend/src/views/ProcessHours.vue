@@ -260,8 +260,6 @@ const {
   nodeProgress,
   workTypeTag,
   workTypeLabel,
-  loadCommonData,
-  loadProcessNodes,
   loadHoursSummary,
   openHoursDialog,
   saveHours,
@@ -280,8 +278,7 @@ const {
   otLoading,
   otSummary,
   loadOvertime,
-  onTabChange,
-} = useProcessHoursPage()
+  onTabChange } = useProcessHoursPage()
 </script>
 
 <style scoped>

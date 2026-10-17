@@ -71,7 +71,6 @@ const props = defineProps<{
   compareV1: string
   compareV2: string
   editingNode: any
-  addForm: any
   allNodes: any[]
   materials: any[]
   saving: boolean
@@ -83,10 +82,14 @@ const props = defineProps<{
   selectedRiskComponent: any
   selectedRiskItem: any
   riskActionMode: RiskActionMode
-  riskActionForm: any
   riskOwners: any[]
   riskActionLoading: boolean
 }>()
+// 2026-10-17（前端 eslint 棘轮级联）：这些对象既由父级 v-model 传入，又用 v-model 透传给子组件，
+// 因此本包装组件也必须用 defineModel（否则 v-model 不能绑定在 prop 上）。
+const addForm = defineModel<any>('addForm', { required: true })
+const riskActionForm = defineModel<any>('riskActionForm', { required: true })
+
 
 const emit = defineEmits<{
   (event: 'update:dlgAdd', value: boolean): void

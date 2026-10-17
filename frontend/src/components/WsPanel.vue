@@ -57,7 +57,6 @@
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue'
 import { useWsStats, closeWebSocket } from '../composables/useWebSocket'
-import { ElMessage } from 'element-plus'
 
 const open = ref(false)
 const stats = useWsStats()

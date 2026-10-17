@@ -188,7 +188,7 @@ async function loadAll() {
     Object.assign(overview, ov)
     await loadWorkstations(false)
   } catch (error: any) {
-    console.error('Failed to load workstation resources:', error)
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     loadError.value = error?.message || '工位资源接口暂时不可用，请稍后重试。'
   } finally {
     loading.value = false
@@ -205,7 +205,7 @@ async function loadWorkstations(toggleLoading = true) {
     const data = await Api.get('/resources/workstations', { params })
     workstations.value = data.workstations || data || []
   } catch (error: any) {
-    console.error('Failed to load workstations:', error)
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     loadError.value = error?.message || '工位资源接口暂时不可用，请稍后重试。'
   } finally {
     if (toggleLoading) loading.value = false

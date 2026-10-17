@@ -218,10 +218,6 @@
 import { useUserManagementPage } from '../composables/useUserManagementPage'
 
 const {
-  route,
-  router,
-  tabNames,
-  routeTab,
   tab,
   users,
   roles,
@@ -235,17 +231,12 @@ const {
   permMap,
   dataScopeLabel,
   previewPerms,
-  loadUsers,
-  loadRoles,
-  loadRoleGroups,
-  loadPermissionCatalog,
   openCreate,
   editUser,
   applyGroupDefault,
   saveUser,
   delUser,
   onRoleNameInput,
-  onGroupNameInput,
   openGroupDialog,
   saveGroup,
   openRoleDialog,
@@ -254,8 +245,7 @@ const {
   deleteRole,
   editPerms,
   toggleSuperAdmin,
-  savePerms,
-} = useUserManagementPage()
+  savePerms } = useUserManagementPage()
 </script>
 
 <style scoped>

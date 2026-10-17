@@ -218,8 +218,6 @@ import { Refresh } from '@element-plus/icons-vue'
 import { useShopfloorWorkspacePage } from '../composables/useShopfloorWorkspacePage'
 
 const {
-  route,
-  router,
   loading,
   saving,
   activeTab,
@@ -241,11 +239,7 @@ const {
   reportForm,
   qcForm,
   andonForm,
-  currentUser,
-  roleCode,
   roleLabel,
-  defaultTabByRole,
-  applyDefaultTab,
   go,
   loadAll,
   lookupScan,
@@ -255,7 +249,6 @@ const {
   pickStatusType,
   pickStatusLabel,
   fillSuggestedPick,
-  allocationsForQty,
   submitPick,
   submitReturn,
   openReport,
@@ -264,8 +257,7 @@ const {
   submitQc,
   ackDoc,
   downloadDoc,
-  raiseException,
-} = useShopfloorWorkspacePage()
+  raiseException } = useShopfloorWorkspacePage()
 </script>
 
 <style scoped>

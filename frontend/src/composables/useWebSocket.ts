@@ -88,7 +88,7 @@ function invokeHandler(handler: WsEventHandler, payload: any, event: string) {
   try {
     handler(payload)
   } catch (error) {
-    console.warn(`[WebSocket] 事件处理器执行失败: ${event}`, error)
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
   }
 }
 
@@ -141,7 +141,7 @@ function connect(c: WsClient) {
         if (setAll) for (const handler of setAll) invokeHandler(handler, { event: msg.event, payload: msg.payload }, "*")
       }
     } catch (error) {
-      console.warn('[WebSocket] 无法解析服务端消息', error)
+      /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     }
   }
   c.ws.onerror = () => { c.status.value = "error" }

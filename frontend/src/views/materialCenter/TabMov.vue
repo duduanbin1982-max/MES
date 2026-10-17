@@ -52,7 +52,6 @@ defineProps<{ tab: string }>()
 // 直接用 useInvData 拿 (由父组件 provide, 这里重新 import 复用 - 但 composable 需独立实例)
 import { useInvData } from './useInvData'
 const data = useInvData()
-const emit = defineEmits<{ (e: 'refresh'): void }>()
 const onSearch = () => { data.movPage.value = 1; data.loadMovs() }
 const onReset = () => {
   data.movFilter.movement_type = undefined

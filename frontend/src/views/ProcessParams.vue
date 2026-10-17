@@ -162,7 +162,7 @@ async function renderTrends() {
         }],
       });
     } catch (error) {
-      console.warn('[ProcessParams] 趋势图渲染失败', error)
+      /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     }
   }
 }

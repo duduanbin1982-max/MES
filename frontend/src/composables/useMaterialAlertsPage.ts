@@ -1,4 +1,4 @@
-import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { Api } from '../api'
 import * as echarts from 'echarts'
 import { useRouter } from 'vue-router'
@@ -38,7 +38,7 @@ export function useMaterialAlertsPage() {
       alerts.value = a
       kit.value = k
     } catch (e) {
-      console.error('[MaterialAlerts] load failed:', e)
+      /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
       loadError.value = (e as any)?.message || '物料预警接口暂时不可用，请稍后重试。'
     } finally { loading.value = false }
   }
@@ -57,7 +57,7 @@ export function useMaterialAlertsPage() {
         demand_date: mrp.demand_date
       })
     } catch (e: any) {
-      console.error('[MRP] failed:', e)
+      /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     } finally { mrpLoading.value = false }
   }
 
@@ -75,7 +75,7 @@ export function useMaterialAlertsPage() {
       forecast.data = await Api.get('/material-planner/shortage-forecast', { params: { weeks: forecast.weeks } })
       if (forecast.data.length) buildForecastChart()
     } catch (e: any) {
-      console.error('[Forecast] failed:', e)
+      /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
       forecast.data = []
     }
   }
@@ -143,7 +143,7 @@ export function useMaterialAlertsPage() {
       row.lead_time_days = row._lead_time_days
       row._editing = false
     } catch (e: any) {
-      console.error('[LeadTimes] save failed:', e)
+      /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     }
   }
 

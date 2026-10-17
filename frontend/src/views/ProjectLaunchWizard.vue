@@ -153,8 +153,6 @@ import EquipmentInstanceCreateDialog from './equipment/EquipmentInstanceCreateDi
 import { useProjectLaunchWizardPage } from '../composables/useProjectLaunchWizardPage'
 
 const {
-  route,
-  router,
   loading,
   showCreate,
   actionLoading,
@@ -162,38 +160,21 @@ const {
   instances,
   types,
   dashboard,
-  bomHealth,
   docsCount,
-  kitStatus,
-  qualityStatus,
-  costStatus,
-  acceptanceStatus,
   loadErrors,
   selectedInstance,
   processTotal,
   workOrderTotal,
-  dispatchedTotal,
-  statusOf,
   statusText,
   statusTag,
   progressColor,
-  routeFor,
-  isDoneStatus,
-  safeLoad,
   flowSteps,
   readinessPct,
-  normalizeList,
-  countList,
-  loadInstances,
-  loadProjectStatus,
   refreshAll,
   handleInstanceChange,
   handleCreated,
   runAction,
-  go,
-  initMinimumBom,
-  generateProcessRoutes,
-} = useProjectLaunchWizardPage()
+  go } = useProjectLaunchWizardPage()
 </script>
 
 <style scoped>

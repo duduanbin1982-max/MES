@@ -168,7 +168,7 @@ async function loadEquipment() {
     equipment.value = data.equipment || data || []
     Object.assign(summary, data.summary || {})
   } catch (error: any) {
-    console.error('Failed to load equipment ledger:', error)
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     loadError.value = error?.message || '设备台账接口暂时不可用，请稍后重试。'
   } finally {
     loading.value = false

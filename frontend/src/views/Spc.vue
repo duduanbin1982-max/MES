@@ -104,7 +104,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, watch } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { Api } from '../api'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'

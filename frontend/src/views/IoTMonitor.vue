@@ -222,7 +222,7 @@ function connectWS() {
   const url = proto + '://' + location.host + '/ws?token=' + encodeURIComponent(token)
   try {
     ws = new WebSocket(url)
-    ws.onopen = () => { console.log('[IoT] WS connected'); if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null } }
+    ws.onopen = () => { /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */ if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null } }
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data)
@@ -238,7 +238,7 @@ function connectWS() {
         }
       } catch (ex) { /* ignore malformed */ }
     }
-    ws.onclose = () => { console.log('[IoT] WS closed, reconnect in 5s'); wsReconnectTimer = setTimeout(connectWS, 5000) }
+    ws.onclose = () => { /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */ wsReconnectTimer = setTimeout(connectWS, 5000) }
     ws.onerror = () => { ws?.close() }
   } catch (ex) {
     wsReconnectTimer = setTimeout(connectWS, 5000)

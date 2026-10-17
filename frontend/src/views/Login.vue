@@ -65,13 +65,13 @@ const login = async () => {
     const target = getDefaultRoute()
     try {
       await router.push(target)
-      console.log(`[login] 跳 ${target} OK`)
+      /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     } catch (e) {
-      console.warn(`[login] ${target} 跳失败, 兜底 /`, e)
+      /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
       await router.push('/')
     }
   } catch (e: any) {
-    console.error('[login] 失败:', e)
+    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
     const msg = e?.response?.data?.message || e?.response?.data?.error || e?.message || '登录失败'
     ElMessage.error(msg)
   } finally {
