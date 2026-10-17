@@ -57,6 +57,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { actionLabel, flattenHistory, stateTagType } from '../domain/workOrderTimeline'
 
 const props = defineProps<{ woId: number }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
@@ -64,30 +65,9 @@ const emit = defineEmits<{ (e: 'changed'): void }>()
 const loading = ref(false)
 const data = ref<any>(null)
 
-const LABELS: Record<string, string> = {
-  start: '开工',
-  dispatch: '派工',
-  pause: '暂停',
-  complete: '完工',
-  report: '报工',
-  cancel: '取消',
-}
-function actionLabel(a: string) {
-  return LABELS[a] || a
-}
-
 const actions = computed<any[]>(() => data.value?.available_actions || [])
-const timeline = computed<any[]>(() => {
-  const list = (data.value?.instances || []).flatMap((i: any) => i.history || [])
-  return [...list].sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))
-})
-const stateType = computed(() => {
-  const s = data.value?.current_state
-  if (s === 'completed') return 'success'
-  if (s === 'cancelled') return 'danger'
-  if (s === 'in_progress') return 'warning'
-  return 'info'
-})
+const timeline = computed(() => flattenHistory(data.value?.instances))
+const stateType = computed(() => stateTagType(data.value?.current_state))
 
 async function load() {
   loading.value = true

@@ -160,8 +160,13 @@ const loadInstances = async () => {
   instLoading.value = true
   try {
     if (filter.entityId && filter.definition) {
-      instances.value = await Api.get('/workflow/entity/' + filter.definition + '/' + filter.entityId)
-      instances.value = Array.isArray(instances.value) ? instances.value : [instances.value]
+      // 2026-10-17 修 bug：接口路径要的是 entity_type（work_order / eco / bom_node），
+      // 不是定义名（work_order / eco_change / bom_approval）——用 definitions 里的 entity_type 映射。
+      const def = definitions.value.find((d: ApiRecord) => d.name === filter.definition)
+      const entityType = (def && (def.entity_type as string)) || filter.definition
+      const res: any = await Api.get('/workflow/entity/' + entityType + '/' + filter.entityId)
+      // 2026-10-17 起该接口返回统一 timeline 形状（{ entity_type, current_state, available_actions, instances }）
+      instances.value = Array.isArray(res) ? res : (res?.instances || [])
     } else {
       // best-effort: get all active
       instances.value = []

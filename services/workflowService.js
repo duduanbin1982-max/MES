@@ -1,4 +1,7 @@
 "use strict";
+
+const { createLogger } = require("../app/logger");
+const logger = createLogger("workflowService");
 const { wrap } = require('../middleware/asyncHandler');
 // services/workflowService.js
 // P0-5 工作流 HTTP API
@@ -14,6 +17,36 @@ const { ApiError } = require("../app/errors");
 function register(app, db, auth) {
   // definitions 端点公开可读 (不经过 app.use 全局中间件)
   const { definitions } = require("../app/workflow/definitions");
+
+  // 2026-10-17：把代码里的定义幂等同步到 workflow_definitions 表
+  // （定义仍以代码为准；落库便于查询/审计/前端下拉，不再出现"表空但功能可用"的错觉）
+  try {
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS uk_workflow_definitions_name ON workflow_definitions(name)").run();
+    const upsert = db.prepare(
+      `INSERT INTO workflow_definitions (name, display_name, entity_type, description, states, transitions, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(name) DO UPDATE SET
+         display_name = excluded.display_name,
+         entity_type  = excluded.entity_type,
+         description  = excluded.description,
+         states       = excluded.states,
+         transitions  = excluded.transitions,
+         updated_at   = datetime('now')`
+    );
+    for (const [name, def] of Object.entries(definitions)) {
+      upsert.run(
+        name,
+        def.display_name,
+        def.entity_type,
+        def.description || null,
+        JSON.stringify(def.states),
+        JSON.stringify(def.transitions.map((t) => ({ from: t.from, to: t.to, action: t.action, label: t.label || t.action })))
+      );
+    }
+  } catch (error) {
+    // 落库失败不影响定义读取（定义一直在代码里）
+    logger.warn("[workflow] definitions 落库失败: " + error.message);
+  }
   const { createEngine } = require("../app/workflow/engine");
   const wf = createEngine(db);
 
@@ -69,9 +102,24 @@ function register(app, db, auth) {
   }));
 
   // 按实体查询
+  // 2026-10-17：统一 timeline 形状（与 /api/work_orders/:id/workflow 一致），
+  // 任意实体都能拿到 实例 + 历史 + 当前状态下的可用动作，前端复用同一套渲染。
   app.get("/api/workflow/entity/:type/:id", wrap((req, res) => {
-    const instances = wf.getInstancesByEntity(req.params.type, Number(req.params.id));
-    res.json(instances);
+    const type = String(req.params.type);
+    const id = Number(req.params.id);
+    const instances = wf.getInstancesByEntity(type, id).map((inst) => ({
+      ...inst,
+      history: wf.getInstance(inst.id).history || [],
+    }));
+    const last = instances[instances.length - 1];
+    const current = last ? last.current_state : null;
+    const defName = Object.keys(definitions).find((n) => definitions[n].entity_type === type);
+    const available = defName && current
+      ? definitions[defName].transitions
+          .filter((t) => t.from === current)
+          .map((t) => ({ action: t.action, label: t.label || t.action, to: t.to }))
+      : [];
+    res.json({ entity_type: type, entity_id: id, current_state: current, available_actions: available, instances });
   }));
 
   // 查询某实例的可用动作
