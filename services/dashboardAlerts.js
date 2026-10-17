@@ -1,7 +1,7 @@
 // services/dashboardAlerts.js
 // 首页告警聚合 - 标准 register(app, db) 模式 (brooks-review fix)
 'use strict';
-const { ApiError } = require('../app/errors');
+require('../app/errors');
 
 const { wrap } = require('../middleware/asyncHandler');
 const { makeDbHelpers } = require('./material/core');

@@ -3,9 +3,9 @@ const { ApiError } = require('../app/errors');
 const { wrap } = require('../middleware/asyncHandler');
 // services/plmService.js
 // P2-3 PLM Integration: Drawing version control + BOM linkage + CAD metadata + ECO sync
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+require("fs");
+require("path");
+require("crypto");
 
 const logger = require("../app/logger").createLogger("plmService");
 

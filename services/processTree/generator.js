@@ -1,4 +1,4 @@
-const { wrap } = require('../../middleware/asyncHandler');
+require('../../middleware/asyncHandler');
 /**
  * 工艺树生成 + 关键路径
  *
@@ -15,7 +15,7 @@ const { wrap } = require('../../middleware/asyncHandler');
 
 const all = (db, sql, params = []) => db.prepare(sql).all(params);
 const get = (db, sql, params = []) => db.prepare(sql).get(params);
-const run = (db, sql, params = []) => db.prepare(sql).run(params);
+(db, sql, params = []) => db.prepare(sql).run(params);
 
 
 // ─── 辅助：纯函数（无 DB，便于单测）───

@@ -81,7 +81,7 @@ function step({ id, title, route, progress, metrics, issues, actions, ownerRole,
 }
 
 function buildSetupStatus(db) {
-  const users = count(db, "users");
+count(db, "users");
   const activeUsers = count(db, "users", has(db, "users", "is_active") ? "is_active = 1" : "1=1");
   const roles = count(db, "roles");
   const roleCodes = tableExists(db, "roles")

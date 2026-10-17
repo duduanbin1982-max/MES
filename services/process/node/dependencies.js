@@ -5,7 +5,7 @@
 //   DELETE /api/process_dependencies/:id      删除依赖
 // Author: 三狗子 | Date: 2026-06-24
 
-const { all, get, run, wrap } = require("./_helpers");
+const { run, wrap } = require("./_helpers");
 
 function register(app, db) {
 app.post('/api/process_dependencies', wrap((req, res) => {

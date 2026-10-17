@@ -1,6 +1,6 @@
 "use strict";
 // 快模式按主题拆分（原 services/processTree/mindmap/views.js）
-const { pickPartName, deriveStatus, statusFromChildren, ROOT_ID } = require('../_pure');
+const { pickPartName, statusFromChildren, ROOT_ID } = require('../_pure');
 
 function aggregatePartsByBomId(nodes) {
   const byBomId = new Map();

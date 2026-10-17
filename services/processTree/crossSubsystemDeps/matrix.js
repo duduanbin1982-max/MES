@@ -14,19 +14,6 @@ const TYPE_FACTOR = {
 // 虚拟 subsystem id: 表示 "未分配到任何 subsystem 的节点"
 const UNASSIGNED = "__unassigned__";
 
-// Stable colour palette — 按 subsystem id 散列取色, 保证 UI 跨视图一致
-const PALETTE = [
-  "#0ea5e9", "#22c55e", "#f97316", "#a855f7", "#ef4444",
-  "#14b8a6", "#eab308", "#ec4899", "#6366f1", "#10b981",
-];
-
-// 根据 id 取色 (稳定散列)
-function colorForId(id) {
-  if (id == null) return "#94a3b8";
-  return PALETTE[Math.abs(Number(id)) % PALETTE.length];
-}
-
-// 数字保留 2 位
 function round2(n) { return Math.round(n * 100) / 100; }
 const { loadSubsystemsForInstance } = require('./loadSubsystems');
 function getCrossSubsystemMatrix(db, instanceId) {

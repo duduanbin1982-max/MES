@@ -1,5 +1,4 @@
 "use strict";
-const { wrap } = require("../../middleware/asyncHandler");
 
 const createContext = require("./context");
 const registerRoutes1 = require("./routes_1");
@@ -13,8 +12,7 @@ function register(app, db) {
 
 
 function collectForException(db) {
-  const fakeApp = { get() {}, post() {} };
-  let collected = null;
+    let collected = null;
   const originalJson = (payload) => { collected = payload; };
   register({
     get(path, handler) {

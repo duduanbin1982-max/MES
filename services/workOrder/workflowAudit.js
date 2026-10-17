@@ -19,7 +19,6 @@ const logger = createLogger('workOrderAudit');
 const DEFINITION = 'work_order';
 const ENTITY_TYPE = 'work_order';
 
-function all(db, sql, params = []) { return db.prepare(sql).all(params); }
 function get(db, sql, params = []) { return db.prepare(sql).get(params); }
 function run(db, sql, params = []) { return db.prepare(sql).run(params); }
 

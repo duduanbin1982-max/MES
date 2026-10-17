@@ -1,13 +1,7 @@
 "use strict";
 // 快模式按主题拆分（原 services/bom/service/mutations.js）
-const {
-  validateNode,
-  normalizeInt,
-  normalizeFloat,
-  normalizeBool,
-  cleanText,
-} = require("../../core");
-const { tableColumns, ensureBomStructureColumns } = require("../schema");
+const { normalizeInt, normalizeFloat, normalizeBool, cleanText } = require("../../core");
+const { ensureBomStructureColumns } = require("../schema");
 const { inferNodeType } = require("./_tree");
 
 function buildValidationContext(db, instanceId, excludeId = null) {

@@ -1,7 +1,7 @@
-const { wrap } = require('../../middleware/asyncHandler');
-const { ApiError } = require('../../app/errors');
-const { makeDbHelpers } = require('../material/core');
-const { getBomRows, aggregateDemand, getStockMap, computeKitItems } = require('../kitCheckCore');
+require('../../middleware/asyncHandler');
+require('../../app/errors');
+require('../material/core');
+require('../kitCheckCore');
 const createContext = require("./context");
 const registerRoutes1 = require("./routes_1");
 const registerRoutes2 = require("./routes_2");

@@ -126,7 +126,7 @@ function registerFaultPrediction(app, db) {
 
 // === Quality Trend Prediction ===
 function registerQualityPrediction(app, db) {
-  const { all, get, run } = makeHelpers(db);
+  const { all, run } = makeHelpers(db);
 
   app.post("/api/ai/predict/quality", wrap((req, res) => {
     const { instance_id, days_back } = req.body;

@@ -2,7 +2,7 @@
 // 问题单构造（原 masterDataService.js 的 register() 前置逻辑）
 
 module.exports = function createIssueHelpers(h) {
-  const { all, get, has, columns, tableExists, MDM_ALLOWED_TABLES } = h;
+  const { all, tableExists } = h;
 
   function stableIssueId(domain, rule, source, refId, title) {
     const raw = [domain, rule, source || "-", refId == null ? "-" : String(refId), title || ""].join("|");

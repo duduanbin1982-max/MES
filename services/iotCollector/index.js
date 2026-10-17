@@ -8,11 +8,10 @@
 const { emit, Events } = require("../../app/ws/EventBus");
 
 
-const { DEFAULT_ALARM_COOLDOWN_MINUTES, DEFAULT_SIM_ALARM_RATE, classifyAlarmSeverity, collectDevice, getAlarmCooldownMinutes, getMode, getSimulatorAlarmRate, insertAlarmIfNeeded, isVerboseLogging, logVerbose, logger, readPositiveNumberEnv, simulateModbusValue } = require("./_helpers");
+const { classifyAlarmSeverity, collectDevice, getAlarmCooldownMinutes, getMode, getSimulatorAlarmRate, insertAlarmIfNeeded, isVerboseLogging, logVerbose, logger, simulateModbusValue } = require("./_helpers");
 
 // 全局开关: 采集器是否运行
 let collectorInterval = null;
-let dbRef = null;
 
 
 
@@ -112,7 +111,6 @@ function start(db, intervalMs) {
     return false;
   }
 
-  dbRef = db;
   const interval = intervalMs || 5000;
 
   // 标记所有设备 online (开发/演示模式)

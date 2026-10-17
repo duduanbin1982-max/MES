@@ -10,18 +10,7 @@ function register(app, db) {
   const get = (sql, params = []) => db.prepare(sql).get(params);
   
 
-  function addHours(isoOrDate, hours) {
-    if (!hours) hours = 0;
-    const d = new Date(isoOrDate);
-    d.setTime(d.getTime() + hours * 3600 * 1000);
-    return d.toISOString().replace('T', ' ').slice(0, 19);
-  }
 
-  function maxDate(a, b) {
-    if (!a) return b;
-    if (!b) return a;
-    return a > b ? a : b;
-  }
 
   // 单实例排程 (与 services/scheduler.js 同算法, 但 dryRun 必为 true)
   // 读 DB 中已排程的 planned_start/planned_end (不重新算)

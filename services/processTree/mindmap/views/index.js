@@ -3,10 +3,10 @@
 //   getRootView / getSubsystemView / getPartView / getNodeView
 'use strict';
 
-const { pickPartName, deriveStatus, statusFromChildren, ROOT_ID } = require('../_pure');
+require('../_pure');
 
 const { getRootView } = require("./rootView");
-const { aggregatePartsByBomId, getSubsystemView } = require("./subsystemView");
+const { getSubsystemView } = require("./subsystemView");
 const { getPartView } = require("./partView");
 const { getNodeView } = require("./nodeView");
 

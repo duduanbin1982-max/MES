@@ -1,14 +1,8 @@
 "use strict";
 // 快模式按主题拆分（原 services/bom/service/mutations.js）
 const { ApiError } = require("../../../../app/errors");
-const {
-  validateNode,
-  normalizeInt,
-  normalizeFloat,
-  normalizeBool,
-  cleanText,
-} = require("../../core");
-const { tableColumns, ensureBomStructureColumns } = require("../schema");
+const { validateNode, normalizeInt } = require("../../core");
+const { ensureBomStructureColumns } = require("../schema");
 const { buildValidationContext, recomputeStructureMetadata, rowToSafeNode } = require("./_meta");
 const { deriveTier, getParent, nextSortOrder } = require("./_tree");
 

@@ -3,14 +3,6 @@
 // 加载某 instance 的 subsystems (含 unassigned 节点)
 // Author: 三狗子 | Date: 2026-06-24
 
-// Inline (brooks-debt R4)
-const TYPE_FACTOR = {
-  FS: 1.0,  // Finish-to-Start: 完成-开始
-  SS: 0.7,  // Start-to-Start: 同时开始
-  FF: 0.5,  // Finish-to-Finish: 同时完成
-  SF: 0.5,  // Start-to-Finish: 开始-完成 (少用)
-};
-
 // 虚拟 subsystem id: 表示 "未分配到任何 subsystem 的节点"
 const UNASSIGNED = "__unassigned__";
 
@@ -27,7 +19,6 @@ function colorForId(id) {
 }
 
 // 数字保留 2 位
-function round2(n) { return Math.round(n * 100) / 100; }
 function loadSubsystemsForInstance(db, instanceId) {
   // Subsystems with at least one node in this instance.
   // Real .73 schema: equipment_subsystems(id, code, name_zh, name_en, sequence, description, equipment_type_id).

@@ -5,7 +5,7 @@ const { wrap } = require("../../middleware/asyncHandler");
 const { computeOEEFromShifts, equipmentLabel, gradeFor, pastDate, round2 } = require("./helpers");
 
 function registerOverviewRoutes(app, store) {
-  const { all, get } = store;
+  const { all } = store;
 
   app.get("/api/oee/overview", wrap((req, res) => {
     const { instance_id, days } = req.query;

@@ -1,13 +1,7 @@
 "use strict";
 // 快模式按主题拆分（原 services/bom/service/mutations.js）
 const { ApiError } = require("../../../../app/errors");
-const {
-  validateNode,
-  normalizeInt,
-  normalizeFloat,
-  normalizeBool,
-  cleanText,
-} = require("../../core");
+const { normalizeInt, normalizeBool, cleanText } = require("../../core");
 
 function getParent(db, instanceId, parentId) {
   if (!parentId) return null;

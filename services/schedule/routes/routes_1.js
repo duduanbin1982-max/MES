@@ -3,7 +3,7 @@
 
 module.exports = function registerRoutes1(app, db, ctx) {
 const { ApiError } = require("../../../app/errors");
-const { makeDbHelpers, toInt, normalizeDate } = require("../_helpers");
+const { toInt, normalizeDate } = require("../_helpers");
 const { wrap } = require("../../../middleware/asyncHandler");
 const { all, get, run } = ctx;
 

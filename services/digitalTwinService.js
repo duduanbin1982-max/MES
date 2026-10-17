@@ -177,7 +177,7 @@ function registerModels(app, db) {
 
 // === Part Mappings ===
 function registerParts(app, db) {
-  const { all, get, run } = makeHelpers(db);
+  const { all, run } = makeHelpers(db);
 
   app.get("/api/dt/models/:id/parts", wrap((req, res) => {
     res.json(all("SELECT * FROM dt_part_mappings WHERE model_id=? ORDER BY assembly_step, id", [req.params.id]));
@@ -194,7 +194,7 @@ function registerParts(app, db) {
 
 // === Assembly Status ===
 function registerAssembly(app, db) {
-  const { all, get, run } = makeHelpers(db);
+  const { all, run } = makeHelpers(db);
 
   app.get("/api/dt/assembly-status", wrap((req, res) => {
     const { model_id, status } = req.query;
@@ -262,7 +262,7 @@ function registerOverlay(app, db) {
 
 // === Dashboard ===
 function registerDashboard(app, db) {
-  const { all, get, run } = makeHelpers(db);
+makeHelpers(db);
   app.get("/api/dt/dashboard", wrap((req, res) => {
     const modelCount = db.prepare("SELECT COUNT(*) AS c FROM dt_models WHERE status='active'").get().c;
     const partCount = db.prepare("SELECT COUNT(*) AS c FROM dt_part_mappings").get().c;

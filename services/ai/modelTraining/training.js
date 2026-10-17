@@ -3,7 +3,7 @@
 
 const { ApiError } = require("../../../app/errors");
 const crypto = require("node:crypto");
-const { safeCode, parseJson, modelRow } = require("./_helpers");
+const { safeCode, modelRow } = require("./_helpers");
 
 function trainingGroups(db, filters = {}) {
   const conditions = ["h.sample_count > 0", "h.avg_value IS NOT NULL", "dp.is_active = 1"];

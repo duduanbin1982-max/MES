@@ -3,7 +3,7 @@
 // P0-2: IoT readings/alarms lifecycle governance.
 // Keeps raw high-frequency data bounded while preserving hour-level trends.
 
-const { ApiError } = require("../app/errors");
+require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 
 const logger = require("../app/logger").createLogger("iotLifecycleService");

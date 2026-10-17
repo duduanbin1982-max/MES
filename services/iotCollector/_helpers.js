@@ -137,7 +137,7 @@ function collectDevice(db, device) {
       const base = 50 + (codeHash % 50); // 50-100 范围的基值
       const value = simulateModbusValue(pt, base);
       
-      const r = insReading.run(device.id, pt.id, value);
+insReading.run(device.id, pt.id, value);
       readingCount++;
       
       // 检查报警。低阈值必须低于高阈值；同一点位同类未确认报警按冷却窗口去重。

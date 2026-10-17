@@ -3,9 +3,9 @@ const { ApiError } = require('../app/errors');
 // services/iotService.js
 // P2-2 IoT/SCADA Integration: Device registry + Data collection + Real-time monitoring
 // Supports Modbus TCP / OPC UA stub + MQTT placeholder
-const fs = require("fs");
-const { wrap } = require('../middleware/asyncHandler');
-const path = require("path");
+require("fs");
+require('../middleware/asyncHandler');
+require("path");
 const { registerIngestionRoutes } = require("./iot/ingestionRoutes");
 const { runMigration } = require("./iot/schema");
 
@@ -208,7 +208,7 @@ function registerReadings(app, db) {
 
 // === Alarms ===
 function registerAlarms(app, db) {
-  const { all, get, run, wrap } = makeHelpers(db);
+  const { all, run, wrap } = makeHelpers(db);
 
   app.get("/api/iot/alarms", wrap((req, res) => {
     const { device_id, acknowledged, severity } = req.query;

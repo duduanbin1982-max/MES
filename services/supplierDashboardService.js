@@ -7,7 +7,7 @@ const { wrap } = require("../middleware/asyncHandler");
 const logger = require("../app/logger").createLogger("supplierDashboard");
 
 function register(app, db) {
-  const { get, all, run } = makeDbHelpers(db);
+  const { all } = makeDbHelpers(db);
 
   app.get("/api/supplier/dashboard", wrap((req, res) => {
     // 供应商列表 + 最新评分

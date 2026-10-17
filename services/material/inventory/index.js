@@ -2,11 +2,11 @@
 // 库存 / 移动 / 调拨路由 — 从 materialService.js 拆分 (brooks-debt R1)
 'use strict';
 
-const { ApiError } = require("../../../app/errors");
-const { wrap } = require('../../../middleware/asyncHandler');
-const { DEFAULT_ROLE_PERMISSIONS, hasPermission } = require('../../../app/permissions');
-const { emit, Events } = require('../../../app/ws/EventBus');
-const { makeDbHelpers } = require('../core');
+require("../../../app/errors");
+require('../../../middleware/asyncHandler');
+require('../../../app/permissions');
+require('../../../app/ws/EventBus');
+require('../core');
 
 const createContext = require("./context");
 const registerRoutes1 = require("./routes_1");

@@ -66,7 +66,7 @@ function registerCertificates(app, db) {
 
 // Skills matrix
 function registerSkills(app, db) {
-  const { all, get, run } = makeHelpers(db);
+  const { all, run } = makeHelpers(db);
   app.get("/api/labor/skills", wrap((req, res) => {
     const { user_id, skill_category } = req.query;
     let sql = "SELECT s.*, u.full_name, u.username FROM worker_skills s JOIN users u ON s.user_id = u.id WHERE 1=1";
@@ -90,7 +90,7 @@ function registerSkills(app, db) {
 
 // Training records
 function registerTraining(app, db) {
-  const { all, get, run } = makeHelpers(db);
+  const { all, run } = makeHelpers(db);
   app.get("/api/labor/training", wrap((req, res) => {
     const { user_id } = req.query;
     let sql = "SELECT t.*, u.full_name FROM worker_training t JOIN users u ON t.user_id = u.id WHERE 1=1";

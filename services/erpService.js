@@ -153,7 +153,7 @@ function registerLedger(app, db) {
 }
 
 function registerExport(app, db) {
-  const { all, get, run } = makeHelpers(db);
+  const { all, run } = makeHelpers(db);
   const edir = "/tmp/erp-exports";
   function ensureDir() { if (!fs.existsSync(edir)) fs.mkdirSync(edir, { recursive: true }); }
 
@@ -198,7 +198,7 @@ function registerExport(app, db) {
 }
 
 function registerCostRollup(app, db) {
-  const { all, get, run } = makeHelpers(db);
+  const { all, get } = makeHelpers(db);
   app.post("/api/erp/cost-rollup", wrap((req, res) => {
     const { instance_id } = req.body;
     if (!instance_id) throw ApiError.validation("instance_id required")

@@ -2,7 +2,7 @@
 // 主数据体检规则（原 masterDataService.js 的 register() 前置逻辑）
 
 module.exports = function createChecks(h) {
-  const { all, get, has, columns, tableExists, MDM_ALLOWED_TABLES, issue, stableIssueId, ignoredIssueIds, severityRank } = h;
+  const { all, get, has, tableExists, MDM_ALLOWED_TABLES, issue } = h;
 
   function firstTable(names) {
     return names.find(tableExists);

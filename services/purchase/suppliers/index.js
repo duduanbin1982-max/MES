@@ -1,9 +1,9 @@
 // services/purchase/suppliers.js
 // 供应商 CRUD + 分类治理
 
-const { makeHelpers } = require('../_helpers')
-const { wrap } = require('../../../middleware/asyncHandler');
-const { ApiError } = require('../../../app/errors');
+require('../_helpers')
+require('../../../middleware/asyncHandler');
+require('../../../app/errors');
 
 const createContext = require("./context");
 const registerRoutes1 = require("./routes_1");
@@ -58,9 +58,6 @@ function safeJson(value, fallback = []) {
   }
 }
 
-function jsonText(value) {
-  return JSON.stringify(safeJson(value));
-}
 
 function categoryLabel(category) {
   return SUPPLIER_CATEGORIES.find((item) => item.value === category)?.label || category || '普通供应商';

@@ -1,11 +1,11 @@
-const { wrap } = require('../../middleware/asyncHandler');
+require('../../middleware/asyncHandler');
 // services/processProgress.js
 // 批次 3 重构：从 server.js 抽出
 
 // db.js 提供 db 实例；本文件用闭包包裹工具函数
 const all = (db, sql, params = []) => db.prepare(sql).all(params);
 const get = (db, sql, params = []) => db.prepare(sql).get(params);
-const run = (db, sql, params = []) => db.prepare(sql).run(params);
+(db, sql, params = []) => db.prepare(sql).run(params);
 
 
 function getProcessProgress(req, res, db, explicitInstanceId) {

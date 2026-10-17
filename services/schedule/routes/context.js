@@ -3,7 +3,7 @@
 
 const logger = require("../../../app/logger").createLogger("scheduleService");
 const { runMigration } = require("../schema");
-const { makeDbHelpers, toInt, normalizeDate } = require("../_helpers");
+const { makeDbHelpers } = require("../_helpers");
 
 
 module.exports = function createContext(app, db, deps) {

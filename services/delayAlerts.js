@@ -1,5 +1,5 @@
 'use strict';
-const { ApiError } = require('../app/errors');
+require('../app/errors');
 const { wrap } = require('../middleware/asyncHandler');
 // services/delayAlerts.js
 // P2-#D 延误预警
