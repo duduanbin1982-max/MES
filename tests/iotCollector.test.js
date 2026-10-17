@@ -6,7 +6,7 @@ const path = require("node:path");
 const Database = require("better-sqlite3");
 const { spawnSync } = require("node:child_process");
 const iotCollector = require("../services/iotCollector");
-const { makeCollectorDb } = require("./helpers/iotCollectorDb");
+require("./helpers/iotCollectorDb");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 

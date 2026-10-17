@@ -91,7 +91,7 @@ test('工位冲突串行排', () => {
   const app = makeApp();
   delete require.cache[svcPath];
   require(svcPath).register(app, db);
-  const r = call(app, 'post', '/api/equipment_instances/1/schedule');
+call(app, 'post', '/api/equipment_instances/1/schedule');
   const total = db.prepare('SELECT id, planned_start, planned_end, required_workstation_id FROM process_nodes WHERE required_workstation_id=1 ORDER BY planned_start').all();
   assert.equal(total.length, 2);
   assert.ok(total[0].planned_end <= total[1].planned_start, '工位 1 的总装应先完成才到喷漆');

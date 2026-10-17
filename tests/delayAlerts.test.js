@@ -6,7 +6,7 @@ const path = require('path');
 const svcPath = path.resolve(__dirname, '../services/delayAlerts.js');
 function makeDb() {
   const db = new Database(':memory:');
-  const Q = (s) => s;
+(s) => s;
   db.exec('CREATE TABLE equipment_instances (id INTEGER PRIMARY KEY, instance_code TEXT, instance_name TEXT, customer_name TEXT, status TEXT, planned_start TEXT, start_date TEXT)');
   db.exec('CREATE TABLE work_orders (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, wo_code TEXT, title TEXT, planned_end TEXT, status TEXT DEFAULT pending)');
   db.exec('CREATE TABLE process_nodes (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, operation_name TEXT, planned_end TEXT, status TEXT DEFAULT pending)');

@@ -53,7 +53,7 @@ test('P0-2.JWT.3 verify 篡改 signature 返回 null', () => {
 
 test('P0-2.JWT.4 verify 篡改 payload 返回 null', () => {
   const r = jwt.signAccess({ sub: 1, role: 'admin' });
-  const [h, b, s] = r.token.split('.');
+  const [h, , s] = r.token.split('.');
   // 改 payload: sub 1 -> 2
   const newPayload = Buffer.from(JSON.stringify({ sub: 2, role: 'admin', iat: Math.floor(Date.now()/1000), exp: Math.floor(Date.now()/1000) + 3600, jti: 'fake', typ: 'access' })).toString('base64url');
   const bad = `${h}.${newPayload}.${s}`;
@@ -138,7 +138,7 @@ test('P0-2.JWT.12 alg 替换攻击防御 (篡改 header 为 none)', () => {
   // 攻击: 把 header 改成 { "alg": "none" }, 期望 verify 拒绝
   const none_header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
   const r = jwt.signAccess({ sub: 1, role: 'admin' });
-  const [_, body] = r.token.split('.');
+  const [, body] = r.token.split('.');
   const evilToken = none_header + '.' + body + '.';
   const p = jwt.verify(evilToken);
   assert.equal(p, null, 'alg none attack should fail');

@@ -74,7 +74,7 @@ test("P5-1 启动 ECO 工作流", () => {
 });
 
 test("P5-2 ECO 提交评审", () => {
-  const inst = wf.getInstance(1);
+wf.getInstance(1);
   const r = wf.transit(1, "submit", 1, "请审核");
   assert.equal(r.instance.current_state, "review");
   assert.equal(r.history.length, 2);
@@ -197,7 +197,7 @@ test("P5-9 getAvailableActions", () => {
 });
 
 test("P5-10 getInstancesByEntity", () => {
-  const r1 = wf.start("eco_change", "eco", 500, { created_by: 1 });
+wf.start("eco_change", "eco", 500, { created_by: 1 });
   const r2 = wf.start("eco_change", "eco", 500, { created_by: 1 });
   const list = wf.getInstancesByEntity("eco", 500);
   assert.equal(list.length, 2);

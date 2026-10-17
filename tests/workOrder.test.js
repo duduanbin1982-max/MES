@@ -228,7 +228,7 @@ test("F-T1.3: POST /:id/report when qty reaches quantity_planned moves WO to com
 
 test("F5.1: PUT /:id/dispatch rejects when user role is not in foreman/admin", async () => {
   const db = createDatabase();
-  const app = createApp(db);
+createApp(db);
   // Override auth to simulate a viewer role attempting dispatch
   const viewerAuth = {
     onlyForemanOrAdmin: (_req, _res, next) => next(new Error("forbidden")),

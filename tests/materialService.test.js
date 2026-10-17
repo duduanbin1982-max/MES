@@ -35,9 +35,9 @@ test('P0-2-1 receive: 库存 + 100, 写 movement receive', () => {
 });
 
 test('P0-2-2 issue: 在 receive 后 issue 30, 库存剩 70', () => {
-  let { req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'receive', quantity: 100, to_location: '主仓库-A-01', unit: 'pcs' });
+  let { req, res } = mkReqRes({ material_lot_id: 1, movement_type: 'receive', quantity: 100, to_location: '主仓库-A-01', unit: 'pcs' });
   ctx.routes['POST /api/material_movements'].handler(req, res);
-  ({ req, res, getResult } = mkReqRes({ material_lot_id: 1, movement_type: 'issue', quantity: 30, from_location: '主仓库-A-01', work_order_id: 1 }));
+  ({ req, res } = mkReqRes({ material_lot_id: 1, movement_type: 'issue', quantity: 30, from_location: '主仓库-A-01', work_order_id: 1 }));
   ctx.routes['POST /api/material_movements'].handler(req, res);
   const inv = _db.prepare('SELECT quantity FROM inventory WHERE material_lot_id = 1 AND location = ?').get('主仓库-A-01');
   assert.equal(inv.quantity, 70, 'issue 后剩 70');

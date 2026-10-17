@@ -6,7 +6,7 @@ const path = require('path');
 const svcPath = path.resolve(__dirname, '../services/equipment/multiInstanceScheduler.js');
 function makeDb() {
   const db = new Database(':memory:');
-  const Q = (s) => s;
+(s) => s;
   db.exec('CREATE TABLE equipment_instances (id INTEGER PRIMARY KEY, instance_code TEXT, instance_name TEXT, customer_name TEXT, status TEXT, planned_start TEXT, start_date TEXT)');
   db.exec('CREATE TABLE workstations (id INTEGER PRIMARY KEY, name TEXT, workshop TEXT)');
   db.exec('CREATE TABLE process_nodes (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, parent_id INTEGER, bom_node_id INTEGER, operation_name TEXT, operation_type TEXT DEFAULT make, sequence INTEGER DEFAULT 1, estimated_hours REAL DEFAULT 0, required_workstation_id INTEGER, status TEXT DEFAULT pending, planned_start TEXT, planned_end TEXT)');

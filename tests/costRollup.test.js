@@ -189,7 +189,7 @@ console.log("=== costRollup ===");
        eq("2. contract_yuan = 5000 (unit=yuan)", j.body.contract_yuan, 5000);
        eq("2. contract_margin_pct = 75.26", j.body.contract_margin_pct, 75.26);
     eq("2. project_status = over_budget", j.body.project_status, "over_budget");
-    const bearing = j.body.key_components.items ? j.body.key_components.items[0] : null;
+j.body.key_components.items ? j.body.key_components.items[0] : null;
     // items 字段不在 rollup, 在 breakdown. 这里只验证 price_diff
   }
 
@@ -198,7 +198,7 @@ console.log("=== costRollup ===");
   // 上面语句故意写两个 valid_from 列, SQLite 会用第二个, 但有语法歧义. 改用普通 insert
   // 改用正确 insert: 直接给 kc2 写价
   db.prepare("DELETE FROM key_component_prices WHERE key_component_id = 2").run();
-  const ins = db.prepare("INSERT INTO key_component_prices (key_component_id, actual_price, contract_no, valid_from, valid_to, priced_at) VALUES (2, 60, 'CN-K2', '2026-06-15', NULL, '2026-06-24 10:00:00')").run();
+db.prepare("INSERT INTO key_component_prices (key_component_id, actual_price, contract_no, valid_from, valid_to, priced_at) VALUES (2, 60, 'CN-K2', '2026-06-15', NULL, '2026-06-24 10:00:00')").run();
   const kc2 = db.prepare("SELECT id FROM key_component_prices WHERE key_component_id = 2 ORDER BY id DESC LIMIT 1").get();
   db.prepare("UPDATE key_components SET last_price_id = ? WHERE id = 2").run(kc2.id);
 

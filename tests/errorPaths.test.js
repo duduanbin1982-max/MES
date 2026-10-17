@@ -12,7 +12,6 @@ require('dotenv').config();
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Database = require('better-sqlite3');
-const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
@@ -97,48 +96,6 @@ function mkApp(db) {
   return { app, routes };
 }
 
-function mkReq(overrides = {}) {
-  return Object.assign({
-    user: { sub: 1, role: 'admin' },
-    params: {},
-    query: {},
-    body: {},
-    headers: {},
-    id: 'test-' + Date.now(),
-  }, overrides);
-}
-
-function mkRes() {
-  const j = { status: 200, json: null, headers: {} };
-  return {
-    status: (s) => { j.status = s; return this; },
-    json: (x) => { j.json = x; return this; },
-    send: (x) => { j.body = x; return this; },
-    setHeader: (k, v) => { j.headers[k] = v; return this; },
-    end: () => {},
-    _j: j,
-  };
-}
-
-async function invoke(method, path, db, handler) {
-  // 找 route 调度器
-  return new Promise((resolve, reject) => {
-    const req = mkReq();
-    const res = mkRes();
-    const next = (err) => {
-      if (err) reject(err);
-      else resolve({ status: res._j.status, json: res._j.json });
-    };
-    try {
-      const r = handler(req, res, next);
-      if (r && typeof r.then === 'function') {
-        r.then(() => resolve({ status: res._j.status, json: res._j.json })).catch(reject);
-      }
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
 
 // =============================================================
 // T5-1: documentService 上传校验 validateMeta -> 异常/失败
@@ -171,16 +128,11 @@ test('T5-1 documentService.validateMeta rejects missing fields', () => {
 test('T5-2 workOrderService rejects dispatch on non-pending order', () => {
   const workOrderService = require('../services/workOrderService');
   const db = freshDb();
-  const { app, routes } = mkApp(db);
+  const { app } = mkApp(db);
   try {
     workOrderService.register(app, db);
   } catch (e) { /* service may need setDb */ }
 
-  // 通过 setDb pattern 找 service 函数
-  const dispatchFn = workOrderService.dispatch ||
-    workOrderService.dispatchWorkOrder ||
-    workOrderService.assign ||
-    workOrderService.setDb?.(db) || null;
 
   // 试直接调用 data 层方法
   assert.throws(
@@ -276,11 +228,9 @@ test('T5-4 material.inventory rejects empty movements array', () => {
 // =============================================================
 test('T5-5 userManagement rejects non-admin role mutation', () => {
   const { ApiError } = require('../app/errors');
-  const userManagement = require('../services/userManagement');
 
   // 模拟 service 的 role-check 路径
   const actorRole = 'worker';
-  const targetUser = { id: 4, role_code: 'worker' };
   const newRole = 'admin';
 
   assert.throws(
@@ -404,7 +354,6 @@ test('T5-8 bom CSV import rejects < 2 lines', () => {
 // T5-9: ai modelCore rejects insufficient training samples
 // =============================================================
 test('T5-9 ai modelCore rejects insufficient training samples', () => {
-  const { ApiError } = require('../app/errors');
   // 模型 core 是 pure function, 不依赖 db
   let modelCore;
   try {

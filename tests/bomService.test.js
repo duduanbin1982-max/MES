@@ -10,7 +10,7 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') }
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Database = require('better-sqlite3');
-const path = require('path');
+require('path');
 
 // stub auth
 const authPath = require.resolve('../middleware/auth');
