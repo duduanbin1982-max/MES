@@ -65,6 +65,12 @@ export function flattenHistory(instances?: WorkflowInstanceRow[] | null): Workfl
   })
 }
 
+/** 统一读取口径：优先用后端返回的 history（已倒序），退化到 instances 拍平 */
+export function historyRows(data?: { history?: WorkflowHistoryRow[] | null; instances?: WorkflowInstanceRow[] | null } | null): WorkflowHistoryRow[] {
+  if (data?.history && data.history.length) return data.history
+  return flattenHistory(data?.instances)
+}
+
 /** 时间线里最近一次动作（用于列表页摘要） */
 export function lastAction(instances?: WorkflowInstanceRow[] | null): WorkflowHistoryRow | null {
   const rows = flattenHistory(instances)

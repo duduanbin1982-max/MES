@@ -159,9 +159,10 @@
 
     <!-- 工单流转审计抽屉（2026-10-17 选项 ii 后半段：可用动作 + workflow_history） -->
     <el-drawer v-model="timelineDlg.show" :title="'工单流转：' + (timelineDlg.wo_code || '')" size="520px">
-      <WorkOrderTimeline
+      <WorkflowTimeline
         v-if="timelineDlg.show && timelineDlg.wo_id"
-        :wo-id="timelineDlg.wo_id"
+        entity-type="work_order"
+        :entity-id="timelineDlg.wo_id"
         @changed="onTimelineChanged"
       />
     </el-drawer>
@@ -174,7 +175,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
 import type { KitCheckResult } from '../types/api'
-import WorkOrderTimeline from '../components/WorkOrderTimeline.vue'
+import WorkflowTimeline from '../components/WorkflowTimeline.vue'
 
 const route = useRoute()
 const router = useRouter()

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   actionLabel,
   flattenHistory,
+  historyRows,
   lastAction,
   stateTagType,
 } from '../../src/domain/workOrderTimeline.ts'
@@ -73,4 +74,27 @@ test('WOT.6 交互动作清单与后端动作名一致（防前端硬编码漂�
   }
   // 不应把未知动作误翻成中文
   assert.equal(actionLabel('nosuch'), 'nosuch')
+})
+
+test('WOT.7 historyRows：优先用统一接口的 history，退化到 instances 拍平', () => {
+  const flat = [{ id: 9, action: 'issue', created_at: '2026-10-17 10:00:00' }]
+  assert.deepEqual(historyRows({ history: flat, instances: [{ id: 1, history: [] }] }), flat)
+
+  const fromInstances = historyRows({
+    history: [],
+    instances: [{ id: 1, history: [
+      { id: 1, action: 'start', created_at: '2026-10-17 09:00:00' },
+      { id: 2, action: 'complete', created_at: '2026-10-17 12:00:00' },
+    ] }],
+  })
+  assert.deepEqual(fromInstances.map((r) => r.action), ['complete', 'start'])
+
+  assert.deepEqual(historyRows(null), [])
+  assert.deepEqual(historyRows({}), [])
+})
+
+test('WOT.8 文档动作也有中文标签（统一口径后同一套渲染）', () => {
+  assert.equal(actionLabel('issue'), '签发')
+  assert.equal(actionLabel('revoke'), '收回')
+  assert.equal(actionLabel('archive'), '归档')
 })

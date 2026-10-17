@@ -17,6 +17,7 @@ const { ApiError } = require("../app/errors");
 function register(app, db, auth) {
   // definitions 端点公开可读 (不经过 app.use 全局中间件)
   const { definitions } = require("../app/workflow/definitions");
+const timeline = require("./workflow/timeline");
 
   // 2026-10-17：把代码里的定义幂等同步到 workflow_definitions 表
   // （定义仍以代码为准；落库便于查询/审计/前端下拉，不再出现"表空但功能可用"的错觉）
@@ -104,25 +105,13 @@ function register(app, db, auth) {
   // 按实体查询
   // 2026-10-17：统一 timeline 形状（与 /api/work_orders/:id/workflow 一致），
   // 任意实体都能拿到 实例 + 历史 + 当前状态下的可用动作，前端复用同一套渲染。
+  // 2026-10-17 统一读取口径：工单 / ECO / 文档 都走 services/workflow/timeline.js
+  // 返回 { entity_type, entity_id, definition, entity, current_state,
+  //        available_actions, sources, history(倒序), instances }
   app.get("/api/workflow/entity/:type/:id", wrap((req, res) => {
-    const type = String(req.params.type);
-    const id = Number(req.params.id);
-    const instances = wf.getInstancesByEntity(type, id).map((inst) => ({
-      ...inst,
-      history: wf.getInstance(inst.id).history || [],
-    }));
-    const last = instances[instances.length - 1];
-    const current = last ? last.current_state : null;
-    const defName = Object.keys(definitions).find((n) => definitions[n].entity_type === type);
-    const available = defName && current
-      ? definitions[defName].transitions
-          .filter((t) => t.from === current)
-          .map((t) => ({ action: t.action, label: t.label || t.action, to: t.to }))
-      : [];
-    res.json({ entity_type: type, entity_id: id, current_state: current, available_actions: available, instances });
+    res.json(timeline.getTimeline(db, req.params.type, Number(req.params.id)));
   }));
 
-  // 查询某实例的可用动作
   app.get("/api/workflow/:id/actions", wrap((req, res) => {
     const actions = wf.getAvailableActions(Number(req.params.id));
     res.json(actions);

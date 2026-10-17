@@ -1,11 +1,13 @@
 <template>
   <div v-loading="loading">
     <el-descriptions :column="2" border size="small" style="margin-bottom: 12px">
-      <el-descriptions-item label="工单号">{{ data?.work_order?.wo_code || '-' }}</el-descriptions-item>
-      <el-descriptions-item label="标题">{{ data?.work_order?.title || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="实体">{{ data?.entity_type }} #{{ data?.entity_id }}</el-descriptions-item>
+      <el-descriptions-item label="标识">{{ data?.entity?.wo_code || data?.entity?.doc_no || data?.entity?.eco_no || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="标题">{{ data?.entity?.title || data?.entity?.doc_name || '-' }}</el-descriptions-item>
       <el-descriptions-item label="当前状态">
         <el-tag :type="stateType" size="small">{{ data?.current_state || '-' }}</el-tag>
       </el-descriptions-item>
+      <el-descriptions-item label="审计来源">{{ (data?.sources || []).join(' / ') || '-' }}</el-descriptions-item>
       <el-descriptions-item label="流转记录数">{{ timeline.length }} 条</el-descriptions-item>
     </el-descriptions>
 
@@ -25,12 +27,12 @@
         >{{ a.label }}</el-button>
       </div>
       <div style="margin-top: 8px; font-size: 12px; color: var(--el-text-color-secondary)">
-        动作来自工作流定义（app/workflow/workOrderDefinition.js），与工单状态机同源。
+        动作来自工作流定义（app/workflow/definitions.js），与业务状态机同源。
       </div>
     </el-card>
 
     <el-card shadow="never">
-      <template #header><span style="font-size: 13px">流转记录（workflow_history）</span></template>
+      <template #header><span style="font-size: 13px">流转记录（统一读取口径）</span></template>
       <el-timeline v-if="timeline.length">
         <el-timeline-item
           v-for="h in timeline"
@@ -57,22 +59,23 @@
 import { computed, onMounted, ref } from 'vue'
 import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { actionLabel, flattenHistory, stateTagType } from '../domain/workOrderTimeline'
+import { actionLabel, historyRows, stateTagType } from '../domain/workOrderTimeline'
 
-const props = defineProps<{ woId: number }>()
+// 2026-10-17 泛化：同一组件渲染任意实体（work_order / eco / document）的流转时间线
+const props = defineProps<{ entityType: string; entityId: number }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 
 const loading = ref(false)
 const data = ref<any>(null)
 
 const actions = computed<any[]>(() => data.value?.available_actions || [])
-const timeline = computed(() => flattenHistory(data.value?.instances))
+const timeline = computed(() => historyRows(data.value))
 const stateType = computed(() => stateTagType(data.value?.current_state))
 
 async function load() {
   loading.value = true
   try {
-    data.value = await Api.get('/work_orders/' + props.woId + '/workflow')
+    data.value = await Api.get('/workflow/entity/' + props.entityType + '/' + props.entityId)
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.error || '加载流转记录失败')
   } finally {
@@ -94,7 +97,12 @@ async function doTransit(action: any) {
   }
   loading.value = true
   try {
-    await Api.post('/work_orders/' + props.woId + '/transit', { action: action.action, comment })
+    // 工单走业务接口（写 work_orders + 审计）；其它实体走引擎 transit
+    if (props.entityType === 'work_order') {
+      await Api.post('/work_orders/' + props.entityId + '/transit', { action: action.action, comment })
+    } else {
+      await Api.post('/workflow/' + (data.value?.instances?.[0]?.id) + '/transit', { action: action.action, comment })
+    }
     ElMessage.success('已' + action.label)
     emit('changed')
     await load()

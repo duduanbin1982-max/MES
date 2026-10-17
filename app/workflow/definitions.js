@@ -75,6 +75,27 @@ const definitions = {
   // ===================== 工单流转（2026-10-13 决策②：以工作流定义为准） =====================
   // 状态与转换的唯一来源是 app/workflow/workOrderDefinition.js（由 stateMachine 平移而来），
   // 这里只做注册：states 供前端下拉/查询，transitions 供 engine.transit() 精确匹配 (from, action)。
+  // 文档签发流程（2026-10-17 统一读取口径：文档的审计来自 document_events）
+  "document_issue": {
+    display_name: "文档签发",
+    entity_type: "document",
+    description: "文档从草稿到签发 / 收回 / 归档",
+    states: [
+      { id: "draft",    label: "草稿" },
+      { id: "issued",   label: "已签发" },
+      { id: "revoked",  label: "已收回" },
+      { id: "archived", label: "已归档", is_terminal: true },
+    ],
+    transitions: [
+      { from: "draft",   to: "issued",   action: "issue",   label: "签发" },
+      { from: "revoked", to: "issued",   action: "issue",   label: "重新签发" },
+      { from: "issued",  to: "revoked",  action: "revoke",  label: "收回" },
+      { from: "draft",   to: "archived", action: "archive", label: "归档" },
+      { from: "issued",  to: "archived", action: "archive", label: "归档" },
+      { from: "revoked", to: "archived", action: "archive", label: "归档" },
+    ],
+  },
+
   "work_order": {
     display_name: "工单流转",
     entity_type: "work_order",

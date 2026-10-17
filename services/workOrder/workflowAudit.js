@@ -103,30 +103,11 @@ function availableActions(state) {
   }
 }
 
-/** 工单流转时间线：实例 + 历史 + 当前可用动作 */
+/** 工单流转时间线：委托给统一读取口径（services/workflow/timeline.js） */
 function getTimeline(db, woId) {
-  const instances = all(
-    db,
-    'SELECT * FROM workflow_instances WHERE definition_name = ? AND entity_type = ? AND entity_id = ? ORDER BY id',
-    [DEFINITION, ENTITY_TYPE, woId]
-  );
-  const timeline = instances.map((inst) => ({
-    ...inst,
-    history: all(
-      db,
-      'SELECT wh.*, u.full_name AS actor_name FROM workflow_history wh LEFT JOIN users u ON wh.actor_id = u.id WHERE wh.instance_id = ? ORDER BY wh.id',
-      [inst.id]
-    ),
-  }));
-  const wo = get(db, 'SELECT id, wo_code, title, status FROM work_orders WHERE id = ?', [woId]);
-  return {
-    entity_type: ENTITY_TYPE,
-    entity_id: woId,
-    work_order: wo || null,
-    current_state: wo ? wo.status : (instances.length ? instances[instances.length - 1].current_state : null),
-    available_actions: wo ? availableActions(wo.status) : [],
-    instances: timeline,
-  };
+  const { getTimeline: unified } = require("../workflow/timeline");
+  const t = unified(db, ENTITY_TYPE, woId);
+  return { ...t, work_order: t.entity };
 }
 
 module.exports = { startInstance, recordTransition, getTimeline, availableActions, DEFINITION, ENTITY_TYPE };
