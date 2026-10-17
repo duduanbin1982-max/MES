@@ -116,7 +116,7 @@
 
     <WorkstationFormDialog
       v-model="workstationFormVisible"
-      :form="workstationForm"
+      v-model:form="workstationForm"
       :station-types="stationTypes"
       :common-tags="commonTags"
       :saving="workstationSaving"
