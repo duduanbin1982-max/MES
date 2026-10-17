@@ -42,9 +42,7 @@ module.exports = [
       "no-console": "error",
       "no-var": "error",
       "prefer-const": "error",
-      // 存量：2026-10-17 首次落地时约 140 处未使用变量/导入，先 warn；
-      // 目标是在 1–2 个迭代内清零后改回 error（棘轮见 docs/lint-and-ci.md）
-      "no-unused-vars": ["warn", { args: "none", caughtErrors: "none", ignoreRestSiblings: true }],
+      "no-unused-vars": ["error", { args: "none", caughtErrors: "none", ignoreRestSiblings: true }],
       "no-empty": ["error", { allowEmptyCatch: true }],
       "no-restricted-syntax": [
         "error",
@@ -57,8 +55,7 @@ module.exports = [
           message: "禁止在业务函数内 require('../../db')：db 由装配层注入（docs/architecture-rules.md 第 5 条）",
         },
       ],
-      // —— 存量风格：先 warn，避免一次性大改 ——
-      eqeqeq: ["warn", "smart"],
+      eqeqeq: ["error", "smart"],
     },
   },
 
@@ -73,7 +70,6 @@ module.exports = [
     files: ["tests/**/*.js", "scripts/**/*.js", "scripts/dev/**/*.js", "seed-*.js", "seed-demo.js", "migrate.js", "inspect-nodes.js", "tmp_*.js", "benchmark.js"],
     rules: {
       "no-console": "off",
-      "no-unused-vars": ["warn", { args: "none", caughtErrors: "none" }],
     },
   },
 ];

@@ -23,8 +23,8 @@ npx prettier --write <文件>   # 单文件格式化（批量重排存量代码�
 | error | `prefer-const` | 自动修复 |
 | error | `no-restricted-syntax` | 禁止业务函数内 `require('../db')` —— 《架构规则》第 5 条 |
 | error | `no-undef` | **本次落地直接抓出 6 处真实缺陷**（见下） |
-| warn | `no-unused-vars` | 存量约 150 处未使用变量/导入；先 warn，1–2 个迭代清零后改 error |
-| warn | `eqeqeq`（smart） | 存量 26 处松散相等，避免一次性大改 |
+| error | `no-unused-vars` | 2026-10-17 棘轮已完成：151 处存量清零（分 services/tests/其余 三批） |
+| error | `eqeqeq`（smart） | 同上，存量清零 |
 
 忽略：`node_modules/`、`frontend/`、`attic/`、`archive/`、`.codex-backups/`、`data/`、`logs/`、`backups/`、`.tmp/`。
 
@@ -51,13 +51,22 @@ npx prettier --write <文件>   # 单文件格式化（批量重排存量代码�
   步骤：安装依赖 → **ESLint** → 四类守卫（schema 指纹 / 分层 / 路由唯一 / 模块清单）
   → 前端类型检查 → 前端 domain 单测 → 前端构建 → 完整部署闸门 → 失败上传日志
 
-## 五、棘轮计划（把 warn 收成 error）
+## 五、棘轮状态（2026-10-17 已完成）
 
-1. **第 1 步（已完成）**：error 级规则 0 违规；存量问题降为 warn 并在本文件登记。
-2. **第 2 步**：按目录分批清理 `no-unused-vars`（建议顺序：`services/` → `routes/` → `tests/`），
-   每批用 `npx eslint <目录> --fix` + 人工复核 diff。
-3. **第 3 步**：清零后把 `no-unused-vars`、`eqeqeq` 改回 `error`，并把 `npm run lint:strict` 接入闸门。
-4. 可选：接入 `eslint-plugin-vue` + `typescript-eslint` 覆盖 `frontend/`，替换当前"只靠 vue-tsc"的做法。
+| 步骤 | 状态 |
+|---|---|
+| 1. error 级规则 0 违规，存量降 warn 登记 | ✅ 2026-10-17（`acfdc7d`） |
+| 2. 按目录分批清理 `no-unused-vars` | ✅ 2026-10-17（`ef4f960` services / `24f6190` tests / `6dd430b` 其余） |
+| 3. `no-unused-vars`、`eqeqeq` 升回 error + 闸门 `--max-warnings 0` | ✅ 见本次提交 |
+| 4. 可选：`eslint-plugin-vue` + `typescript-eslint` 覆盖 `frontend/` | ⬜ 未做（当前前端靠 `vue-tsc` + domain 单测） |
+
+**当前基线：`npx eslint .` → 0 error / 0 warning（515 文件）。**
+
+清理时踩到的坑（写下来防复发）：
+- `let x = null` 但**只写不读**（"assigned a value but never used"）时，删声明必须**连同所有写入点**
+  一起删；否则会留下裸赋值被 `no-undef` 抓住（`iotCollector/index.js` 的 `dbRef` 就是这样）。
+- 删除 `const x = fn()` 时若 `fn()` 有副作用，应保留调用、只去掉绑定。
+- 删除 require 解构里的全部名字时，保留裸 `require("...")` 以保留模块副作用。
 
 ## 六、常见问题
 

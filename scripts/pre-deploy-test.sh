@@ -100,10 +100,10 @@ fi
 if [ -x "$ROOT/node_modules/.bin/eslint" ]; then
   log "ESLint 静态检查 ..."
   ESLINT_LOG="$LOG_DIR/eslint-$ts.log"
-  if (cd "$ROOT" && "$ROOT/node_modules/.bin/eslint" . ) > "$ESLINT_LOG" 2>&1; then
+  if (cd "$ROOT" && "$ROOT/node_modules/.bin/eslint" . --max-warnings 0 ) > "$ESLINT_LOG" 2>&1; then
     ERR_CNT=$(grep -cE '^✖|error' "$ESLINT_LOG" 2>/dev/null || echo 0)
     WARN_CNT=$(grep -oE '[0-9]+ warning' "$ESLINT_LOG" 2>/dev/null | tail -1 | awk '{print $1}' || true)
-    log "  ESLint: 0 error / ${WARN_CNT:-0} warning (存量 warn 见 docs/lint-and-ci.md)"
+    log "  ESLint: 0 error / 0 warning（任何新增问题都会阻断，棘轮已收口）"
   else
     log "  ❌ ESLint 有 error，阻断部署。前 10 条:"
     grep -E '^/|  [0-9]+:[0-9]+' "$ESLINT_LOG" | head -20 | sed 's/^/  /'
