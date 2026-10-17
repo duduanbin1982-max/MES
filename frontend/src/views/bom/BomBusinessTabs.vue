@@ -273,10 +273,13 @@ const props = defineProps<{
   businessViews: any
   flat: any[]
   bomDocs: any[]
-  docFilter: { bom_node_id: number | null; doc_type: string }
   docLoading: boolean
   docTypeLabel: Record<string, string>
 }>()
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const docFilter = defineModel<any>('docFilter', { required: true })
+
 
 const emit = defineEmits<{
   (event: 'load-docs'): void

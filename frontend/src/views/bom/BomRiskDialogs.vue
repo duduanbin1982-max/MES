@@ -92,10 +92,13 @@ const props = defineProps<{
   selectedRiskComponent: any
   selectedRiskItem: any
   riskActionMode: RiskActionMode
-  riskActionForm: any
   riskOwners: any[]
   riskActionLoading: boolean
 }>()
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const riskActionForm = defineModel<any>('riskActionForm', { required: true })
+
 
 const emit = defineEmits<{
   (event: 'update:dlgRiskDrill', value: boolean): void

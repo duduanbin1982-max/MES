@@ -66,11 +66,14 @@ import { CATEGORY_OPTIONS, NODE_TYPE_OPTIONS, UNIT_OPTIONS, tierLabel } from './
 const props = defineProps<{
   dlgAdd: boolean
   editingNode: any
-  addForm: any
   allNodes: any[]
   materials: any[]
   saving: boolean
 }>()
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const addForm = defineModel<any>('addForm', { required: true })
+
 
 const emit = defineEmits<{
   (event: 'update:dlgAdd', value: boolean): void

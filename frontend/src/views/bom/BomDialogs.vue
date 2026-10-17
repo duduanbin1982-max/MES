@@ -3,7 +3,7 @@
     <BomAddEditDialog
       v-model:dlg-add="dlgAddModel"
       :editing-node="editingNode"
-      :add-form="addForm"
+      v-model:add-form="addForm"
       :all-nodes="allNodes"
       :materials="materials"
       :saving="saving"
@@ -37,7 +37,7 @@
       :selected-risk-component="selectedRiskComponent"
       :selected-risk-item="selectedRiskItem"
       :risk-action-mode="riskActionMode"
-      :risk-action-form="riskActionForm"
+      v-model:risk-action-form="riskActionForm"
       :risk-owners="riskOwners"
       :risk-action-loading="riskActionLoading"
       @risk-followup="emit('risk-followup', $event)"

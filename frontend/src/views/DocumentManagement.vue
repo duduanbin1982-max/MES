@@ -79,7 +79,7 @@
     <DocumentUploadDialog
       ref="uploadDialogRef"
       v-model="dlgUpload"
-      :upload-form="uploadForm"
+      v-model:upload-form="uploadForm"
       :doc-types="DOC_TYPES"
       :instances="instances"
       :bom-nodes="bomNodes"

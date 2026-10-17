@@ -125,9 +125,6 @@ const props = defineProps({
   showEdit: Boolean,
   showAssign: Boolean,
   showDep: Boolean,
-  editForm: { type: Object, required: true },
-  assignForm: { type: Object, required: true },
-  depForm: { type: Object, required: true },
   workstations: { type: Array, default: () => [] },
   users: { type: Array, default: () => [] },
   flat: { type: Array, default: () => [] },
@@ -135,9 +132,15 @@ const props = defineProps({
   operationTemplates: { type: Array, default: () => [] },
   saving: Boolean,
   showHours: Boolean,
-  hoursForm: { type: Object, default: () => ({}) },
   hoursSaving: Boolean
 })
+// 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
+// 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
+const editForm = defineModel<any>('editForm', { required: true })
+const assignForm = defineModel<any>('assignForm', { required: true })
+const depForm = defineModel<any>('depForm', { required: true })
+const hoursForm = defineModel<any>('hoursForm', { required: true })
+
 defineEmits([
   'update:showEdit', 'update:showAssign', 'update:showDep',
   'save-node', 'save-assign', 'save-dep', 'save-hours', 'update:showHours'
@@ -146,7 +149,7 @@ defineEmits([
 function applyTemplate(id) {
   const template = props.operationTemplates.find((item) => item.id === id)
   if (!template) return
-  Object.assign(props.editForm, {
+  Object.assign(editForm.value, {
     operation_name: template.operation_name,
     operation_type: template.operation_type,
     estimated_hours: template.standard_hours || 0,

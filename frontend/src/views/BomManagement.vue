@@ -226,7 +226,7 @@
         :business-views="businessViews"
         :flat="flat"
         :bom-docs="bomDocs"
-        :doc-filter="docFilter"
+        v-model:doc-filter="docFilter"
         :doc-loading="docLoading"
         :doc-type-label="DOC_TYPE_LABEL"
         @load-docs="loadBomDocs"
