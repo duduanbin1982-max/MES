@@ -144,5 +144,6 @@ module.exports = function createContext(app, db) {
 
 
   // ====== 短缺预测 ======
-  return { all, getKitCheck, getMaterialAlerts, run };
+  // 2026-10-17：补 get（routes_2.js 解构了 get，缺失导致 /api/material-planner/* 500）
+  return { all, get, getKitCheck, getMaterialAlerts, run };
 };
