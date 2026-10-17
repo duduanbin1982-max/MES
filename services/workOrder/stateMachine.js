@@ -8,6 +8,11 @@
 // 历史：F4 (brooks-audit) 曾把内联 4 份的状态逻辑收敛到本文件；
 // 现在再收敛到 app/workflow/，使"工作流引擎 + 工单状态机"共用同一份定义。
 
+// 2026-10-17（W2-2 完成）：DB 级 CHECK 已落地，非法状态由数据库直接拒绝（第二道防线）。
+//   work_orders.status CHECK 取值 = 本文件 WO_STATUS 的 6 个状态；
+//   迁移：scripts/migrate-wo-status-check.js（--rehearse 演练 / --apply 执行 / --verify 校验）；
+//   测试：tests/workOrdersStatusCheck.test.js（6 条，含"CHECK 取值集合 = WO_STATUS"防漂移）。
+
 const woDef = require('../../app/workflow/workOrderDefinition');
 
 const WO_STATUS = woDef.WO_STATUS;
