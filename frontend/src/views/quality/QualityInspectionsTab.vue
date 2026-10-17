@@ -60,7 +60,6 @@ type InspectionEntry = { title: string; subtitle: string; badge: string; createL
 
 defineProps<{
   stats: any
-  filters: any
   instances: any[]
   types: Array<{ value: string, label: string }>
   rows: any[]
@@ -70,6 +69,10 @@ defineProps<{
   inspectionEntry: InspectionEntry
   isScoped: boolean
 }>()
+
+// 2026-10-17（前端 eslint 棘轮）：filters 改为 defineModel，父组件用 v-model:filters 绑定；
+// 模板里改写的仍是父组件同一个对象，行为不变。
+const filters = defineModel<Record<string, any>>('filters', { required: true })
 
 defineEmits<{
   (event: 'load'): void

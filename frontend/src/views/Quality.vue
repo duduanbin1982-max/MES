@@ -19,7 +19,7 @@
       <el-tab-pane label="检验记录" name="inspections">
         <QualityInspectionsTab
           :stats="stats"
-          :filters="filters"
+          v-model:filters="filters"
           :instances="instances"
           :types="types"
           :rows="rows"
@@ -36,7 +36,7 @@
 
       <el-tab-pane label="不合格品 (NCR)" name="ncr">
         <QualityNcrTab
-          :filters="ncrFilters"
+          v-model:filters="ncrFilters"
           :rows="ncrRows"
           :loading="ncrLoading"
           :severity-label="severityLabel"
@@ -55,7 +55,7 @@
 
       <el-tab-pane label="纠正预防 (CAPA)" name="capa">
         <QualityCapaTab
-          :filters="capaFilters"
+          v-model:filters="capaFilters"
           :users="users"
           :rows="capaRows"
           :loading="capaLoading"
@@ -88,12 +88,12 @@
       v-model:show-template-create="showTemplateCreate"
       v-model:show-template-items="showTemplateItems"
       v-model:close-note="closeNote"
-      :form="form"
-      :ncr-form="ncrForm"
-      :disposition-form="dispositionForm"
-      :capa-add-form="capaAddForm"
-      :recheck-form="recheckForm"
-      :template-form="templateForm"
+      v-model:form="form"
+      v-model:ncr-form="ncrForm"
+      v-model:disposition-form="dispositionForm"
+      v-model:capa-add-form="capaAddForm"
+      v-model:recheck-form="recheckForm"
+      v-model:template-form="templateForm"
       :instances="instances"
       :work-orders="workOrders"
       :users="users"

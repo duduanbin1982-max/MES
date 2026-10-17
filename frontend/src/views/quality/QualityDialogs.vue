@@ -127,12 +127,6 @@ const props = defineProps<{
   showTemplateCreate: boolean
   showTemplateItems: boolean
   closeNote: string
-  form: any
-  ncrForm: any
-  dispositionForm: any
-  capaAddForm: any
-  recheckForm: any
-  templateForm: any
   instances: any[]
   workOrders: any[]
   users: any[]
@@ -153,6 +147,16 @@ const props = defineProps<{
   templateItemsList: Array<{ name: string }>
   dispositionLabel: (value: string) => string
 }>()
+
+// 2026-10-17（前端 eslint 棘轮）：表单对象改为 defineModel ——
+// 父组件用 v-model:form / v-model:ncr-form … 绑定；子组件只在模板里改写字段，
+// 改的仍是父组件那个对象（行为与改造前完全一致），但不再触发 vue/no-mutating-props。
+const form = defineModel<Record<string, any>>('form', { required: true })
+const ncrForm = defineModel<Record<string, any>>('ncrForm', { required: true })
+const dispositionForm = defineModel<Record<string, any>>('dispositionForm', { required: true })
+const capaAddForm = defineModel<Record<string, any>>('capaAddForm', { required: true })
+const recheckForm = defineModel<Record<string, any>>('recheckForm', { required: true })
+const templateForm = defineModel<Record<string, any>>('templateForm', { required: true })
 
 const emit = defineEmits<{
   (event: 'update:showCreate', value: boolean): void
