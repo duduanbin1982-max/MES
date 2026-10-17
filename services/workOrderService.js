@@ -3,13 +3,12 @@ const { wrap } = require('../middleware/asyncHandler');
 // services/workOrderService.js
 const { emit, Events } = require("../app/ws/EventBus");
 const woStateMachine = require("./workOrder/stateMachine");
+const woAudit = require("./workOrder/workflowAudit");
 // F4 (brooks-audit): all status transitions go through stateMachine.plan/apply.
 // P0-#1 ? server.js: ??/????/????
 // Author: ??? | Date: 2026-06-23
 
 function register(app, db, auth) {
-  const { createEngine } = require("../app/workflow/engine");
-  const wf = createEngine(db);
   const all = (sql, params = []) => db.prepare(sql).all(params);
   const get = (sql, params = []) => db.prepare(sql).get(params);
   const run = (sql, params = []) => db.prepare(sql).run(params);
@@ -61,6 +60,7 @@ app.post('/api/work_orders', auth.onlyForemanOrAdmin, wrap((req, res) => {
   if (!wo_code || !equipment_instance_id || !title) throw ApiError.validation('wo_code/equipment_instance_id/title ??')
   const r = run("INSERT INTO work_orders (wo_code, equipment_instance_id, milestone_id, subsystem_id, title, workstation_id, estimated_hours, planned_start, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')",
     [wo_code, equipment_instance_id, milestone_id || null, subsystem_id || null, title, workstation_id || null, estimated_hours || null, planned_start || null]);
+  woAudit.startInstance(db, { id: Number(r.lastInsertRowid), wo_code, title, status: 'pending' }, req.user && req.user.sub);
   res.json({ id: r.lastInsertRowid });
 }));
 
@@ -81,6 +81,7 @@ app.post('/api/work_orders/:id/operations', auth.foremanOrWorker, wrap((req, res
   if (!wo) throw ApiError.notFound('?????');
   try {
     const newStatus = woStateMachine.apply(wo, event, {}, run);
+    woAudit.recordTransition(db, wo, event, wo.status, newStatus, (req.user && req.user.sub) || operator_id, notes || null, { operator_id: operator_id || null });
     emit(Events.WORKORDER_STATUS_CHANGED, { wo_id: Number(req.params.id), status: newStatus, operator_id });
   } catch (e) {
     if (e && e.code === 'VALIDATION_ERROR') {
@@ -90,45 +91,24 @@ app.post('/api/work_orders/:id/operations', auth.foremanOrWorker, wrap((req, res
   res.json({ id: r.lastInsertRowid });
 }));
 
-  app.post('/api/work_orders/:id/transit', auth.onlyForemanOrAdmin, wrap(async (req, res) => {
+  // 工单流转（2026-10-13 选项 ii）：action 名与工作流定义中的 action 同名，
+  // 由 stateMachine（= workOrderDefinition 适配器）校验并写 work_orders，
+  // 随后写审计流水；不再让 workflow 引擎反向驱动业务状态（避免双向写）。
+  app.post('/api/work_orders/:id/transit', auth.onlyForemanOrAdmin, wrap((req, res) => {
     const { action, comment } = req.body;
     const wo = get("SELECT * FROM work_orders WHERE id = ?", req.params.id);
-    if (!wo) throw ApiError.notFound('?????');
+    if (!wo) throw ApiError.notFound('工单不存在');
 
-    let wfInst = wf.getInstancesByEntity("work_order", Number(req.params.id))[0];
-    if (!wfInst) {
-      const r = wf.start("work_order", "work_order", Number(req.params.id), {
-        assigned_to: req.user && req.user.sub,
-        data: { wo_code: wo.wo_code, title: wo.title },
-        created_by: req.user && req.user.sub,
-        comment: "? " + (wo.status || "created") + " ??",
-      });
-      wfInst = r.instance;
-    }
-
-    const result = wf.transit(Number(wfInst.id), action, req.user && req.user.sub, comment);
-
-    // F4 refactored: state machine derives SQL from workflow state. No more inline if/else.
-    // Map workflow state -> state machine event. Unknown states fall through.
-    const eventMap = { in_progress: 'start', completed: 'complete', paused: 'pause', pending: 'cancel', cancelled: 'cancel' };
-    const wfState = result.instance && result.instance.current_state;
-    const event = eventMap[wfState];
-    if (event) {
-      try {
-        woStateMachine.apply(wo, event, {}, run);
-      } catch (_e) {
-        // Workflow may request a transition that the work_orders domain disallows
-        // (e.g. workflow says completed but WO already cancelled). Log and continue.
-      }
-    }
-
-    res.json(result);
+    const event = String(action || '');
+    const newStatus = woStateMachine.apply(wo, event, {}, run);
+    woAudit.recordTransition(db, wo, event, wo.status, newStatus, req.user && req.user.sub, comment || null);
+    emit(Events.WORKORDER_STATUS_CHANGED, { wo_id: Number(req.params.id), status: newStatus, actor_id: req.user && req.user.sub });
+    res.json({ work_order: { id: Number(req.params.id), status: newStatus }, timeline: woAudit.getTimeline(db, Number(req.params.id)) });
   }));
 
   // ????? workflow ??
   app.get('/api/work_orders/:id/workflow', wrap((req, res) => {
-    const instances = wf.getInstancesByEntity("work_order", Number(req.params.id));
-    res.json(instances);
+    res.json(woAudit.getTimeline(db, Number(req.params.id)));
   }));
 
 app.post('/api/work_orders/:id/welds', auth.onlyWelder, wrap((req, res) => {
@@ -155,7 +135,8 @@ app.put('/api/work_orders/:id/dispatch', auth.onlyForemanOrAdmin, wrap((req, res
     [user_id, workstation_id || null, planned_start || null, planned_end || null, req.params.id]
   );
   const woUpdated = get("SELECT * FROM work_orders WHERE id = ?", req.params.id);
-  woStateMachine.apply(woUpdated, 'dispatch', {}, run);
+  const dispatchedStatus = woStateMachine.apply(woUpdated, 'dispatch', {}, run);
+  woAudit.recordTransition(db, woUpdated, 'dispatch', woUpdated.status, dispatchedStatus, (req.user && req.user.sub) || user_id, notes || null, { user_id, workstation_id: workstation_id || null });
 
   run(
     "INSERT INTO resource_allocations (work_order_id, user_id, workstation_id, equipment_instance_id, assigned_at, status, notes) VALUES (?, ?, ?, ?, datetime('now'), 'active', ?)",
@@ -178,6 +159,8 @@ app.post('/api/work_orders/:id/report', auth.foremanOrWorker, wrap((req, res) =>
   let newStatus;
   try {
     newStatus = woStateMachine.apply(wo, 'report', { quantity_completed: quantity_completed || 0, hours_worked: hours_worked || 0 }, run);
+    woAudit.recordTransition(db, wo, 'report', wo.status, newStatus, (req.user && req.user.sub) || user_id, notes || null,
+      { quantity_completed: quantity_completed || 0, hours_worked: hours_worked || 0, defect_quantity: defect_quantity || 0 });
   } catch (e) {
     if (e && e.code === 'VALIDATION_ERROR') {
       throw ApiError.validation('???? dispatched/in_progress ?????');

@@ -176,8 +176,14 @@ const RULES = [
   match(/^\/users(?:\/.*)?$/, READ, ["user:read"]),
   match(/^\/users(?:\/.*)?$/, WRITE, ["user:admin"]),
   match(/^\/audit(?:\/.*)?$/, READ, ["audit:read"]),
-  match(/^\/workflow(?:\/.*)?$/, READ, ["work_order:read"]),
-  match(/^\/workflow(?:\/.*)?$/, WRITE, ["work_order:write"]),
+  // 2026-10-13（选项 ii 后半段）：工作流按实体分权
+  //   读：审计流水是只读信息，登录即可（避免 welder/qc 等角色 403）
+  //   写：任一业务写权限即可触发流转（start/transit 的实体在 body 里，路径规则无法区分）
+  match(/^\/workflow\/entity\/eco(?:\/.*)?$/, READ, ["process:read", "equipment:read"]),
+  match(/^\/workflow\/entity\/work_order(?:\/.*)?$/, READ, ["work_order:read", "shopfloor:read"]),
+  match(/^\/workflow\/entity\/document(?:\/.*)?$/, READ, ["document:read"]),
+  match(/^\/workflow(?::\/.*)?$/, READ, AUTHENTICATED_READ_PERMISSIONS),
+  match(/^\/workflow(?:\/.*)?$/, WRITE, ["work_order:write", "process:write", "document:write", "quality:write"]),
 ];
 
 function canAccess(userPerms, permissions) {
