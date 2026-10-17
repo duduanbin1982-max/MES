@@ -269,8 +269,14 @@ const loadTraceTree = async () => {
   finally { treeLoading.value = false }
 }
 
-const expandAll = () => { treeRef.value?.store?.nodesMap && Object.values(treeRef.value.store.nodesMap).forEach((n:any) => n.expand()) }
-const collapseAll = () => { treeRef.value?.store?.nodesMap && Object.values(treeRef.value.store.nodesMap).forEach((n:any) => n.collapse()) }
+const expandAll = () => {
+  if (!treeRef.value?.store?.nodesMap) return
+  Object.values(treeRef.value.store.nodesMap).forEach((n: any) => n.expand())
+}
+const collapseAll = () => {
+  if (!treeRef.value?.store?.nodesMap) return
+  Object.values(treeRef.value.store.nodesMap).forEach((n: any) => n.collapse())
+}
 
 const onTreeNodeClick = (data: any) => {
   treeDetail.value = data

@@ -114,6 +114,24 @@ else
   log "  跳过 ESLint（node_modules/.bin/eslint 不存在，先 npm ci）"
 fi
 
+# 前端 ESLint（Vue 3 + TS）—— 2026-10-17 落地（eslint-plugin-vue + typescript-eslint）
+# error 阻断部署；warning（存量 vue/no-mutating-props 等）只提示，棘轮见 docs/lint-and-ci.md
+if [ -x "$ROOT/frontend/node_modules/.bin/eslint" ]; then
+  log "前端 ESLint 静态检查 ..."
+  FE_LINT_LOG="$LOG_DIR/frontend-eslint-$ts.log"
+  if (cd "$ROOT/frontend" && "$ROOT/frontend/node_modules/.bin/eslint" . ) > "$FE_LINT_LOG" 2>&1; then
+    FE_WARN=$(grep -oE '[0-9]+ warning' "$FE_LINT_LOG" 2>/dev/null | tail -1 | awk '{print $1}' || true)
+    log "  前端 ESLint: 0 error / ${FE_WARN:-0} warning（存量见 docs/lint-and-ci.md）"
+  else
+    log "  ❌ 前端 ESLint 有 error，阻断部署。前 10 条:"
+    grep -E '^/|  [0-9]+:[0-9]+' "$FE_LINT_LOG" | head -16 | sed 's/^/  /'
+    log "  完整日志: $FE_LINT_LOG"
+    exit 1
+  fi
+else
+  log "  跳过前端 ESLint（frontend/node_modules/.bin/eslint 不存在）"
+fi
+
 # 前端 domain 层单测 (无浏览器: Node 22 原生 TS 类型擦除 + node:test)
 if [ -d "$ROOT/frontend/node_modules" ]; then
   log "前端 domain 单测 (frontend/tests/domain) ..."

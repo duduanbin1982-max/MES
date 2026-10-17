@@ -59,6 +59,9 @@ jobs:
       - name: 模块清单一致性守卫
         run: node scripts/check-module-manifest.js
 
+      - name: 前端 ESLint（Vue + TS，error 阻断）
+        run: npm run lint --prefix frontend
+
       - name: 前端类型检查
         run: npm run typecheck --prefix frontend
 

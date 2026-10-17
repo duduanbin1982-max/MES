@@ -5,14 +5,22 @@
 ## 一、本地怎么用
 
 ```bash
+# 后端（仓库根目录）
 npm run lint          # 全量检查（error 阻断，warning 只提示）
-npm run lint:fix      # 自动修复可修项（no-var / prefer-const）
-npm run lint:strict   # warning 也当错误（棘轮达标后用这个）
+npm run lint:fix      # 自动修复可修项
+npm run lint:strict   # warning 也当错误（后端已达标：0/0）
 npx prettier --write <文件>   # 单文件格式化（批量重排存量代码不在本阶段范围）
+
+# 前端（frontend/）
+npm run lint --prefix frontend          # eslint-plugin-vue + typescript-eslint
+npm run lint:fix --prefix frontend
+npm run lint:strict --prefix frontend   # 棘轮达标后用这个
 ```
 
-覆盖率：`app/ services/ routes/ middleware/ db/ config/ tests/ scripts/` 下全部 `.js`（515 个文件）；
-`frontend/` 由 `vue-tsc` + `npm run test:domain` 把关，不纳入 ESLint（尚未接 eslint-plugin-vue）。
+覆盖率：
+- 后端：`app/ services/ routes/ middleware/ db/ config/ tests/ scripts/` 下全部 `.js`（515 个文件）→ **0 error / 0 warning**
+- 前端：`frontend/src` + `frontend/tests`（133 个 `.vue` + 55 个 `.ts`）→ `eslint-plugin-vue@10` + `typescript-eslint@8`，
+  **0 error / 237 warning**（存量棘轮，见下）；类型正确性仍由 `vue-tsc` 负责
 
 ## 二、规则清单（eslint.config.js）
 
@@ -58,7 +66,21 @@ npx prettier --write <文件>   # 单文件格式化（批量重排存量代码�
 | 1. error 级规则 0 违规，存量降 warn 登记 | ✅ 2026-10-17（`acfdc7d`） |
 | 2. 按目录分批清理 `no-unused-vars` | ✅ 2026-10-17（`ef4f960` services / `24f6190` tests / `6dd430b` 其余） |
 | 3. `no-unused-vars`、`eqeqeq` 升回 error + 闸门 `--max-warnings 0` | ✅ 见本次提交 |
-| 4. 可选：`eslint-plugin-vue` + `typescript-eslint` 覆盖 `frontend/` | ⬜ 未做（当前前端靠 `vue-tsc` + domain 单测） |
+| 4. 前端接入 `eslint-plugin-vue` + `typescript-eslint` | ✅ 2026-10-17（0 error；237 warning 待棘轮） |
+
+### 前端棘轮（237 warning，按类别排队）
+
+| 规则 | 数量 | 处置计划 |
+|---|---|---|
+| `vue/no-mutating-props` | 151 | 约 20 个弹窗组件直接改写传入的 `form` 对象。正确做法：`defineModel`/`emit` 或 local reactive 副本 + watch 同步；**属设计级重构，必须逐组件 GUI 复核**，按目录分批（quality → bom → purchase → resources → …） |
+| `@typescript-eslint/no-unused-vars` | 63 | 与后端同一套办法：删未使用导入/变量，分批清零后升 error |
+| `no-console` | 21 | 前端调试输出；替换为统一提示（`ElMessage`）或删除 |
+| `vue/no-unused-vars` | 2 | 模板里的未使用变量 |
+
+前端 lint 的设计取向（写在 `frontend/eslint.config.js` 注释里）：只用 plugin-vue 的 **flat/essential**（正确性），
+**不开** flat/recommended 的缩进/换行类格式规则，避免一次性制造上千条格式告警；TS 侧用非 type-checked 的
+recommended（速度优先，类型由 `vue-tsc` 保证）。`vue/multi-word-component-names` 关闭（视图多为单词名），
+`@typescript-eslint/no-explicit-any` 关闭（历史代码大量 any）。
 
 **当前基线：`npx eslint .` → 0 error / 0 warning（515 文件）。**
 

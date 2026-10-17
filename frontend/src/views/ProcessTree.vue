@@ -91,7 +91,7 @@
       <!-- 总装根节点（uncategorized） -->
       <ProcessTreeSubsystemCard
         v-for="u in uncategorized"
-        :key="'uncategorized'"
+        :key="'uncategorized-' + (u.name_zh || u.name_en || 'node')"
         :ref="'card_uncategorized'"
         :subsystem="{ id: null, name_zh: u.name_zh, name_en: '', sequence: 0, color: 'var(--el-color-info)', nodes: u.nodes, ...u }"
         :critical-set="criticalSet"

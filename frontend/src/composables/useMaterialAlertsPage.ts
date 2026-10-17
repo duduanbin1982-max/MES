@@ -68,7 +68,7 @@ export function useMaterialAlertsPage() {
   // ============ Tab 3: Forecast ============
   const forecast = reactive({ weeks: 4, data: [] as any[], chartData: null as any })
   const forecastChartRef = ref<HTMLElement | null>(null)
-  var forecastChart: any = null
+  let forecastChart: any = null
 
   const loadForecast = async () => {
     try {

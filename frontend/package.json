@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
     "test:domain": "node --test tests/domain/*.test.ts",
-    "build:safe": "vite build --outDir dist.next --emptyOutDir && rm -rf dist.prev && (mv dist dist.prev 2>/dev/null || true) && mv dist.next dist && rm -rf dist.prev"
+    "build:safe": "vite build --outDir dist.next --emptyOutDir && rm -rf dist.prev && (mv dist dist.prev 2>/dev/null || true) && mv dist.next dist && rm -rf dist.prev",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:strict": "eslint . --max-warnings 0"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.1",
@@ -24,7 +27,11 @@
   "devDependencies": {
     "@types/three": "^0.185.0",
     "@vitejs/plugin-vue": "^6.0.8",
+    "eslint": "^10.13.0",
+    "eslint-plugin-vue": "^10.11.1",
+    "globals": "^16.5.0",
     "typescript": "^5.4.0",
+    "typescript-eslint": "^8.71.2",
     "vite": "^8.1.5",
     "vue-tsc": "^2.0.0"
   }

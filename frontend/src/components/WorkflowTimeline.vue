@@ -84,7 +84,7 @@ async function load() {
 }
 
 async function doTransit(action: any) {
-  let comment = ''
+  let comment;
   try {
     const r: any = await ElMessageBox.prompt(
       '流转动作：' + action.label + (action.to ? '（→ ' + action.to + '）' : '（目标状态由报工量决定）'),
