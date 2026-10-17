@@ -58,9 +58,10 @@
             <el-table-column label="结束" width="110">
               <template #default="{ row }">{{ (row.actual_end || '').slice(0, 10) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="120" align="center" fixed="right">
+            <el-table-column label="操作" width="170" align="center" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" type="primary" link @click="checkKit(row)"><el-icon><Box /></el-icon> 齐套</el-button>
+                <el-button size="small" type="primary" link @click="openTimeline(row)">流转</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -155,6 +156,15 @@
         <el-button type="primary" @click="confirmDispatch" :loading="dispatchDlg.loading">确认派工</el-button>
       </template>
     </el-dialog>
+
+    <!-- 工单流转审计抽屉（2026-10-17 选项 ii 后半段：可用动作 + workflow_history） -->
+    <el-drawer v-model="timelineDlg.show" :title="'工单流转：' + (timelineDlg.wo_code || '')" size="520px">
+      <WorkOrderTimeline
+        v-if="timelineDlg.show && timelineDlg.wo_id"
+        :wo-id="timelineDlg.wo_id"
+        @changed="onTimelineChanged"
+      />
+    </el-drawer>
   </div>
 </template>
 
@@ -164,6 +174,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
 import type { KitCheckResult } from '../types/api'
+import WorkOrderTimeline from '../components/WorkOrderTimeline.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -325,6 +336,17 @@ const confirmDispatch = async () => {
   } finally {
     dispatchDlg.loading = false
   }
+}
+
+// 流转审计抽屉
+const timelineDlg = reactive({ show: false, wo_id: 0, wo_code: '' })
+function openTimeline(row: any) {
+  timelineDlg.wo_id = row.id
+  timelineDlg.wo_code = row.wo_code
+  timelineDlg.show = true
+}
+function onTimelineChanged() {
+  load()
 }
 
 onMounted(() => {
