@@ -36,7 +36,7 @@ if (!args.length) {
 
 const FILES = args;
 
-const GLOBALS = new Set([
+new Set([
   "undefined", "NaN", "Infinity", "globalThis", "eval", "JSON", "Math", "Object", "Array",
   "String", "Number", "Boolean", "Date", "Set", "Map", "WeakMap", "WeakSet", "Promise", "RegExp",
   "Error", "TypeError", "RangeError", "SyntaxError", "ReferenceError", "Symbol", "BigInt",

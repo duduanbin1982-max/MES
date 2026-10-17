@@ -10,7 +10,7 @@
 //   - requirePermission 改用 ApiError (P0-3 统一错误)
 //   - 兼容 requireRole (旧业务还在用)
 
-const crypto = require('crypto');
+require('crypto');
 const jwt = require('../app/jwt');
 const rateLimit = require('express-rate-limit');
 const { ApiError } = require('../app/errors');

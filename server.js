@@ -15,7 +15,7 @@ const db = require('./db');
 const { authMiddleware } = require('./middleware/auth');
 const { apiPermissionMiddleware } = require('./middleware/apiPermissions');
 const { requirePermission } = require('./middleware/auth');  // P0-2 OWASP: db-stats 加权限
-const { onlyForemanOrAdmin, onlyWelder } = require('./routes/guards');
+require('./routes/guards');
 // 必须放在 dotenv.config() 之后: app/logger.js 在模块加载时读取 LOG_LEVEL
 const logger = require('./app/logger').createLogger('server');
 

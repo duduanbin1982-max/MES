@@ -8,7 +8,7 @@
 // Author: 三狗子 | Date: 2026-06-25 (P0-2 升级 access/refresh 双 token)
 
 const bcrypt = require('bcryptjs');
-const { makeToken, loginLimiter, getRolePermissions, handleRefresh } = require('../middleware/auth');
+const { loginLimiter, getRolePermissions, handleRefresh } = require('../middleware/auth');
 const jwt = require('../app/jwt');
 const { ApiError } = require('../app/errors');
 

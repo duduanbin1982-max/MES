@@ -18,7 +18,7 @@ const { wrap } = require('../../middleware/asyncHandler');
 const { requirePermission } = require('../../middleware/auth');
 const { buildWebhookUrl } = require('../../services/webhookValidator');
 const fs = require('fs');
-const path = require('path');
+require('path');
 const https = require('https');
 const { URL } = require('url');
 

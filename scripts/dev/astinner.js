@@ -198,7 +198,7 @@ const outDir = path.join(path.dirname(full), path.basename(full, ".js"));
 fs.mkdirSync(outDir, { recursive: true });
 
 const names = hoistable.map((c) => c.name);
-const extraOf = new Map(hoistable.map((c) => [c.name, c.extraParams || []]));
+new Map(hoistable.map((c) => [c.name, c.extraParams || []]));
 // 提升函数定义时，把 extraParams 前置为形参
 function hoistedText(cand) {
   let text = src.slice(cand.node.start, cand.node.end);
