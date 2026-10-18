@@ -144,6 +144,25 @@ test("BF.9 completenessReport：算出还差多少才能补 BOM 批次", () => {
   db.close();
 });
 
+test("BF.13 bom_id 精确定位：同装备同物料多条 BOM 行不再歧义", () => {
+  const db = freshDb();
+  // 再造一条同物料 BOM 行（模拟 滚刀 12 件 / 1 件 两行）
+  db.exec("INSERT INTO instance_bom VALUES (2, 1, 'P-001', 1, 1, 1, NULL, NULL)");
+  const ambiguous = backfill.planBomLots(db, [{ instance_code: "TBM-2026-001", material_code: "M-001", lot_no: "LOT-2026-001" }]);
+  assert.equal(ambiguous.changes.length, 0);
+  assert.match(ambiguous.errors[0].reason, /多条 BOM 行/);
+
+  const precise = backfill.planBomLots(db, [{ bom_id: 2, instance_code: "TBM-2026-001", material_code: "M-001", lot_no: "LOT-2026-001" }]);
+  assert.equal(precise.changes.length, 1);
+  assert.equal(precise.changes[0].rowId, 2);
+
+  const wrongInstance = backfill.planBomLots(db, [{ bom_id: 2, instance_code: "TBM-2026-001", lot_no: "LOT-2026-001" }]);
+  assert.equal(wrongInstance.changes.length, 1, "同装备应通过");
+  const badInstance = backfill.planBomLots(db, [{ bom_id: 2, instance_code: "NO-SUCH", lot_no: "LOT-2026-001" }]);
+  assert.match(badInstance.errors[0].reason, /装备编码不存在/);
+  db.close();
+});
+
 test("BF.7 幂等：已填过 material_lot_id 的行默认跳过", () => {
   const db = freshDb();
   db.exec("UPDATE instance_bom SET material_lot_id = 1 WHERE id = 1");

@@ -42,6 +42,23 @@ node scripts/oee-recompute-check.js --days=365   # OEE 口径一致率
 | `lot_no` | 二选一 | 批次号（`material_lots.lot_no`）；批次物料须与 BOM 物料一致 |
 | `serial_no` | 二选一 | 序列号（需先用 `serials.csv` 建档） |
 
+#### 只填「现在就能生效」的行：`--only-linkable`
+
+```bash
+node scripts/gen-backfill-templates.js --type=bom-lots --only-linkable
+# → data/backfill/templates/bom-lots-ready.csv（只含"该物料已有批次"的行，2026-10-18 实测 8/40 行）
+```
+
+模板第一列是 **`bom_id`**（BOM 行主键）。同一装备同一物料可能有多行（例如滚刀 12 件 / 1 件），
+按 `material_code` 会歧义，**用 `bom_id` 就能精确对上**：
+
+```csv
+bom_id,instance_code,material_code,lot_no
+12,TBM-2026-001,M-ST-Q345-40,LOT-20261015-01
+15,TBM-2026-001,M-CUTTER-DISC,20261012-CD-01
+17,TBM-2026-001,M-CUTTER-DISC,20261012-CD-01
+```
+
 ### 2) `serials.csv` —— 序列号建档
 
 | 列 | 必填 | 说明 |

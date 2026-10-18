@@ -114,17 +114,26 @@ function planBomLots(db, rows, options = {}) {
     const partNumber = row.part_number || row["零件号"] || null;
     const lotNo = row.lot_no || row["批次号"];
     const serialNo = row.serial_no || row["序列号"] || null;
-    if (!instanceCode || (!materialCode && !partNumber) || (!lotNo && !serialNo)) {
-      plan.errors.push({ line, reason: "instance_code / (material_code 或 part_number) / (lot_no 或 serial_no) 必填", row });
+    const bomIdRaw = num(row.bom_id || row["bom_id"]);
+    if (!instanceCode || (!bomIdRaw && !materialCode && !partNumber) || (!lotNo && !serialNo)) {
+      plan.errors.push({ line, reason: "instance_code / (bom_id 或 material_code 或 part_number) / (lot_no 或 serial_no) 必填", row });
       continue;
     }
     const instance = getInstance.get(instanceCode);
     if (!instance) { plan.errors.push({ line, reason: `装备编码不存在: ${instanceCode}`, row }); continue; }
 
-    // 现网 BOM 行可能没有 part_number（只有 material_id），所以优先按物料编码匹配
+    // 优先用 bom_id 精确定位（同一装备同一物料可能有多条 BOM 行，material_code 会歧义）
     let bomRow;
     let matchedBy;
-    if (materialCode) {
+    const bomId = bomIdRaw;
+    if (bomId) {
+      bomRow = db.prepare("SELECT id, equipment_instance_id, material_id, material_lot_id, serial_id FROM instance_bom WHERE id = ?").get(bomId);
+      if (!bomRow) { plan.errors.push({ line, reason: `BOM 行 id 不存在: ${bomId}`, row }); continue; }
+      if (Number(bomRow.equipment_instance_id) !== Number(instance.id)) {
+        plan.errors.push({ line, reason: `bom_id=${bomId} 属于其它装备，与 instance_code=${instanceCode} 不一致`, row }); continue;
+      }
+      matchedBy = `bom#${bomId}`;
+    } else if (materialCode) {
       const material = db.prepare("SELECT id FROM materials WHERE material_code = ?").get(materialCode);
       if (!material) { plan.errors.push({ line, reason: `物料编码不存在: ${materialCode}`, row }); continue; }
       const rowsFound = db.prepare(

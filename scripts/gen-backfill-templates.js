@@ -40,7 +40,7 @@ const want = (type) => !args.type || args.type === type;
 // 1) bom-lots：每个 BOM 行一行，待填 lot_no / serial_no
 if (want("bom-lots")) {
   const rows = db.prepare(`
-    SELECT ei.instance_code, ib.part_number AS part_number, m.material_code AS material_code,
+    SELECT ib.id AS bom_id, ei.instance_code, ib.part_number AS part_number, m.material_code AS material_code,
            m.material_name AS material_name, ib.quantity AS qty, ib.is_key_component AS is_key_component,
            ml.lot_no AS current_lot_no
     FROM instance_bom ib
@@ -56,9 +56,17 @@ if (want("bom-lots")) {
     WHERE ib.material_id IS NULL OR m.material_code IS NULL
   `).get().c;
   if (skipped) console.log(`（跳过 ${skipped} 行无零件号/无物料的 BOM 行：通常是装配/工艺节点，不参与批次补录）`);
-  writeCsv("bom-lots.csv",
-    ["instance_code", "material_code", "part_number", "material_name", "qty", "is_key_component", "lot_no", "serial_no", "current_lot_no"],
-    rows.map((row) => ({ ...row, lot_no: "", serial_no: "" })));
+  // --only-linkable：只输出"该物料的批次已经登记过"的 BOM 行，业务只填这些就能立刻生效
+  const onlyLinkable = !!args["only-linkable"];
+  const finalRows = onlyLinkable
+    ? rows.filter((row) => db.prepare(
+        "SELECT 1 FROM material_lots ml JOIN materials m ON m.id = ml.material_id WHERE m.material_code = ? LIMIT 1"
+      ).get(row.material_code))
+    : rows;
+  writeCsv(onlyLinkable ? "bom-lots-ready.csv" : "bom-lots.csv",
+    ["bom_id", "instance_code", "material_code", "part_number", "material_name", "qty", "is_key_component", "lot_no", "serial_no", "current_lot_no"],
+    finalRows.map((row) => ({ ...row, lot_no: "", serial_no: "" })));
+  if (onlyLinkable) console.log(`  （只输出物料已有批次的 BOM 行：${finalRows.length}/${rows.length}）`);
 }
 
 // 2) serials：给关键件建档的模板（表头 + 两行示例，示例行请替换）
