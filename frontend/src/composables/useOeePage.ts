@@ -14,6 +14,11 @@ export function useOeePage() {
   const oeeNote = ref<string>('')
   const loadError = ref('')
 
+  // 2026-10-18 P0-1：ISA-95 口径数据（三层时间基线 / 损失分桶 / 数据来源 / 数据质量）
+  const isa95 = ref<any>(null)
+  const isa95Loading = ref(false)
+  const isa95Error = ref('')
+
   const utilColor = (p: number) => p >= 90 ? 'var(--el-color-danger)' : p >= 70 ? 'var(--el-color-warning)' : p >= 30 ? 'var(--el-color-success)' : 'var(--el-color-info)'
   const utilToneClass = (p: number) => p >= 90 ? 'text-danger' : p >= 70 ? 'text-warning' : p >= 30 ? 'text-success' : 'text-info'
   const binaryToneClass = (bad: boolean) => bad ? 'text-danger' : 'text-success'
@@ -261,7 +266,28 @@ export function useOeePage() {
     finally { trendLoading.value = false }
   }
 
+  // 2026-10-18 P0-1：拉取 ISA-95 口径（全厂维度，暂不按 instance 过滤）
+  const loadIsa95 = async () => {
+    isa95Loading.value = true
+    isa95Error.value = ''
+    try {
+      isa95.value = await Api.get('/oee/overview', { params: { days: days.value } })
+    } catch (error: any) {
+      isa95.value = null
+      isa95Error.value = error?.message || 'OEE 口径接口暂时不可用，请稍后重试。'
+    } finally {
+      isa95Loading.value = false
+    }
+  }
+
+  // 周期切换：工位概览与 ISA-95 口径一起刷新
+  const onDaysChange = () => {
+    load()
+    if (activeTab.value === 'isa95') loadIsa95()
+  }
+
   const onTabChange = (tab: string) => {
+    if (tab === 'isa95' && !isa95.value) loadIsa95()
     if ((tab === 'loss' || tab === 'shift' || tab === 'trend') && instances.value.length === 0) loadInstances()
     if (tab === 'loss') { nextTick(() => { if (lossRecords.value.length) renderLossCharts() }) }
     if (tab === 'shift') { nextTick(() => { if (shiftData.value.length) renderShiftCharts() }) }
@@ -308,6 +334,11 @@ export function useOeePage() {
     themeColor,
     chartTones,
     load,
+    loadIsa95,
+    onDaysChange,
+    isa95,
+    isa95Loading,
+    isa95Error,
     instances,
     loadInstances,
     lossCategories,

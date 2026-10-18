@@ -8,13 +8,13 @@
       <template #icon>
         <el-icon><Setting /></el-icon>
       </template>
-      <template v-if="activeTab === 'overview'" #filters>
+      <template v-if="activeTab === 'overview' || activeTab === 'isa95'" #filters>
         <div class="toolbar-form">
           <span class="toolbar-label">统计周期</span>
-          <el-select v-model="days" class="days-select" @change="load">
+          <el-select v-model="days" class="days-select" @change="onDaysChange">
             <el-option v-for="d in [7,14,30,60,90]" :key="d" :label="d+' 天'" :value="d" />
           </el-select>
-          <el-button :icon="Refresh" type="primary" :loading="loading" @click="load">刷新</el-button>
+          <el-button :icon="Refresh" type="primary" :loading="loading || isa95Loading" @click="onDaysChange">刷新</el-button>
         </div>
       </template>
     </PageToolbar>
@@ -94,6 +94,73 @@
         </el-card>
 
         <el-alert v-if="oeeNote" :title="oeeNote" type="info" :closable="false" class="mt-md" />
+        </template>
+      </el-tab-pane>
+
+      <!-- 2026-10-18 P0-1：ISA-95 口径（三层时间基线 + 损失分桶 + 数据来源 + 数据质量） -->
+      <el-tab-pane label="ISA-95 口径" name="isa95">
+        <PageState
+          v-if="isa95Error"
+          state="error"
+          title="OEE 口径数据加载失败"
+          :description="isa95Error"
+          action-text="重新加载"
+          @retry="loadIsa95"
+        />
+        <PageState
+          v-else-if="isa95Loading && !isa95"
+          state="loading"
+          title="正在加载 ISA-95 口径数据"
+          description="正在汇总三层时间基线与损失分桶。"
+        />
+        <template v-else>
+          <el-alert
+            v-if="!isa95?.basis"
+            type="warning"
+            :closable="false"
+            class="mt-md"
+            title="当前周期没有班次（shift_log）数据"
+            description="ISA-95 口径依赖班次的三层时间基线；请在「班次对比」补录班次，或等待 IoT 采集接入后再看。"
+          />
+          <template v-else>
+            <el-row :gutter="12" class="metric-row">
+              <el-col :span="6"><div class="stat-card"><div class="stat-label">计划生产时间</div><div class="stat-value">{{ formatMinutes(isa95.basis.planned_production_minutes) }}</div><div class="stat-label stat-caption">班次 {{ formatMinutes(isa95.basis.shift_minutes) }} − 计划停机 {{ formatMinutes(isa95.basis.planned_stop_minutes) }}</div></div></el-col>
+              <el-col :span="6"><div class="stat-card"><div class="stat-label">实际运行时间</div><div class="stat-value">{{ formatMinutes(isa95.basis.run_minutes) }}</div><div class="stat-label stat-caption">可用率损失 {{ formatMinutes(isa95.basis.availability_loss_minutes) }}</div></div></el-col>
+              <el-col :span="6"><div class="stat-card"><div class="stat-label">净运行时间</div><div class="stat-value">{{ formatMinutes(isa95.basis.net_run_minutes) }}</div><div class="stat-label stat-caption">性能损失 {{ formatMinutes(isa95.basis.performance_loss_minutes) }}</div></div></el-col>
+              <el-col :span="6"><div class="stat-card"><div class="stat-label">数据质量</div><div class="stat-value"><el-tag :type="qualityBadge.type" size="small">{{ qualityBadge.label }}</el-tag></div><div class="stat-label stat-caption">{{ qualityBadge.description }}</div></div></el-col>
+            </el-row>
+
+            <el-row :gutter="12" class="metric-row">
+              <el-col :span="12">
+                <el-card><template #header><span class="card-title">OEE 指标（ISA-95 定义）</span></template>
+                  <el-descriptions :column="2" border size="small">
+                    <el-descriptions-item label="可用率">{{ pctText(isa95.oee?.availability) }}</el-descriptions-item>
+                    <el-descriptions-item label="性能">{{ pctText(isa95.oee?.performance) }}</el-descriptions-item>
+                    <el-descriptions-item label="质量">{{ pctText(isa95.oee?.quality) }}</el-descriptions-item>
+                    <el-descriptions-item label="OEE"><b>{{ pctText(isa95.oee?.oee) }}</b>（{{ isa95.oee?.grade }}）</el-descriptions-item>
+                    <el-descriptions-item label="班次数">{{ isa95.data?.shifts ?? 0 }}</el-descriptions-item>
+                    <el-descriptions-item label="数据来源">
+                      <el-tag v-for="src in (isa95.sources || [])" :key="src.source" size="small" style="margin-right:6px">{{ sourceLabel(src.source) }} × {{ src.shifts }}</el-tag>
+                      <span v-if="!(isa95.sources || []).length">—</span>
+                    </el-descriptions-item>
+                  </el-descriptions>
+                  <el-alert v-if="isa95.data_quality?.legacy_shifts" type="info" :closable="false" class="mt-md"
+                    :title="isa95.data_quality.legacy_shifts + ' 个班次无法校验口径'"
+                    description="原因：缺三层基线字段，或同一设备同日多班次导致损失事件无法归属。补录班次时长/显式损失分钟数后即可纳入校验。" />
+                </el-card>
+              </el-col>
+              <el-col :span="12">
+                <el-card><template #header><span class="card-title">损失分桶（相对计划生产时间）</span></template>
+                  <div v-for="bucket in lossBuckets" :key="bucket.key" class="util-bar" style="margin-bottom:10px">
+                    <span style="width:88px;font-size:12px">{{ bucket.label }}</span>
+                    <el-progress :percentage="bucket.pct" :status="bucket.status" class="util-progress" />
+                    <span class="util-value">{{ formatMinutes(bucket.minutes) }}</span>
+                  </div>
+                  <div class="hint-text">口径：可用率损失（故障/换型/待料）计入运行时间，性能损失（短停/降速）计入净运行时间，质量损失按不合格品计算。</div>
+                </el-card>
+              </el-col>
+            </el-row>
+          </template>
         </template>
       </el-tab-pane>
 
@@ -195,9 +262,11 @@
 
 <script setup lang="ts">
 import { Refresh, Setting } from '@element-plus/icons-vue'
+import { computed } from 'vue'
 import PageState from '../components/PageState.vue'
 import PageToolbar from '../components/PageToolbar.vue'
 import { useOeePage } from '../composables/useOeePage'
+import { buildLossBuckets, formatMinutes, pctText, qualityBadgeOf, sourceLabel } from '../domain/oeeIsa95'
 
 const {
   activeTab,
@@ -240,7 +309,16 @@ const {
   trendLoading,
   trendRef,
   loadTrend,
-  onTabChange } = useOeePage()
+  onTabChange,
+  loadIsa95,
+  isa95,
+  isa95Loading,
+  isa95Error,
+  onDaysChange } = useOeePage()
+
+// ISA-95 口径展示派生数据（纯逻辑在 domain/oeeIsa95.ts，有 domain 单测覆盖）
+const lossBuckets = computed(() => buildLossBuckets(isa95.value?.losses_by_bucket, isa95.value?.basis?.planned_production_minutes))
+const qualityBadge = computed(() => qualityBadgeOf(isa95.value?.data_quality))
 </script>
 
 <style scoped>
