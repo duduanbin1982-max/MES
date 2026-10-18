@@ -91,6 +91,38 @@
         </el-descriptions>
       </el-card>
 
+      <el-card v-if="selectedInstance" style="margin-bottom: 16px">
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight: 500"><el-icon><DataAnalysis /></el-icon> 三层差异（量差 / 价差 / 效率差）</span>
+            <el-tag size="small" :type="confidenceTag(variance.totals?.confidence).type">{{ confidenceTag(variance.totals?.confidence).label }}</el-tag>
+          </div>
+        </template>
+        <el-row :gutter="16" style="margin-bottom: 12px">
+          <el-col :span="6"><div class="stat-mini"><span class="stat-val" :class="varianceTone(variance.totals?.quantity_variance)">{{ signedMoney(variance.totals?.quantity_variance) }}</span><span class="stat-lbl">量差（用多/用少）</span></div></el-col>
+          <el-col :span="6"><div class="stat-mini"><span class="stat-val" :class="varianceTone(variance.totals?.price_variance)">{{ signedMoney(variance.totals?.price_variance) }}</span><span class="stat-lbl">价差（买贵/买便宜）</span></div></el-col>
+          <el-col :span="6"><div class="stat-mini"><span class="stat-val" :class="varianceTone(variance.totals?.efficiency_variance)">{{ signedMoney(variance.totals?.efficiency_variance) }}</span><span class="stat-lbl">效率差（干慢/干快）</span></div></el-col>
+          <el-col :span="6"><div class="stat-mini"><span class="stat-val" :class="varianceTone(variance.totals?.total_variance)">{{ signedMoney(variance.totals?.total_variance) }}</span><span class="stat-lbl">合计差异（{{ varianceLabel(variance.totals?.total_variance) }}）</span></div></el-col>
+        </el-row>
+        <el-descriptions :column="3" border size="small" style="margin-bottom: 12px">
+          <el-descriptions-item label="标准成本">{{ fmtMoney(variance.totals?.standard_cost) }} 元</el-descriptions-item>
+          <el-descriptions-item label="已发生实际">{{ fmtMoney(variance.totals?.actual_cost) }} 元</el-descriptions-item>
+          <el-descriptions-item label="差异率">{{ variance.totals?.variance_pct != null ? variance.totals.variance_pct + '%' : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="人工费率">{{ variance.labor_rate?.rate || '-' }} 元/h（{{ variance.labor_rate?.source === 'system_settings' ? '系统设置' : variance.labor_rate?.source === 'env' ? '环境变量' : '默认值' }}）</el-descriptions-item>
+          <el-descriptions-item label="标准/实际工时">{{ variance.labor?.standard_hours || 0 }}h / {{ variance.labor?.actual_hours || 0 }}h</el-descriptions-item>
+          <el-descriptions-item label="报工覆盖">{{ variance.labor?.coverage_pct != null ? variance.labor.coverage_pct + '%' : '-' }}</el-descriptions-item>
+        </el-descriptions>
+        <div v-if="variance.top_contributors?.length" style="margin-bottom: 8px">
+          <span class="stat-lbl">Top 影响项：</span>
+          <el-tag v-for="item in variance.top_contributors" :key="item.kind + item.key" size="small" class="tag-gap"
+            :type="varianceKind(item.total_variance) === 'over' ? 'danger' : 'success'">{{ contributorText(item) }}</el-tag>
+        </div>
+        <el-alert v-for="(line, index) in notComputedSummary(variance.not_computed)" :key="'nc' + index"
+          type="warning" :closable="false" :title="line" style="margin-bottom: 6px" />
+        <el-alert v-for="(gap, index) in (variance.data_gaps || [])" :key="'gap' + index"
+          type="info" :closable="false" :title="gap" style="margin-bottom: 6px" />
+      </el-card>
+
       <el-card v-if="isVarianceView" style="margin-top: 16px">
         <template #header><span style="font-weight: 500"><el-icon><DataAnalysis /></el-icon> 偏差诊断</span></template>
         <el-row :gutter="16">
@@ -116,11 +148,22 @@ import { useRoute } from 'vue-router'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
 import type { ApiRecord } from '../types/api'
+import {
+  confidenceTag,
+  contributorText,
+  notComputedSummary,
+  signedMoney,
+  varianceKind,
+  varianceLabel,
+  varianceTone,
+} from '../domain/costVariance'
 
 const route = useRoute()
 const instances = ref<ApiRecord[]>([])
 const selectedInstance = ref<number | null>(null)
 const data = ref<ApiRecord>({})
+// P2-2：三层差异（量差 / 价差 / 效率差）
+const variance = ref<ApiRecord>({})
 const loading = ref(false)
 const isVarianceView = computed(() => route.path === '/cost-variance' || route.query.view === 'variance' || route.query.view === 'cost-variance')
 const showInstancePicker = computed(() => !isVarianceView.value)
@@ -137,6 +180,8 @@ const load = async () => {
   loading.value = true
   try { data.value = await Api.get('/equipment_instances/' + selectedInstance.value + '/cost_rollup') }
   catch(_) { data.value = {}; ElMessage.error('加载成本数据失败') }
+  try { variance.value = await Api.get('/equipment_instances/' + selectedInstance.value + '/cost_variance') }
+  catch(_) { variance.value = {} }
   finally { loading.value = false }
 }
 

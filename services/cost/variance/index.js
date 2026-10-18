@@ -1,0 +1,194 @@
+"use strict";
+// services/cost/variance/index.js
+// P2-2（2026-10-19）：成本三层差异接口。
+//   GET /api/equipment_instances/:id/cost_variance   项目级：材料量差/价差 + 人工效率差/费率差
+//   GET /api/cost/work_orders/:id/variance           工单级：人工三层 + 材料价差（量差需工单级 BOM 用量，暂缺）
+//
+// 数据来源：instance_bom（标准用量）+ materials（标准/实际单价）+ material_movements（实际领用）
+//          + process_nodes / work_order_operations（标准/实际工时）+ system_settings（人工费率）
+
+const { wrap } = require("../../../middleware/asyncHandler");
+const { materialVariance, laborVariance, summarize, pickLaborRate, laborCoverageOk } = require("../../../app/cost/variance");
+
+function register(app, db) {
+  const all = (sql, ...params) => db.prepare(sql).all(...params);
+  const get = (sql, ...params) => db.prepare(sql).get(...params);
+
+  function resolveRate() {
+    // system_settings 可能不存在（老库）→ 用 IIFE 包一层，避免"赋值后未使用"的 lint 噪音
+    const rateRow = (() => {
+      try {
+        return get("SELECT value FROM system_settings WHERE key = 'labor_rate_per_hour'");
+      } catch (_error) {
+        return null;
+      }
+    })();
+    const settingValue = rateRow ? rateRow.value : null;
+    return pickLaborRate({ settingValue, envValue: process.env.LABOR_RATE_PER_HOUR || null, fallback: 200 });
+  }
+
+  // ---------------- 项目级三层差异
+  app.get("/api/equipment_instances/:id/cost_variance", wrap((req, res) => {
+    const instance = get("SELECT id, instance_code, instance_name FROM equipment_instances WHERE id = ?", req.params.id);
+    if (!instance) return res.status(404).json({ error: "equipment_instance not found" });
+
+    // 标准：BOM 用量 × 标准单价（materials.estimated_unit_price，缺则用 actual，再缺用 0）
+    const bomRows = all(`
+      SELECT ib.material_id, m.material_code, m.material_name,
+             SUM(ib.quantity) AS standard_qty,
+             COALESCE(NULLIF(m.estimated_unit_price, 0), NULLIF(m.actual_unit_price, 0), 0) AS standard_price,
+             COALESCE(NULLIF(m.actual_unit_price, 0), NULLIF(m.estimated_unit_price, 0), 0) AS actual_price
+      FROM instance_bom ib
+      JOIN materials m ON m.id = ib.material_id
+      WHERE ib.equipment_instance_id = ? AND ib.material_id IS NOT NULL
+      GROUP BY ib.material_id
+      ORDER BY ib.material_id
+    `, instance.id);
+
+    // 实际：本项目的领料数量（含该装备下工单的领料）
+    const issueRows = all(`
+      SELECT ml.material_id, SUM(mm.quantity) AS actual_qty
+      FROM material_movements mm
+      JOIN material_lots ml ON ml.id = mm.material_lot_id
+      WHERE mm.movement_type = 'issue'
+        AND (mm.project_id = ? OR mm.work_order_id IN (SELECT id FROM work_orders WHERE equipment_instance_id = ?))
+      GROUP BY ml.material_id
+    `, instance.id, instance.id);
+    const actualByMaterial = new Map(issueRows.map((row) => [Number(row.material_id), Number(row.actual_qty) || 0]));
+
+    const materialLines = bomRows.map((row) => {
+      const hasIssue = actualByMaterial.has(Number(row.material_id));
+      const line = materialVariance({
+        standardQty: row.standard_qty,
+        actualQty: actualByMaterial.get(Number(row.material_id)) || 0,
+        standardPrice: row.standard_price,
+        actualPrice: row.actual_price,
+      });
+      return {
+        ...line,
+        material_id: row.material_id,
+        material_code: row.material_code,
+        material_name: row.material_name,
+        actual_missing: !hasIssue,
+        price_missing: !row.actual_price || !row.standard_price,
+        // 没领料就没有量差：标为不可用，金额进 not_computed，不能算成"节约"
+        available: hasIssue,
+        unavailable_reason: hasIssue ? null : "no_issue_record",
+      };
+    });
+
+    // 人工：标准工时 = 工艺节点估算；实际工时 = 报工（无报工时退化为工单 actual_hours）
+    const stdHours = get("SELECT COALESCE(SUM(estimated_hours), 0) AS h FROM process_nodes WHERE equipment_instance_id = ?", instance.id).h;
+    const reportedHours = get(`
+      SELECT COALESCE(SUM(wo.hours_worked), 0) AS h
+      FROM work_order_operations wo
+      JOIN work_orders w ON w.id = wo.work_order_id
+      WHERE w.equipment_instance_id = ?
+    `, instance.id).h;
+    const bookedHours = get("SELECT COALESCE(SUM(actual_hours), 0) AS h FROM work_orders WHERE equipment_instance_id = ?", instance.id).h;
+    const actHours = Number(reportedHours) > 0 ? Number(reportedHours) : Number(bookedHours);
+    const rate = resolveRate();
+    const labor = laborVariance({ standardHours: stdHours, actualHours: actHours, standardRate: rate.rate, actualRate: null });
+    labor.rate_source = rate.source;
+    // 没有实际工时 → 效率差不可算（不能把"没报工"当成 100% 节约）
+    const coverage = laborCoverageOk({
+      standardHours: stdHours,
+      actualHours: actHours,
+      minPct: Number(process.env.LABOR_COVERAGE_MIN_PCT || 10) || 10,
+    });
+    labor.available = coverage.ok;
+    labor.unavailable_reason = coverage.reason;
+    labor.coverage_pct = coverage.coverage_pct;
+    labor.actual_hours_source = Number(reportedHours) > 0 ? "work_order_operations" : (Number(bookedHours) > 0 ? "work_orders.actual_hours" : "none");
+
+    const summary = summarize({ materialLines, labor });
+
+    // 数据缺口（诚实标注，避免把"没有数据"当成"没有差异"）
+    const dataGaps = [];
+    const missingActual = materialLines.filter((line) => line.actual_missing).length;
+    const missingPrice = materialLines.filter((line) => line.price_missing).length;
+    if (missingActual) dataGaps.push(`${missingActual} 种物料没有领料记录，其量差未计入合计（标准金额见 not_computed，避免被误读成节约）`);
+    if (missingPrice) dataGaps.push(`${missingPrice} 种物料缺标准/实际单价，价差按 0 计`);
+    if (coverage.reason === "no_actual_hours") dataGaps.push("没有实际工时（报工/工单均未回填），效率差未计入合计");
+    else if (coverage.reason === "insufficient_actual_hours") dataGaps.push(`实际工时只覆盖标准工时的 ${coverage.coverage_pct}%（低于 ${coverage.min_pct}%），效率差未计入合计；补齐报工后再看`);
+    else if (Number(reportedHours) === 0 && Number(bookedHours) > 0) dataGaps.push("实际工时取自工单 actual_hours（无工序级报工），精度到工单级");
+
+    res.json({
+      equipment_instance: instance,
+      material_lines: materialLines,
+      labor,
+      labor_rate: { rate: rate.rate, source: rate.source, unit: "元/小时" },
+      totals: summary.totals,
+      not_computed: summary.not_computed,
+      top_contributors: summary.top_contributors,
+      data_gaps: dataGaps,
+      basis: "标准成本法：标准用量取 instance_bom，实际用量取 material_movements(issue)；标准工时取 process_nodes.estimated_hours",
+    });
+  }));
+
+  // ---------------- 工单级三层差异
+  app.get("/api/cost/work_orders/:id/variance", wrap((req, res) => {
+    const wo = get(`SELECT w.id, w.wo_code, w.title, w.status, w.equipment_instance_id,
+                           w.estimated_hours, w.actual_hours, w.quantity_planned, w.quantity_completed
+                    FROM work_orders w WHERE w.id = ?`, req.params.id);
+    if (!wo) return res.status(404).json({ error: "work_order not found" });
+
+    const reported = get("SELECT COALESCE(SUM(hours_worked), 0) AS h FROM work_order_operations WHERE work_order_id = ?", wo.id).h;
+    const actualHours = Number(reported) > 0 ? Number(reported) : Number(wo.actual_hours || 0);
+    const rate = resolveRate();
+    const labor = laborVariance({ standardHours: wo.estimated_hours || 0, actualHours, standardRate: rate.rate, actualRate: null });
+    labor.rate_source = rate.source;
+    const woCoverage = laborCoverageOk({
+      standardHours: wo.estimated_hours || 0,
+      actualHours,
+      minPct: Number(process.env.LABOR_COVERAGE_MIN_PCT || 10) || 10,
+    });
+    labor.available = woCoverage.ok;
+    labor.unavailable_reason = woCoverage.reason;
+    labor.coverage_pct = woCoverage.coverage_pct;
+    labor.actual_hours_source = Number(reported) > 0 ? "work_order_operations" : (Number(wo.actual_hours || 0) > 0 ? "work_orders.actual_hours" : "none");
+
+    // 材料：该工单领料的"价差"可算（实际用量 × (实际单价 − 标准单价)）；量差需要工单级标准用量，当前无
+    const issueRows = all(`
+      SELECT ml.material_id, m.material_code, m.material_name, SUM(mm.quantity) AS actual_qty,
+             COALESCE(NULLIF(m.estimated_unit_price, 0), NULLIF(m.actual_unit_price, 0), 0) AS standard_price,
+             COALESCE(NULLIF(m.actual_unit_price, 0), NULLIF(m.estimated_unit_price, 0), 0) AS actual_price
+      FROM material_movements mm
+      JOIN material_lots ml ON ml.id = mm.material_lot_id
+      JOIN materials m ON m.id = ml.material_id
+      WHERE mm.movement_type = 'issue' AND mm.work_order_id = ?
+      GROUP BY ml.material_id
+    `, wo.id);
+
+    const materialLines = issueRows.map((row) => {
+      const line = materialVariance({ standardQty: row.actual_qty, actualQty: row.actual_qty, standardPrice: row.standard_price, actualPrice: row.actual_price });
+      return {
+        ...line,
+        material_id: row.material_id,
+        material_code: row.material_code,
+        material_name: row.material_name,
+        quantity_variance_available: false,
+      };
+    });
+
+    const summary = summarize({ materialLines, labor });
+    const dataGaps = ["工单级标准用量未维护（BOM 挂在装备实例上），本工单只拆价差+人工三层；量差请在项目级（/cost-variance）查看"];
+    if (issueRows.length === 0) dataGaps.push("该工单没有领料记录，材料价差为 0");
+    if (labor.unavailable_reason === "no_actual_hours") dataGaps.push("该工单还没有报工/实际工时，人工效率差未计入合计");
+    else if (labor.unavailable_reason === "insufficient_actual_hours") dataGaps.push(`该工单报工只覆盖标准工时的 ${labor.coverage_pct}%（低于 ${laborCoverageOk({ minPct: Number(process.env.LABOR_COVERAGE_MIN_PCT || 10) || 10 }).min_pct}%），效率差未计入合计`);
+
+    res.json({
+      work_order: wo,
+      material_lines: materialLines,
+      labor,
+      labor_rate: { rate: rate.rate, source: rate.source, unit: "元/小时" },
+      totals: summary.totals,
+      not_computed: summary.not_computed,
+      top_contributors: summary.top_contributors,
+      data_gaps: dataGaps,
+      basis: "工单级：人工三层（标准工时=estimated_hours，实际=报工/actual_hours）+ 材料价差（领料实际单价 vs 标准单价）",
+    });
+  }));
+}
+
+module.exports = { register };
