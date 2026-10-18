@@ -8,6 +8,8 @@ const { registerBackwardTraceRoutes } = require("./trace/backward");
 const { registerTraceTreeRoutes } = require("./trace/tree");
 const { registerCertificateRoutes } = require("./trace/certificate");
 const { registerTraceRecordRoutes } = require("./trace/records");
+const { ensureChainSchema } = require("./trace/chainSchema");
+const { registerChainRoutes } = require("./trace/chain");
 
 function register(app, db) {
   const store = createTraceStore(db);
@@ -16,6 +18,9 @@ function register(app, db) {
   registerTraceTreeRoutes(app, store);
   registerCertificateRoutes(app, store);
   registerTraceRecordRoutes(app, db);
+  // 2026-10-18 P0-2：五级链路软关联 + 统一链路接口
+  ensureChainSchema(db);
+  registerChainRoutes(app, db);
 }
 
 module.exports = { register };

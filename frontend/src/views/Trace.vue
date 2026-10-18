@@ -131,6 +131,67 @@
     </el-tab-pane>
 
     <!-- 追溯证书 -->
+    <!-- 2026-10-18 P0-2：五级证据链（装备 → 工单 → 工序 → 批次/序列号 → 检验与证据） -->
+    <el-tab-pane label="证据链 (5 级)" name="chain">
+      <el-card shadow="never">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+          <el-select v-model="chainAnchor.kind" style="width:140px">
+            <el-option label="序列号" value="serial_no" />
+            <el-option label="批次号" value="lot_no" />
+            <el-option label="装备编码" value="instance_code" />
+            <el-option label="工单号" value="wo_code" />
+          </el-select>
+          <el-input v-model="chainAnchor.value" :placeholder="anchorMeta(chainAnchor.kind).placeholder" style="width:260px" clearable @keyup.enter="loadChain" />
+          <el-button type="primary" :loading="chainAnchor.loading" @click="loadChain">查证据链</el-button>
+          <el-button :loading="chainCoverageLoading" @click="loadChainCoverage">刷新覆盖率</el-button>
+        </div>
+
+        <el-alert v-if="chainAnchor.error" type="error" :closable="false" :title="chainAnchor.error" />
+        <el-alert v-else-if="chainAnchor.result && !chainAnchor.result.found" type="warning" :closable="false"
+          :title="'未找到：' + (chainAnchor.result.reason || '未知编号')" :description="'请确认' + anchorMeta(chainAnchor.kind).label + '是否存在'" />
+
+        <template v-if="chainAnchor.result && chainAnchor.result.found">
+          <el-row :gutter="8">
+            <el-col :span="4" v-for="lv in chainAnchor.result.levels" :key="lv.level + '-' + lv.key">
+              <div style="border:1px solid var(--el-border-color-lighter);border-radius:10px;padding:10px;text-align:center">
+                <div style="font-size:12px;color:var(--el-color-info)">L{{ lv.level }} {{ lv.label }}</div>
+                <el-tag :type="levelStatusMeta(lv.status).type" size="small" style="margin-top:6px">{{ levelStatusMeta(lv.status).label }}</el-tag>
+                <div style="font-size:12px;margin-top:6px">{{ lv.count }} 条</div>
+              </div>
+            </el-col>
+          </el-row>
+
+          <el-descriptions :column="4" border size="small" style="margin-top:12px">
+            <el-descriptions-item label="装备">{{ chainAnchor.result.anchor.instance?.code || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="工单数">{{ (chainAnchor.result.chain.work_orders || []).length }}</el-descriptions-item>
+            <el-descriptions-item label="序列号数">{{ (chainAnchor.result.chain.serials || []).length }}</el-descriptions-item>
+            <el-descriptions-item label="证据">{{ evidenceSummary(chainAnchor.result.evidence_count) }}</el-descriptions-item>
+          </el-descriptions>
+
+          <el-card shadow="never" style="margin-top:12px">
+            <template #header><span>断点与补录建议（{{ gapSummary(chainAnchor.result.gaps).total }}）</span></template>
+            <el-table :data="chainAnchor.result.gaps" size="small" border empty-text="未发现断点，链路完整">
+              <el-table-column prop="level" label="级别" width="70" />
+              <el-table-column prop="issue" label="断点" min-width="220" />
+              <el-table-column prop="action" label="建议动作" min-width="280" />
+            </el-table>
+          </el-card>
+        </template>
+
+        <div v-if="chainCoverage" style="margin-top:12px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:8px">全厂链路覆盖率（有该级证据的装备数 / {{ chainCoverage.instances }} 台）</div>
+          <el-table :data="chainCoverage.levels" size="small" border>
+            <el-table-column prop="level" label="级别" width="70" />
+            <el-table-column prop="label" label="环节" width="180" />
+            <el-table-column label="覆盖率">
+              <template #default="{row}"><el-progress :percentage="row.pct" :status="coverageStatus(row.pct)" /></template>
+            </el-table-column>
+            <el-table-column prop="count" label="台数" width="80" />
+          </el-table>
+        </div>
+      </el-card>
+    </el-tab-pane>
+
     <el-tab-pane label="追溯证书" name="certificate">
       <div class="toolbar">
         <el-select v-model="certFilter.instance_id" placeholder="选择设备实例" filterable style="width:320px" @change="loadCertificate">
@@ -232,10 +293,49 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Api } from '../api'
 import type { ApiRecord } from '../types/api'
+import { anchorMeta, coverageStatus, evidenceSummary, gapSummary, levelStatusMeta } from '../domain/traceChain'
 
 const tab = ref('forward')
+
+// 2026-10-18 P0-2：五级证据链状态
+const chainAnchor = reactive({
+  kind: 'instance_code',
+  value: '',
+  loading: false,
+  result: null as any,
+  error: '',
+})
+const chainCoverage = ref<any>(null)
+const chainCoverageLoading = ref(false)
+
+const loadChain = async () => {
+  if (!chainAnchor.value) { chainAnchor.error = '请输入' + anchorMeta(chainAnchor.kind).label; return }
+  chainAnchor.loading = true
+  chainAnchor.error = ''
+  try {
+    const params: Record<string, string> = { [chainAnchor.kind]: chainAnchor.value.trim() }
+    chainAnchor.result = await Api.get('/trace/chain', { params })
+  } catch (error: any) {
+    chainAnchor.result = null
+    chainAnchor.error = error?.response?.data?.message || error?.message || '证据链查询失败'
+  } finally {
+    chainAnchor.loading = false
+  }
+}
+
+const loadChainCoverage = async () => {
+  chainCoverageLoading.value = true
+  try {
+    chainCoverage.value = await Api.get('/trace/chain/coverage')
+  } catch (_error) {
+    chainCoverage.value = null
+  } finally {
+    chainCoverageLoading.value = false
+  }
+}
 const instances = ref<ApiRecord[]>([])
 onMounted(async () => {
+  loadChainCoverage()
   try {
     instances.value = await Api.instances()
   } catch (error: any) {

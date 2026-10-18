@@ -232,9 +232,9 @@
       "ddlStatements": 15
     },
     "traceService": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "c64159912bde85bd43f8fa7418c3fd735627fa9c451b50570462b1c106959f68",
-      "ddlStatements": 2
+      "schemaVersion": 3,
+      "ddlFingerprint": "8539890ce443f5e5a7d3aba1e8d8ed72059ebf1d1a35d58019180ff6c2f77efc",
+      "ddlStatements": 12
     },
     "userManagement": {
       "schemaVersion": 1,
