@@ -34,6 +34,20 @@ const BACKFILL_DIR = path.join(ROOT, "data", "backfill");
 const MAX_BACKUP_AGE_H = 6;
 
 // ---------------------------------------------------------------- CSV
+/**
+ * CSV 字节 → 文本（自动识别编码）。
+ * 背景：Excel 中文环境「另存为 CSV」默认是 GBK/GB18030，直接按 utf8 读会乱码，
+ * 导致 supplier/notes 变成乱码、甚至 material_code 匹配失败。
+ */
+function decodeCsvBuffer(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  try {
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), encoding: "utf-8" };
+  } catch (_error) {
+    return { text: new TextDecoder("gbk").decode(bytes), encoding: "gbk" };
+  }
+}
+
 /** 极简 RFC4180 解析：支持引号、逗号、CRLF、BOM 头 */
 function parseCsv(text) {
   const clean = String(text || "").replace(/^\uFEFF/, "");
@@ -64,6 +78,23 @@ function parseCsv(text) {
     header.forEach((key, idx) => { obj[key] = String(cells[idx] === undefined ? "" : cells[idx]).trim(); });
     return obj;
   });
+}
+
+/**
+ * 日期归一：Excel 常把 2026-10-15 写成 2026/10/15 或 2026.10.15。
+ * 统一转成 YYYY-MM-DD；无法识别返回 null（调用方报错）。
+ */
+function normalizeDate(value) {
+  const text = String(value === undefined || value === null ? "" : value).trim();
+  if (!text) return null;
+  const match = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  // 粗校验：月份 1-12、日期 1-31
+  if (Number(mm) < 1 || Number(mm) > 12 || Number(dd) < 1 || Number(dd) > 31) return null;
+  return `${year}-${mm}-${dd}`;
 }
 
 function num(value) {
@@ -203,9 +234,10 @@ function planLots(db, rows) {
     }
     const quantity = num(row.quantity);
     if (quantity !== null && quantity < 0) { plan.errors.push({ line, reason: `quantity 不能为负: ${row.quantity}`, row }); continue; }
-    const receivedDate = row.received_date || row["到货日期"] || null;
-    if (receivedDate && !/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) {
-      plan.errors.push({ line, reason: `received_date 需为 YYYY-MM-DD: ${receivedDate}`, row }); continue;
+    const rawDate = row.received_date || row["到货日期"] || "";
+    const receivedDate = normalizeDate(rawDate);
+    if (String(rawDate).trim() && !receivedDate) {
+      plan.errors.push({ line, reason: `received_date 无法识别（支持 2026-10-15 / 2026/10/15）: ${rawDate}`, row }); continue;
     }
     seen.add(key);
     plan.inserts.push({ table: "material_lots", values: {
@@ -395,7 +427,12 @@ function main() {
     console.error("      node scripts/data-backfill.js --rollback=batch.json");
     process.exit(2);
   }
-  const rows = parseCsv(fs.readFileSync(path.resolve(ROOT, String(args.csv)), "utf8"));
+  const raw = fs.readFileSync(path.resolve(ROOT, String(args.csv)));
+  const decoded = decodeCsvBuffer(raw);
+  if (decoded.encoding !== "utf-8") {
+    console.log(`（检测到 ${decoded.encoding.toUpperCase()} 编码，已自动转换：Excel 默认另存为 CSV 时常见）`);
+  }
+  const rows = parseCsv(decoded.text);
   if (!rows.length) { console.error("CSV 没有数据行"); process.exit(2); }
 
   let plan;
@@ -420,6 +457,6 @@ function main() {
   db.close();
 }
 
-module.exports = { parseCsv, planBomLots, planSerials, planOeeShifts, planLots, completenessReport, applyPlan, rollbackBatch, latestBackupAgeHours, OEE_COLUMNS };
+module.exports = { parseCsv, decodeCsvBuffer, normalizeDate, planBomLots, planSerials, planOeeShifts, planLots, completenessReport, applyPlan, rollbackBatch, latestBackupAgeHours, OEE_COLUMNS };
 
 if (require.main === module) main();

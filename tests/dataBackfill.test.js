@@ -116,7 +116,7 @@ test("BF.8 planLots：批次批量登记（重复跳过 / 物料不存在报错 
     { material_code: "M-001", lot_no: "LOT-NEW-1", supplier: "宝钢", received_date: "2026-10-01", quantity: "12.5", unit: "t" },
     { material_code: "M-001", lot_no: "LOT-NEW-1" },
     { material_code: "M-404", lot_no: "LOT-X" },
-    { material_code: "M-001", lot_no: "LOT-BAD-DATE", received_date: "2026/10/01" },
+    { material_code: "M-001", lot_no: "LOT-BAD-DATE", received_date: "2026/13/01" },
   ]);
   assert.equal(plan.inserts.length, 1);
   assert.equal(plan.inserts[0].values.lot_no, "LOT-NEW-1");
@@ -151,5 +151,41 @@ test("BF.7 幂等：已填过 material_lot_id 的行默认跳过", () => {
   assert.equal(plan.changes.length, 0);
   assert.equal(plan.skipped.length, 1);
   assert.match(plan.skipped[0].reason, /已有值/);
+  db.close();
+});
+
+test("BF.10 decodeCsvBuffer：UTF-8 原样解码，GBK 自动回退（Excel 中文环境）", () => {
+  const utf8 = Buffer.from("material_code,lot_no\nM-1,批次一\n", "utf8");
+  const a = backfill.decodeCsvBuffer(utf8);
+  assert.equal(a.encoding, "utf-8");
+  assert.match(a.text, /批次一/);
+
+  // "宝钢" 的 GBK 字节：B1 A6 B8 D6
+  const gbk = Buffer.from([0x6d, 0x2c, 0xb1, 0xa6, 0xb8, 0xd6, 0x0a]); // "m,宝钢\n"
+  const b = backfill.decodeCsvBuffer(gbk);
+  assert.equal(b.encoding, "gbk");
+  assert.match(b.text, /宝钢/);
+});
+
+test("BF.11 normalizeDate：兼容 Excel 的 / 与 . 分隔", () => {
+  assert.equal(backfill.normalizeDate("2026-10-15"), "2026-10-15");
+  assert.equal(backfill.normalizeDate("2026/10/15"), "2026-10-15");
+  assert.equal(backfill.normalizeDate("2026/1/5"), "2026-01-05");
+  assert.equal(backfill.normalizeDate("2026.10.15"), "2026-10-15");
+  assert.equal(backfill.normalizeDate("2026/13/01"), null);
+  assert.equal(backfill.normalizeDate(""), null);
+  assert.equal(backfill.normalizeDate("昨天"), null);
+});
+
+test("BF.12 planLots：Excel 日期格式可直接通过", () => {
+  const db = freshDb();
+  const plan = backfill.planLots(db, [
+    { material_code: "M-001", lot_no: "LOT-EXCEL-1", received_date: "2026/10/15", quantity: "3" },
+    { material_code: "M-001", lot_no: "LOT-EXCEL-2", received_date: "2026/13/01" },
+  ]);
+  assert.equal(plan.inserts.length, 1);
+  assert.equal(plan.inserts[0].values.received_date, "2026-10-15");
+  assert.equal(plan.errors.length, 1);
+  assert.match(plan.errors[0].reason, /无法识别/);
   db.close();
 });
