@@ -16,9 +16,18 @@
 ## 二、启动
 
 ```bash
-# 在 MES 仓库根目录
+# 方式一：npm 快捷入口（人手动调试时加 --silent，否则 npm 的 banner 会混进 JSON-RPC 流）
+npm run --silent mcp
+
+# 方式二：直接跑脚本（MCP 客户端配置里推荐这种，最干净）
 node scripts/mcp-server.js
 ```
+
+> ⚠️ **npm banner 会污染协议**：`npm run mcp`（不加 `--silent`）会先往 stdout 打
+> `> factory-mes@0.1.0 mcp` / `> node scripts/mcp-server.js` 两行，MCP 客户端按行解析 JSON 时会报错。
+> 所以：**人手动敲命令用 `npm run --silent mcp`；写进客户端配置用 `node scripts/mcp-server.js`**。
+>
+> 后台常驻：`nohup node scripts/mcp-server.js >> logs/mcp.log 2>&1 &`（一般不需要，MCP 客户端会自己拉起进程）。
 
 stdio + 换行分隔 JSON-RPC 2.0；`initialize` / `tools/list` / `tools/call` / `ping`。
 
@@ -39,6 +48,7 @@ stdio + 换行分隔 JSON-RPC 2.0；`initialize` / `tools/list` / `tools/call` /
     "tbm-mes": {
       "command": "node",
       "args": ["/home/dubin/factory-mes/scripts/mcp-server.js"],
+      "_comment": "若想用 npm 入口：command=npm, args=[\"run\",\"--silent\",\"mcp\"]（不加 --silent 会因 banner 污染协议）",
       "env": {
         "MES_API_BASE": "http://127.0.0.1:3890",
         "MES_WEB_BASE": "http://192.168.1.73",
@@ -61,9 +71,15 @@ stdio + 换行分隔 JSON-RPC 2.0；`initialize` / `tools/list` / `tools/call` /
 ## 五、手工验证
 
 ```bash
+# 快捷入口
 printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mes_oee","arguments":{"days":90}}}' \
+  | npm run --silent mcp
+
+# 或直接跑脚本
+printf '%s\n' \
   '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"mes_oee","arguments":{"days":90}}}' \
   | node scripts/mcp-server.js
 ```
@@ -71,5 +87,6 @@ printf '%s\n' \
 ## 六、测试
 
 ```bash
-node --test tests/mcpServer.test.js   # 8 条：工具清单、协议分发、参数、只读约束、缺料聚合
+npm run mcp:test      # 等价于 node --test tests/mcpServer.test.js
+# 8 条：工具清单、协议分发、参数、只读约束、缺料聚合
 ```
