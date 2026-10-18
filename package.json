@@ -24,7 +24,10 @@
     "lint:strict": "eslint . --max-warnings 0",
     "mcp": "node scripts/mcp-server.js",
     "mcp:test": "node --test tests/mcpServer.test.js",
-    "audit": "npm audit --omit=dev --audit-level=high"
+    "audit": "npm audit --omit=dev --audit-level=high",
+    "backfill": "node scripts/data-backfill.js",
+    "backfill:template": "node scripts/gen-backfill-templates.js",
+    "backfill:test": "node --test tests/dataBackfill.test.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
