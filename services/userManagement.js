@@ -89,6 +89,46 @@ function listRoleGroups() {
   `).all().map(row => ({ ...row, scope_config: parseJson(row.scope_config, {}) }));
 }
 
+// P1-1 修复（2026-10-18）：角色组 PATCH 的参数规范化。
+//   坑：el-switch 传的是布尔 true/false，better-sqlite3 只接受 number/string/bigint/buffer/null，
+//   直接把 boolean 绑进 SQL 会抛 TypeError → 前端只看到"服务内部错误"。
+//   同时把 scope_config 统一成 JSON 字符串（对象/字符串都接受）。
+function normalizeRoleGroupPatch(body) {
+  const allowed = ["group_name", "default_role_code", "data_scope", "default_home", "description", "is_active"];
+  const sets = [];
+  const params = [];
+  for (const key of allowed) {
+    if (body[key] === undefined) continue;
+    if (key === "is_active") { sets.push("is_active = ?"); params.push(body[key] ? 1 : 0); continue; }
+    if (key === "data_scope") {
+      const scope = body[key] ? String(body[key]) : "all";
+      if (!require("../app/dataScope").SCOPES.includes(scope)) {
+        const error = new Error("data_scope 非法: " + scope);
+        error.status = 400;
+        throw error;
+      }
+      sets.push("data_scope = ?"); params.push(scope);
+      continue;
+    }
+    sets.push(key + " = ?"); params.push(body[key]);
+  }
+  if (body.scope_config !== undefined) {
+    const raw = body.scope_config;
+    let serialized = "{}";
+    if (raw && typeof raw === "object") serialized = JSON.stringify(raw);
+    else if (typeof raw === "string" && raw.trim()) {
+      try { JSON.parse(raw); } catch (_e) {
+        const error = new Error("scope_config 不是合法 JSON");
+        error.status = 400;
+        throw error;
+      }
+      serialized = raw.trim();
+    }
+    sets.push("scope_config = ?"); params.push(serialized);
+  }
+  return { sets, params };
+}
+
 function listUsers() {
   return db.prepare(`
     SELECT u.id, u.username, u.full_name, u.role_id, u.role_code, u.role_group_id, u.is_active, u.phone,
@@ -229,13 +269,7 @@ function register(app, _db) {
   app.patch('/api/role-groups/:id', wrap((req, res) => {
     const exists = db.prepare('SELECT id FROM role_groups WHERE id = ?').get(req.params.id);
     if (!exists) throw ApiError.notFound('role group not found');
-    const allowed = ['group_name', 'default_role_code', 'data_scope', 'default_home', 'description', 'is_active'];
-    const sets = [];
-    const params = [];
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) { sets.push(key + ' = ?'); params.push(req.body[key]); }
-    }
-    if (req.body.scope_config !== undefined) { sets.push('scope_config = ?'); params.push(JSON.stringify(req.body.scope_config || {})); }
+    const { sets, params } = normalizeRoleGroupPatch(req.body || {});
     if (!sets.length) throw ApiError.validation('无可更新字段');
     sets.push("updated_at = datetime('now')");
     params.push(req.params.id);
@@ -291,4 +325,4 @@ function register(app, _db) {
   }));
 }
 
-module.exports = { register, setDb, listRoles, getRoleByCode, hasPermission, listUsers, getUser, createUser, updateUser, setRolePermissions };
+module.exports = { register, setDb, listRoles, getRoleByCode, hasPermission, listUsers, getUser, createUser, updateUser, setRolePermissions, normalizeRoleGroupPatch };
