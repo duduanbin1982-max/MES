@@ -23,7 +23,8 @@
     "schema:write": "node scripts/check-service-schema-versions.js --write",
     "lint:strict": "eslint . --max-warnings 0",
     "mcp": "node scripts/mcp-server.js",
-    "mcp:test": "node --test tests/mcpServer.test.js"
+    "mcp:test": "node --test tests/mcpServer.test.js",
+    "audit": "npm audit --omit=dev --audit-level=high"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -42,5 +43,8 @@
     "eslint": "^10.13.0",
     "globals": "^16.5.0",
     "prettier": "^3.9.10"
+  },
+  "engines": {
+    "node": ">=22 <23"
   }
 }

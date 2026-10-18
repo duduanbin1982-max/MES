@@ -40,6 +40,9 @@ jobs:
       - name: 安装后端依赖
         run: npm ci
 
+      - name: 依赖安全审计（生产依赖，high 级阻断）
+        run: npm run audit
+
       - name: 安装前端依赖
         run: npm ci --prefix frontend
 

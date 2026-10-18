@@ -188,7 +188,20 @@ if [ -d "$PRE_DIR" ]; then
 fi
 
 if [ ${#problems[@]} -eq 0 ]; then
-  log "ROSTER: OK"
+  # TLS 证书（P0-A1：内网 CA）——剩余天数与签发者，便于巡检时一眼看到
+TLS_INFO=""
+for f in "$ROOT/ssl/cert.pem" "$ROOT/ssl/tbm-root-ca.crt"; do
+  if [ -f "$f" ]; then
+    d=$(openssl x509 -in "$f" -noout -enddate 2>/dev/null | cut -d= -f2 | xargs -I{} date -d "{}" +%s 2>/dev/null || echo 0)
+    if [ "${d:-0}" -gt 0 ] 2>/dev/null; then
+      left=$(( (d - $(date +%s)) / 86400 ))
+      TLS_INFO="$TLS_INFO $(basename "$f")=${left}d"
+    fi
+  fi
+done
+[ -n "$TLS_INFO" ] && log "tls:${TLS_INFO}"
+
+log "ROSTER: OK"
 else
   log "ROSTER: ${#problems[@]} issue(s)"
   for i in "${problems[@]}"; do log "  - $i"; done
