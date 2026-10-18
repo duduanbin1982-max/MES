@@ -110,6 +110,40 @@ test("BF.6 applyPlan + rollbackBatch：写入并完整还原（含 INSERT 撤销
   db.close();
 });
 
+test("BF.8 planLots：批次批量登记（重复跳过 / 物料不存在报错 / 日期校验）", () => {
+  const db = freshDb();
+  const plan = backfill.planLots(db, [
+    { material_code: "M-001", lot_no: "LOT-NEW-1", supplier: "宝钢", received_date: "2026-10-01", quantity: "12.5", unit: "t" },
+    { material_code: "M-001", lot_no: "LOT-NEW-1" },
+    { material_code: "M-404", lot_no: "LOT-X" },
+    { material_code: "M-001", lot_no: "LOT-BAD-DATE", received_date: "2026/10/01" },
+  ]);
+  assert.equal(plan.inserts.length, 1);
+  assert.equal(plan.inserts[0].values.lot_no, "LOT-NEW-1");
+  assert.equal(plan.inserts[0].values.quantity, 12.5);
+  assert.equal(plan.skipped.length, 1);
+  assert.match(plan.skipped[0].reason, /CSV 内重复批次/);
+  assert.equal(plan.errors.length, 2);
+  assert.ok(plan.errors.some((e) => /物料编码不存在/.test(e.reason)));
+  assert.ok(plan.errors.some((e) => /received_date/.test(e.reason)));
+  db.close();
+});
+
+test("BF.9 completenessReport：算出还差多少才能补 BOM 批次", () => {
+  const db = freshDb();
+  const report = backfill.completenessReport(db);
+  assert.equal(report.materials.total, 1);
+  assert.equal(report.lots.total, 1);
+  assert.equal(report.materials.with_lot, 1);
+  assert.equal(report.bom.total, 1);
+  assert.equal(report.bom.with_lot, 0);
+  assert.equal(report.bom.lot_pct, 0);
+  assert.equal(report.oee.shifts, 1);
+  assert.equal(report.oee.with_explicit_loss, 0);
+  assert.deepEqual(report.materials_without_lot, []);
+  db.close();
+});
+
 test("BF.7 幂等：已填过 material_lot_id 的行默认跳过", () => {
   const db = freshDb();
   db.exec("UPDATE instance_bom SET material_lot_id = 1 WHERE id = 1");

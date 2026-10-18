@@ -27,7 +27,8 @@
     "audit": "npm audit --omit=dev --audit-level=high",
     "backfill": "node scripts/data-backfill.js",
     "backfill:template": "node scripts/gen-backfill-templates.js",
-    "backfill:test": "node --test tests/dataBackfill.test.js"
+    "backfill:test": "node --test tests/dataBackfill.test.js",
+    "backfill:report": "node scripts/data-backfill.js --report"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

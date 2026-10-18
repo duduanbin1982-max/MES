@@ -183,6 +183,80 @@ function planSerials(db, rows) {
 
 const OEE_COLUMNS = ["shift_minutes", "planned_stop_minutes", "fault_minutes", "changeover_minutes", "material_wait_minutes", "idle_minutes"];
 
+// B-2（2026-10-18）：批次批量登记 —— 现在库里只有 3 个批次，BOM 补录根本无从谈起。
+// CSV: material_code, lot_no, supplier, heat_no, certificate_no, received_date, quantity, unit, quality_status, notes
+function planLots(db, rows) {
+  const plan = { type: "lots", inserts: [], skipped: [], errors: [] };
+  const seen = new Set();
+  for (const [index, row] of rows.entries()) {
+    const line = index + 2;
+    const materialCode = row.material_code || row["物料编码"];
+    const lotNo = row.lot_no || row["批次号"];
+    if (!materialCode || !lotNo) { plan.errors.push({ line, reason: "material_code / lot_no 必填", row }); continue; }
+    const material = db.prepare("SELECT id, material_name FROM materials WHERE material_code = ?").get(materialCode);
+    if (!material) { plan.errors.push({ line, reason: `物料编码不存在: ${materialCode}`, row }); continue; }
+    const key = `${material.id}|${lotNo}`;
+    if (seen.has(key)) { plan.skipped.push({ line, reason: `CSV 内重复批次: ${materialCode} / ${lotNo}` }); continue; }
+    if (db.prepare("SELECT id FROM material_lots WHERE material_id = ? AND lot_no = ?").get(material.id, lotNo)) {
+      plan.skipped.push({ line, reason: `批次已存在: ${materialCode} / ${lotNo}` });
+      continue;
+    }
+    const quantity = num(row.quantity);
+    if (quantity !== null && quantity < 0) { plan.errors.push({ line, reason: `quantity 不能为负: ${row.quantity}`, row }); continue; }
+    const receivedDate = row.received_date || row["到货日期"] || null;
+    if (receivedDate && !/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) {
+      plan.errors.push({ line, reason: `received_date 需为 YYYY-MM-DD: ${receivedDate}`, row }); continue;
+    }
+    seen.add(key);
+    plan.inserts.push({ table: "material_lots", values: {
+      material_id: material.id,
+      lot_no: lotNo,
+      supplier: row.supplier || row["供应商"] || null,
+      heat_no: row.heat_no || row["炉号"] || null,
+      certificate_no: row.certificate_no || row["质保书号"] || null,
+      received_date: receivedDate,
+      quantity: quantity,
+      unit: row.unit || row["单位"] || null,
+      quality_status: row.quality_status || row["质检状态"] || "pending",
+      notes: row.notes || row["备注"] || null,
+    } });
+  }
+  return plan;
+}
+
+// 数据完备度报告（只读）：看清"还差多少才能做 BOM 批次补录"
+function completenessReport(db) {
+  const one = (sql, params = []) => { try { return db.prepare(sql).get(params) || {}; } catch (_e) { return {}; } };
+  const count = (sql, params = []) => Number(one(sql, params).c || 0);
+  const materials = count("SELECT COUNT(*) c FROM materials");
+  const lots = count("SELECT COUNT(*) c FROM material_lots");
+  const materialsWithLot = count("SELECT COUNT(DISTINCT material_id) c FROM material_lots");
+  const instances = count("SELECT COUNT(*) c FROM equipment_instances");
+  const serials = count("SELECT COUNT(*) c FROM serial_numbers");
+  const bomRows = count("SELECT COUNT(*) c FROM instance_bom");
+  const bomWithMaterial = count("SELECT COUNT(*) c FROM instance_bom WHERE material_id IS NOT NULL");
+  const bomWithLot = count("SELECT COUNT(*) c FROM instance_bom WHERE material_lot_id IS NOT NULL");
+  const bomWithSerial = count("SELECT COUNT(*) c FROM instance_bom WHERE serial_id IS NOT NULL");
+  const oeeShifts = count("SELECT COUNT(*) c FROM oee_shift_log");
+  const oeeExplicit = count(`SELECT COUNT(*) c FROM oee_shift_log
+    WHERE COALESCE(fault_minutes,0)+COALESCE(changeover_minutes,0)+COALESCE(material_wait_minutes,0) > 0`);
+  const materialsWithoutLot = db.prepare(`
+    SELECT m.material_code, m.material_name
+    FROM materials m LEFT JOIN material_lots ml ON ml.material_id = m.id
+    WHERE ml.id IS NULL ORDER BY m.material_code
+  `).all();
+  const pct = (part, total) => (total ? Math.round((part / total) * 1000) / 10 : null);
+  return {
+    materials: { total: materials, with_lot: materialsWithLot, pct: pct(materialsWithLot, materials) },
+    lots: { total: lots },
+    instances: { total: instances },
+    serials: { total: serials },
+    bom: { total: bomRows, with_material: bomWithMaterial, with_lot: bomWithLot, with_serial: bomWithSerial, lot_pct: pct(bomWithLot, bomRows) },
+    oee: { shifts: oeeShifts, with_explicit_loss: oeeExplicit, pct: pct(oeeExplicit, oeeShifts) },
+    materials_without_lot: materialsWithoutLot,
+  };
+}
+
 function planOeeShifts(db, rows) {
   const plan = { type: "oee-shifts", changes: [], skipped: [], errors: [] };
   for (const [index, row] of rows.entries()) {
@@ -285,7 +359,7 @@ function printPlan(plan, limit = 10) {
   console.log(`类型 ${plan.type}：将写入 ${total} 处变更，跳过 ${(plan.skipped || []).length}，错误 ${(plan.errors || []).length}`);
   const preview = [...(plan.changes || []), ...(plan.inserts || [])].slice(0, limit);
   for (const item of preview) {
-    if (item.column === "__insert__" || item.table === "serial_numbers" && item.values) {
+    if (item.values || item.column === "__insert__") {
       console.log(`  + ${item.table} INSERT ${JSON.stringify(item.values)}`);
     } else {
       console.log(`  ~ ${item.table}#${item.rowId} ${item.column}: ${item.oldValue} → ${item.newValue}  (${item.key})`);
@@ -300,6 +374,13 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   const db = new Database(DB_PATH);
 
+  if (args.report) {
+    const report = completenessReport(db);
+    console.log(JSON.stringify(report, null, 2));
+    db.close();
+    return;
+  }
+
   if (args.rollback) {
     const result = rollbackBatch(db, path.resolve(ROOT, String(args.rollback)));
     console.log(result.already ? "该批次已回滚过" : `已回滚 ${result.reverted} 处变更`);
@@ -309,7 +390,9 @@ function main() {
 
   const type = String(args.type || "");
   if (!type || !args.csv) {
-    console.error("用法: node scripts/data-backfill.js --type=bom-lots|serials|oee-shifts --csv=file.csv [--apply] [--overwrite] [--allow-material-mismatch] [--force]");
+    console.error("用法: node scripts/data-backfill.js --type=bom-lots|lots|serials|oee-shifts --csv=file.csv [--apply] [--overwrite] [--allow-material-mismatch] [--force]");
+    console.error("      node scripts/data-backfill.js --report            # 数据完备度报告（只读）");
+    console.error("      node scripts/data-backfill.js --rollback=batch.json");
     process.exit(2);
   }
   const rows = parseCsv(fs.readFileSync(path.resolve(ROOT, String(args.csv)), "utf8"));
@@ -319,6 +402,7 @@ function main() {
   if (type === "bom-lots") plan = planBomLots(db, rows, { overwrite: !!args.overwrite, allowMaterialMismatch: !!args["allow-material-mismatch"] });
   else if (type === "serials") plan = planSerials(db, rows);
   else if (type === "oee-shifts") plan = planOeeShifts(db, rows);
+  else if (type === "lots") plan = planLots(db, rows);
   else { console.error("未知类型: " + type); process.exit(2); }
 
   printPlan(plan);
@@ -336,6 +420,6 @@ function main() {
   db.close();
 }
 
-module.exports = { parseCsv, planBomLots, planSerials, planOeeShifts, applyPlan, rollbackBatch, latestBackupAgeHours, OEE_COLUMNS };
+module.exports = { parseCsv, planBomLots, planSerials, planOeeShifts, planLots, completenessReport, applyPlan, rollbackBatch, latestBackupAgeHours, OEE_COLUMNS };
 
 if (require.main === module) main();

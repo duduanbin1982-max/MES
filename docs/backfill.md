@@ -52,6 +52,25 @@ node scripts/oee-recompute-check.js --days=365   # OEE 口径一致率
 | `work_order_code` | 可选 | 装配工单 |
 | `status` | 可选 | 默认 `in_stock` |
 
+### 2.5) `lots.csv` —— 批次批量登记（B-2，推荐先做）
+
+现网 `material_lots` 只有 3 条，`bom-lots` 大半行无批次可挂。先把批次登记进来：
+
+| 列 | 必填 | 说明 |
+|---|---|---|
+| `material_code` | ✅ | 物料编码（`materials.material_code`） |
+| `lot_no` | ✅ | 批次号（同物料下唯一；已存在会跳过） |
+| `supplier` / `heat_no` / `certificate_no` | 建议 | 供应商 / 炉号 / 质保书号（追溯要用） |
+| `received_date` | 可选 | `YYYY-MM-DD` |
+| `quantity` / `unit` | 可选 | 到货数量（≥0）与单位 |
+| `quality_status` | 可选 | 默认 `pending`（待检）；`pass` / `fail` |
+
+```bash
+node scripts/gen-backfill-templates.js --type=lots
+node scripts/data-backfill.js --type=lots --csv=data/backfill/templates/lots.csv            # dry-run
+node scripts/data-backfill.js --type=lots --csv=data/backfill/templates/lots.csv --apply
+```
+
 ### 3) `oee-shifts.csv` —— 三层时间基线
 
 | 列 | 说明 |
@@ -73,6 +92,15 @@ node scripts/oee-recompute-check.js --days=365   # OEE 口径一致率
 - 写库前检查最近备份年龄 >6h 会拒绝（先跑 `scripts/backup-db.sh`，或 `--force`）
 - 已填过值的行默认跳过；覆盖需显式 `--overwrite`
 - 批次物料与 BOM 物料不一致会报错；确认无误可加 `--allow-material-mismatch`
+
+## 三·五、先看"还差多少"：完备度报告
+
+```bash
+node scripts/data-backfill.js --report
+```
+
+输出（JSON）包含：物料/批次覆盖、BOM 行有多少挂了物料/批次/序列号、OEE 有多少班次有显式基线、
+以及**哪些物料还没有任何批次**（`materials_without_lot`，可直接拿去登记批次）。
 
 ## 四、常见错误
 

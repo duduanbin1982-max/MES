@@ -78,6 +78,24 @@ if (want("serials")) {
   writeCsv("serials.csv", ["serial_no", "material_code", "lot_no", "instance_code", "work_order_code", "status", "note"], rows);
 }
 
+// 2.5) lots：批次批量登记（现网只有 3 个批次；没有物料清单的物料先列出来）
+if (want("lots")) {
+  const noLot = db.prepare(`
+    SELECT m.material_code, m.material_name
+    FROM materials m LEFT JOIN material_lots ml ON ml.material_id = m.id
+    WHERE ml.id IS NULL ORDER BY m.material_code
+  `).all();
+  const example = noLot.slice(0, 10).map((material) => ({
+    material_code: material.material_code, lot_no: "", supplier: "", heat_no: "", certificate_no: "",
+    received_date: "", quantity: "", unit: "", quality_status: "pending", notes: `${material.material_name}（请填批次信息）`,
+  }));
+  writeCsv("lots.csv",
+    ["material_code", "lot_no", "supplier", "heat_no", "certificate_no", "received_date", "quantity", "unit", "quality_status", "notes"],
+    example);
+  const withLot = db.prepare("SELECT COUNT(DISTINCT material_id) c FROM material_lots").get().c;
+  console.log(`  （物料 ${noLot.length + withLot} 种，已有批次 ${withLot} 种，待登记 ${noLot.length} 种：上面模板列出前 10 个，其余照表头自行追加）`);
+}
+
 // 3) oee-shifts：legacy 班次（缺三层基线），预填"计划生产 − 运行 = 可用率损失合计"作为拆分基准
 if (want("oee-shifts")) {
   const rows = db.prepare(`
