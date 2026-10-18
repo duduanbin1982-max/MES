@@ -19,6 +19,9 @@ const { _applyMovement, all, get, requireLogin, requirePermission } = ctx;
     if (movement_type)   { base += ' AND mm.movement_type = ?';   params.push(movement_type); }
     if (date_from)       { base += ' AND mm.created_at >= ?';     params.push(date_from); }
     if (date_to)         { base += ' AND mm.created_at <= ?';     params.push(date_to); }
+    // P1-1：数据范围（行级权限）
+    const scopeFilter = require('../../../app/dataScope').buildFilter('material_movements', require('../../../app/dataScope').scopeOf(req), 'mm');
+    if (scopeFilter.clause) { base += ' AND ' + scopeFilter.clause; params.push(...scopeFilter.params); }
     const total = get('SELECT COUNT(*) AS c ' + base, params).c;
     const rows = all('SELECT mm.*, ml.lot_no, m.material_name ' + base + ' ORDER BY mm.created_at DESC LIMIT ? OFFSET ?', params.concat([lim, off]));
     res.json({ total, limit: lim, offset: off, count: rows.length, items: rows });

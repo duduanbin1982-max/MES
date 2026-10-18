@@ -32,7 +32,29 @@ export function useUserManagementPage() {
   const permDlg = reactive<any>({ visible: false, saving: false, role: null, superAdmin: false })
   const permMap = reactive<Record<string, boolean>>({})
 
-  const dataScopeLabel = (value: string) => ({ all: '全部', workshop: '按车间', warehouse: '按仓库', instance: '按装备', self: '仅本人' } as any)[value] || '-'
+  // P1-1：数据范围（5+1 种），与后端 app/dataScope.js 的 SCOPES 对齐
+  const dataScopeOptions = [
+    { value: 'all', label: '全部数据' },
+    { value: 'instance', label: '按装备/项目' },
+    { value: 'workshop', label: '按车间' },
+    { value: 'workstation', label: '按工位' },
+    { value: 'warehouse', label: '按仓库' },
+    { value: 'self', label: '仅本人相关' },
+  ]
+  const dataScopeLabel = (value: string) => (dataScopeOptions.find(o => o.value === value)?.label) || '-'
+  const scopeNeedsConfig = (scope: string) => scope === 'instance' || scope === 'workshop' || scope === 'workstation' || scope === 'warehouse'
+  const myScope = ref<any>(null)
+  const loadMyScope = async () => {
+    try { myScope.value = await Api.get('/me/scope') } catch (_) { myScope.value = null }
+  }
+  const parseJsonField = (text: string, label: string) => {
+    if (!text || !String(text).trim()) return undefined
+    try { return JSON.parse(String(text)) } catch (error) {
+      const err: any = new Error(label + ' 不是合法 JSON')
+      err.cause = error
+      throw err
+    }
+  }
   const previewPerms = (perms: string[] = []) => perms.includes('*') ? ['*'] : perms.slice(0, 8)
 
   const loadUsers = async () => {
@@ -73,7 +95,13 @@ export function useUserManagementPage() {
 
   const editUser = (row: any) => {
     dlg.isEdit = true
-    dlg.form = { ...row, password: '' }
+    dlg.form = {
+      ...row,
+      password: '',
+      // P1-1：用户级数据范围覆盖（空 = 继承角色组）
+      data_scope: row.data_scope_override || '',
+      data_scope_config: row.data_scope_config_override || '',
+    }
     dlg.visible = true
   }
 
@@ -85,11 +113,15 @@ export function useUserManagementPage() {
   const saveUser = async () => {
     dlg.saving = true
     try {
+      // P1-1：把范围配置字符串解析成对象（后端会 JSON.stringify 入库）
+      const payload: any = { ...dlg.form }
+      payload.data_scope = dlg.form.data_scope || null
+      payload.data_scope_config = parseJsonField(dlg.form.data_scope_config, '数据范围配置')
       if (dlg.isEdit) {
-        await Api.patch('/users/' + dlg.form.id, dlg.form)
+        await Api.patch('/users/' + dlg.form.id, payload)
         ElMessage.success('用户已更新')
       } else {
-        await Api.post('/users', dlg.form)
+        await Api.post('/users', payload)
         ElMessage.success('用户已创建')
       }
       dlg.visible = false
@@ -145,8 +177,11 @@ export function useUserManagementPage() {
   const saveGroup = async () => {
     groupDlg.saving = true
     try {
-      if (groupDlg.isEdit) await Api.patch('/role-groups/' + groupDlg.form.id, groupDlg.form)
-      else await Api.post('/role-groups', groupDlg.form)
+      // P1-1：角色组的 scope_config（按装备/车间/工位/仓库筛选范围）
+      const payload: any = { ...groupDlg.form }
+      payload.scope_config = parseJsonField(groupDlg.form.scope_config, '范围配置')
+      if (groupDlg.isEdit) await Api.patch('/role-groups/' + groupDlg.form.id, payload)
+      else await Api.post('/role-groups', payload)
       ElMessage.success('角色组已保存')
       groupDlg.visible = false
       await loadRoleGroups()
@@ -242,6 +277,7 @@ export function useUserManagementPage() {
   }
 
   onMounted(async () => {
+    loadMyScope()
     await Promise.all([loadRoles(), loadRoleGroups(), loadPermissionCatalog()])
     await loadUsers()
   })
@@ -263,6 +299,10 @@ export function useUserManagementPage() {
     permDlg,
     permMap,
     dataScopeLabel,
+    dataScopeOptions,
+    scopeNeedsConfig,
+    myScope,
+    loadMyScope,
     previewPerms,
     loadUsers,
     loadRoles,

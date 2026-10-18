@@ -30,12 +30,16 @@ function register(app, db, auth) {
 
 
 app.get('/api/work_orders', wrap((req, res) => {
+  const dataScope = require('../app/dataScope');
   const { equipment_instance_id, subsystem_id, status } = req.query;
   let sql = "SELECT wo.*, ei.instance_code, ei.instance_name, es.name_zh as subsystem_name FROM work_orders wo LEFT JOIN equipment_instances ei ON wo.equipment_instance_id = ei.id LEFT JOIN equipment_subsystems es ON wo.subsystem_id = es.id WHERE 1=1";
   const params = [];
   if (equipment_instance_id) { sql += ' AND wo.equipment_instance_id = ?'; params.push(equipment_instance_id); }
   if (subsystem_id) { sql += ' AND wo.subsystem_id = ?'; params.push(subsystem_id); }
   if (status) { sql += ' AND wo.status = ?'; params.push(status); }
+  // P1-1：数据范围（行级权限）
+  const scopeFilter = dataScope.buildFilter('work_orders', dataScope.scopeOf(req), 'wo');
+  if (scopeFilter.clause) { sql += ' AND ' + scopeFilter.clause; params.push(...scopeFilter.params); }
   sql += ' ORDER BY wo.created_at DESC';
   res.json(all(sql, params));
 }));
@@ -51,6 +55,9 @@ app.get('/api/work_orders/dispatchable', wrap((req, res) => {
 app.get('/api/work_orders/:id', wrap((req, res) => {
   const wo = get("SELECT wo.*, ei.instance_code, es.name_zh as subsystem_name FROM work_orders wo LEFT JOIN equipment_instances ei ON wo.equipment_instance_id = ei.id LEFT JOIN equipment_subsystems es ON wo.subsystem_id = es.id WHERE wo.id = ?", req.params.id);
   if (!wo) throw ApiError.notFound('not found')
+  // P1-1：越权访问详情 → 403
+  const dataScope = require('../app/dataScope');
+  if (!dataScope.rowInScope('work_orders', dataScope.scopeOf(req), wo)) throw ApiError.forbidden('超出数据范围：该工单不在你的数据权限内');
   wo.operations = all('SELECT * FROM work_order_operations WHERE work_order_id = ? ORDER BY timestamp', req.params.id);
   res.json(wo);
 }));

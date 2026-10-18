@@ -14,6 +14,8 @@ function nextNcrCode(get) {
   return prefix + String(sequence).padStart(3, "0");
 }
 
+const dataScope = require("../../app/dataScope");
+
 function registerInspectionRoutes({ app, helpers, ApiError }) {
   const { all, get, run } = helpers;
 
@@ -25,6 +27,9 @@ function registerInspectionRoutes({ app, helpers, ApiError }) {
     if (work_order_id) { sql += " AND q.work_order_id = ?"; params.push(work_order_id); }
     if (inspection_type) { sql += " AND q.inspection_type = ?"; params.push(inspection_type); }
     if (result) { sql += " AND q.result = ?"; params.push(result); }
+    // P1-1：数据范围（行级权限）
+    const scopeFilter = dataScope.buildFilter("qc_inspections", dataScope.scopeOf(req), "q");
+    if (scopeFilter.clause) { sql += " AND " + scopeFilter.clause; params.push(...scopeFilter.params); }
     sql += " ORDER BY q.inspection_date DESC";
     res.json(all(sql, params));
   }));

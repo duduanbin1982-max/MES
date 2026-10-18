@@ -27,6 +27,9 @@ function ensureSchema() {
   `);
   const cols = db.prepare("PRAGMA table_info(users)").all().map(c => c.name);
   if (!cols.includes("role_group_id")) db.exec("ALTER TABLE users ADD COLUMN role_group_id INTEGER");
+  // P1-1（2026-10-18）：用户级数据范围覆盖（为空则继承角色组）
+  if (!cols.includes("data_scope")) db.exec("ALTER TABLE users ADD COLUMN data_scope TEXT");
+  if (!cols.includes("data_scope_config")) db.exec("ALTER TABLE users ADD COLUMN data_scope_config TEXT");
   const seed = [
     ['production', '生产部', 'foreman', 'workshop', '{}', '/delivery', '生产计划、排程、派工与现场执行'],
     ['warehouse', '仓储部', 'warehouse', 'warehouse', '{}', '/shopfloor?tab=pick', '库存、齐套、领料、退料'],
@@ -89,7 +92,9 @@ function listRoleGroups() {
 function listUsers() {
   return db.prepare(`
     SELECT u.id, u.username, u.full_name, u.role_id, u.role_code, u.role_group_id, u.is_active, u.phone,
-           u.created_at, u.last_login, r.role_name, rg.group_name, rg.group_code, rg.data_scope, rg.default_home
+           u.created_at, u.last_login, r.role_name, rg.group_name, rg.group_code, rg.data_scope, rg.default_home,
+           u.data_scope AS data_scope_override, u.data_scope_config AS data_scope_config_override,
+           COALESCE(u.data_scope, rg.data_scope, 'all') AS effective_data_scope
     FROM users u
     LEFT JOIN roles r ON u.role_id = r.id
     LEFT JOIN role_groups rg ON u.role_group_id = rg.id
@@ -100,7 +105,9 @@ function listUsers() {
 function getUser(id) {
   return db.prepare(`
     SELECT u.id, u.username, u.full_name, u.role_id, u.role_code, u.role_group_id, u.is_active, u.phone,
-           u.created_at, u.last_login, r.role_name, rg.group_name, rg.group_code, rg.data_scope, rg.default_home
+           u.created_at, u.last_login, r.role_name, rg.group_name, rg.group_code, rg.data_scope, rg.default_home,
+           u.data_scope AS data_scope_override, u.data_scope_config AS data_scope_config_override,
+           COALESCE(u.data_scope, rg.data_scope, 'all') AS effective_data_scope
     FROM users u
     LEFT JOIN roles r ON u.role_id = r.id
     LEFT JOIN role_groups rg ON u.role_group_id = rg.id
@@ -110,7 +117,7 @@ function getUser(id) {
 
 const bcrypt = require('bcryptjs');
 
-function createUser({ username, password, full_name, role_code, role_group_id, phone, is_active }) {
+function createUser({ username, password, full_name, role_code, role_group_id, phone, is_active, data_scope, data_scope_config }) {
   if (!username || !password || !full_name || !role_code) return { ok: false, error: 'username, password, full_name, role_code 必填' };
   const exist = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
   if (exist) return { ok: false, error: 'username 已存在' };
@@ -121,14 +128,18 @@ function createUser({ username, password, full_name, role_code, role_group_id, p
     if (!group) return { ok: false, error: 'role_group_id 不存在: ' + role_group_id };
   }
   const hash = bcrypt.hashSync(password, 10);
+  const scope = data_scope ? String(data_scope) : null;
+  if (scope && !require('../app/dataScope').SCOPES.includes(scope)) return { ok: false, error: 'data_scope 非法: ' + scope };
   const r = db.prepare(`
-    INSERT INTO users (username, password_hash, full_name, role_id, role_code, role_group_id, phone, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(username, hash, full_name, role.id, role_code, role_group_id || null, phone || null, is_active == null ? 1 : (is_active ? 1 : 0));
+    INSERT INTO users (username, password_hash, full_name, role_id, role_code, role_group_id, phone, is_active, data_scope, data_scope_config)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(username, hash, full_name, role.id, role_code, role_group_id || null, phone || null,
+    is_active == null ? 1 : (is_active ? 1 : 0), scope,
+    data_scope_config ? JSON.stringify(data_scope_config) : null);
   return { ok: true, id: r.lastInsertRowid };
 }
 
-function updateUser(id, { password, full_name, role_code, role_group_id, phone, is_active }) {
+function updateUser(id, { password, full_name, role_code, role_group_id, phone, is_active, data_scope, data_scope_config }) {
   const u = getUser(id);
   if (!u) return { ok: false, error: 'user not found' };
   const fields = [];
@@ -149,6 +160,16 @@ function updateUser(id, { password, full_name, role_code, role_group_id, phone, 
     if (!role) return { ok: false, error: 'role_code 不存在: ' + role_code };
     fields.push('role_id = ?'); params.push(role.id);
     fields.push('role_code = ?'); params.push(role_code);
+  }
+  // P1-1：用户级数据范围覆盖（传 null 表示恢复"继承角色组"）
+  if (data_scope !== undefined) {
+    const scope = data_scope ? String(data_scope) : null;
+    if (scope && !require('../app/dataScope').SCOPES.includes(scope)) return { ok: false, error: 'data_scope 非法: ' + scope };
+    fields.push('data_scope = ?'); params.push(scope);
+  }
+  if (data_scope_config !== undefined) {
+    fields.push('data_scope_config = ?');
+    params.push(data_scope_config ? JSON.stringify(data_scope_config) : null);
   }
   if (fields.length === 0) return { ok: true, changed: 0 };
   params.push(id);
@@ -223,6 +244,13 @@ function register(app, _db) {
   }));
 
   // Role list/detail/permission routes are owned by routes/roles.js (audit + cache sync).
+  // P1-1（2026-10-18）：当前登录用户的生效数据范围（前端提示 / 排障用）
+  app.get('/api/me/scope', wrap((req, res) => {
+    const { loadScope, describe } = require('../app/dataScope');
+    const ctx = (typeof req.scope === 'function') ? req.scope() : loadScope(db, req.user && (req.user.sub || req.user.uid));
+    res.json(describe(ctx));
+  }));
+
   app.get('/api/users', wrap((req, res) => {
     res.json({ items: listUsers() });
   }));

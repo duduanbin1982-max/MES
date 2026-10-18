@@ -39,6 +39,8 @@ require('./routes/root').register(app);
 // auth 白名单: /api/health 和 /api/auth/login
 app.use('/api', authMiddleware);
 app.use('/api', apiPermissionMiddleware);
+// P1-1（2026-10-18）：数据范围（行级权限）——懒加载，只有需要的接口才查库
+app.use('/api', require('./middleware/dataScope').dataScopeMiddleware(db));
 app.use('/api', require('./app/middleware/auditTrail')(db));
 
 // P1-2: 查询性能统计。必须挂在 authMiddleware 之后，否则 requirePermission
