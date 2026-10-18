@@ -1,4 +1,5 @@
 import { reactive, ref, onMounted, watch } from 'vue'
+import { formatJsonForInput, parseJsonInput } from '../domain/jsonField'
 import { useRoute, useRouter } from 'vue-router'
 import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -47,14 +48,8 @@ export function useUserManagementPage() {
   const loadMyScope = async () => {
     try { myScope.value = await Api.get('/me/scope') } catch (_) { myScope.value = null }
   }
-  const parseJsonField = (text: string, label: string) => {
-    if (!text || !String(text).trim()) return undefined
-    try { return JSON.parse(String(text)) } catch (error) {
-      const err: any = new Error(label + ' 不是合法 JSON')
-      err.cause = error
-      throw err
-    }
-  }
+  // 统一用 domain/jsonField（有单测），避免"对象 v-model 到输入框显示 [object Object]"
+  const parseJsonField = (text: unknown, label = '配置') => parseJsonInput(text, label)
   const previewPerms = (perms: string[] = []) => perms.includes('*') ? ['*'] : perms.slice(0, 8)
 
   const loadUsers = async () => {
@@ -100,7 +95,7 @@ export function useUserManagementPage() {
       password: '',
       // P1-1：用户级数据范围覆盖（空 = 继承角色组）
       data_scope: row.data_scope_override || '',
-      data_scope_config: row.data_scope_config_override || '',
+      data_scope_config: formatJsonForInput(row.data_scope_config_override),
     }
     dlg.visible = true
   }
@@ -116,7 +111,7 @@ export function useUserManagementPage() {
       // P1-1：把范围配置字符串解析成对象（后端会 JSON.stringify 入库）
       const payload: any = { ...dlg.form }
       payload.data_scope = dlg.form.data_scope || null
-      payload.data_scope_config = parseJsonField(dlg.form.data_scope_config, '数据范围配置')
+      payload.data_scope_config = parseJsonField(dlg.form.data_scope_config, '数据范围配置') ?? null
       if (dlg.isEdit) {
         await Api.patch('/users/' + dlg.form.id, payload)
         ElMessage.success('用户已更新')
@@ -167,9 +162,13 @@ export function useUserManagementPage() {
 
   const openGroupDialog = (row?: any) => {
     groupDlg.isEdit = !!row
-    groupDlg.form = row ? { ...row } : {
+    groupDlg.form = row ? {
+      ...row,
+      group_code: row.group_code,
+      scope_config: formatJsonForInput(row.scope_config),
+    } : {
       group_code: '', group_name: '', default_role_code: '', data_scope: 'all',
-      default_home: '', description: '', is_active: true,
+      scope_config: '', default_home: '', description: '', is_active: true,
     }
     groupDlg.visible = true
   }
@@ -179,7 +178,7 @@ export function useUserManagementPage() {
     try {
       // P1-1：角色组的 scope_config（按装备/车间/工位/仓库筛选范围）
       const payload: any = { ...groupDlg.form }
-      payload.scope_config = parseJsonField(groupDlg.form.scope_config, '范围配置')
+      payload.scope_config = parseJsonField(groupDlg.form.scope_config, '范围配置') ?? {}
       if (groupDlg.isEdit) await Api.patch('/role-groups/' + groupDlg.form.id, payload)
       else await Api.post('/role-groups', payload)
       ElMessage.success('角色组已保存')

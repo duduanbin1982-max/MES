@@ -62,6 +62,12 @@
             <el-table-column prop="group_name" label="名称" width="130" />
             <el-table-column prop="default_role_name" label="默认角色" width="120" />
             <el-table-column label="数据范围" width="120"><template #default="{ row }">{{ dataScopeLabel(row.data_scope) }}</template></el-table-column>
+            <el-table-column label="范围配置" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">
+                <code v-if="row.scope_config && Object.keys(row.scope_config).length">{{ JSON.stringify(row.scope_config) }}</code>
+                <span v-else style="color: var(--el-color-info)">（空）</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="default_home" label="默认首页" width="180" />
             <el-table-column prop="user_count" label="用户数" width="80" />
             <el-table-column prop="description" label="说明" min-width="220" />
