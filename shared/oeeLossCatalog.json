@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-18",
+  "comment": "OEE 损失目录（ISA-95 对齐）。category_key 是唯一可入库值；legacy_labels 用于兼容历史中文数据。",
+  "timeLayers": ["shift_minutes", "planned_stop", "planned_production", "run", "net_run"],
+  "buckets": {
+    "availability": { "label": "可用率损失", "isa95": "Availability Loss" },
+    "performance": { "label": "性能损失", "isa95": "Performance Loss" },
+    "quality": { "label": "质量损失", "isa95": "Quality Loss" },
+    "none": { "label": "非损失（计划内）", "isa95": "Planned Stop" }
+  },
+  "categories": [
+    { "key": "equipment_failure", "label": "设备故障", "isa95": "Breakdown", "bucket": "availability", "countsAsLoss": true,
+      "legacy_labels": ["故障停机", "设备故障", "故障", "停机"] },
+    { "key": "setup_adjustment", "label": "换型调试", "isa95": "Setup & Adjustments", "bucket": "availability", "countsAsLoss": true,
+      "legacy_labels": ["换型调试", "换型", "调试", "调机"] },
+    { "key": "idling_waiting", "label": "空转待料", "isa95": "Idling & Minor Stops (waiting)", "bucket": "availability", "countsAsLoss": true,
+      "legacy_labels": ["空转待料", "待料", "缺料", "等料"] },
+    { "key": "minor_stops", "label": "短暂停机", "isa95": "Minor Stops", "bucket": "performance", "countsAsLoss": true,
+      "legacy_labels": ["短暂停机", "小停机", "轻微停机"] },
+    { "key": "speed_loss", "label": "速度损失", "isa95": "Reduced Speed", "bucket": "performance", "countsAsLoss": true,
+      "legacy_labels": ["速度损失", "降速", "节拍损失"] },
+    { "key": "quality_defects", "label": "质量废品", "isa95": "Scrap & Rework", "bucket": "quality", "countsAsLoss": true,
+      "legacy_labels": ["质量废品", "废品", "返工", "不合格"] },
+    { "key": "startup_reject", "label": "启动损失", "isa95": "Startup Rejects", "bucket": "quality", "countsAsLoss": true,
+      "legacy_labels": ["启动损失", "试机", "首件报废"] },
+    { "key": "planned_stop", "label": "计划停机", "isa95": "Planned Stop", "bucket": "none", "countsAsLoss": false,
+      "legacy_labels": ["计划停机", "保养", "点检", "计划检修", "节假日"] },
+    { "key": "other", "label": "其他（待归类）", "isa95": "Unclassified", "bucket": "availability", "countsAsLoss": true,
+      "legacy_labels": ["其他", "未知"] }
+  ]
+}

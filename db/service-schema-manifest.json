@@ -122,9 +122,9 @@
       "ddlStatements": 0
     },
     "oeeService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "6cd4ff29729bfcf2342bbde9f2a21e7dae4d7daf1782086a9573dcddcd3056b5",
-      "ddlStatements": 1
+      "schemaVersion": 2,
+      "ddlFingerprint": "152b91f0b603669b0a3b84475c091c137cedee12c699d1db0645017e9a2b79c6",
+      "ddlStatements": 3
     },
     "pickService": {
       "schemaVersion": 1,
