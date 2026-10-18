@@ -93,6 +93,51 @@ node scripts/data-backfill.js --type=lots --csv=data/backfill/templates/lots.csv
 - 已填过值的行默认跳过；覆盖需显式 `--overwrite`
 - 批次物料与 BOM 物料不一致会报错；确认无误可加 `--allow-material-mismatch`
 
+## 三·四、`lots.csv` 怎么填（逐个字段说明）
+
+**一句话**：一行 = **一次到货的一个批次**；同一个物料进 3 批就写 3 行，`lot_no` 不同。
+
+先打开 `materials-reference.csv`（36 种物料 + 单位 + 是否关键件），在 `material_code` 列里挑编码。
+
+| 列 | 填法 | 示例 | 说明 |
+|---|---|---|---|
+| `material_code` | 查 `materials-reference.csv` 第 1 列 | `M-ST-Q345-40` | 必须与库里一致；填错会报"物料编码不存在" |
+| `lot_no` | 供应商批号，或自编 `LOT-YYYYMMDD-序号` | `LOT-20261015-01` | **同物料内唯一**；已存在会自动跳过（不报错） |
+| `supplier` | 供应商简称 | `宝钢` | 追溯时要知道"谁供的" |
+| `heat_no` | 炉号（钢材/铸件**必填**，从质保书抄） | `H-20261015-3` | 同一炉号可能是多个批次，追溯靠它 |
+| `certificate_no` | 质保书/材质证明编号 | `GB/T 3274-20261015` | 客户审核时能出示证明 |
+| `received_date` | 到货日期 | `2026-10-15` | 必须 `YYYY-MM-DD`（Excel 里先设成"文本"列） |
+| `quantity` | 到货数量 | `12.5` | 不能为负；可留空 |
+| `unit` | 计量单位 | `t` / `件` / `套` / `m` / `kg` | 建议与该物料的 `unit` 一致（见参考表） |
+| `quality_status` | 检验状态 | `pending` | `pending` 待检 / `pass` 合格 / `fail` 不合格；默认 `pending` |
+| `notes` | 用途/库位/备注 | `前盾下料用` | 可留空 |
+
+### 照抄示例（`lots-EXAMPLE.csv`，已实测可导入）
+
+```csv
+material_code,lot_no,supplier,heat_no,certificate_no,received_date,quantity,unit,quality_status,notes
+M-ST-Q345-40,LOT-20261015-01,宝钢,H-20261015-3,GB/T 3274-20261015,2026-10-15,12.5,t,pass,前盾下料用
+M-ST-Q345-40,LOT-20261015-02,宝钢,H-20261016-1,GB/T 3274-20261016,2026-10-16,8.2,t,pass,同上，第二批
+M-CUTTER-DISC,20261012-CD-01,洛阳轴承,HEAT-77821,ZZ-2026-1012,2026-10-12,4,件,pending,滚刀到货待检
+M-BOLT-M20-10,20261013-BM-01,晋亿,HEAT-99012,BM-2026-1013,2026-10-13,500,件,pass,
+```
+
+### Excel 操作要点
+
+1. 用 Excel 打开 `lots.csv` → **另存为 CSV UTF-8**（不要 xlsx，导入器只读 CSV）
+2. **不要改表头**（列名/顺序都别改），行数随意加
+3. **先把 `received_date` 列格式设为文本**，否则 Excel 可能写成 `2026/10/15`
+4. 空行会被忽略；`material_code` 留空的行会报错（方便你发现漏填）
+5. 不确定的行先留着不填，dry-run 会告诉你哪行有问题，不会写库
+
+### 数据从哪来
+
+- **采购/入库台账**（ERP 的收货单、供应商送货单）
+- **质保书/材质证明**（炉号、证书号）
+- **来料检验记录**（决定 `quality_status`）
+
+> 如果你们台账是 Excel 且列名不一样，把原表发我，我可以加一个"列名映射"直接转换，不用手工改。
+
 ## 三·五、先看"还差多少"：完备度报告
 
 ```bash
