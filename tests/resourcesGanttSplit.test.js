@@ -95,10 +95,15 @@ test("GANTT.4 resolveWindow 的钳制与默认值不变", () => {
   assert.equal(resourcesGantt.resolveWindow({ start_date: "2026-10-12", compare: "1" }).compare, "1");
 });
 
-test("GANTT.5 workstationDailyCapacity 的兜底顺序不变 (capacity_per_day → max_workers → 1) ×8", () => {
-  assert.equal(resourcesGantt.workstationDailyCapacity({ capacity_per_day: 2 }), 16);
-  assert.equal(resourcesGantt.workstationDailyCapacity({ capacity_per_day: 0, max_workers: 3 }), 24);
-  assert.equal(resourcesGantt.workstationDailyCapacity({}), 8);
+test("GANTT.5 workstationDailyCapacity 按班次 × 人数推导（P2-1 口径修正，2026-10-19）", () => {
+  // 原实现：capacity_per_day × 8 —— 把"件/天产能"当成了工时容量（50 件/天 → 400 小时/天），
+  // 导致利用率被稀释 10~50 倍，"最紧工位"看不出来。现改为「班次工时 × max_workers，封顶 24h」，
+  // capacity_per_day 仅作"件/天产能"参考，不再参与工时计算。
+  assert.equal(resourcesGantt.workstationDailyCapacity({}), 8, "默认白班 8h");
+  assert.equal(resourcesGantt.workstationDailyCapacity({ max_workers: 3 }), 24, "8h × 3 人");
+  assert.equal(resourcesGantt.workstationDailyCapacity({ shift: "two" }), 16, "双班 16h");
+  assert.equal(resourcesGantt.workstationDailyCapacity({ shift: "three", max_workers: 2 }), 24, "24h × 2 封顶 24");
+  assert.equal(resourcesGantt.workstationDailyCapacity({ capacity_per_day: 50, max_workers: 1 }), 8, "件/天产能不再影响工时容量");
 });
 
 test("GANTT.6 每个阶段函数可独立调用，且与 golden 的分片一致", () => {

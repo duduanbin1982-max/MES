@@ -52,3 +52,51 @@ function buildWorkstationUtilization(heatmapGrid) {
 }
 
 module.exports = { buildInstanceBreakdown, buildWorkstationUtilization };
+
+/**
+ * P2-1（2026-10-19）：挑出"最紧的三个工位"和"最空闲的三个工位"。
+ * 排序依据：峰值利用率（peak_utilization_pct）→ 平均利用率（avg_utilization_pct）→ 已用工时倒序。
+ * @param {Array} utilization buildWorkstationUtilization 的输出
+ * @param {number} n 取前几个（默认 3）
+ * @returns {{top_overloaded: Array, top_idle: Array, threshold: {overload_pct: number, idle_pct: number}}}
+ */
+function pickBottlenecks(utilization, n = 3) {
+  const list = (utilization || []).filter((row) => row && row.daily_capacity_hours > 0);
+  const score = (row) => [
+    Number(row.peak_utilization_pct || 0),
+    Number(row.avg_utilization_pct || 0),
+    Number(row.total_busy_hours || 0),
+  ];
+  const compare = (a, b) => {
+    const sa = score(a);
+    const sb = score(b);
+    for (let i = 0; i < sa.length; i++) {
+      if (sb[i] !== sa[i]) return sb[i] - sa[i];
+    }
+    return String(a.name || "").localeCompare(String(b.name || ""));
+  };
+  const sorted = [...list].sort(compare);
+  const brief = (row) => ({
+    ws_id: row.ws_id,
+    name: row.name,
+    workshop: row.workshop,
+    avg_utilization_pct: row.avg_utilization_pct,
+    peak_utilization_pct: row.peak_utilization_pct,
+    peak_day: row.peak_day,
+    total_busy_hours: row.total_busy_hours,
+    daily_capacity_hours: row.daily_capacity_hours,
+  });
+  return {
+    top_overloaded: sorted.slice(0, n).map(brief),
+    // 空闲：从最不忙的一端取，但只取"确实空闲"（峰值 < 30%）的工位，避免把正常工位算成空闲
+    top_idle: sorted
+      .slice()
+      .reverse()
+      .filter((row) => Number(row.peak_utilization_pct || 0) < 30)
+      .slice(0, n)
+      .map(brief),
+    threshold: { overload_pct: 100, idle_pct: 30 },
+  };
+}
+
+module.exports = { buildInstanceBreakdown, buildWorkstationUtilization, pickBottlenecks };

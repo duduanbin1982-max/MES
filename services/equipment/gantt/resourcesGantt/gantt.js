@@ -12,7 +12,7 @@ const { collectItems, loadWorkstations } = require("./_items");
 const { resolveWindow } = require("./_window");
 const { loadSourceRows } = require("./_queries");
 const { buildHeatmap } = require("./_heatmap");
-const { buildInstanceBreakdown, buildWorkstationUtilization } = require("./_breakdown");
+const { buildInstanceBreakdown, buildWorkstationUtilization, pickBottlenecks } = require("./_breakdown");
 const { detectConflicts } = require("./_conflicts");
 
 function getResourcesGantt(req, res, db) {
@@ -23,6 +23,8 @@ function getResourcesGantt(req, res, db) {
   const { workstationById, dayList, heatmapGrid } = buildHeatmap(workstations, items, rangeStart, numDays);
   const instanceBreakdown = buildInstanceBreakdown(items);
   const workstationUtilization = buildWorkstationUtilization(heatmapGrid);
+  // P2-1：最紧 / 最空闲的三个工位（排程页 Top3 卡片直接用）
+  const bottlenecks = pickBottlenecks(workstationUtilization, 3);
   const conflicts = detectConflicts(items, heatmapGrid, workstationById);
 
   const publicItems = items.map(({ _start, _end, ...item }) => item);
@@ -43,6 +45,7 @@ function getResourcesGantt(req, res, db) {
     heatmap: { days: dayList, grid: heatmapGrid },
     instance_breakdown: instanceBreakdown,
     workstation_utilization: workstationUtilization,
+    bottlenecks,
     items: publicItems,
     conflicts,
   });

@@ -308,6 +308,80 @@
         "peak_utilization_pct": 25
       }
     ],
+    "bottlenecks": {
+      "top_overloaded": [
+        {
+          "ws_id": 10,
+          "name": "工位A",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 64,
+          "peak_utilization_pct": 450,
+          "peak_day": {
+            "day": "2026-10-12",
+            "busy_hours": 36,
+            "capacity_hours": 8,
+            "utilization_pct": 450,
+            "level": "overload"
+          },
+          "total_busy_hours": 36,
+          "daily_capacity_hours": 8
+        },
+        {
+          "ws_id": 13,
+          "name": "工位C",
+          "workshop": "装配车间",
+          "avg_utilization_pct": 11,
+          "peak_utilization_pct": 75,
+          "peak_day": {
+            "day": "2026-10-13",
+            "busy_hours": 6,
+            "capacity_hours": 8,
+            "utilization_pct": 75,
+            "level": "normal"
+          },
+          "total_busy_hours": 6,
+          "daily_capacity_hours": 8
+        },
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 7,
+          "peak_utilization_pct": 25,
+          "peak_day": {
+            "day": "2026-10-13",
+            "busy_hours": 4,
+            "capacity_hours": 16,
+            "utilization_pct": 25,
+            "level": "idle"
+          },
+          "total_busy_hours": 8,
+          "daily_capacity_hours": 16
+        }
+      ],
+      "top_idle": [
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 7,
+          "peak_utilization_pct": 25,
+          "peak_day": {
+            "day": "2026-10-13",
+            "busy_hours": 4,
+            "capacity_hours": 16,
+            "utilization_pct": 25,
+            "level": "idle"
+          },
+          "total_busy_hours": 8,
+          "daily_capacity_hours": 16
+        }
+      ],
+      "threshold": {
+        "overload_pct": 100,
+        "idle_pct": 30
+      }
+    },
     "items": [
       {
         "id": "wo_1",
@@ -786,6 +860,88 @@
         "peak_utilization_pct": 0
       }
     ],
+    "bottlenecks": {
+      "top_overloaded": [
+        {
+          "ws_id": 10,
+          "name": "工位A",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 64,
+          "peak_utilization_pct": 450,
+          "peak_day": {
+            "day": "2026-10-12",
+            "busy_hours": 36,
+            "capacity_hours": 8,
+            "utilization_pct": 450,
+            "level": "overload"
+          },
+          "total_busy_hours": 36,
+          "daily_capacity_hours": 8
+        },
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 0,
+          "peak_utilization_pct": 0,
+          "peak_day": {
+            "day": "",
+            "busy_hours": 0,
+            "utilization_pct": 0
+          },
+          "total_busy_hours": 0,
+          "daily_capacity_hours": 16
+        },
+        {
+          "ws_id": 13,
+          "name": "工位C",
+          "workshop": "装配车间",
+          "avg_utilization_pct": 0,
+          "peak_utilization_pct": 0,
+          "peak_day": {
+            "day": "",
+            "busy_hours": 0,
+            "utilization_pct": 0
+          },
+          "total_busy_hours": 0,
+          "daily_capacity_hours": 8
+        }
+      ],
+      "top_idle": [
+        {
+          "ws_id": 13,
+          "name": "工位C",
+          "workshop": "装配车间",
+          "avg_utilization_pct": 0,
+          "peak_utilization_pct": 0,
+          "peak_day": {
+            "day": "",
+            "busy_hours": 0,
+            "utilization_pct": 0
+          },
+          "total_busy_hours": 0,
+          "daily_capacity_hours": 8
+        },
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 0,
+          "peak_utilization_pct": 0,
+          "peak_day": {
+            "day": "",
+            "busy_hours": 0,
+            "utilization_pct": 0
+          },
+          "total_busy_hours": 0,
+          "daily_capacity_hours": 16
+        }
+      ],
+      "threshold": {
+        "overload_pct": 100,
+        "idle_pct": 30
+      }
+    },
     "items": [
       {
         "id": "wo_1",
@@ -1732,6 +1888,80 @@
         "peak_utilization_pct": 25
       }
     ],
+    "bottlenecks": {
+      "top_overloaded": [
+        {
+          "ws_id": 10,
+          "name": "工位A",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 15,
+          "peak_utilization_pct": 450,
+          "peak_day": {
+            "day": "2026-10-12",
+            "busy_hours": 36,
+            "capacity_hours": 8,
+            "utilization_pct": 450,
+            "level": "overload"
+          },
+          "total_busy_hours": 36,
+          "daily_capacity_hours": 8
+        },
+        {
+          "ws_id": 13,
+          "name": "工位C",
+          "workshop": "装配车间",
+          "avg_utilization_pct": 3,
+          "peak_utilization_pct": 75,
+          "peak_day": {
+            "day": "2026-10-13",
+            "busy_hours": 6,
+            "capacity_hours": 8,
+            "utilization_pct": 75,
+            "level": "normal"
+          },
+          "total_busy_hours": 6,
+          "daily_capacity_hours": 8
+        },
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 2,
+          "peak_utilization_pct": 25,
+          "peak_day": {
+            "day": "2026-10-13",
+            "busy_hours": 4,
+            "capacity_hours": 16,
+            "utilization_pct": 25,
+            "level": "idle"
+          },
+          "total_busy_hours": 8,
+          "daily_capacity_hours": 16
+        }
+      ],
+      "top_idle": [
+        {
+          "ws_id": 11,
+          "name": "工位B",
+          "workshop": "机加车间",
+          "avg_utilization_pct": 2,
+          "peak_utilization_pct": 25,
+          "peak_day": {
+            "day": "2026-10-13",
+            "busy_hours": 4,
+            "capacity_hours": 16,
+            "utilization_pct": 25,
+            "level": "idle"
+          },
+          "total_busy_hours": 8,
+          "daily_capacity_hours": 16
+        }
+      ],
+      "threshold": {
+        "overload_pct": 100,
+        "idle_pct": 30
+      }
+    },
     "items": [
       {
         "id": "wo_1",

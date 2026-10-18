@@ -9,9 +9,26 @@ function all(db, sql, ...params) {
   return db.prepare(sql).all(...params);
 }
 
+/**
+ * P2-1（2026-10-19）：工位「每日可用工时」。
+ *
+ * 原实现是 capacity_per_day × 8 —— 但 capacity_per_day 是**产出能力（件/天）**，
+ * 50 件/天 × 8 = 400 小时/天，明显不是工时容量，导致利用率被稀释成 1~2%，
+ * "最紧工位"根本看不出来。
+ *
+ * 现改为按班次推导：白班/夜班 = 8h，双班 = 16h，三班 = 24h，再乘 max_workers（多工位并行）。
+ * capacity_per_day 保留在响应里作为"件/天产能"参考，不再参与工时计算。
+ */
 function workstationDailyCapacity(workstation) {
-  const capacityUnits = Number(workstation.capacity_per_day || 0) || Number(workstation.max_workers || 0) || 1;
-  return Math.max(1, capacityUnits) * 8;
+  const baseHours = Number(process.env.WORKSTATION_SHIFT_HOURS || 8) || 8;
+  const shift = String(workstation.shift || "day").toLowerCase();
+  const shiftHours = shift.includes("three") || shift.includes("三班")
+    ? baseHours * 3
+    : shift.includes("two") || shift.includes("double") || shift.includes("双班")
+      ? baseHours * 2
+      : baseHours;
+  const workers = Math.max(1, Number(workstation.max_workers || 1) || 1);
+  return Math.min(24, shiftHours * workers);
 }
 
 function normalizeItem(row, type) {
