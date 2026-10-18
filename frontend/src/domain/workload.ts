@@ -93,3 +93,28 @@ export function pickCellItems(items: any[] | null | undefined, wsId?: number | n
     return start <= day && (end || start) >= day
   })
 }
+
+// ---------------------------------------------------------------- 拖拽改派（P2-1 第二步）
+
+/** 只有工序（process_node）能在排程页改派；工单级任务需在工单页调整所属工位 */
+export function canReassign(item?: { type?: string } | null): boolean {
+  return !!item && item.type === 'process_node'
+}
+
+/** 拖拽时给一组任务预置目标工位（只对可改派的任务生效） */
+export function applyPresetTarget<T extends { type?: string; _target?: number | null }>(items: T[] | null | undefined, targetWsId?: number | null): T[] {
+  const list = items || []
+  return list.map((item) => (canReassign(item as any) ? { ...item, _target: targetWsId ?? null } : { ...item }))
+}
+
+/** 是否同工位（同工位拖拽 = 无效操作） */
+export function sameWorkstation(sourceWsId?: number | null, targetWsId?: number | null): boolean {
+  if (sourceWsId === null || sourceWsId === undefined || targetWsId === null || targetWsId === undefined) return false
+  return Number(sourceWsId) === Number(targetWsId)
+}
+
+/** 拖拽结果提示文案 */
+export function dropHint(sourceWsId?: number | null, targetWsId?: number | null, targetName?: string): { ok: boolean; text: string } {
+  if (sameWorkstation(sourceWsId, targetWsId)) return { ok: false, text: '源工位与目标工位相同，无需改派' }
+  return { ok: true, text: `已把目标工位预置为「${targetName || targetWsId}」，确认后点"保存改派"` }
+}

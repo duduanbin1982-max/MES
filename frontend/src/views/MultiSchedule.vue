@@ -57,7 +57,7 @@
       <template #header>
         <div class="card-header">
           <span><el-icon><Grid /></el-icon> 工位 × 日 负荷热力图</span>
-          <span class="stat-label">点击格子查看当日在制任务并可改派</span>
+          <span class="stat-label">点击格子查看任务｜**拖拽格子到另一工位** 或 在弹窗里把任务拖到工位即可改派</span>
         </div>
       </template>
       <el-alert v-if="hiddenDays > 0" type="info" :closable="false" class="range-alert"
@@ -71,9 +71,13 @@
           <template #default="{ row }">
             <span
               class="heat-cell"
-              :class="heatLevelClass(cellOf(row, day).level)"
-              :title="`${row.name} ${day}：${cellText(cellOf(row, day))}`"
+              :class="[heatLevelClass(cellOf(row, day).level), { 'drop-target': cellDlg.dragSource }]"
+              :title="`${row.name} ${day}：${cellText(cellOf(row, day))}（可拖到其它工位改派）`"
+              draggable="true"
               @click="openCell(row, day)"
+              @dragstart="onCellDragStart(row, day)"
+              @dragover.prevent="onCellDragOver(row, day)"
+              @drop.prevent="onCellDrop(row, day)"
             >{{ cellOf(row, day).utilization_pct }}%</span>
           </template>
         </el-table-column>
@@ -156,7 +160,14 @@
 
     <el-dialog v-model="cellDlg.visible" :title="`${cellDlg.wsName} · ${cellDlg.day}`" width="760px">
       <el-alert v-if="cellDlg.items.length === 0" type="info" :closable="false" title="该工位当天没有在制任务" />
-      <el-table v-else :data="cellDlg.items" size="small" border>
+      <el-table v-else :data="cellDlg.items" size="small" border row-key="id">
+        <el-table-column label="拖" width="46" align="center">
+          <template #default="{ row }">
+            <span v-if="canReassign(row)" class="drag-handle" draggable="true" title="拖到下方工位即可改派"
+              @dragstart="onTaskDragStart(row)">⋮⋮</span>
+            <span v-else class="stat-label">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="任务" min-width="200">
           <template #default="{ row }">
             {{ row.name }}
@@ -175,6 +186,16 @@
           </template>
         </el-table-column>
       </el-table>
+      <div v-if="cellDlg.items.some(canReassign)" class="drop-zones" @dragover.prevent>
+        <div class="stat-label">拖到工位（把左侧任务拖到下面任一工位 = 改派）：</div>
+        <span v-for="ws in workstations" :key="'dz' + ws.id" class="drop-zone"
+          :class="{ 'drop-active': cellDlg.dragTaskId }"
+          @dragover.prevent="cellDlg.hoverWs = ws.id"
+          @dragleave="cellDlg.hoverWs = null"
+          @drop.prevent="onTaskDrop(ws)">
+          {{ ws.name }}<el-tag v-if="Number(ws.id) === Number(cellDlg.wsId)" size="small" type="info" class="tag-gap">源工位</el-tag>
+        </span>
+      </div>
       <div v-if="cellDlg.workOrderCount" class="stat-label" style="margin-top: 8px">
         注：{{ cellDlg.workOrderCount }} 条是工单级任务，改派需在工单页调整所属工位；这里只能改工序（process_node）。
       </div>
@@ -191,7 +212,10 @@ import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
 import {
+  applyPresetTarget,
+  canReassign,
   cellText,
+  dropHint,
   formatHours,
   heatLevelClass,
   limitDays,
@@ -218,7 +242,11 @@ const heatGrid = ref<any[]>([])
 const heatDays = ref<string[]>([])
 const items = ref<any[]>([])
 const workstations = ref<any[]>([])
-const cellDlg = ref<any>({ visible: false, saving: false, wsId: null, wsName: '', day: '', items: [], workOrderCount: 0 })
+const cellDlg = ref<any>({
+  visible: false, saving: false, wsId: null, wsName: '', day: '', items: [], workOrderCount: 0,
+  // 拖拽改派状态：dragSource=被拖的格子 {wsId, day}；dragTaskId=被拖的任务；hoverWs=悬停目标
+  dragSource: null, dragTaskId: null, hoverWs: null,
+})
 
 const topBottlenecks = computed(() => bottlenecks.value.top_overloaded || [])
 const topIdle = computed(() => bottlenecks.value.top_idle || [])
@@ -230,7 +258,7 @@ const heatRows = computed(() => heatGrid.value || [])
 
 const cellOf = (row: any, day: string) => (row.cells || []).find((cell: any) => cell.day === day) || { day, busy_hours: 0, utilization_pct: 0, level: 'idle' }
 
-const openCell = (row: any, day: string) => {
+const openCell = (row: any, day: string, presetTarget: number | null = null) => {
   const cellItems = pickCellItems(items.value, row.ws_id, day).map((item: any) => ({ ...item, _target: null }))
   cellDlg.value = {
     visible: true,
@@ -238,9 +266,59 @@ const openCell = (row: any, day: string) => {
     wsId: row.ws_id,
     wsName: row.name,
     day,
-    items: cellItems,
+    items: presetTarget ? applyPresetTarget(cellItems, presetTarget) : cellItems,
     workOrderCount: cellItems.filter((item: any) => item.type === 'work_order').length,
+    dragSource: null,
+    dragTaskId: null,
+    hoverWs: null,
   }
+}
+
+// ---- 拖拽改派（P2-1 第二步）
+const onCellDragStart = (row: any, day: string) => {
+  cellDlg.value.dragSource = { wsId: row.ws_id, day, name: row.name }
+  cellDlg.value.dragTaskId = null
+}
+
+const onCellDragOver = (row: any, day: string) => {
+  // 仅用于视觉反馈：悬停到目标格时高亮
+  cellDlg.value.hoverWs = row.ws_id
+  cellDlg.value.hoverDay = day
+}
+
+const onCellDrop = (row: any, day: string) => {
+  const source = cellDlg.value.dragSource
+  cellDlg.value.hoverWs = null
+  cellDlg.value.hoverDay = null
+  if (!source) return
+  const hint = dropHint(source.wsId, row.ws_id, row.name)
+  cellDlg.value.dragSource = null
+  if (!hint.ok) { ElMessage.info(hint.text); return }
+  // 打开源格子弹窗，并把目标工位预置到每条工序上，用户确认后保存
+  const sourceRow = heatRows.value.find((item: any) => Number(item.ws_id) === Number(source.wsId))
+  if (!sourceRow) return
+  openCell(sourceRow, source.day, row.ws_id)
+  ElMessage.warning(hint.text)
+}
+
+const onTaskDragStart = (item: any) => {
+  if (!canReassign(item)) return
+  cellDlg.value.dragTaskId = item.id
+  cellDlg.value.dragSource = null
+}
+
+const onTaskDrop = (ws: any) => {
+  const taskId = cellDlg.value.dragTaskId
+  cellDlg.value.hoverWs = null
+  if (!taskId) return
+  if (Number(ws.id) === Number(cellDlg.value.wsId)) {
+    ElMessage.info('目标就是源工位，无需改派')
+    return
+  }
+  cellDlg.value.items = cellDlg.value.items.map((item: any) =>
+    item.id === taskId && canReassign(item) ? { ...item, _target: ws.id } : item)
+  cellDlg.value.dragTaskId = null
+  ElMessage.success(`已把该任务预置到「${ws.name}」，确认后点"保存改派"`)
 }
 
 const saveReassign = async () => {
@@ -355,4 +433,11 @@ onMounted(load)
   font-size: 12px;
   line-height: 1.8;
 }
+.drag-handle { cursor: grab; font-weight: 700; letter-spacing: -2px; color: var(--el-color-primary); }
+.drag-handle:active { cursor: grabbing; }
+.drop-zones { margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--el-border-color); }
+.drop-zone { display: inline-block; padding: 4px 10px; margin: 4px 6px 0 0; border: 1px dashed var(--el-border-color);
+  border-radius: 6px; font-size: 12px; cursor: copy; }
+.drop-zone.drop-active { border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
+.heat-cell.drop-target { outline: 1px dashed var(--el-color-primary); }
 </style>
