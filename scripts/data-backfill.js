@@ -265,6 +265,79 @@ function planLots(db, rows) {
   return plan;
 }
 
+// 成本台账（project_cost_entries）：P2-2 的真实成本来源
+// CSV: instance_code, cost_type, amount, occurred_on, description,
+//      work_order_code?, bom_node_id?, vendor?, currency?, status?, source_ref?, notes?
+const COST_TYPES = ["material", "labor", "outsourcing", "depreciation", "rework", "quality_loss"];
+const COST_STATUS = ["draft", "posted", "void"];
+
+function planCostEntries(db, rows) {
+  const plan = { type: "cost-entries", inserts: [], skipped: [], errors: [] };
+  const seen = new Set();
+  for (const [index, row] of rows.entries()) {
+    const line = index + 2;
+    const instanceCode = row.instance_code || row["装备编码"];
+    const costType = String(row.cost_type || row["成本类型"] || "").trim();
+    const amount = num(row.amount ?? row["金额"]);
+    const rawDate = row.occurred_on || row["发生日期"] || "";
+    const occurredOn = normalizeDate(rawDate);
+
+    if (!instanceCode) { plan.errors.push({ line, reason: "instance_code 必填", row }); continue; }
+    if (!COST_TYPES.includes(costType)) {
+      plan.errors.push({ line, reason: `cost_type 必须是 ${COST_TYPES.join("/")}，收到: ${costType || "(空)"}`, row });
+      continue;
+    }
+    if (amount === null) { plan.errors.push({ line, reason: "amount 必须是数字", row }); continue; }
+    if (!occurredOn) { plan.errors.push({ line, reason: `occurred_on 无法识别: ${rawDate || "(空)"}`, row }); continue; }
+
+    const instance = db.prepare("SELECT id, instance_code FROM equipment_instances WHERE instance_code = ?").get(instanceCode);
+    if (!instance) { plan.errors.push({ line, reason: `装备编码不存在: ${instanceCode}`, row }); continue; }
+
+    let workOrderId = null;
+    const woCode = row.work_order_code || row["工单号"];
+    if (woCode) {
+      const wo = db.prepare("SELECT id FROM work_orders WHERE wo_code = ?").get(woCode);
+      if (!wo) { plan.errors.push({ line, reason: `工单号不存在: ${woCode}`, row }); continue; }
+      workOrderId = wo.id;
+    }
+    const status = String(row.status || row["状态"] || "posted").trim() || "posted";
+    if (!COST_STATUS.includes(status)) { plan.errors.push({ line, reason: `status 必须是 ${COST_STATUS.join("/")}`, row }); continue; }
+
+    const description = String(row.description || row["摘要"] || "").trim()
+      || `成本台账导入 ${costType} ${occurredOn}`;
+    const sourceRef = String(row.source_ref || row["来源单据"] || "").trim() || null;
+
+    // 去重：优先按 source_ref，其次按 实例+类型+日期+金额+摘要
+    const duplicate = sourceRef
+      ? db.prepare("SELECT id FROM project_cost_entries WHERE equipment_instance_id = ? AND source_ref = ? AND deleted_at IS NULL").get(instance.id, sourceRef)
+      : db.prepare(`SELECT id FROM project_cost_entries
+                    WHERE equipment_instance_id = ? AND cost_type = ? AND occurred_on = ? AND amount = ? AND description = ? AND deleted_at IS NULL`)
+          .get(instance.id, costType, occurredOn, amount, description);
+    if (duplicate) { plan.skipped.push({ line, reason: `已存在（id=${duplicate.id}）${sourceRef ? " 来源单据 " + sourceRef : ""}` }); continue; }
+
+    const key = `${instance.id}|${costType}|${occurredOn}|${amount}|${description}`;
+    if (seen.has(key)) { plan.skipped.push({ line, reason: "CSV 内重复行" }); continue; }
+    seen.add(key);
+
+    plan.inserts.push({ table: "project_cost_entries", values: {
+      equipment_instance_id: instance.id,
+      bom_node_id: num(row.bom_node_id) || null,
+      work_order_id: workOrderId,
+      cost_type: costType,
+      source_type: "import",
+      source_ref: sourceRef,
+      description,
+      vendor: row.vendor || row["供应商"] || null,
+      amount,
+      currency: String(row.currency || row["币种"] || "CNY").trim() || "CNY",
+      occurred_on: occurredOn,
+      status,
+      notes: row.notes || row["备注"] || null,
+    } });
+  }
+  return plan;
+}
+
 // 数据完备度报告（只读）：看清"还差多少才能做 BOM 批次补录"
 function completenessReport(db) {
   const one = (sql, params = []) => { try { return db.prepare(sql).get(params) || {}; } catch (_e) { return {}; } };
@@ -281,6 +354,10 @@ function completenessReport(db) {
   const oeeShifts = count("SELECT COUNT(*) c FROM oee_shift_log");
   const oeeExplicit = count(`SELECT COUNT(*) c FROM oee_shift_log
     WHERE COALESCE(fault_minutes,0)+COALESCE(changeover_minutes,0)+COALESCE(material_wait_minutes,0) > 0`);
+  const costEntries = count("SELECT COUNT(*) c FROM project_cost_entries WHERE deleted_at IS NULL");
+  const costByType = db.prepare(`SELECT cost_type, COUNT(*) c, COALESCE(SUM(amount),0) total
+                                 FROM project_cost_entries WHERE deleted_at IS NULL GROUP BY cost_type`).all();
+  const instancesWithCost = count("SELECT COUNT(DISTINCT equipment_instance_id) c FROM project_cost_entries WHERE deleted_at IS NULL");
   const materialsWithoutLot = db.prepare(`
     SELECT m.material_code, m.material_name
     FROM materials m LEFT JOIN material_lots ml ON ml.material_id = m.id
@@ -294,6 +371,7 @@ function completenessReport(db) {
     serials: { total: serials },
     bom: { total: bomRows, with_material: bomWithMaterial, with_lot: bomWithLot, with_serial: bomWithSerial, lot_pct: pct(bomWithLot, bomRows) },
     oee: { shifts: oeeShifts, with_explicit_loss: oeeExplicit, pct: pct(oeeExplicit, oeeShifts) },
+    cost: { entries: costEntries, by_type: costByType, instances_with_cost: instancesWithCost, pct: pct(instancesWithCost, instances) },
     materials_without_lot: materialsWithoutLot,
   };
 }
@@ -431,7 +509,7 @@ function main() {
 
   const type = String(args.type || "");
   if (!type || !args.csv) {
-    console.error("用法: node scripts/data-backfill.js --type=bom-lots|lots|serials|oee-shifts --csv=file.csv [--apply] [--overwrite] [--allow-material-mismatch] [--force]");
+    console.error("用法: node scripts/data-backfill.js --type=bom-lots|lots|serials|oee-shifts|cost-entries --csv=file.csv [--apply] [--overwrite] [--allow-material-mismatch] [--force]");
     console.error("      node scripts/data-backfill.js --report            # 数据完备度报告（只读）");
     console.error("      node scripts/data-backfill.js --rollback=batch.json");
     process.exit(2);
@@ -449,6 +527,7 @@ function main() {
   else if (type === "serials") plan = planSerials(db, rows);
   else if (type === "oee-shifts") plan = planOeeShifts(db, rows);
   else if (type === "lots") plan = planLots(db, rows);
+  else if (type === "cost-entries") plan = planCostEntries(db, rows);
   else { console.error("未知类型: " + type); process.exit(2); }
 
   printPlan(plan);
@@ -466,6 +545,6 @@ function main() {
   db.close();
 }
 
-module.exports = { parseCsv, decodeCsvBuffer, normalizeDate, planBomLots, planSerials, planOeeShifts, planLots, completenessReport, applyPlan, rollbackBatch, latestBackupAgeHours, OEE_COLUMNS };
+module.exports = { parseCsv, decodeCsvBuffer, normalizeDate, planBomLots, planSerials, planOeeShifts, planLots, planCostEntries, COST_TYPES, COST_STATUS, completenessReport, applyPlan, rollbackBatch, latestBackupAgeHours, OEE_COLUMNS };
 
 if (require.main === module) main();

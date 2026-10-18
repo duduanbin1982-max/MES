@@ -117,6 +117,19 @@
           <el-tag v-for="item in variance.top_contributors" :key="item.kind + item.key" size="small" class="tag-gap"
             :type="varianceKind(item.total_variance) === 'over' ? 'danger' : 'success'">{{ contributorText(item) }}</el-tag>
         </div>
+        <el-descriptions v-if="variance.ledger" :column="3" border size="small" style="margin-bottom: 8px">
+          <el-descriptions-item label="台账其他成本">{{ fmtMoney(variance.ledger.other_costs) }} 元</el-descriptions-item>
+          <el-descriptions-item label="台账合计（含其他）">{{ fmtMoney(variance.ledger.actual_total_including_other) }} 元</el-descriptions-item>
+          <el-descriptions-item label="台账条目">{{ variance.ledger.entries || 0 }} 条（已过账）</el-descriptions-item>
+          <el-descriptions-item label="材料台账 vs 计算">{{ signedMoney(variance.ledger.cross_check?.material_diff) }} 元</el-descriptions-item>
+          <el-descriptions-item label="人工台账 vs 计算">{{ variance.ledger.cross_check?.labor_diff == null ? '-' : signedMoney(variance.ledger.cross_check.labor_diff) + ' 元' }}</el-descriptions-item>
+          <el-descriptions-item label="其他成本构成">
+            <span v-if="variance.ledger.other_costs">外协 {{ fmtMoney(variance.ledger.by_type?.outsourcing?.amount) }} ｜ 折旧 {{ fmtMoney(variance.ledger.by_type?.depreciation?.amount) }} ｜ 返工 {{ fmtMoney(variance.ledger.by_type?.rework?.amount) }} ｜ 质量 {{ fmtMoney(variance.ledger.by_type?.quality_loss?.amount) }}</span>
+            <span v-else style="color: var(--el-color-info)">（无）</span>
+          </el-descriptions-item>
+        </el-descriptions>
+        <el-alert v-if="variance.ledger && !variance.ledger.entries" type="info" :closable="false" style="margin-bottom: 8px"
+          title="还没有成本台账数据：三层差异目前只包含材料+人工的推算值；导入台账后这里会显示外协/折旧/返工与账实核对" />
         <el-alert v-for="(line, index) in notComputedSummary(variance.not_computed)" :key="'nc' + index"
           type="warning" :closable="false" :title="line" style="margin-bottom: 6px" />
         <el-alert v-for="(gap, index) in (variance.data_gaps || [])" :key="'gap' + index"

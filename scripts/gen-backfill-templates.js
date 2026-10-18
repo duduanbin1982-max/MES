@@ -104,6 +104,49 @@ if (want("lots")) {
   console.log(`  （物料 ${noLot.length + withLot} 种，已有批次 ${withLot} 种，待登记 ${noLot.length} 种：上面模板列出前 10 个，其余照表头自行追加）`);
 }
 
+// 2.7) cost-entries：成本台账（project_cost_entries）—— P2-2 的真实成本来源
+if (want("cost-entries")) {
+  const instances = db.prepare("SELECT instance_code, instance_name FROM equipment_instances ORDER BY id").all();
+  const COST_TYPES = [
+    ["material", "材料费"],
+    ["labor", "人工费"],
+    ["outsourcing", "外协费"],
+    ["depreciation", "折旧费"],
+    ["rework", "返工费"],
+    ["quality_loss", "质量损失"],
+  ];
+  const rows = [];
+  for (const instance of instances.slice(0, 2)) {
+    for (const [type, label] of COST_TYPES) {
+      rows.push({
+        instance_code: instance.instance_code,
+        cost_type: type,
+        amount: "",
+        occurred_on: "",
+        description: `${label}（请填摘要，如：前盾钢板采购 第3批）`,
+        work_order_code: "",
+        vendor: "",
+        source_ref: "",
+        notes: `填金额与发生日期；不涉及的整行删掉。实例「${instance.instance_name || instance.instance_code}」`,
+      });
+    }
+  }
+  writeCsv("cost-entries.csv",
+    ["instance_code", "cost_type", "amount", "occurred_on", "description", "work_order_code", "vendor", "source_ref", "notes"],
+    rows);
+  console.log(`  （成本类型：${COST_TYPES.map(([, label]) => label).join(" / ")}；实例预填前 2 个，其余照表头追加）`);
+
+  // 已填示例（照抄格式用）
+  const sample = instances[0] || { instance_code: "TBM-2026-001" };
+  writeCsv("cost-entries-EXAMPLE.csv",
+    ["instance_code", "cost_type", "amount", "occurred_on", "description", "work_order_code", "vendor", "source_ref", "notes"],
+    [
+      { instance_code: sample.instance_code, cost_type: "material", amount: "168500", occurred_on: "2026-10-15", description: "前盾钢板采购（宝钢 2 批）", work_order_code: "", vendor: "宝钢", source_ref: "PO-2026-0101", notes: "含运费" },
+      { instance_code: sample.instance_code, cost_type: "outsourcing", amount: "42000", occurred_on: "2026-10-16", description: "刀盘法兰外协加工", work_order_code: "", vendor: "洛阳精工", source_ref: "WO-OUT-2026-07", notes: "" },
+      { instance_code: sample.instance_code, cost_type: "depreciation", amount: "8600", occurred_on: "2026-10-31", description: "10 月设备折旧分摊", work_order_code: "", vendor: "", source_ref: "DEP-2026-10", notes: "按工时分摊" },
+    ]);
+}
+
 // 3) oee-shifts：legacy 班次（缺三层基线），预填"计划生产 − 运行 = 可用率损失合计"作为拆分基准
 if (want("oee-shifts")) {
   const rows = db.prepare(`

@@ -88,6 +88,36 @@ node scripts/data-backfill.js --type=lots --csv=data/backfill/templates/lots.csv
 node scripts/data-backfill.js --type=lots --csv=data/backfill/templates/lots.csv --apply
 ```
 
+### 2.8) `cost-entries.csv` —— 成本台账（喂给 P2-2 三层差异 / 成本归集）
+
+`project_cost_entries` 是项目实际成本的台账。原来只有 4 条人工成本，导致成本三层差异只能算出"380 元"。
+
+| 列 | 必填 | 说明 |
+|---|---|---|
+| `instance_code` | ✅ | 装备编码 |
+| `cost_type` | ✅ | **material / labor / outsourcing / depreciation / rework / quality_loss** |
+| `amount` | ✅ | 金额（元，可为负数表示冲销） |
+| `occurred_on` | ✅ | 发生日期（`2026-10-15` 或 `2026/10/15`） |
+| `description` | 建议 | 摘要，空则自动生成"成本台账导入 {类型} {日期}" |
+| `work_order_code` | 可选 | 关联工单（须已存在） |
+| `vendor` | 可选 | 供应商 |
+| `source_ref` | 强烈建议 | 来源单据号（采购单/外协单/折旧单）—— **去重键**，重复导入会自动跳过 |
+| `notes` | 可选 | 备注 |
+
+```bash
+node scripts/gen-backfill-templates.js --type=cost-entries
+# → cost-entries.csv（实例×6 类预填骨架，删掉不涉及的行）
+# → cost-entries-EXAMPLE.csv（3 行已填示例，照抄格式）
+
+node scripts/data-backfill.js --type=cost-entries --csv=...            # dry-run
+node scripts/data-backfill.js --type=cost-entries --csv=... --apply
+```
+
+导入后：成本归集页的「三层差异」卡片会多出 **台账其他成本（外协/折旧/返工/质量损失）** 与
+**台账核对**（台账金额 vs 按领料/工时计算的金额），能看出"账实差"。
+
+> 注意：`cost_type` 有 CHECK 约束，只能是上面 6 类；填错会直接报错并指出行号。
+
 ### 3) `oee-shifts.csv` —— 三层时间基线
 
 | 列 | 说明 |

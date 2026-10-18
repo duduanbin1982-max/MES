@@ -19,6 +19,11 @@ function freshDb() {
     CREATE TABLE serial_numbers (id INTEGER PRIMARY KEY, serial_no TEXT UNIQUE, lot_id INTEGER, equipment_instance_id INTEGER,
                                  status TEXT, work_order_id INTEGER);
     CREATE TABLE work_orders (id INTEGER PRIMARY KEY, wo_code TEXT);
+    CREATE TABLE project_cost_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, equipment_instance_id INTEGER NOT NULL,
+      bom_node_id INTEGER, work_order_id INTEGER, cost_type TEXT NOT NULL, source_type TEXT, source_ref TEXT,
+      description TEXT NOT NULL, vendor TEXT, amount REAL NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'CNY',
+      occurred_on TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'posted', notes TEXT, created_by INTEGER,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT);
     CREATE TABLE oee_shift_log (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, shift_date TEXT, shift_name TEXT,
                                 planned_minutes REAL, operating_minutes REAL, ideal_cycle_time REAL, total_output INTEGER,
                                 good_output INTEGER, shift_minutes REAL, planned_stop_minutes REAL, fault_minutes REAL,
@@ -206,5 +211,63 @@ test("BF.12 planLots：Excel 日期格式可直接通过", () => {
   assert.equal(plan.inserts[0].values.received_date, "2026-10-15");
   assert.equal(plan.errors.length, 1);
   assert.match(plan.errors[0].reason, /无法识别/);
+  db.close();
+});
+
+test("BF.13 cost-entries：成本台账导入（类型/金额/日期校验 + 去重 + 工单关联）", () => {
+  const db = freshDb();
+  const plan = backfill.planCostEntries(db, [
+    { instance_code: "TBM-2026-001", cost_type: "material", amount: "168500", occurred_on: "2026/10/15", description: "前盾钢板采购", source_ref: "PO-1" },
+    { instance_code: "TBM-2026-001", cost_type: "outsourcing", amount: "42000", occurred_on: "2026-10-16", description: "外协加工", work_order_code: "WO-001" },
+    { instance_code: "TBM-2026-001", cost_type: "bogus", amount: "1", occurred_on: "2026-10-16" },
+    { instance_code: "NO-SUCH", cost_type: "material", amount: "1", occurred_on: "2026-10-16" },
+    { instance_code: "TBM-2026-001", cost_type: "material", amount: "abc", occurred_on: "2026-10-16" },
+    { instance_code: "TBM-2026-001", cost_type: "material", amount: "100", occurred_on: "2026/13/01" },
+    { instance_code: "TBM-2026-001", cost_type: "material", amount: "168500", occurred_on: "2026-10-15", description: "前盾钢板采购", source_ref: "PO-1" },
+  ]);
+  assert.equal(plan.inserts.length, 2);
+  const material = plan.inserts.find((row) => row.values.cost_type === "material");
+  assert.equal(material.values.amount, 168500);
+  assert.equal(material.values.occurred_on, "2026-10-15");
+  assert.equal(material.values.status, "posted");
+  assert.equal(material.values.source_type, "import");
+  const outsourcing = plan.inserts.find((row) => row.values.cost_type === "outsourcing");
+  assert.equal(outsourcing.values.work_order_id, 1, "工单号解析成功");
+  assert.equal(plan.errors.length, 4);
+  assert.ok(plan.errors.some((e) => /cost_type/.test(e.reason)));
+  assert.ok(plan.errors.some((e) => /装备编码不存在/.test(e.reason)));
+  assert.ok(plan.errors.some((e) => /amount/.test(e.reason)));
+  assert.ok(plan.errors.some((e) => /occurred_on/.test(e.reason)));
+  // CSV 内重复行被跳过（同 PO-1 同实例，前一条尚未入库 → 由 plan 内 seen 去重）
+  assert.equal(plan.skipped.length, 1);
+  assert.match(plan.skipped[0].reason, /CSV 内重复/);
+  db.close();
+});
+
+test("BF.14 cost-entries：库内已存在（同来源单据）→ 跳过", () => {
+  const db = freshDb();
+  db.exec(`INSERT INTO project_cost_entries (equipment_instance_id, cost_type, description, amount, occurred_on, source_ref, status)
+           VALUES (1, 'material', '已导入的钢板', 168500, '2026-10-15', 'PO-1', 'posted')`);
+  const plan = backfill.planCostEntries(db, [
+    { instance_code: "TBM-2026-001", cost_type: "material", amount: "168500", occurred_on: "2026-10-15", description: "重复导入", source_ref: "PO-1" },
+  ]);
+  assert.equal(plan.inserts.length, 0);
+  assert.equal(plan.skipped.length, 1);
+  assert.match(plan.skipped[0].reason, /已存在/);
+  db.close();
+});
+
+test("BF.15 completenessReport：成本台账统计（类型分布/覆盖实例）", () => {
+  const db = freshDb();
+  db.exec(`INSERT INTO project_cost_entries (equipment_instance_id, cost_type, description, amount, occurred_on, status)
+           VALUES (1, 'material', '钢板', 1000, '2026-10-15', 'posted'),
+                  (1, 'labor', '人工', 500, '2026-10-16', 'posted'),
+                  (1, 'outsourcing', '外协', 300, '2026-10-17', 'posted')`);
+  const report = backfill.completenessReport(db);
+  assert.equal(report.cost.entries, 3);
+  assert.equal(report.cost.instances_with_cost, 1);
+  const byType = Object.fromEntries(report.cost.by_type.map((row) => [row.cost_type, row.total]));
+  assert.equal(byType.material, 1000);
+  assert.equal(byType.labor, 500);
   db.close();
 });

@@ -8,7 +8,7 @@
 //          + process_nodes / work_order_operations（标准/实际工时）+ system_settings（人工费率）
 
 const { wrap } = require("../../../middleware/asyncHandler");
-const { materialVariance, laborVariance, summarize, pickLaborRate, laborCoverageOk } = require("../../../app/cost/variance");
+const { materialVariance, laborVariance, summarize, pickLaborRate, laborCoverageOk, round2 } = require("../../../app/cost/variance");
 
 function register(app, db) {
   const all = (sql, ...params) => db.prepare(sql).all(...params);
@@ -103,6 +103,49 @@ function register(app, db) {
 
     const summary = summarize({ materialLines, labor });
 
+    // 成本台账（project_cost_entries）：P2-2 的真实成本来源。三层差异只覆盖材料+人工，
+    // 外协/折旧/返工/质量损失属于"其他成本"，单列并与计算值做台账核对。
+    const ledgerRows = (() => {
+      try {
+        return all(`SELECT cost_type, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total
+                    FROM project_cost_entries
+                    WHERE equipment_instance_id = ? AND deleted_at IS NULL AND status = 'posted'
+                    GROUP BY cost_type`, instance.id);
+      } catch (_error) {
+        return [];
+      }
+    })();
+    const ledgerByType = {};
+    let ledgerTotal = 0;
+    for (const row of ledgerRows) {
+      ledgerByType[row.cost_type] = { count: row.cnt, amount: round2(row.total) };
+      ledgerTotal += Number(row.total) || 0;
+    }
+    const otherCostKeys = ["outsourcing", "depreciation", "rework", "quality_loss"];
+    const otherCosts = round2(otherCostKeys.reduce((sum, key) => sum + (ledgerByType[key]?.amount || 0), 0));
+    const ledgerMaterial = ledgerByType.material?.amount || 0;
+    const ledgerLabor = ledgerByType.labor?.amount || 0;
+    const computedActualMaterial = round2(materialLines.filter((line) => line.available !== false).reduce((sum, line) => sum + (line.actual_cost || 0), 0));
+    const computedActualLabor = labor.available ? round2(labor.actual_cost || 0) : null;
+    const ledger = {
+      entries: ledgerRows.reduce((sum, row) => sum + Number(row.cnt || 0), 0),
+      total: round2(ledgerTotal),
+      by_type: ledgerByType,
+      other_costs: otherCosts,
+      material_actual: round2(ledgerMaterial),
+      labor_actual: round2(ledgerLabor),
+      cross_check: {
+        material_computed: computedActualMaterial,
+        material_ledger: round2(ledgerMaterial),
+        material_diff: round2(ledgerMaterial - computedActualMaterial),
+        labor_computed: computedActualLabor,
+        labor_ledger: round2(ledgerLabor),
+        labor_diff: computedActualLabor === null ? null : round2(ledgerLabor - computedActualLabor),
+        note: "台账合计用于核对：差异 = 台账金额 − 本次计算金额（材料按领料×单价，人工按工时×费率）",
+      },
+      actual_total_including_other: round2(summary.totals.actual_cost + otherCosts),
+    };
+
     // 数据缺口（诚实标注，避免把"没有数据"当成"没有差异"）
     const dataGaps = [];
     const missingActual = materialLines.filter((line) => line.actual_missing).length;
@@ -120,9 +163,10 @@ function register(app, db) {
       labor_rate: { rate: rate.rate, source: rate.source, unit: "元/小时" },
       totals: summary.totals,
       not_computed: summary.not_computed,
+      ledger,
       top_contributors: summary.top_contributors,
       data_gaps: dataGaps,
-      basis: "标准成本法：标准用量取 instance_bom，实际用量取 material_movements(issue)；标准工时取 process_nodes.estimated_hours",
+      basis: "标准成本法：标准用量取 instance_bom，实际用量取 material_movements(issue)；标准工时取 process_nodes.estimated_hours；台账取 project_cost_entries(posted)",
     });
   }));
 
