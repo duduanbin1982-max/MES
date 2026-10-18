@@ -12,7 +12,7 @@
         <div class="toolbar-form">
           <span class="toolbar-label">统计周期</span>
           <el-select v-model="days" class="days-select" @change="onDaysChange">
-            <el-option v-for="d in [7,14,30,60,90]" :key="d" :label="d+' 天'" :value="d" />
+            <el-option v-for="d in [7,14,30,60,90,180,365]" :key="d" :label="d+' 天'" :value="d" />
           </el-select>
           <el-button :icon="Refresh" type="primary" :loading="loading || isa95Loading" @click="onDaysChange">刷新</el-button>
         </div>

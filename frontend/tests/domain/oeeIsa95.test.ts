@@ -38,9 +38,16 @@ test('OEEUI.3 buildLossBuckets：相对计划生产时间算百分比，超 100 
 })
 
 test('OEEUI.4 qualityBadgeOf：ok / mismatch / legacy 三态', () => {
-  const ok = qualityBadgeOf({ level: 'ok', tolerance_pct: 2 })
+  const ok = qualityBadgeOf({ level: 'ok', tolerance_pct: 2, legacy_shifts: 0 })
   assert.equal(ok.type, 'success')
   assert.match(ok.description, /2%/)
+
+  // ok 但仍有 legacy 班次 → 「部分可校验」（warning），不夸大成全量通过
+  const partial = qualityBadgeOf({ level: 'ok', tolerance_pct: 2, legacy_shifts: 117, verifiable_shifts: 3 })
+  assert.equal(partial.type, 'warning')
+  assert.equal(partial.label, '部分可校验')
+  assert.match(partial.description, /117/)
+  assert.match(partial.description, /3 个班次全部通过/)
 
   const mismatch = qualityBadgeOf({ level: 'mismatch', tolerance_pct: 2 })
   assert.equal(mismatch.type, 'danger')

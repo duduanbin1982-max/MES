@@ -84,6 +84,14 @@ export function qualityBadgeOf(dq?: OeeDataQuality | null): {
 } {
   const level = dq?.level || (dq?.ok ? 'ok' : 'legacy')
   if (level === 'ok') {
+    const legacyShifts = Number(dq?.legacy_shifts) || 0
+    if (legacyShifts > 0) {
+      return {
+        type: 'warning',
+        label: '部分可校验',
+        description: `${legacyShifts} 个班次待补录；可校验的 ${Number(dq?.verifiable_shifts) || 0} 个班次全部通过`,
+      }
+    }
     return {
       type: 'success',
       label: '口径可校验',

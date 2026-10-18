@@ -128,6 +128,7 @@ test("ISA.8 多班次聚合按分钟累加，不对百分比取平均", () => {
   assert.equal(agg.basis.run_minutes, 810);
   assert.equal(agg.availability, 0.9);
   assert.deepEqual(agg.sources.map((s) => s.source).sort(), ["iot", "manual"]);
+  assert.equal(agg.data_quality.level, "ok", "两个班次都可校验且无差异 → ok");
 });
 
 test("ISA.9 损失目录自身是自洽的（key 唯一 / bucket 合法 / legacy 无冲突）", () => {

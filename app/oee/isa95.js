@@ -190,6 +190,8 @@ function aggregateShifts(perShift, options = {}) {
     sources: [...sources.entries()].map(([source, shifts]) => ({ source, shifts })),
     data_quality: {
       ok: dataQualityOk,
+      // 聚合层的等级：有 mismatch → mismatch；有可校验班次且无误 → ok；全 legacy → legacy
+      level: qualityLevels.mismatch > 0 ? "mismatch" : (qualityLevels.ok > 0 ? "ok" : "legacy"),
       worst_diff_pct: Math.round(worstDiffPct * 100) / 100,
       tolerance_pct: Math.round(tolerance * 10000) / 100,
       levels: qualityLevels,
