@@ -12,6 +12,9 @@
 | `mes_oee` | OEE（ISA-95 口径） | `days` / `instance_id` | 可用率/性能/质量/OEE、三层基线、损失分桶、数据质量 |
 | `mes_qc_pass_rate` | 质检合格率 | `days` / `limit` | 总数/合格/不合格、按类型分组、最近不合格 |
 | `mes_anomalies` | 异常中心 | `days` / `status` / `level` / `limit` | 异常清单 + 链接 |
+| `mes_cost_variance` | 项目成本三层差异 | `instance_id` 或 `instance_code` | 量差/价差/效率差、标准 vs 实际、台账核对、Top 影响项、数据缺口 |
+| `mes_trace_chain` | 追溯五级链路 | `serial_no` / `lot_no` / `instance_code` / `wo_code` | 五级状态、证据计数、断点与补录建议 |
+| `mes_workstation_load` | 工位负荷 | `start_date` / `days` | 最紧三个工位、最空闲、各工位平均/峰值利用率 |
 
 ## 二、启动
 

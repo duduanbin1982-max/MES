@@ -215,6 +215,81 @@ async function toolAnomalies(args) {
   return { window_days: days, count: items.length, anomalies: items, link: webLink("/exceptions") };
 }
 
+async function resolveInstanceId(args) {
+  if (args.instance_id) return Number(args.instance_id);
+  if (!args.instance_code) return null;
+  const list = await getJson("/api/equipment_instances");
+  const rows = Array.isArray(list) ? list : (list && (list.items || list.data)) || [];
+  const found = rows.find((row) => String(row.instance_code) === String(args.instance_code));
+  return found ? Number(found.id) : null;
+}
+
+async function toolCostVariance(args) {
+  const instanceId = await resolveInstanceId(args || {});
+  if (!instanceId) return { found: false, message: "需要 instance_id 或 instance_code（可用 mes_work_order_progress 里的 instance 字段）" };
+  const data = await getJson(`/api/equipment_instances/${instanceId}/cost_variance`);
+  if (!data || !data.totals) return { found: false, message: "该装备没有成本数据" };
+  return {
+    instance: data.equipment_instance,
+    totals: data.totals,
+    ledger: data.ledger,
+    top_contributors: data.top_contributors,
+    data_gaps: data.data_gaps,
+    not_computed: data.not_computed,
+    link: webLink("/cost-variance?instance_id=" + instanceId),
+  };
+}
+
+async function toolTraceChain(args) {
+  const keys = ["serial_no", "lot_no", "instance_code", "wo_code"];
+  const query = {};
+  for (const key of keys) if (args && args[key]) query[key] = args[key];
+  if (!Object.keys(query).length) return { found: false, message: "需要 serial_no / lot_no / instance_code / wo_code 之一" };
+  const data = await getJson("/api/trace/chain", query);
+  if (!data || data.found === false) return { found: false, reason: data && data.reason, query };
+  return {
+    found: true,
+    anchor: data.anchor,
+    levels: data.levels,
+    evidence_count: data.evidence_count,
+    gaps: data.gaps,
+    chain: {
+      instance: data.chain.instance,
+      work_orders: (data.chain.work_orders || []).slice(0, 10),
+      operations: (data.chain.operations || []).slice(0, 10),
+      serials: (data.chain.serials || []).slice(0, 10),
+      lots: (data.chain.lots || []).slice(0, 10),
+      inspections: (data.chain.inspections || []).slice(0, 10),
+      documents: (data.chain.documents || []).slice(0, 10),
+    },
+    link: webLink("/trace"),
+  };
+}
+
+async function toolWorkstationLoad(args) {
+  const days = Math.min(Number(args && args.days) || 30, 90);
+  const start = (args && args.start_date) || new Date().toISOString().slice(0, 10);
+  const data = await getJson("/api/resources/gantt", { start_date: start, days });
+  const grid = (data && data.heatmap && data.heatmap.grid) || [];
+  const load = grid.map((row) => ({
+    ws_id: row.ws_id,
+    name: row.name,
+    workshop: row.workshop,
+    daily_capacity_hours: row.daily_capacity_hours,
+    total_busy_hours: row.total_busy_hours,
+    avg_utilization_pct: row.avg_utilization_pct,
+    peak_utilization_pct: Math.max(0, ...(row.cells || []).map((cell) => Number(cell.utilization_pct) || 0)),
+  })).sort((a, b) => b.peak_utilization_pct - a.peak_utilization_pct);
+  return {
+    period: { start, days, end: data && data.end_date },
+    summary: data && data.summary,
+    top_three: (data && data.bottlenecks && data.bottlenecks.top_overloaded) || [],
+    idle_workstations: (data && data.bottlenecks && data.bottlenecks.top_idle) || [],
+    workstations: load,
+    link: webLink("/multi-schedule"),
+  };
+}
+
 const TOOLS = [
   {
     name: "mes_work_order_progress",
@@ -271,6 +346,47 @@ const TOOLS = [
       additionalProperties: false,
     },
     handler: toolQcPassRate,
+  },
+  {
+    name: "mes_cost_variance",
+    description: "查询项目成本三层差异：量差/价差/效率差、标准 vs 实际、成本台账（外协/折旧/返工）与账实核对（只读）。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        instance_id: { type: "number", description: "装备实例 id（与 instance_code 二选一）" },
+        instance_code: { type: "string", description: "装备编码，如 TBM-2026-001" },
+      },
+      additionalProperties: false,
+    },
+    handler: toolCostVariance,
+  },
+  {
+    name: "mes_trace_chain",
+    description: "查询追溯五级链路：装备 → 工单 → 工序 → 批次/序列号 → 检验与证据，返回每级状态与断点建议（只读）。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        serial_no: { type: "string", description: "序列号" },
+        lot_no: { type: "string", description: "批次号" },
+        instance_code: { type: "string", description: "装备编码" },
+        wo_code: { type: "string", description: "工单号" },
+      },
+      additionalProperties: false,
+    },
+    handler: toolTraceChain,
+  },
+  {
+    name: "mes_workstation_load",
+    description: "查询工位负荷：最紧三个工位、最空闲工位、各工位平均/峰值利用率（只读）。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        start_date: { type: "string", description: "起始日期 YYYY-MM-DD，默认今天" },
+        days: { type: "number", description: "统计天数，默认 30（上限 90）" },
+      },
+      additionalProperties: false,
+    },
+    handler: toolWorkstationLoad,
   },
   {
     name: "mes_anomalies",
@@ -350,7 +466,8 @@ function startServer() {
   process.stderr.write(`[tbm-mes-mcp] ready (api=${API_BASE}, user=${USER_ID}, tools=${TOOLS.length})\n`);
 }
 
-module.exports = { TOOLS, TOOL_MAP, callTool, handleMessage, httpGetJson, withinDays, webLink, __setHttpGet };
+module.exports = { TOOLS, TOOL_MAP, callTool, handleMessage, httpGetJson, withinDays, webLink, __setHttpGet,
+  resolveInstanceId, toolCostVariance, toolTraceChain, toolWorkstationLoad };
 
 if (require.main === module) {
   startServer();

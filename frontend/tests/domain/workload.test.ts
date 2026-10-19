@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import {
   applyPresetTarget,
   canReassign,
+  reassignRequest,
   cellText,
   dropHint,
   sameWorkstation,
@@ -72,20 +73,34 @@ test('WLD.6 pickCellItems：按工位 + 日期重叠筛任务', () => {
   assert.deepEqual(pickCellItems(null, 3, '2026-06-18'), [])
 })
 
-test('WLD.7 拖拽改派：只有工序可改派，工单不可', () => {
+test('WLD.7 拖拽改派：工序与工单都可改派（走不同端点）', () => {
   assert.equal(canReassign({ type: 'process_node' }), true)
-  assert.equal(canReassign({ type: 'work_order' }), false)
+  assert.equal(canReassign({ type: 'work_order' }), true)
+  assert.equal(canReassign({ type: 'other' }), false)
   assert.equal(canReassign(null), false)
 })
 
-test('WLD.8 applyPresetTarget：只给工序预置目标，工单保持不动', () => {
+test('WLD.10 reassignRequest：工序/工单分别对应不同接口与字段', () => {
+  assert.deepEqual(reassignRequest({ type: 'process_node', source_id: 134 }, 5), {
+    url: '/process_nodes/134/assign', body: { required_workstation_id: 5 },
+  })
+  assert.deepEqual(reassignRequest({ type: 'work_order', source_id: 2 }, 5), {
+    url: '/work_orders/2/workstation', body: { workstation_id: 5 },
+  })
+  assert.equal(reassignRequest({ type: 'other', source_id: 1 }, 5), null)
+  assert.equal(reassignRequest({ type: 'process_node', source_id: 1 }, null), null)
+})
+
+test('WLD.8 applyPresetTarget：给所有可改派任务预置目标', () => {
   const items = [
     { type: 'process_node', source_id: 11, _target: null },
     { type: 'work_order', source_id: 2, _target: null },
+    { type: 'other', source_id: 3, _target: null },
   ]
   const next = applyPresetTarget(items, 5)
   assert.equal(next[0]._target, 5)
-  assert.equal(next[1]._target, null)
+  assert.equal(next[1]._target, 5, '工单级也预置（改派走另一个端点）')
+  assert.equal(next[2]._target, null)
   assert.equal(items[0]._target, null, '不修改原数组')
 })
 

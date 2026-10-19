@@ -180,7 +180,7 @@
         </el-table-column>
         <el-table-column label="改派到" width="220">
           <template #default="{ row }">
-            <el-select v-model="row._target" size="small" clearable placeholder="选择目标工位" :disabled="row.type === 'work_order'">
+            <el-select v-model="row._target" size="small" clearable placeholder="选择目标工位" :disabled="!canReassign(row)">
               <el-option v-for="ws in workstations" :key="ws.id" :label="ws.name" :value="ws.id" :disabled="Number(ws.id) === Number(cellDlg.wsId)" />
             </el-select>
           </template>
@@ -197,7 +197,8 @@
         </span>
       </div>
       <div v-if="cellDlg.workOrderCount" class="stat-label" style="margin-top: 8px">
-        注：{{ cellDlg.workOrderCount }} 条是工单级任务，改派需在工单页调整所属工位；这里只能改工序（process_node）。
+        注：{{ cellDlg.workOrderCount }} 条是工单级任务，保存时会改「工单所属工位」（PUT /work_orders/:id/workstation），
+        不影响工序级排程（process_node 走 /assign）。
       </div>
       <template #footer>
         <el-button @click="cellDlg.visible = false">取消</el-button>
@@ -222,6 +223,7 @@ import {
   loadToneClass,
   peakDayText,
   pickCellItems,
+  reassignRequest,
 } from '../domain/workload'
 
 const now = new Date()
@@ -322,14 +324,21 @@ const onTaskDrop = (ws: any) => {
 }
 
 const saveReassign = async () => {
-  const targets = cellDlg.value.items.filter((item: any) => item.type !== 'work_order' && item._target)
-  if (!targets.length) { ElMessage.warning('没有需要改派的工序'); return }
+  const targets = cellDlg.value.items.filter((item: any) => canReassign(item) && item._target)
+  if (!targets.length) { ElMessage.warning('没有需要改派的任务'); return }
   cellDlg.value.saving = true
   try {
     for (const item of targets) {
-      await api.put(`/process_nodes/${item.source_id}/assign`, { required_workstation_id: item._target })
+      const request = reassignRequest(item, item._target)
+      if (!request) continue
+      await api.put(request.url, request.body)
     }
-    ElMessage.success(`已改派 ${targets.length} 道工序`)
+    const orders = targets.filter((item: any) => item.type === 'work_order').length
+    const nodes = targets.length - orders
+    const parts = []
+    if (nodes) parts.push(`${nodes} 道工序`)
+    if (orders) parts.push(`${orders} 张工单`)
+    ElMessage.success(`已改派 ${parts.join(' + ')}`)
     cellDlg.value.visible = false
     await load()
   } catch (error: any) {

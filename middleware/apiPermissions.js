@@ -66,6 +66,8 @@ const RULES = [
   match(/^\/work_orders\/\d+$/, READ, ["work_order:read"]),
   match(/^\/work_orders$/, ["POST"], ["work_order:write"]),
   match(/^\/work_orders\/\d+\/(?:operations|transit|welds|dispatch|report)$/, WRITE, ["work_order:write"]),
+  // 2026-10-19 P2-1：工单级改派（改所属工位）
+  match(/^\/work_orders\/\d+\/workstation$/, WRITE, ["work_order:write"]),
   match(/^\/work_orders\/\d+\/(?:kit-check|kit-check\/short|lots)$/, READ, ["work_order:read", "pick:read"]),
   match(/^\/work_orders\/\d+\/(?:pick-list|pick-history)$/, READ, ["pick:read"]),
   match(/^\/work_orders\/\d+\/(?:pick|return)$/, ["POST"], ["pick:write"]),

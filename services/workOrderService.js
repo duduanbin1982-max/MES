@@ -154,6 +154,28 @@ app.put('/api/work_orders/:id/dispatch', auth.onlyForemanOrAdmin, wrap((req, res
   res.json(updated);
 }));
 
+// 2026-10-19 P2-1 遗留：工单级改派（改工单所属工位）
+app.put('/api/work_orders/:id/workstation', auth.onlyForemanOrAdmin, wrap((req, res) => {
+  const { workstation_id } = req.body || {};
+  if (workstation_id === undefined || workstation_id === null || workstation_id === '') {
+    throw ApiError.validation('workstation_id 必填');
+  }
+  const wo = get("SELECT * FROM work_orders WHERE id = ?", req.params.id);
+  if (!wo) throw ApiError.notFound('工单不存在');
+  const ws = get("SELECT id, name, is_active FROM workstations WHERE id = ?", Number(workstation_id));
+  if (!ws) throw ApiError.notFound('工位不存在');
+  if (!ws.is_active) throw ApiError.validation('工位已停用，不能改派');
+  if (Number(wo.workstation_id) === Number(ws.id)) {
+    return res.json({ ok: true, changed: 0, workstation_id: ws.id, workstation_name: ws.name, message: '工位未变化' });
+  }
+  run("UPDATE work_orders SET workstation_id = ?, updated_at = datetime('now') WHERE id = ?", [ws.id, req.params.id]);
+  res.json({
+    ok: true, changed: 1,
+    workstation_id: ws.id, workstation_name: ws.name,
+    previous_workstation_id: wo.workstation_id,
+  });
+}));
+
 // 3. POST /api/work_orders/:id/report ? ?????? (F4 refactored)
 app.post('/api/work_orders/:id/report', auth.foremanOrWorker, wrap((req, res) => {
   const { user_id, hours_worked, quantity_completed, defect_quantity, notes } = req.body;

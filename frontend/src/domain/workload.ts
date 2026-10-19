@@ -96,9 +96,29 @@ export function pickCellItems(items: any[] | null | undefined, wsId?: number | n
 
 // ---------------------------------------------------------------- 拖拽改派（P2-1 第二步）
 
-/** 只有工序（process_node）能在排程页改派；工单级任务需在工单页调整所属工位 */
+/**
+ * 排程页可改派的任务类型：
+ *   process_node → PUT /api/process_nodes/:id/assign（改工序所需工位）
+ *   work_order   → PUT /api/work_orders/:id/workstation（改工单所属工位，2026-10-19 新增）
+ */
 export function canReassign(item?: { type?: string } | null): boolean {
-  return !!item && item.type === 'process_node'
+  if (!item) return false
+  return item.type === 'process_node' || item.type === 'work_order'
+}
+
+/** 按任务类型构造改派请求（前端只关心 url + body） */
+export function reassignRequest(
+  item?: { type?: string; source_id?: number } | null,
+  targetWsId?: number | null,
+): { url: string; body: Record<string, number> } | null {
+  if (!item || targetWsId === null || targetWsId === undefined) return null
+  if (item.type === 'process_node') {
+    return { url: `/process_nodes/${item.source_id}/assign`, body: { required_workstation_id: Number(targetWsId) } }
+  }
+  if (item.type === 'work_order') {
+    return { url: `/work_orders/${item.source_id}/workstation`, body: { workstation_id: Number(targetWsId) } }
+  }
+  return null
 }
 
 /** 拖拽时给一组任务预置目标工位（只对可改派的任务生效） */
