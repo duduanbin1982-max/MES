@@ -220,8 +220,13 @@ export function useShopfloorWorkspacePage() {
     await loadAll()
   }
 
-  function downloadDoc(doc: any) {
-    window.open(Api.documentDownloadUrl(doc.id), '_blank')
+  async function downloadDoc(doc: any) {
+    // 2026-10-19：新标签页无法携带 Authorization → 统一走 blob 下载
+    try {
+      await Api.downloadDocument(doc.id)
+    } catch (error: any) {
+      ElMessage.error(error?.message || '下载失败')
+    }
   }
 
   async function raiseException() {

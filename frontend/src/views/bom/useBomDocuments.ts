@@ -23,12 +23,13 @@ export function useBomDocuments(instanceId: Ref<number | null>) {
     }
   }
 
-  function downloadBomDoc(row: any) {
-    const token = localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token') || localStorage.getItem('token') || ''
-    const link = document.createElement('a')
-    link.href = '/api/documents/' + row.id + '/download?token=' + encodeURIComponent(token)
-    link.target = '_blank'
-    link.click()
+  // 2026-10-19：URL 带 token 会被 authMiddleware 拒绝（只认 Authorization header）→ 改 blob 下载
+  async function downloadBomDoc(row: any) {
+    try {
+      await api.downloadDocument(row.id)
+    } catch (error: any) {
+      ElMessage.error(error?.message || '下载失败')
+    }
   }
 
   return {

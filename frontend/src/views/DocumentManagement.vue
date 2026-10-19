@@ -250,15 +250,20 @@ const loadBomNodes = async (instanceId?: number | null) => {
 const onRowClick = () => { /* noop */ }
 
 // 下载
+// 2026-10-19：改走带 Authorization 的 blob 下载（window.open 无法带请求头 → 401）
 const downloadDoc = async (row: any) => {
-  const token = localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token') || ''
-  const url = api.documentDownloadUrl(row.id) + (token ? `?t=${encodeURIComponent(token)}` : '')
-  window.open(url, '_blank')
+  try {
+    await api.downloadDocument(row.id)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '下载失败')
+  }
 }
-const downloadDocById = (v: any) => {
-  const token = localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token') || ''
-  const url = api.documentDownloadUrl(v.id) + (token ? `?t=${encodeURIComponent(token)}` : '')
-  window.open(url, '_blank')
+const downloadDocById = async (v: any) => {
+  try {
+    await api.downloadDocument(v.id)
+  } catch (error: any) {
+    ElMessage.error(error?.message || '下载失败')
+  }
 }
 
 // 归档

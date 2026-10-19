@@ -1,4 +1,5 @@
 import { api, ACCESS_KEY } from './client'
+import { parseContentDispositionFilename } from '../domain/download'
 
 export function createDocumentsApi() {
   return {
@@ -15,8 +16,43 @@ export function createDocumentsApi() {
     documentAcknowledgements: (id: number) => api.get(`/documents/${id}/acknowledgements`),
     pendingAckDocuments: (params?: any) => api.get('/documents/pending-ack', { params }),
     documentDownloadUrl: (id: number) => `/api/documents/${id}/download`,
+    downloadDocument: downloadDocumentFile,
     documentPreviewUrl: (id: number) => `/uploads/${id}`,
   }
+}
+
+/**
+ * 2026-10-19：文档下载改为「带 Authorization 的 fetch + blob」。
+ * 原因：原来的 window.open(url?t=token) 无法带请求头，而后端 authMiddleware 只认
+ * Authorization: Bearer，于是新标签页直接 401「未登录或 token 无效」。
+ */
+async function downloadDocumentFile(id: number, fallbackName?: string): Promise<void> {
+  const token = localStorage.getItem(ACCESS_KEY) || localStorage.getItem('tbm_token')
+  const response = await fetch(`/api/documents/${id}/download`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    let message = `下载失败 (HTTP ${response.status})`
+    try {
+      const body = await response.json()
+      message = body.message || body.error || message
+    } catch (_error) { /* 非 JSON 响应 */ }
+    throw new Error(message)
+  }
+  const blob = await response.blob()
+  const fileName = parseContentDispositionFilename(
+    response.headers.get('Content-Disposition'),
+    fallbackName || `document-${id}`,
+  )
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = fileName
+  link.rel = 'noopener'
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 2000)
 }
 
 async function uploadDocument(file: File, meta: any) {
