@@ -120,6 +120,8 @@ node scripts/data-backfill.js --type=cost-entries --csv=... --apply
 
 ### 3) `oee-shifts.csv` —— 三层时间基线
 
+> 逐行填法（含三种典型场景与常见错误）见 [docs/oee-backfill-guide.md](oee-backfill-guide.md)。
+
 | 列 | 说明 |
 |---|---|
 | `shift_id` | 班次 id（模板已给，**不要改**） |
