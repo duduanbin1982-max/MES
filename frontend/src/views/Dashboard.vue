@@ -39,6 +39,11 @@
         :delays-total="delaysSummary.total"
         :fleet-utilization="fleetUtilization"
       />
+      <ProcessHealthCard
+        :data="processHealth"
+        :loading="healthLoading"
+        @refresh="loadProcessHealth()"
+      />
       <DashboardProjectRisk
         :stats="stats"
         :risk-level="riskLevel"
@@ -71,6 +76,7 @@ import DashboardKpiGrid from './dashboard/DashboardKpiGrid.vue'
 import DashboardProjectRisk from './dashboard/DashboardProjectRisk.vue'
 import DashboardOeeLive from './dashboard/DashboardOeeLive.vue'
 import DashboardInstanceRiskTables from './dashboard/DashboardInstanceRiskTables.vue'
+import ProcessHealthCard from './dashboard/ProcessHealthCard.vue'
 
 type DashboardRequestKey = 'dashboard' | 'riskSummary' | 'instances' | 'longLeadtime' | 'liveStatus' | 'delaysSummary' | 'delays' | 'oee'
 type DashboardRiskLevel = { type: 'success' | 'warning' | 'danger'; label: string }
@@ -86,6 +92,22 @@ const updatedAt = ref('')
 const loadError = ref('')
 const partialErrors = ref<Array<{ key: DashboardRequestKey; label: string; message: string }>>([])
 const riskSummary = ref<any>(defaultRiskSummary())
+// 2026-10-19：全流程健康检查（8 环节体检）
+const processHealth = ref<any>({ instances: [], selected: null })
+const healthLoading = ref(false)
+
+const loadProcessHealth = async (instanceId?: number) => {
+  healthLoading.value = true
+  try {
+    const params = instanceId ? { instance_id: instanceId } : {}
+    processHealth.value = await Api.get('/dashboard/process-health', { params })
+  } catch (_error) {
+    // 体检失败不阻断仪表盘主体
+    processHealth.value = { instances: [], selected: null }
+  } finally {
+    healthLoading.value = false
+  }
+}
 
 const inProgress = computed(() => stats.value.work_orders?.by_status?.find((s: any) => s.status === 'in_progress')?.c || 0)
 const completed = computed(() => stats.value.work_orders?.by_status?.find((s: any) => s.status === 'completed')?.c || 0)
@@ -234,6 +256,9 @@ const loadAll = async () => {
     loading.value = false
     return
   }
+
+  const queryInstance = Number(new URLSearchParams(window.location.search).get('instance_id')) || undefined
+  loadProcessHealth(queryInstance)
 
   const dashboardStats = values.dashboard || defaultStats()
   const dashboardRisk = values.riskSummary || dashboardStats.risk_summary
