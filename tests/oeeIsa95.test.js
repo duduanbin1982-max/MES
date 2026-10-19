@@ -174,3 +174,21 @@ test("ISA.11 缺三层基线时标记 legacy + missing_basis", () => {
   assert.equal(r.data_quality.level, "legacy");
   assert.equal(r.data_quality.reason, "missing_basis");
 });
+
+test("ISA.12 质量损失不进时间对账（否则补录后会被误判 mismatch/legacy）", () => {
+  // 班次基线正确（显式损失 = planned − operating），但当天有质量类损失事件
+  const shift = shiftRow({ fault_minutes: 60, changeover_minutes: 20, material_wait_minutes: 10 });
+  const qualityEvents = [{ loss_category: "质量废品", duration_minutes: 58.2 }];
+  const r = isa95.computeShift(shift, qualityEvents);
+  assert.equal(r.basis.quality_loss_minutes, 58.2, "质量损失仍记录在 basis 里供展示");
+  assert.equal(r.data_quality.diff_minutes, 0, "但不参与时间差对账");
+  assert.equal(r.data_quality.level, "ok");
+});
+
+test("ISA.13 显式基线优先：同日多班次（事件归属不可靠）也应可校验", () => {
+  const shift = shiftRow({ fault_minutes: 60, changeover_minutes: 20, material_wait_minutes: 10 });
+  const events = [{ loss_category: "故障停机", duration_minutes: 200 }];
+  const r = isa95.computeShift(shift, events, { unreliableEvents: true });
+  assert.equal(r.data_quality.level, "ok", "有显式字段时不再因事件归属不可靠而降级");
+  assert.equal(r.data_quality.verifiable, true);
+});

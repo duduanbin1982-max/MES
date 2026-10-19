@@ -92,7 +92,9 @@ function computeShift(shift, lossEvents = [], options = {}) {
   //   mismatch  = 有基线数据但两者差异超阈值 → 需要业务补录/纠正
   //   legacy    = 缺三层基线字段（旧数据）→ 无法校验，不能算"通过"也不算"错误"
   const hasBasis = shiftMinutes > 0 || plannedStop > 0 || useExplicit || num(shift.operating_minutes) > 0;
-  const accountedLoss = availabilityLoss + performanceLoss + qualityLossMinutes;
+  // 2026-10-19：质量损失是"件/不合格品"口径，不是时间口径 —— 不进"损失合计 vs 时间差"的对账，
+  // 否则质量事件越多，diff 越大，明明基线正确也被判成 mismatch（补录后 52 个班次被误判为 legacy 的原因）。
+  const accountedLoss = availabilityLoss + performanceLoss;
   const expectedLoss = Math.max(0, plannedProduction - runTime) + performanceLoss;
   const diff = Math.abs(accountedLoss - expectedLoss);
   const diffPct = expectedLoss > 0 ? diff / expectedLoss : (diff > 0 ? 1 : 0);
@@ -102,9 +104,11 @@ function computeShift(shift, lossEvents = [], options = {}) {
   let reason = null;
   if (level === "legacy") {
     reason = "missing_basis";
-  } else if (level === "mismatch" && unreliableEvents) {
+  } else if (level === "mismatch" && unreliableEvents && !useExplicit) {
     // 同一天多个班次时，损失事件没有 shift_log_id，无法可靠归属到某个班次：
     // 此时"损失合计 vs 时间差"的差异是假阳性，标为 legacy（不可校验）而不是 mismatch。
+    // 2026-10-19：若班次已有**显式基线**（fault/changeover/material_wait），以显式字段为准，
+    // 事件归属是否可靠不再影响判定（补录后应全部可校验）。
     finalLevel = "legacy";
     reason = "ambiguous_event_attribution";
   }
