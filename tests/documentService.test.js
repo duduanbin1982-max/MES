@@ -145,6 +145,32 @@ test('P0.DOC.4 上传文档 (raw body + X-Doc-Meta)', () => {
   assert.ok(fs.existsSync(abs), '文件应已落盘: ' + abs)
 })
 
+test('P0.DOC.4b 中文元数据（encodeURIComponent 后的 header）能正常上传', () => {
+  const db = freshDb()
+  const { find } = mkApp(db)
+  const handler = find('POST', '/api/documents')
+  const meta = { title: '机架总装图（中文标题）', doc_type: 'drawing', doc_code: 'ZZ-002-A0', equipment_instance_id: 1, version: 'A0', description: '含空格与&符号 50%抽检' }
+  const buf = Buffer.from('%PDF-1.4 fake pdf')
+  const req = {
+    body: buf,
+    headers: {
+      // 与前端 api/documents.ts 一致：encodeURIComponent(JSON.stringify(meta))
+      'x-doc-meta': encodeURIComponent(JSON.stringify(meta)),
+      'x-file-name': encodeURIComponent('机架总装图.pdf'),
+      'x-file-mime': 'application/pdf',
+    },
+    user: { uid: 1 },
+  }
+  const res = mkRes()
+  handler(req, res, (err) => { throw err })
+  assert.equal(res._j.status || 200, 200)
+  const saved = db.prepare('SELECT title, file_name FROM documents WHERE doc_code = ?').get('ZZ-002-A0')
+  assert.ok(saved, '文档应已入库')
+  assert.equal(saved.title, '机架总装图（中文标题）', '中文标题不能乱码')
+  assert.equal(saved.file_name, '机架总装图.pdf')
+  db.close()
+})
+
 test('P0.DOC.5 同一 hash + version 重复上传被拒', () => {
   const db = freshDb()
   const { find } = mkApp(db)

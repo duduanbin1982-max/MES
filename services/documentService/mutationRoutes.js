@@ -11,7 +11,15 @@ function registerUploadRoute(app, db) {
     try {
       let meta = {};
       try {
-        meta = JSON.parse(req.headers["x-doc-meta"] || "{}");
+        // 2026-10-19：前端把 JSON 做了 encodeURIComponent（header 只能是 ISO-8859-1）。
+        // 这里先解码；未编码的旧客户端（或裸 JSON 里本身含 %）解码失败时按原样解析，保持兼容。
+        let metaRaw = String(req.headers["x-doc-meta"] || "{}");
+        try {
+          metaRaw = decodeURIComponent(metaRaw);
+        } catch (_decodeError) {
+          /* 保持原样 */
+        }
+        meta = JSON.parse(metaRaw);
       } catch (_error) {
         return next(ApiError.validation("X-Doc-Meta 不是合法 JSON"));
       }

@@ -26,7 +26,9 @@ async function uploadDocument(file: File, meta: any) {
     method: 'POST',
     headers: {
       'Content-Type': file.type || 'application/octet-stream',
-      'X-Doc-Meta': JSON.stringify(meta),
+      // 2026-10-19：HTTP header 只允许 ISO-8859-1，中文标题直接放进去会抛
+      // "Failed to read the 'headers' property ... non ISO-8859-1 code point"
+      'X-Doc-Meta': encodeURIComponent(JSON.stringify(meta)),
       'X-File-Name': encodeURIComponent(file.name),
       'X-File-Mime': file.type || 'application/octet-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
