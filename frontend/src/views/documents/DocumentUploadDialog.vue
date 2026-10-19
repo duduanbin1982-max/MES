@@ -4,10 +4,11 @@
       <el-form-item label="文件" required>
         <el-upload
           ref="uploadRef"
+          v-model:file-list="fileList"
           :auto-upload="false"
           :limit="1"
-          :on-change="(file: any) => $emit('file-change', file)"
-          :on-exceed="() => ElMessage.warning('只能选择 1 个文件')"
+          :on-change="handleFileChange"
+          :on-exceed="handleExceed"
           drag
         >
           <el-icon class="upload-icon"><UploadFilled /></el-icon>
@@ -31,7 +32,7 @@
           <el-option v-for="type in docTypes" :key="type.value" :label="type.label" :value="type.value" />
         </el-select>
       </el-form-item>
-      <el-form-item label="关联设备">
+      <el-form-item label="关联设备" required>
         <el-select v-model="uploadForm.equipment_instance_id" placeholder="可选" clearable filterable style="width:100%">
           <el-option v-for="instance in instances" :key="instance.id" :label="`${instance.instance_code || ''} ${instance.instance_name || ''}`" :value="instance.id" />
         </el-select>
@@ -67,13 +68,13 @@
     </el-form>
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :loading="uploading" @click="$emit('submit', uploadRef?.uploadFiles || [])">提交上传</el-button>
+      <el-button type="primary" :loading="uploading" @click="submit">提交上传</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
@@ -97,10 +98,46 @@ const emit = defineEmits<{
 }>()
 
 const uploadRef = ref<any>(null)
+/**
+ * 2026-10-19 修复：Element Plus 2.14 的 el-upload 只 expose
+ * abort / submit / clearFiles / handleStart / handleRemove，**不 expose uploadFiles**。
+ * 原来提交时取 `uploadRef.value.uploadFiles` 永远是 undefined → 父组件收到 [] →
+ * 选了文件也提示"请先选择文件"。改为本地 file-list（v-model:file-list）作为唯一数据源。
+ */
+const fileList = ref<any[]>([])
+
+const handleFileChange = (file: any) => {
+  emit('file-change', file)
+}
+
+/** limit=1 时再次选择：替换旧文件而不是报错了事 */
+const handleExceed = (files: any[]) => {
+  fileList.value = []
+  uploadRef.value?.clearFiles()
+  const next = (files || [])[0]
+  if (next) uploadRef.value?.handleStart(next)
+}
+
+const submit = () => {
+  if (!fileList.value.length) {
+    ElMessage.warning('请先选择文件')
+    return
+  }
+  emit('submit', fileList.value)
+}
+
 
 const visible = computed({
   get: () => props.modelValue,
   set: (value: boolean) => emit('update:modelValue', value),
+})
+
+// 关闭时清空，避免下次打开残留上一次的文件（放在 visible 定义之后，避免 TS2448）
+watch(visible, (open) => {
+  if (!open) {
+    fileList.value = []
+    uploadRef.value?.clearFiles()
+  }
 })
 
 const bomNodeLabel = (node: any) => {
@@ -111,7 +148,10 @@ const bomNodeLabel = (node: any) => {
 }
 
 defineExpose({
-  clearFiles: () => uploadRef.value?.clearFiles(),
+  clearFiles: () => {
+    fileList.value = []
+    uploadRef.value?.clearFiles()
+  },
 })
 </script>
 

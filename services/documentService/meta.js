@@ -7,6 +7,10 @@ const ISSUE_TARGETS = ["assembly", "welding", "qc", "warehouse", "field", "desig
 function validateMeta(meta) {
   const errors = [];
   if (!meta.title || String(meta.title).trim().length === 0) errors.push("title 必填");
+  // 2026-10-19：documents.equipment_instance_id 是 NOT NULL，不校验就会抛 SqliteError → 500
+  if (meta.equipment_instance_id === undefined || meta.equipment_instance_id === null || meta.equipment_instance_id === "") {
+    errors.push("equipment_instance_id 必填（文档需关联到某台装备实例）");
+  }
   if (!meta.doc_type || !DOC_TYPES.includes(meta.doc_type)) errors.push(`doc_type 必须是: ${DOC_TYPES.join("/")}`);
   if (meta.status && !DOC_STATUS.includes(meta.status)) errors.push(`status 必须是: ${DOC_STATUS.join("/")}`);
   if (meta.issued_to && !ISSUE_TARGETS.includes(meta.issued_to)) errors.push(`issued_to 必须是: ${ISSUE_TARGETS.join("/")}`);

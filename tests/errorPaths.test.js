@@ -114,9 +114,14 @@ test('T5-1 documentService.validateMeta rejects missing fields', () => {
   assert.equal(r2.ok, false);
   assert.ok(r2.errors.some(e => /doc_type/i.test(e)));
 
-  // valid
-  const r3 = documentService.validateMeta({ title: '机架装配图', doc_type: 'drawing' });
+  // valid（2026-10-19：equipment_instance_id 也是必填，documents 表 NOT NULL）
+  const r3 = documentService.validateMeta({ title: '机架装配图', doc_type: 'drawing', equipment_instance_id: 1 });
   assert.equal(r3.ok, true);
+
+  // 缺 equipment_instance_id → 拒绝（避免入库抛 SqliteError → 500）
+  const r4 = documentService.validateMeta({ title: '机架装配图', doc_type: 'drawing' });
+  assert.equal(r4.ok, false);
+  assert.ok(r4.errors.some(e => /equipment_instance_id/.test(e)));
 
   // ApiError 隐式契约: 内部调用 validateMeta 失败会 throw ApiError.validation
   // 这里测 validateMeta 自身的 invariants

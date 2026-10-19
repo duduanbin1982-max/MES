@@ -73,15 +73,19 @@ function mkRes() {
 }
 
 test('P0.DOC.1 validateMeta 必填校验', () => {
-  const v1 = documentService.validateMeta({ title: '机架装配图', doc_type: 'drawing' })
+  // 2026-10-19：documents.equipment_instance_id 是 NOT NULL → 校验里也要求必填
+  const v1 = documentService.validateMeta({ title: '机架装配图', doc_type: 'drawing', equipment_instance_id: 1 })
   assert.equal(v1.ok, true)
-  const v2 = documentService.validateMeta({ title: '', doc_type: 'drawing' })
+  const v2 = documentService.validateMeta({ title: '', doc_type: 'drawing', equipment_instance_id: 1 })
   assert.equal(v2.ok, false)
   assert.ok(v2.errors.some(e => e.includes('title')))
-  const v3 = documentService.validateMeta({ title: 'X', doc_type: 'wrong' })
+  const v3 = documentService.validateMeta({ title: 'X', doc_type: 'wrong', equipment_instance_id: 1 })
   assert.ok(v3.errors.some(e => e.includes('doc_type')))
-  const v4 = documentService.validateMeta({ title: 'X', doc_type: 'drawing', status: 'invalid' })
+  const v4 = documentService.validateMeta({ title: 'X', doc_type: 'drawing', equipment_instance_id: 1, status: 'invalid' })
   assert.ok(v4.errors.some(e => e.includes('status')))
+  const v5 = documentService.validateMeta({ title: 'X', doc_type: 'drawing' })
+  assert.equal(v5.ok, false, '缺 equipment_instance_id 必须拒绝（否则入库 500）')
+  assert.ok(v5.errors.some(e => e.includes('equipment_instance_id')))
 })
 
 test('P0.DOC.2 列出空列表', () => {

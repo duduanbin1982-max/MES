@@ -300,6 +300,10 @@ const submitUpload = async (fileList: any[] = []) => {
   if (!uploadForm.title || !uploadForm.doc_code || !uploadForm.doc_type) {
     return ElMessage.warning('请填写 文档标题 / 文档编码 / 类型')
   }
+  // 2026-10-19：documents.equipment_instance_id 是 NOT NULL，前端原来标"可选"→ 提交后 500
+  if (!uploadForm.equipment_instance_id) {
+    return ElMessage.warning('请选择关联设备（文档需挂到某台装备实例）')
+  }
   const file = fileList[0].raw as File
   if (file.size > 50 * 1024 * 1024) return ElMessage.error('文件超过 50MB')
   const meta: any = {
