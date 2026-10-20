@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { asArray } from '../../domain/apiPayload'
 import api from '../../api'
 import { emptyBusinessViews, templateDesc } from './bomShared'
 
@@ -47,7 +48,8 @@ export function useBomData() {
         .sort((a, b) => a - b)
         .forEach((tier) => flat.value.push(...(levels[tier] || [])))
       costs.value = costR.items || []
-      materials.value = matsR.items || []
+      // 2026-10-21 修复：/api/materials 返回的是数组，原写法 matsR.items 恒为 undefined → 物料下拉无数据
+      materials.value = asArray<any>(matsR)
       health.value = healthR || { score: 0, checks: {}, highlights: [] }
       businessViews.value = businessR || emptyBusinessViews()
     } catch (error: any) {
