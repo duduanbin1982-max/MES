@@ -113,8 +113,42 @@ function evaluateStage(key, metrics) {
     else if (costTypes < 2) blockers.push(`成本台账只有 ${costTypes} 类（建议至少材料+人工/外协）`);
   }
 
-  const scoreMap = { ok: 100, partial: 50, empty: 0 };
-  return { ...base, status, score: scoreMap[status], blockers };
+  const progress = partialProgress(key, get, m);
+  const score = status === "ok" ? 100 : status === "partial" ? Math.round((50 + Math.min(progress, 100) * 0.49) * 10) / 10 : 0;
+  return { ...base, status, score, progress_pct: status === "partial" ? Math.round(progress) : status === "ok" ? 100 : 0, blockers };
+}
+
+/**
+ * 部分完成时的完成度（0~100）。用来把"部分"这个粗档位细化成分数，
+ * 否则补了数据但没跨过阈值时，健康分纹丝不动，看起来像没进展。
+ */
+function partialProgress(key, get, metricsByKey) {
+  if (key === "design_bom") {
+    return pct(get("bom_with_lot"), get("bom_with_material")) || 0;
+  }
+  if (key === "process") {
+    return pct(get("nodes_scheduled"), get("nodes")) || 0;
+  }
+  if (key === "execution") {
+    return pct(get("operations_with_hours"), get("work_orders")) || 0;
+  }
+  if (key === "material") {
+    // 领料与序列号各占一半
+    return ((get("issue_movements") > 0 ? 50 : 0) + (get("serials") > 0 ? 50 : 0));
+  }
+  if (key === "quality") {
+    const parts = [get("inspections") > 0, get("ndt") > 0 || get("work_order_qc") > 0, get("assembly") > 0];
+    return (parts.filter(Boolean).length / parts.length) * 100;
+  }
+  if (key === "project") {
+    return get("contract") > 0 ? 100 : 0;
+  }
+  if (key === "delivery_cost") {
+    const delivery = get("delivery_milestones") > 0 ? 1 : 0;
+    const cost = Math.min(get("cost_types") / 2, 1);
+    return ((delivery + cost) / 2) * 100;
+  }
+  return 0;
 }
 
 /** 汇总：总分 + 各状态计数 + 下一步动作（按环节顺序取未完成的前 3 个） */
@@ -142,4 +176,4 @@ function summarize(stages) {
   };
 }
 
-module.exports = { STAGES, metric, evaluateStage, summarize, pct };
+module.exports = { STAGES, metric, evaluateStage, summarize, pct, partialProgress };

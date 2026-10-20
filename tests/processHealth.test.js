@@ -73,8 +73,10 @@ test("PH.7 summarize：总分 = 各环节均分；next_actions 取未完成前 3
   assert.equal(summary.counts.ok, 3);
   assert.equal(summary.counts.partial, 3);
   assert.equal(summary.counts.empty, 2);
-  assert.equal(summary.score, Math.round(((100 * 3 + 50 * 3 + 0 * 2) / 8) * 10) / 10);
-  assert.equal(summary.grade, "blocked"); // 56.25 < 60
+  // 2026-10-20：部分环节按完成度计分（50~99），总分改为按实际 stage 分数求平均
+  const expected = Math.round((stages.reduce((sum, stage) => sum + stage.score, 0) / stages.length) * 10) / 10;
+  assert.equal(summary.score, expected);
+  assert.ok(summary.score > 50, "部分环节有进展时总分应高于粗档位 50");
   assert.deepEqual(summary.next_actions.map((a) => a.stage), ["派工与报工", "齐套与领料", "检验与证据"]);
   assert.ok(summary.next_actions[0].action.length > 4);
 });
@@ -98,4 +100,19 @@ test("PH.10 交付与成本：只有一类成本（仅人工）→ partial，≥
   assert.equal(partial.status, "partial");
   assert.ok(partial.blockers.some((b) => /1 类/.test(b)));
   assert.equal(evaluateStage("delivery_cost", metrics({ delivery_milestones: 1, cost_entries: 5, cost_types: 2 })).status, "ok");
+});
+
+test("PH.11 部分环节按完成度计分：覆盖率越高分数越高，但不到 100", () => {
+  const low = evaluateStage("design_bom", metrics({ bom_rows: 68, bom_with_material: 40, bom_with_lot: 8 }));
+  const mid = evaluateStage("design_bom", metrics({ bom_rows: 68, bom_with_material: 40, bom_with_lot: 20 }));
+  const high = evaluateStage("design_bom", metrics({ bom_rows: 68, bom_with_material: 40, bom_with_lot: 31 }));
+  assert.equal(low.status, "partial");
+  assert.equal(mid.status, "partial");
+  assert.equal(high.status, "partial");
+  assert.ok(mid.score > low.score, `${mid.score} 应大于 ${low.score}`);
+  assert.ok(high.score > mid.score, `${high.score} 应大于 ${mid.score}`);
+  assert.ok(high.score < 100, "未跨过 80% 阈值不能给满分");
+  assert.equal(low.progress_pct, 20);
+  assert.equal(mid.progress_pct, 50);
+  assert.equal(evaluateStage("design_bom", metrics({ bom_rows: 68, bom_with_material: 40, bom_with_lot: 32 })).score, 100);
 });
