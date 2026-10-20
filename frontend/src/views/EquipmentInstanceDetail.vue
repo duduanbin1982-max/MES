@@ -11,6 +11,7 @@
         <el-tag :type="statusTagType(inst.lifecycle_stage || inst.status)" size="default">{{ statusLabel(inst.lifecycle_stage || inst.status) }}</el-tag>
         <el-tag v-if="overview?.freeze?.archive_status === 'archived'" type="danger">已归档</el-tag>
         <el-tag v-else-if="overview?.freeze?.frozen_at" type="warning">已冻结</el-tag>
+        <el-button size="small" type="primary" :disabled="isFrozen" @click="openEdit">编辑项目信息</el-button>
         <el-button size="small" @click="load">刷新</el-button>
       </div>
     </div>
@@ -163,15 +164,62 @@
         </el-tab-pane>
       </el-tabs>
     </div>
+
+    <!-- 2026-10-21：原来进度/合同/客户等字段只能看不能改（PUT 接口有、前端没入口） -->
+    <el-dialog v-model="editVisible" title="编辑项目信息" width="640px" :close-on-click-modal="false">
+      <el-form :model="editForm" label-width="110px" size="default">
+        <el-form-item label="项目名称">
+          <el-input v-model="editForm.instance_name" placeholder="例如：郑州地铁 4 号线 4m 盾构机" />
+        </el-form-item>
+        <el-form-item label="进度">
+          <el-slider v-model="editForm.progress_pct" :min="0" :max="100" :step="1" show-input style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="项目号">
+          <el-input v-model="editForm.project_no" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="出厂序列号">
+          <el-input v-model="editForm.serial_no" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="客户">
+          <el-input v-model="editForm.customer_name" />
+        </el-form-item>
+        <el-form-item label="客户联系人">
+          <el-input v-model="editForm.customer_contact" placeholder="姓名 / 电话" />
+        </el-form-item>
+        <el-form-item label="现场位置">
+          <el-input v-model="editForm.site_location" />
+        </el-form-item>
+        <el-form-item label="合同号">
+          <el-input v-model="editForm.contract_no" />
+        </el-form-item>
+        <el-form-item label="合同金额(万)">
+          <el-input v-model="editForm.contract_amount" type="number" placeholder="单位：万元" />
+        </el-form-item>
+        <el-form-item label="计划开始">
+          <el-date-picker v-model="editForm.planned_start" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="计划结束">
+          <el-date-picker v-model="editForm.planned_end" type="date" value-format="YYYY-MM-DD" placeholder="选择日期" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="editForm.notes" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editSaving" @click="saveEdit">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
 import { EQUIPMENT_LIFECYCLE_META, EQUIPMENT_LIFECYCLE_OPTIONS, statusLabel as catalogStatusLabel, statusTag as catalogStatusTag } from '../domain/statusCatalog'
+import { buildInstancePatch, normalizeProgressPct } from '../domain/instanceEdit'
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
@@ -190,6 +238,47 @@ const nextStage = ref('')
 const transitionReason = ref('')
 
 const lifecycleOptions = ref<any[]>([...EQUIPMENT_LIFECYCLE_OPTIONS])
+
+// 2026-10-21：编辑项目信息（进度/客户/合同等）
+const editVisible = ref(false)
+const editSaving = ref(false)
+const editForm = reactive<any>({
+  instance_name: '', progress_pct: 0, project_no: '', serial_no: '', customer_name: '',
+  customer_contact: '', site_location: '', contract_no: '', contract_amount: '',
+  planned_start: '', planned_end: '', notes: '',
+})
+
+const openEdit = () => {
+  const source = inst.value || {}
+  editForm.instance_name = source.instance_name || ''
+  editForm.progress_pct = normalizeProgressPct(source.progress_pct)
+  editForm.project_no = source.project_no || ''
+  editForm.serial_no = source.serial_no || ''
+  editForm.customer_name = source.customer_name || ''
+  editForm.customer_contact = source.customer_contact || ''
+  editForm.site_location = source.site_location || ''
+  editForm.contract_no = source.contract_no || ''
+  editForm.contract_amount = source.contract_amount ?? ''
+  editForm.planned_start = source.planned_start || ''
+  editForm.planned_end = source.planned_end || ''
+  editForm.notes = source.notes || ''
+  editVisible.value = true
+}
+
+const saveEdit = async () => {
+  editSaving.value = true
+  try {
+    const patch = buildInstancePatch({ ...editForm })
+    await Api.put(`/equipment_instances/${id.value}`, patch)
+    ElMessage.success('已保存项目信息')
+    editVisible.value = false
+    await load()
+  } catch (error: any) {
+    ElMessage.error('保存失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    editSaving.value = false
+  }
+}
 
 const statusLabel = (s: string) => lifecycleOptions.value.find(x => x.value === s)?.label || catalogStatusLabel(EQUIPMENT_LIFECYCLE_META, s)
 const statusTagType = (s: string) => catalogStatusTag(EQUIPMENT_LIFECYCLE_META, s)
