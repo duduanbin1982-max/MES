@@ -87,7 +87,7 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-defineEmits<{ refresh: [] }>()
+const emit = defineEmits<{ refresh: []; select: [instanceId: number] }>()
 
 const router = useRouter()
 const rows = computed(() => stageRows(props.data?.selected?.stages))
@@ -96,8 +96,10 @@ const instances = computed(() => props.data?.instances || [])
 const selectedId = computed(() => props.data?.selected?.instance_id || null)
 const actions = computed(() => nextActionLines(summary.value?.next_actions))
 
+// 2026-10-21 修复：原来这里只 router.push 改 URL，但仪表盘没有 watch 路由 → 选了没反应。
+// 改为向父组件抛事件，由父组件负责重新拉数据（并同步 URL 便于深链）。
 const onSelect = (value: number) => {
-  router.push({ query: { ...router.currentRoute.value.query, instance_id: String(value) } })
+  emit('select', value)
 }
 const goPage = (page: string) => {
   if (page) router.push(page)

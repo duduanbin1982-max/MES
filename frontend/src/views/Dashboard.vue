@@ -43,6 +43,7 @@
         :data="processHealth"
         :loading="healthLoading"
         @refresh="loadProcessHealth()"
+        @select="onHealthSelect"
       />
       <DashboardProjectRisk
         :stats="stats"
@@ -67,8 +68,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Api } from '../api'
 import PageState from '../components/PageState.vue'
 import DashboardHero from './dashboard/DashboardHero.vue'
@@ -83,6 +84,7 @@ type DashboardRiskLevel = { type: 'success' | 'warning' | 'danger'; label: strin
 type DashboardRiskItem = { key?: string; label: string; value: number; hint: string; type: string }
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const stats = ref<any>(defaultStats())
 const live = ref<any>(defaultLiveStatus())
@@ -97,9 +99,10 @@ const processHealth = ref<any>({ instances: [], selected: null })
 const healthLoading = ref(false)
 
 const loadProcessHealth = async (instanceId?: number) => {
+  const requested = instanceId ?? (Number(route.query.instance_id) || undefined)
   healthLoading.value = true
   try {
-    const params = instanceId ? { instance_id: instanceId } : {}
+    const params = requested ? { instance_id: requested } : {}
     processHealth.value = await Api.get('/dashboard/process-health', { params })
   } catch (_error) {
     // 体检失败不阻断仪表盘主体
@@ -108,6 +111,24 @@ const loadProcessHealth = async (instanceId?: number) => {
     healthLoading.value = false
   }
 }
+
+/** 切换体检项目：先拉数据，再同步 URL（失败也不影响已加载的数据） */
+const onHealthSelect = async (instanceId: number) => {
+  await loadProcessHealth(instanceId)
+  try {
+    await router.replace({ query: { ...route.query, instance_id: String(instanceId) } })
+  } catch (_error) { /* 忽略路由同步失败 */ }
+}
+
+// 支持手改 URL / 前进后退（深链）
+watch(
+  () => route.query.instance_id,
+  (value) => {
+    const id = Number(value) || undefined
+    if (id && Number(processHealth.value?.selected?.instance_id) === id) return
+    loadProcessHealth(id)
+  },
+)
 
 const inProgress = computed(() => stats.value.work_orders?.by_status?.find((s: any) => s.status === 'in_progress')?.c || 0)
 const completed = computed(() => stats.value.work_orders?.by_status?.find((s: any) => s.status === 'completed')?.c || 0)
