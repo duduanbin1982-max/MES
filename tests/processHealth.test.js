@@ -116,3 +116,10 @@ test("PH.11 部分环节按完成度计分：覆盖率越高分数越高，但�
   assert.equal(mid.progress_pct, 50);
   assert.equal(evaluateStage("design_bom", metrics({ bom_rows: 68, bom_with_material: 40, bom_with_lot: 32 })).score, 100);
 });
+
+test("PH.12 新建空实例：BOM 已挂批次=0、无领料/序列号 → 齐套环节 empty（不再误判 partial）", () => {
+  const stage = evaluateStage("material", metrics({ lots: 0, issue_movements: 0, serials: 0 }));
+  assert.equal(stage.status, "empty");
+  assert.equal(stage.score, 0);
+  assert.ok(stage.blockers.some((b) => /批次/.test(b)));
+});

@@ -146,7 +146,9 @@ function register(app, db) {
         metric("operations_with_hours", "有工时的报工", c('SELECT COUNT(*) c FROM work_order_operations o JOIN work_orders w ON w.id = o.work_order_id WHERE w.equipment_instance_id = ? AND o.hours_worked > 0', [instanceId])),
       ],
       material: [
-        metric("lots", "批次", c('SELECT COUNT(*) c FROM material_lots', [])),
+        // 2026-10-20：原来数的是全库批次，导致"新建的空实例"也显示批次=19、齐套环节莫名"部分"；
+        // 改为本实例 BOM 已挂的批次（去重）
+        metric("lots", "已挂批次", c('SELECT COUNT(DISTINCT material_lot_id) c FROM instance_bom WHERE equipment_instance_id = ? AND material_lot_id IS NOT NULL', [instanceId])),
         metric("issue_movements", "领料流水", c("SELECT COUNT(*) c FROM material_movements mm WHERE mm.movement_type = 'issue' AND mm.work_order_id IN (SELECT id FROM work_orders WHERE equipment_instance_id = ?)", [instanceId])),
         metric("serials", "序列号", c('SELECT COUNT(*) c FROM serial_numbers WHERE equipment_instance_id = ?', [instanceId])),
       ],
