@@ -39,17 +39,31 @@ function register(app, db) {
     return safeGet('SELECT * FROM v_dashboard_counts') || {}
   }
 
+  // 2026-11-02：延误拆两档（业务确认口径）
+  //   已开工超期   = 已开工（in_progress/paused）且过计划完成时间  → 算"执行风险"
+  //   未开工计划过期 = 还没开工（pending/ready）但计划时间已过    → 单列 backlog，催重排程
+  //   受阻超期     = blocked 且过计划完成时间（工序特有）
+  // 风险合计 total 只统计"执行风险"，未开工过期进 backlog，避免永久"高风险"
   function buildRiskSummary(riskCounts) {
     const today = new Date().toISOString().replace('T', ' ').slice(0, 19)
     // 允许调用方传入已取到的计数（/api/dashboard 复用同一次查询，避免重复 count）
     const counts = riskCounts || safeGet('SELECT * FROM v_risk_counts') || {}
-    const workOrderDelays = num(counts.work_order_delays)
-    const processNodeDelays = num(counts.process_node_delays)
+    const woStarted = num(counts.work_order_overdue_started)
+    const woNotStarted = num(counts.work_order_overdue_not_started)
+    const pnStarted = num(counts.process_node_overdue_started)
+    const pnNotStarted = num(counts.process_node_overdue_not_started)
+    const pnBlocked = num(counts.process_node_overdue_blocked)
+    // 兼容旧字段：合计仍是全部延误（已开工 + 未开工 + 受阻）
+    const workOrderDelays = num(counts.work_order_delays) || woStarted + woNotStarted
+    const processNodeDelays = num(counts.process_node_delays) || pnStarted + pnNotStarted + pnBlocked
     const delays = workOrderDelays + processNodeDelays
+    const started = woStarted + pnStarted
+    const notStarted = woNotStarted + pnNotStarted
     const longLeadtime = num(counts.long_leadtime)
+    const longLeadtimeUrgent = num(counts.long_leadtime_urgent)
     const openEco = num(counts.open_eco)
     const openFieldService = num(counts.open_field_service)
-    const total = delays + longLeadtime + openEco + openFieldService
+    const total = started + longLeadtime + openEco + openFieldService
     const level = total >= 10
       ? { type: 'danger', label: '高风险' }
       : total >= 4
@@ -61,20 +75,33 @@ function register(app, db) {
       level,
       today,
       delays: {
+        // 合计（兼容旧消费方）
         work_order_delays: workOrderDelays,
         process_node_delays: processNodeDelays,
         total: delays,
         today,
+        started: { work_orders: woStarted, process_nodes: pnStarted, total: started },
+        not_started: { work_orders: woNotStarted, process_nodes: pnNotStarted, total: notStarted },
+        blocked: { process_nodes: pnBlocked },
+      },
+      backlog: {
+        not_started: notStarted,
+        hint: '计划时间已过但尚未开工，需重排程或确认取消',
       },
       sources: {
         delays,
+        delays_started: started,
+        delays_not_started: notStarted,
+        delays_blocked: pnBlocked,
         long_leadtime: longLeadtime,
+        long_leadtime_urgent: longLeadtimeUrgent,
         open_eco: openEco,
         open_field_service: openFieldService,
       },
       items: [
-        { key: 'delays', label: '延误项', value: delays, hint: '工单与工序延期', type: delays ? 'danger' : 'success' },
-        { key: 'long_leadtime', label: '长交期关键件', value: longLeadtime, hint: '采购到货风险', type: longLeadtime ? 'warning' : 'success' },
+        { key: 'delays_started', label: '执行中超期', value: started, hint: '已开工但超计划完成时间', type: started ? 'danger' : 'success' },
+        { key: 'delays_not_started', label: '未开工计划过期', value: notStarted, hint: '计划时间已过但尚未开工（需重排程）', type: notStarted ? 'warning' : 'success' },
+        { key: 'long_leadtime', label: '长交期关键件', value: longLeadtime, hint: longLeadtimeUrgent ? `≥12 周（其中 ≥16 周紧急 ${longLeadtimeUrgent} 项）` : '采购到货风险', type: longLeadtime ? 'warning' : 'success' },
         { key: 'open_eco', label: '待处理 ECO', value: openEco, hint: '设计变更影响', type: openEco ? 'warning' : 'success' },
         { key: 'open_field_service', label: '服务工单', value: openFieldService, hint: '现场/售后问题', type: openFieldService ? 'info' : 'success' },
       ],
@@ -91,6 +118,8 @@ function register(app, db) {
       instances: {
         total: num(counts.instances_total),
         by_status: safeAll('SELECT status, c FROM v_instance_status_counts'),
+        // 2026-11-02：补 by_type（前端「装备类型」饼图之前一直空，因为接口没返回）
+        by_type: safeAll('SELECT type, c FROM v_instance_type_counts'),
       },
       work_orders: {
         total: num(counts.work_orders_total),
@@ -115,7 +144,7 @@ function register(app, db) {
 
   app.get('/api/dashboard/long-leadtime', wrap((req, res) => {
     const items = safeAll(
-      `SELECT material_code, material_name, lead_time_weeks, supplier, unit_price
+      `SELECT material_code, material_name, lead_time_weeks, supplier, unit_price, is_urgent
        FROM v_long_leadtime_components
        ORDER BY lead_time_weeks DESC
        LIMIT 50`

@@ -177,9 +177,9 @@
       "ddlStatements": 4
     },
     "reportService": {
-      "schemaVersion": 5,
-      "ddlFingerprint": "94aa537a6f928e5e12a8367d83e270f5d966addb8fc180b68d7bfa4ba073b77c",
-      "ddlStatements": 12
+      "schemaVersion": 6,
+      "ddlFingerprint": "a2940b4fa403c0b62a3ea34c91f8d4a71293df6cb79b9c88898240bf2ea3cebc",
+      "ddlStatements": 13
     },
     "resourceService": {
       "schemaVersion": 2,

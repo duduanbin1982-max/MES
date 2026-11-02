@@ -17,13 +17,33 @@ const RISK_COUNTS = {
   sql: `
 CREATE VIEW v_risk_counts AS
 SELECT
+  -- 延误合计（兼容旧字段 = 已开工超期 + 未开工计划过期 + 受阻超期）
   (SELECT COUNT(*) FROM work_orders
     WHERE planned_end IS NOT NULL AND planned_end < datetime('now')
       AND status NOT IN ('completed', 'cancelled'))                             AS work_order_delays,
+  -- 已开工超期：已开工（in_progress/paused）且过计划完成时间
+  (SELECT COUNT(*) FROM work_orders
+    WHERE planned_end IS NOT NULL AND planned_end < datetime('now')
+      AND status IN ('in_progress', 'paused'))                                  AS work_order_overdue_started,
+  -- 未开工计划过期：还没开工（pending/ready）但计划时间已过
+  (SELECT COUNT(*) FROM work_orders
+    WHERE planned_end IS NOT NULL AND planned_end < datetime('now')
+      AND status IN ('pending', 'ready'))                                       AS work_order_overdue_not_started,
   (SELECT COUNT(*) FROM process_nodes
     WHERE planned_end IS NOT NULL AND planned_end < datetime('now')
       AND status NOT IN ('completed', 'cancelled'))                             AS process_node_delays,
+  (SELECT COUNT(*) FROM process_nodes
+    WHERE planned_end IS NOT NULL AND planned_end < datetime('now')
+      AND status IN ('in_progress', 'paused'))                                  AS process_node_overdue_started,
+  (SELECT COUNT(*) FROM process_nodes
+    WHERE planned_end IS NOT NULL AND planned_end < datetime('now')
+      AND status IN ('pending', 'ready'))                                       AS process_node_overdue_not_started,
+  (SELECT COUNT(*) FROM process_nodes
+    WHERE planned_end IS NOT NULL AND planned_end < datetime('now')
+      AND status = 'blocked')                                                   AS process_node_overdue_blocked,
+  -- 长交期：12 周 = 风险，16 周 = 紧急
   (SELECT COUNT(*) FROM key_components WHERE lead_time_weeks >= 12)             AS long_leadtime,
+  (SELECT COUNT(*) FROM key_components WHERE lead_time_weeks >= 16)             AS long_leadtime_urgent,
   (SELECT COUNT(*) FROM instance_eco WHERE status = 'open')                     AS open_eco,
   (SELECT COUNT(*) FROM field_service WHERE status = 'open')                    AS open_field_service
 `,
@@ -43,8 +63,14 @@ SELECT
   (SELECT COUNT(*) FROM instance_bom)                                           AS bom_total,
   (SELECT COUNT(*) FROM key_components)                                         AS key_components_total,
   risk.work_order_delays                                                        AS work_order_delays,
+  risk.work_order_overdue_started                                               AS work_order_overdue_started,
+  risk.work_order_overdue_not_started                                           AS work_order_overdue_not_started,
   risk.process_node_delays                                                      AS process_node_delays,
+  risk.process_node_overdue_started                                             AS process_node_overdue_started,
+  risk.process_node_overdue_not_started                                         AS process_node_overdue_not_started,
+  risk.process_node_overdue_blocked                                             AS process_node_overdue_blocked,
   risk.long_leadtime                                                            AS long_leadtime,
+  risk.long_leadtime_urgent                                                     AS long_leadtime_urgent,
   risk.open_eco                                                                 AS open_eco,
   risk.open_field_service                                                       AS open_field_service
 FROM v_risk_counts risk
@@ -80,10 +106,25 @@ const LONG_LEADTIME = {
   name: "v_long_leadtime_components",
   sql: `
 CREATE VIEW v_long_leadtime_components AS
-SELECT m.material_code, m.material_name, kc.lead_time_weeks, kc.supplier, kc.unit_price
+SELECT m.material_code, m.material_name, kc.lead_time_weeks, kc.supplier, kc.unit_price,
+       CASE WHEN kc.lead_time_weeks >= 16 THEN 1 ELSE 0 END AS is_urgent
 FROM key_components kc
 JOIN materials m ON m.id = kc.material_id
 WHERE kc.lead_time_weeks >= 12
+`,
+};
+
+// 实例按装备类型分布（看板「装备类型」饼图；之前 /api/dashboard 没返回这个字段，图一直是空的）
+const INSTANCE_TYPE_COUNTS = {
+  name: "v_instance_type_counts",
+  sql: `
+CREATE VIEW v_instance_type_counts AS
+SELECT COALESCE(et.name_zh, '未分类') AS type, COUNT(*) AS c
+FROM equipment_instances ei
+LEFT JOIN equipment_models em ON em.id = ei.equipment_model_id
+LEFT JOIN equipment_types et ON et.id = em.equipment_type_id
+GROUP BY COALESCE(et.name_zh, '未分类')
+ORDER BY c DESC
 `,
 };
 
@@ -179,6 +220,7 @@ const READ_MODEL_VIEWS = [
   WORK_ORDER_STATUS,
   PROCESS_NODE_STATUS,
   INSTANCE_STATUS,
+  INSTANCE_TYPE_COUNTS,
   LONG_LEADTIME,
   INSTANCE_HEALTH_METRICS,
   INSTANCE_LIVE_STATUS,

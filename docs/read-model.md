@@ -24,16 +24,17 @@
 
 ## 2. 视图清单
 
-### 2.1 报表看板（`services/reportService/schema.js`，8 个）
+### 2.1 报表看板（`services/reportService/schema.js`，9 个）
 
 | 视图 | 用途 | 被谁用 |
 |---|---|---|
-| `v_risk_counts` | 风险口径 5 个计数 | `/api/dashboard/risk-summary` |
+| `v_risk_counts` | 风险口径：延误拆两档（已开工超期 / 未开工计划过期 / 受阻）+ 长交期 12/16 周两档 + ECO + 服务工单 | `/api/dashboard/risk-summary` |
 | `v_dashboard_counts` | 看板头部 12 个标量（内联 `v_risk_counts`） | `/api/dashboard` |
 | `v_work_order_status_counts` | 工单按状态分组 | `/api/dashboard` |
 | `v_process_node_status_counts` | 工序按状态分组 | `/api/dashboard` |
 | `v_instance_status_counts` | 项目按状态分组 | `/api/dashboard` |
-| `v_long_leadtime_components` | 长交期关键件（≥12 周） | `/api/dashboard/long-leadtime` |
+| `v_instance_type_counts` | 项目按装备类型分组（前端「装备类型」饼图数据源） | `/api/dashboard` |
+| `v_long_leadtime_components` | 长交期关键件（≥12 周，含 `is_urgent`（≥16 周）标记） | `/api/dashboard/long-leadtime` |
 | `v_instance_health_metrics` | 一实例一行的 8 环节全部计数 | `/api/dashboard/process-health` |
 | `v_instance_live_status` | 在健康指标上收敛的现场实时状态 | `/api/dashboard/live-status` |
 

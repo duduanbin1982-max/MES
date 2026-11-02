@@ -27,7 +27,8 @@
       <div class="kpi-body">
         <span class="kpi-label">风险待办</span>
         <strong>{{ numberText(riskTotal) }}</strong>
-        <small>{{ numberText(delaysTotal) }} 延误 / {{ numberText(stats.open_eco) }} ECO / {{ numberText(stats.open_field_service) }} 服务</small>
+        <small class="kpi-sub">{{ numberText(executionDelays) }} 执行中超期 · {{ numberText(planOverdue) }} 未开工过期</small>
+        <small class="kpi-sub">{{ numberText(stats.open_eco) }} ECO · {{ numberText(stats.open_field_service) }} 服务</small>
       </div>
     </article>
     <article class="kpi-card kpi-card--green">
@@ -54,6 +55,8 @@ defineProps<{
   completed: number
   riskTotal: number
   delaysTotal: number
+  executionDelays?: number
+  planOverdue?: number
   fleetUtilization: number
 }>()
 </script>
@@ -141,5 +144,9 @@ defineProps<{
   .kpi-card {
     transition: none;
   }
+}
+.kpi-sub {
+  display: block;
+  line-height: 1.5;
 }
 </style>

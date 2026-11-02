@@ -10,10 +10,10 @@ const Database = require("better-sqlite3");
 const { ensureReadModel, READ_MODEL_VIEWS } = require("../services/reportService/schema");
 
 const TABLE_DDL = [
-  "CREATE TABLE equipment_types (id INTEGER PRIMARY KEY, is_active INTEGER DEFAULT 1)",
-  "CREATE TABLE equipment_models (id INTEGER PRIMARY KEY)",
+  "CREATE TABLE equipment_types (id INTEGER PRIMARY KEY, is_active INTEGER DEFAULT 1, name_zh TEXT)",
+  "CREATE TABLE equipment_models (id INTEGER PRIMARY KEY, equipment_type_id INTEGER)",
   `CREATE TABLE equipment_instances (id INTEGER PRIMARY KEY, instance_code TEXT, instance_name TEXT,
-     status TEXT, lifecycle_stage TEXT, progress_pct INTEGER, contract_no TEXT)`,
+     status TEXT, lifecycle_stage TEXT, progress_pct INTEGER, contract_no TEXT, equipment_model_id INTEGER)`,
   `CREATE TABLE work_orders (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, planned_end TEXT,
      status TEXT, workstation_id INTEGER)`,
   `CREATE TABLE process_nodes (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, planned_end TEXT,
@@ -89,7 +89,7 @@ function seed(db) {
   `);
 }
 
-test("RMV.1 只读视图创建幂等，且 8 个视图齐全", () => {
+test("RMV.1 只读视图创建幂等，且 9 个视图齐全", () => {
   const db = new Database(":memory:");
   for (const sql of TABLE_DDL) db.exec(sql);
   ensureReadModel(db);
@@ -100,12 +100,13 @@ test("RMV.1 只读视图创建幂等，且 8 个视图齐全", () => {
     "v_instance_health_metrics",
     "v_instance_live_status",
     "v_instance_status_counts",
+    "v_instance_type_counts",
     "v_long_leadtime_components",
     "v_process_node_status_counts",
     "v_risk_counts",
     "v_work_order_status_counts",
   ]);
-  assert.equal(READ_MODEL_VIEWS.length, 8);
+  assert.equal(READ_MODEL_VIEWS.length, 9);
   db.close();
 });
 
@@ -115,7 +116,11 @@ test("RMV.1b v_dashboard_counts 内联了风险口径（同一次查询可复用
   const risk = db.prepare("SELECT * FROM v_risk_counts").get();
   const board = db.prepare("SELECT * FROM v_dashboard_counts").get();
   assert.equal(risk.work_order_delays, board.work_order_delays);
+  assert.equal(risk.work_order_overdue_started, board.work_order_overdue_started);
+  assert.equal(risk.work_order_overdue_not_started, board.work_order_overdue_not_started);
+  assert.equal(risk.process_node_overdue_started, board.process_node_overdue_started);
   assert.equal(risk.long_leadtime, board.long_leadtime);
+  assert.equal(risk.long_leadtime_urgent, board.long_leadtime_urgent);
   assert.equal(risk.open_eco, board.open_eco);
   db.close();
 });
@@ -133,6 +138,12 @@ test("RMV.2 v_dashboard_counts：头部计数与延误口径一次查出", () =>
   assert.equal(counts.open_eco, 1);
   assert.equal(counts.open_field_service, 1);
   assert.equal(counts.work_order_delays, 1, "工单#1 计划结束已过且进行中");
+  assert.equal(counts.work_order_overdue_started, 1, "工单#1 已开工超期");
+  assert.equal(counts.work_order_overdue_not_started, 0, "工单#2 计划时间未到");
+  assert.equal(counts.process_node_overdue_started, 1, "工序#1 已开工超期");
+  assert.equal(counts.process_node_overdue_not_started, 0);
+  assert.equal(counts.process_node_overdue_blocked, 0, "工序#2 没有计划时间");
+  assert.equal(counts.long_leadtime_urgent, 1, "16 周的关键件同时算紧急档");
   db.close();
 });
 

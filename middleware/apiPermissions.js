@@ -84,7 +84,8 @@ const RULES = [
   match(/^\/documents\/\d+\/(?:issue|revoke)$/, ["PUT"], ["document:write"]),
   match(/^\/documents\/\d+$/, ["DELETE"], ["document:write"]),
 
-  match(/^\/dashboard(?:\/alerts|\/delays|\/delays\/summary)?$/, READ, ["report:read"]),
+  // 2026-11-02：补齐 risk-summary / long-leadtime / live-status / process-health（此前未匹配任何规则=任意登录用户可读）
+  match(/^\/dashboard(?:\/alerts|\/delays|\/delays\/summary|\/risk-summary|\/long-leadtime|\/live-status|\/process-health)?$/, READ, ["report:read"]),
   match(/^\/reports(?:\/.*)?$/, READ.concat(["POST", "PUT", "DELETE"]), ["report:read"]),
 
   match(/^\/equipment(?:\/(?:live_status|oee))?$/, READ, ["equipment:read", "report:read"]),

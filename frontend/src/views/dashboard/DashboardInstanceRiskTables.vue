@@ -20,9 +20,10 @@
       <el-table :data="longLeadtime" stripe size="small" class="dashboard-dense-table">
         <el-table-column prop="material_name" label="物料" min-width="150" />
         <el-table-column prop="supplier" label="供应商" width="100" />
-        <el-table-column label="交期" width="84">
+        <el-table-column label="交期" width="120">
           <template #default="{ row }">
-            <el-tag type="danger" size="small">{{ row.lead_time_weeks }}w</el-tag>
+            <el-tag :type="row.is_urgent ? 'danger' : 'warning'" size="small">{{ row.lead_time_weeks }}w</el-tag>
+            <el-tag v-if="row.is_urgent" type="danger" size="small" effect="dark" style="margin-left: 4px">紧急</el-tag>
           </template>
         </el-table-column>
       </el-table>
@@ -35,7 +36,7 @@
       <el-icon><Timer /></el-icon>
       <div>
         <strong>延误预警</strong>
-        <span>WO {{ numberText(delaysSummary.work_order_delays) }} / 工序 {{ numberText(delaysSummary.process_node_delays) }}</span>
+        <span>执行中超期 {{ numberText(delaysSummary.started) }} / 未开工过期 {{ numberText(delaysSummary.not_started) }}</span>
       </div>
     </div>
     <el-table :data="delaysTop" size="small" class="dashboard-dense-table delay-table">
@@ -46,7 +47,14 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="延误项" min-width="180" />
+      <el-table-column label="阶段" width="92">
+        <template #default="{ row }">
+          <el-tag :type="row.phase === 'started' ? 'danger' : row.phase === 'blocked' ? 'warning' : 'info'" size="small">
+            {{ row.phase === 'started' ? '执行中' : row.phase === 'blocked' ? '受阻' : '未开工' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="name" label="延误项" min-width="170" />
       <el-table-column prop="instance_code" label="项目" width="130" />
       <el-table-column prop="days_overdue" label="延期" width="90">
         <template #default="{ row }">

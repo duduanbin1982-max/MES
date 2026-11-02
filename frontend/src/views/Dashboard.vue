@@ -37,6 +37,8 @@
         :completed="completed"
         :risk-total="riskTotal"
         :delays-total="delaysSummary.total"
+        :execution-delays="executionDelays"
+        :plan-overdue="planOverdue"
         :fleet-utilization="fleetUtilization"
       />
       <ProcessHealthCard
@@ -133,6 +135,9 @@ watch(
 const inProgress = computed(() => stats.value.work_orders?.by_status?.find((s: any) => s.status === 'in_progress')?.c || 0)
 const completed = computed(() => stats.value.work_orders?.by_status?.find((s: any) => s.status === 'completed')?.c || 0)
 const fleetUtilization = computed(() => Number(oee.value.summary?.fleet_utilization_pct || live.value.utilization || 0))
+// 2026-11-02：延误拆两档（已开工超期 / 未开工计划过期）
+const executionDelays = computed(() => Number(riskSummary.value.sources?.delays_started ?? riskSummary.value.delays?.started?.total ?? 0))
+const planOverdue = computed(() => Number(riskSummary.value.sources?.delays_not_started ?? riskSummary.value.delays?.not_started?.total ?? 0))
 const riskTotal = computed(() => Number(riskSummary.value.total || 0))
 const riskLevel = computed<DashboardRiskLevel>(() => riskSummary.value.level || defaultRiskSummary().level)
 const riskItems = computed<DashboardRiskItem[]>(() => riskSummary.value.items || defaultRiskSummary().items)
@@ -192,7 +197,8 @@ function defaultRiskSummary() {
     delays: defaultDelaySummary(),
     sources: { delays: 0, long_leadtime: 0, open_eco: 0, open_field_service: 0 },
     items: [
-      { key: 'delays', label: '延误项', value: 0, hint: '工单与工序延期', type: 'success' },
+      { key: 'delays_started', label: '执行中超期', value: 0, hint: '已开工但超计划完成时间', type: 'success' },
+      { key: 'delays_not_started', label: '未开工计划过期', value: 0, hint: '计划时间已过但尚未开工（需重排程）', type: 'success' },
       { key: 'long_leadtime', label: '长交期关键件', value: 0, hint: '采购到货风险', type: 'success' },
       { key: 'open_eco', label: '待处理 ECO', value: 0, hint: '设计变更影响', type: 'success' },
       { key: 'open_field_service', label: '服务工单', value: 0, hint: '现场/售后问题', type: 'success' },
