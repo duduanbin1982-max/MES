@@ -1,12 +1,13 @@
 "use strict";
 // scripts/check-module-boundaries.js
-// 2026-11-02：模块边界检查（跨域只读 / 跨模块 require 白名单）
+// 2026-11-02：模块边界检查（跨域只读 / 跨服务 require 白名单 / 跨域触发器）
 //
 // 规则：
 //   1. 服务只能写「自己拥有的表」；跨域写必须走对方服务或只读视图。
 //   2. 服务之间只允许 require 白名单里的模块（默认禁止）。
-//   3. 表归属 = 声明该表的文件所属服务（按文件路径判定，不按调用图）；
-//      共享文件（services 根级、或一个目录被多个服务共用）里声明的表视为 shared。
+//   3. 不允许在别人的表上建触发器（跨域副作用，需白名单）。
+//   表归属 = 声明该表的文件所属服务（按文件路径判定，不按调用图）；
+//   共享文件（services 根级、或一个目录被多个服务共用）里声明的表视为 shared。
 //
 // 用法：
 //   node scripts/check-module-boundaries.js            # 检查（有违规退出码 1）
@@ -31,7 +32,7 @@ function loadConfig() {
   try {
     return JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
   } catch (_error) {
-    return { allowedRequires: [], allowedWrites: [], sharedTables: [] };
+    return { allowedRequires: [], allowedWrites: [], allowedTriggers: [], sharedTables: [] };
   }
 }
 
@@ -49,7 +50,7 @@ function buildServiceIndex() {
  * 文件归属：按路径判定，避免"被哪个服务的调用图扫到就算谁的"导致的归属漂移。
  *   services/<dir>/...        -> 该 dir 只对应一个服务时归它；多个服务共用则视为共享
  *   services/<file>.js        -> 仅当它是某个服务的入口文件时归该服务
- *   其它（共享文件）           -> null（表视为 shared，不参与跨域写检查）
+ *   其它（共享文件）           -> null（表视为 shared，不参与跨域检查）
  */
 function buildFileOwnership(serviceIndex) {
   const dirServices = new Map();
@@ -93,7 +94,7 @@ function buildTableOwners(serviceFiles, ownership) {
   const conflicts = [];
   for (const [name, files] of serviceFiles) {
     for (const file of files) {
-      if (ownerOfFile(file, ownership) !== name) continue; // 只算本服务自有文件
+      if (ownerOfFile(file, ownership) !== name) continue;
       const source = fs.readFileSync(file, "utf8");
       for (const sql of extractDdlLiterals(source)) {
         for (const match of sql.matchAll(/CREATE\s+(?:TEMP\s+|TEMPORARY\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`]?([A-Za-z_][A-Za-z0-9_]*)["'`]?/gi)) {
@@ -124,6 +125,14 @@ function extractWrites(sql) {
   return out;
 }
 
+/** CREATE TRIGGER <name> AFTER|BEFORE|INSTEAD OF <event> ON <table> → 被挂触发器的表 */
+function extractTriggerTargets(sql) {
+  const out = [];
+  const pattern = /CREATE\s+TRIGGER\s+(?:IF\s+NOT\s+EXISTS\s+)?["'`]?([A-Za-z_][A-Za-z0-9_]*)["'`]?\s+(?:BEFORE|AFTER|INSTEAD\s+OF)\s+(?:INSERT|UPDATE|DELETE)\s+ON\s+["'`]?([A-Za-z_][A-Za-z0-9_]*)["'`]?/gi;
+  for (const match of sql.matchAll(pattern)) out.push({ name: match[1], table: match[2] });
+  return out;
+}
+
 function analyze() {
   const config = loadConfig();
   const serviceIndex = buildServiceIndex();
@@ -141,17 +150,19 @@ function analyze() {
   const { owners, conflicts } = buildTableOwners(serviceFiles, ownership);
   const allowedRequires = new Set((config.allowedRequires || []).map((row) => `${row.from}->${row.to}`));
   const allowedWrites = new Set((config.allowedWrites || []).map((row) => `${row.from}->${row.table}`));
-  const sharedTables = new Set(config.sharedTables || []);
+  const allowedTriggers = new Set((config.allowedTriggers || []).map((row) => `${row.from}->${row.table}`));
+  const sharedTables = new Set((config.sharedTables || []).map((row) => (typeof row === "string" ? row : row.table)));
 
   const requireViolations = [];
   const writeViolations = [];
+  const triggerViolations = [];
   const dynamicWriteSites = [];
-  const seenRequire = new Set();
+  const seen = new Set();
 
   for (const [name, files] of serviceFiles) {
     for (const file of files) {
       const owner = ownerOfFile(file, ownership);
-      if (owner !== name) continue; // 共享文件不判定归属，避免重复/误判
+      if (owner !== name) continue;
       const source = fs.readFileSync(file, "utf8");
       const relative = path.relative(ROOT, file).replaceAll(path.sep, "/");
 
@@ -164,9 +175,9 @@ function analyze() {
         const targetService = ownerOfFile(resolved, ownership);
         if (!targetService || targetService === owner) continue;
         const key = `${owner}->${targetService}`;
-        const dedupe = `${key}@${relative}`;
-        if (allowedRequires.has(key) || seenRequire.has(dedupe)) continue;
-        seenRequire.add(dedupe);
+        const dedupe = `R:${key}@${relative}`;
+        if (allowedRequires.has(key) || seen.has(dedupe)) continue;
+        seen.add(dedupe);
         requireViolations.push({ owner, target: targetService, key, file: relative, specifier });
       }
 
@@ -176,11 +187,20 @@ function analyze() {
           const tableOwner = owners.get(table);
           if (tableOwner === owner || sharedTables.has(table)) continue;
           const key = `${owner}->${table}`;
-          if (allowedWrites.has(key)) continue;
-          const dedupe = `${key}@${relative}`;
-          if (seenRequire.has(dedupe)) continue;
-          seenRequire.add(dedupe);
+          const dedupe = `W:${key}@${relative}`;
+          if (allowedWrites.has(key) || seen.has(dedupe)) continue;
+          seen.add(dedupe);
           writeViolations.push({ owner, table, tableOwner, key, file: relative });
+        }
+        for (const trigger of extractTriggerTargets(sql)) {
+          if (!owners.has(trigger.table)) continue;
+          const tableOwner = owners.get(trigger.table);
+          if (tableOwner === owner) continue;
+          const key = `${owner}->${trigger.table}`;
+          const dedupe = `T:${key}@${relative}`;
+          if (allowedTriggers.has(key) || seen.has(dedupe)) continue;
+          seen.add(dedupe);
+          triggerViolations.push({ owner, table: trigger.table, tableOwner, trigger: trigger.name, key, file: relative });
         }
       }
 
@@ -195,8 +215,9 @@ function analyze() {
     tableConflicts: conflicts,
     requireViolations,
     writeViolations,
+    triggerViolations,
     dynamicWriteSites,
-    ok: requireViolations.length === 0 && writeViolations.length === 0,
+    ok: requireViolations.length === 0 && writeViolations.length === 0 && triggerViolations.length === 0,
   };
 }
 
@@ -222,14 +243,27 @@ function run() {
     console.log(`\n❌ 跨域写（${result.writeViolations.length}）：`);
     for (const row of result.writeViolations) console.log(`  - ${row.owner} 写 ${row.table}（属于 ${row.tableOwner}）${verbose ? `  ${row.file}` : ""}`);
   }
+  if (result.triggerViolations.length) {
+    console.log(`\n❌ 跨域触发器（${result.triggerViolations.length}）：`);
+    for (const row of result.triggerViolations) console.log(`  - ${row.owner} 在 ${row.table}（属于 ${row.tableOwner}）上建触发器 ${row.trigger}${verbose ? `  ${row.file}` : ""}`);
+  }
   if (result.dynamicWriteSites.length) {
     console.log(`\nℹ️ 动态 SQL（表名来自变量，无法静态判定）：${result.dynamicWriteSites.length} 个文件`);
     if (verbose) for (const file of result.dynamicWriteSites) console.log(`  - ${file}`);
   }
-  console.log(result.ok ? "\n✅ 模块边界检查通过" : "\n❌ 模块边界检查失败：跨域写或跨服务 require 未在白名单");
+  console.log(result.ok ? "\n✅ 模块边界检查通过" : "\n❌ 模块边界检查失败：跨域写/跨服务 require/跨域触发器 未在白名单");
   process.exit(result.ok ? 0 : 1);
 }
 
 if (require.main === module) run();
 
-module.exports = { analyze, buildServiceIndex, buildFileOwnership, ownerOfFile, buildTableOwners, extractWrites, extractRequires };
+module.exports = {
+  analyze,
+  buildServiceIndex,
+  buildFileOwnership,
+  ownerOfFile,
+  buildTableOwners,
+  extractWrites,
+  extractRequires,
+  extractTriggerTargets,
+};

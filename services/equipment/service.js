@@ -10,11 +10,14 @@ const { createInstanceFactory } = require("./instanceFactory");
 const { registerInstanceRoutes } = require("./instanceRoutes");
 const { createEquipmentOverview } = require("./overview");
 const { initEquipmentInstanceEnhancements } = require("./schema");
+const { initInstanceProgressModel } = require("./progressModel");
 const { registerTemplateRoutes } = require("./templateRoutes");
 const { createTemplateStore } = require("./templateStore");
 
 function register(app, db) {
   initEquipmentInstanceEnhancements(db);
+  // 2026-11-02：项目进度回写模型（视图 + 触发器），修「进度不回写」断点
+  initInstanceProgressModel(db);
   const helpers = makeDbHelpers(db);
   const codeGenerator = createCodeGenerator(helpers.get);
   const templateStore = createTemplateStore({ get: helpers.get, ApiError });

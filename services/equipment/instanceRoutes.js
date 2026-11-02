@@ -1,6 +1,7 @@
 "use strict";
 
 const { registerLifecycleRoutes } = require("./lifecycleRoutes");
+const { recalcInstanceProgress, recalcAllInstances } = require("./progress");
 
 function registerInstanceRoutes({
   app,
@@ -85,6 +86,17 @@ function registerInstanceRoutes({
   }));
 
   app.get("/api/equipment_instances/:id/overview", wrap((req, res) => res.json(buildOverview(req.params.id))));
+
+  // 2026-11-02：项目进度补数（日常回写由触发器自动完成，这里用于历史数据/巡检）
+  app.post("/api/equipment_instances/progress/recalc-all", wrap((req, res) => {
+    res.json(recalcAllInstances(db));
+  }));
+
+  app.post("/api/equipment_instances/:id/progress/recalc", wrap((req, res) => {
+    const result = recalcInstanceProgress(db, req.params.id);
+    if (!result.found) throw ApiError.notFound("not found");
+    res.json(result);
+  }));
   registerLifecycleRoutes({ app, db, wrap, ApiError, ensureNotFrozen, buildOverview });
 }
 

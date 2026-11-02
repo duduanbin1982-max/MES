@@ -19,5 +19,17 @@
       "reason": "registry 已声明 dependsOn: [tbmAdvanced]；证书表由 tbmAdvanced 建表，criticalPartsService 在其上扩展 document_id 并写入"
     }
   ],
+  "allowedTriggers": [
+    {
+      "from": "equipment",
+      "table": "process_nodes",
+      "reason": "进度回写触发器：工序状态变化时自动重算 equipment_instances.progress_pct（派生字段，公式见 services/equipment/progressModel.js）"
+    },
+    {
+      "from": "equipment",
+      "table": "work_orders",
+      "reason": "进度回写触发器：工单状态变化时自动重算进度（没有工序时的退化口径）"
+    }
+  ],
   "sharedTables": []
 }

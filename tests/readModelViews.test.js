@@ -227,6 +227,36 @@ test("RMV.7 process_nodes 重建（修 FK）时依赖视图不被打断", () => 
   db.close();
 });
 
+test("RMV.8 process_nodes 重建时：引用视图的触发器也能安全恢复", () => {
+  const db = new Database(":memory:");
+  db.exec(`
+    CREATE TABLE instance_bom (id INTEGER PRIMARY KEY);
+    CREATE TABLE instance_bom_v22 (id INTEGER PRIMARY KEY);
+    CREATE TABLE work_orders (id INTEGER PRIMARY KEY, status TEXT, progress_cache INTEGER);
+    CREATE TABLE process_nodes (
+      id INTEGER PRIMARY KEY,
+      equipment_instance_id INTEGER,
+      status TEXT,
+      bom_node_id INTEGER REFERENCES instance_bom_v22(id)
+    );
+    CREATE VIEW v_node_done AS SELECT COUNT(*) AS c FROM process_nodes WHERE status = 'completed';
+    CREATE TRIGGER trg_wo_sync AFTER UPDATE ON work_orders
+    BEGIN UPDATE work_orders SET progress_cache = (SELECT c FROM v_node_done) WHERE id = NEW.id; END;
+  `);
+  db.exec("INSERT INTO instance_bom (id) VALUES (1); INSERT INTO instance_bom_v22 (id) VALUES (1)");
+  db.exec("INSERT INTO process_nodes (id, equipment_instance_id, status, bom_node_id) VALUES (1, 1, 'completed', 1)");
+  db.exec("INSERT INTO work_orders (id, status, progress_cache) VALUES (1, 'pending', 0)");
+
+  const { repairProcessNodesBomForeignKey } = require("../services/processTree/repairBomForeignKey");
+  assert.equal(repairProcessNodesBomForeignKey(db), true, "应执行重建");
+  // 视图与触发器都要还在，且触发器仍能工作
+  assert.equal(db.prepare("SELECT c FROM v_node_done").get().c, 1);
+  db.prepare("UPDATE work_orders SET status = 'in_progress' WHERE id = 1").run();
+  assert.equal(db.prepare("SELECT progress_cache FROM work_orders WHERE id = 1").get().progress_cache, 1, "触发器应能正常执行");
+  const fk = db.prepare("PRAGMA foreign_key_list(process_nodes)").all().find((row) => row.from === "bom_node_id");
+  assert.equal(fk.table, "instance_bom");
+  db.close();
+});
 test("RMV.6 看板服务改读视图后接口正常（含健康检查整页一次查询）", () => {
   const db = freshDb();
   seed(db);

@@ -62,9 +62,9 @@
       "ddlStatements": 0
     },
     "equipment": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "491cf5f301b422d7bdc0d81424315bc217634a0a78d937f8c29bcc2740e1a746",
-      "ddlStatements": 13
+      "schemaVersion": 3,
+      "ddlFingerprint": "0ad2a730041cdd64ca20c457844380c1cb5ca330273cb98c62a9bc10ec8402fd",
+      "ddlStatements": 17
     },
     "erpService": {
       "schemaVersion": 1,
@@ -157,9 +157,9 @@
       "ddlStatements": 0
     },
     "processTree": {
-      "schemaVersion": 3,
-      "ddlFingerprint": "8b1fe63232171e3190710dc4ace35d08c69c1b8d1e94132d6fb570fca3158a96",
-      "ddlStatements": 6
+      "schemaVersion": 4,
+      "ddlFingerprint": "1a70c48a807c641ce4748991b33a5a8411fffed39f548166db3ee0912c3f4c2a",
+      "ddlStatements": 7
     },
     "projectMasterService": {
       "schemaVersion": 1,

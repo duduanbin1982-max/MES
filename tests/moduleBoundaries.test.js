@@ -77,3 +77,27 @@ test("MB.5 归属表数量与 DDL 声明一致（防止归属算法失效后静�
   assert.ok(result.tablesOwned >= 40, `应有 >=40 张表有明确归属，实际 ${result.tablesOwned}`);
   assert.ok(result.services >= 45, `应扫描 >=45 个服务，实际 ${result.services}`);
 });
+
+test("MB.6 extractTriggerTargets：识别 CREATE TRIGGER 挂在哪张表", () => {
+  const sql = `
+    CREATE TRIGGER trg_a AFTER INSERT ON process_nodes BEGIN SELECT 1; END;
+    CREATE TRIGGER IF NOT EXISTS trg_b BEFORE UPDATE ON work_orders BEGIN SELECT 1; END;
+    CREATE TRIGGER trg_c AFTER DELETE ON equipment_instances BEGIN SELECT 1; END;
+    CREATE TABLE t_x (id INTEGER);
+  `;
+  const targets = boundaries.extractTriggerTargets(sql);
+  assert.deepEqual(targets, [
+    { name: "trg_a", table: "process_nodes" },
+    { name: "trg_b", table: "work_orders" },
+    { name: "trg_c", table: "equipment_instances" },
+  ]);
+});
+
+test("MB.7 跨域触发器必须白名单（进度回写触发器已登记）", () => {
+  const result = boundaries.analyze();
+  assert.equal(result.triggerViolations.length, 0, "存在未登记的跨域触发器");
+  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+  const triggers = config.allowedTriggers || [];
+  assert.ok(triggers.some((row) => row.from === "equipment" && row.table === "process_nodes"));
+  assert.ok(triggers.some((row) => row.from === "equipment" && row.table === "work_orders"));
+});

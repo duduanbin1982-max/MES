@@ -12,6 +12,7 @@
         <el-tag v-if="overview?.freeze?.archive_status === 'archived'" type="danger">已归档</el-tag>
         <el-tag v-else-if="overview?.freeze?.frozen_at" type="warning">已冻结</el-tag>
         <el-button size="small" type="primary" :disabled="isFrozen" @click="openEdit">编辑项目信息</el-button>
+        <el-button size="small" @click="recalcProgress">重算进度</el-button>
         <el-button size="small" @click="load">刷新</el-button>
       </div>
     </div>
@@ -58,6 +59,9 @@
                   <el-descriptions-item label="型号">{{ inst?.model_name || '-' }} {{ inst?.model_code ? `(${inst.model_code})` : '' }}</el-descriptions-item>
                   <el-descriptions-item label="合同金额">{{ inst?.contract_amount ? inst.contract_amount + ' 万' : '-' }}</el-descriptions-item>
                   <el-descriptions-item label="现场位置" :span="2">{{ inst?.site_location || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="进度（自动）">{{ inst?.progress_pct ?? 0 }}%
+                    <el-tag size="small" type="info" style="margin-left: 6px">按工序工时加权</el-tag>
+                  </el-descriptions-item>
                   <el-descriptions-item label="计划工期" :span="2">{{ (inst?.planned_start || '-') + ' → ' + (inst?.planned_end || '-') }}</el-descriptions-item>
                 </el-descriptions>
               </el-card>
@@ -172,7 +176,8 @@
           <el-input v-model="editForm.instance_name" placeholder="例如：郑州地铁 4 号线 4m 盾构机" />
         </el-form-item>
         <el-form-item label="进度">
-          <el-slider v-model="editForm.progress_pct" :min="0" :max="100" :step="1" show-input style="width: 100%" />
+          <el-slider :model-value="editForm.progress_pct" :min="0" :max="100" :step="1" disabled show-input style="width: 100%" />
+          <div class="progress-tip">进度由系统自动计算（工序完成率按标准工时加权；没有工序时按工单完成率），不支持手工修改。</div>
         </el-form-item>
         <el-form-item label="项目号">
           <el-input v-model="editForm.project_no" placeholder="可选" />
@@ -265,10 +270,23 @@ const openEdit = () => {
   editVisible.value = true
 }
 
+const recalcProgress = async () => {
+  try {
+    const result: any = await Api.post(`/equipment_instances/${id.value}/progress/recalc`)
+    const sourceLabel: Record<string, string> = { process_nodes: '工序完成率', work_orders: '工单完成率', none: '暂无工序/工单', unavailable: '进度模型未就绪' }
+    ElMessage.success(`进度已重算：${result.pct ?? 0}%（${sourceLabel[result.source] || result.source}）`)
+    await load()
+  } catch (error: any) {
+    ElMessage.error('重算失败: ' + (error?.response?.data?.message || error?.message || error))
+  }
+}
+
 const saveEdit = async () => {
   editSaving.value = true
   try {
     const patch = buildInstancePatch({ ...editForm })
+    // 进度由后端自动回写，前端不再提交，避免覆盖系统计算值
+    delete patch.progress_pct
     await Api.put(`/equipment_instances/${id.value}`, patch)
     ElMessage.success('已保存项目信息')
     editVisible.value = false
@@ -389,4 +407,10 @@ onMounted(load)
 .card-title { color: var(--el-text-color-secondary); font-size: 13px; }
 .card-value { font-size: 28px; font-weight: 800; margin: 8px 0 4px; }
 .card-sub { color: var(--el-text-color-secondary); font-size: 12px; }
+.progress-tip {
+  color: var(--el-color-info);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
+}
 </style>

@@ -11,6 +11,7 @@
 |---|---|---|
 | 1 | **跨域只读** | 服务只能写「自己拥有的表」。要读别人的数据，走 `v_*` 只读视图（见 `docs/read-model.md`）；要写别人的数据，走对方服务的接口/函数。 |
 | 2 | **跨服务 require 白名单** | 服务之间默认不允许 `require` 对方的模块；确需共用时在 `config/moduleBoundaries.json` 登记并写原因。 |
+| 3 | **跨域触发器受限** | 不允许在别人的表上建触发器（跨域副作用）；确需时登记 `allowedTriggers` 并写原因。 |
 
 ## 2. 表归属怎么判定
 
@@ -39,6 +40,10 @@ services/<file>.js            → 仅当它是某服务的入口文件时归该�
     { "from": "criticalPartsService", "to": "tbmAdvanced", "table": "critical_part_certificates",
       "reason": "registry 已声明 dependsOn: [tbmAdvanced]；表由 tbmAdvanced 建，关键件服务在其上扩展 document_id" }
   ],
+  "allowedTriggers": [
+    { "from": "equipment", "table": "process_nodes",
+      "reason": "进度回写触发器：工序状态变化时自动重算 equipment_instances.progress_pct" }
+  ],
   "sharedTables": []
 }
 ```
@@ -54,6 +59,7 @@ services/<file>.js            → 仅当它是某服务的入口文件时归该�
 | 有明确归属的表 | 49 |
 | 跨服务 require（已白名单） | 8 组 |
 | 跨域写（已白名单） | 1 处（关键件证书表，registry 已声明依赖） |
+| 跨域触发器（已白名单） | 2 处（equipment 在 process_nodes / work_orders 上建进度回写触发器） |
 | 表归属冲突 | 0 |
 | 动态 SQL（表名来自变量，无法静态判定） | 14 个文件 |
 
