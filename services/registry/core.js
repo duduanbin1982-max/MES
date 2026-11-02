@@ -12,7 +12,7 @@ const CORE_SERVICES = [
   { name: "reportService", module: "./reportService", schemaVersion: 6 },
   { name: "resourceService", module: "./resourceService", schemaVersion: 2 },
   { name: "scanner", module: "./scanner", schemaVersion: 1 },
-  { name: "scheduleService", module: "./schedule", schemaVersion: 2 },
+  { name: "scheduleService", module: "./schedule", schemaVersion: 5 },
 ];
 
 module.exports = { CORE_SERVICES };

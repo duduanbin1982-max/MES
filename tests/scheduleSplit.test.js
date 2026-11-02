@@ -22,6 +22,11 @@ const EXPECTED_ROUTES = [
   ["GET", "/api/schedule/capacity"],
   ["GET", "/api/schedule/daily"],
   ["GET", "/api/schedule/my-tasks"],
+  // 2026-11-03：批量重排程（未开工过期节点整体顺延，可撤销）
+  ["GET", "/api/schedule/reschedule/preview"],
+  ["POST", "/api/schedule/reschedule/apply"],
+  ["GET", "/api/schedule/reschedule/batches"],
+  ["POST", "/api/schedule/reschedule/batches/:id/undo"],
 ];
 
 function makeApp() {
@@ -112,7 +117,7 @@ test("SCHED.2 拆分目录里每个相对 require 都能解析", () => {
   assert.deepEqual(missing, []);
 });
 
-test("SCHED.3 register 装配的 6 条路由与拆分前逐条一致", () => {
+test("SCHED.3 register 装配的路由 = 拆分前 6 条 + 批量重排程 4 条", () => {
   const db = makeDb();
   const app = makeApp();
   schedule.register(app, db);

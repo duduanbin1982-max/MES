@@ -12,11 +12,13 @@ require("../schema");
 const createContext = require("./context");
 const registerRoutes1 = require("./routes_1");
 const registerRoutes2 = require("./routes_2");
+const { registerRescheduleRoutes } = require("../reschedule");
 
 function register(app, db) {
   const ctx = createContext(app, db);
   registerRoutes1(app, db, ctx);
   registerRoutes2(app, db, ctx);
+  registerRescheduleRoutes(app, db);
 }
 
 module.exports = { register };

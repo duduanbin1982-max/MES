@@ -3,6 +3,7 @@
     <div class="page-header">
       <div class="page-title"><el-icon><Calendar /></el-icon> 调度看板</div>
       <div class="page-actions">
+        <el-button type="primary" plain @click="openReschedule">批量重排程</el-button>
         <el-button @click="load">刷新</el-button>
       </div>
     </div>
@@ -166,10 +167,73 @@
         <el-button type="primary" @click="submitAssign">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 2026-11-03：批量重排程（只改计划时间，可撤销） -->
+    <el-dialog v-model="rescheduleVisible" title="批量重排程（只改计划时间）" width="820px" :close-on-click-modal="false">
+      <el-form :model="rescheduleForm" label-width="110px" size="small">
+        <el-form-item label="项目范围">
+          <el-select v-model="rescheduleForm.instance_id" clearable placeholder="全部项目" style="width: 100%">
+            <el-option
+              v-for="item in instances"
+              :key="item.id"
+              :label="`${item.instance_code || ''} · ${item.instance_name || ''}`"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="处理范围">
+          <el-checkbox v-model="rescheduleForm.only_overdue">只处理「未开工且计划已过期」</el-checkbox>
+          <div class="reschedule-tip">只调整 planned_start / planned_end；不改状态、派工和实际时间。已开工 / 已完成节点不在范围内。</div>
+        </el-form-item>
+        <el-form-item label="重排方式">
+          <el-radio-group v-model="rescheduleForm.mode">
+            <el-radio value="anchor">对齐到日期</el-radio>
+            <el-radio value="days">顺延天数</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="rescheduleForm.mode === 'anchor'" label="目标日期">
+          <el-date-picker v-model="rescheduleForm.anchor_date" type="date" value-format="YYYY-MM-DD" style="width: 200px" />
+          <span class="reschedule-tip">把该范围最早的工序计划开始时间对齐到这一天，其余按原相对间隔平移。</span>
+        </el-form-item>
+        <el-form-item v-else label="顺延天数">
+          <el-input-number v-model="rescheduleForm.shift_days" :min="1" :max="365" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="rescheduleForm.note" placeholder="例如：11 月计划重排 / 排程过期修正" />
+        </el-form-item>
+      </el-form>
+
+      <div v-if="previewStats" class="reschedule-summary">
+        将调整 <strong>{{ previewStats.total }}</strong> 个工序节点（{{ previewStats.instance_count }} 个项目），实际顺延
+        <strong>{{ previewShiftDays }}</strong> 天
+      </div>
+      <el-table v-if="previewItems.length" :data="previewItems" size="small" border max-height="260">
+        <el-table-column prop="instance_code" label="项目" width="140" />
+        <el-table-column prop="operation_name" label="工序" min-width="110" />
+        <el-table-column prop="status" label="状态" width="90" />
+        <el-table-column label="计划开始（旧 → 新）" min-width="220">
+          <template #default="{ row }">{{ row.old_planned_start || '-' }} → {{ row.new_planned_start || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="计划结束（旧 → 新）" min-width="260">
+          <template #default="{ row }">{{ row.old_planned_end || '-' }} → {{ row.new_planned_end || '-' }}</template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="rescheduleVisible = false">取消</el-button>
+        <el-button :loading="previewLoading" @click="loadReschedulePreview">预览</el-button>
+        <el-button type="primary" :disabled="!previewStats || !previewStats.total" :loading="applyingReschedule" @click="applyReschedule">
+          应用（{{ previewStats?.total || 0 }} 条）
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Api } from '../api'
 import { useSchedulePage } from '../composables/useSchedulePage'
 
 const {
@@ -205,6 +269,82 @@ const {
   onTabChange,
   load,
 } = useSchedulePage()
+
+// ---------------- 批量重排程（2026-11-03） ----------------
+const rescheduleVisible = ref(false)
+const previewLoading = ref(false)
+const applyingReschedule = ref(false)
+const previewStats = ref<{ total: number; instance_count: number } | null>(null)
+const previewShiftDays = ref(0)
+const previewItems = ref<any[]>([])
+const rescheduleForm = ref({
+  instance_id: null as number | null,
+  only_overdue: true,
+  mode: 'anchor' as 'anchor' | 'days',
+  anchor_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
+  shift_days: 30,
+  note: '',
+})
+
+const reschedulePayload = () => {
+  const base: any = {
+    instance_id: rescheduleForm.value.instance_id || undefined,
+    only_overdue: rescheduleForm.value.only_overdue,
+    note: rescheduleForm.value.note || undefined,
+  }
+  if (rescheduleForm.value.mode === 'anchor') base.anchor_date = rescheduleForm.value.anchor_date
+  else base.shift_days = rescheduleForm.value.shift_days
+  return base
+}
+
+const openReschedule = () => {
+  previewStats.value = null
+  previewItems.value = []
+  rescheduleVisible.value = true
+}
+
+const loadReschedulePreview = async () => {
+  if (!reschedulePayload().anchor_date && !reschedulePayload().shift_days) {
+    ElMessage.warning('请选择目标日期或填写顺延天数')
+    return
+  }
+  previewLoading.value = true
+  try {
+    const data: any = await Api.get('/schedule/reschedule/preview', { params: reschedulePayload() })
+    previewStats.value = data.stats
+    previewShiftDays.value = data.shift_days
+    previewItems.value = data.items || []
+    if (!data.stats?.total) ElMessage.warning('没有符合条件的工序节点（检查范围与"只处理过期"选项）')
+  } catch (error: any) {
+    ElMessage.error('预览失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+const applyReschedule = async () => {
+  if (!previewStats.value?.total) return
+  try {
+    await ElMessageBox.confirm(
+      `将调整 ${previewStats.value.total} 个工序节点的计划时间（顺延 ${previewShiftDays.value} 天），不改状态与实际时间。确认应用？`,
+      '确认批量重排程',
+      { type: 'warning' },
+    )
+  } catch { return }
+  applyingReschedule.value = true
+  try {
+    const result: any = await Api.post('/schedule/reschedule/apply', reschedulePayload())
+    ElMessage.success(`已应用：${result.node_count} 个节点，批次号 ${result.batch_no}`)
+    rescheduleVisible.value = false
+    previewStats.value = null
+    previewItems.value = []
+    await load()
+  } catch (error: any) {
+    ElMessage.error('应用失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    applyingReschedule.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -246,5 +386,19 @@ const {
 
 .clickable-table {
   cursor: pointer;
+}
+.reschedule-tip {
+  color: var(--el-color-info);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.reschedule-summary {
+  margin: 4px 0 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--el-color-warning-light-9);
+  color: var(--color-text);
+  font-size: 13px;
 }
 </style>
