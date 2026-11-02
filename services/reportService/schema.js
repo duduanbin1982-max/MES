@@ -1,3 +1,4 @@
+"use strict";
 // services/reportService/schema.js
 // 2026-11-02：只读视图（read model）。
 //
@@ -8,10 +9,13 @@
 //   3. 视图只读（CREATE VIEW），不写任何数据，不影响各模块的事务与写入路径。
 //
 // 变更流程：改视图 -> 提升 registry 里 reportService 的 schemaVersion -> npm run schema:write
+// 注意：SQLite 没有 CREATE OR REPLACE VIEW，必须 DROP + CREATE 才能让已有库更新视图定义。
 
 // 风险口径（5 个计数）：risk-summary 只需要这 5 个，单独成型避免多算
-const RISK_COUNTS = `
-CREATE VIEW IF NOT EXISTS v_risk_counts AS
+const RISK_COUNTS = {
+  name: "v_risk_counts",
+  sql: `
+CREATE VIEW v_risk_counts AS
 SELECT
   (SELECT COUNT(*) FROM work_orders
     WHERE planned_end IS NOT NULL AND planned_end < datetime('now')
@@ -22,11 +26,14 @@ SELECT
   (SELECT COUNT(*) FROM key_components WHERE lead_time_weeks >= 12)             AS long_leadtime,
   (SELECT COUNT(*) FROM instance_eco WHERE status = 'open')                     AS open_eco,
   (SELECT COUNT(*) FROM field_service WHERE status = 'open')                    AS open_field_service
-`;
+`,
+};
 
 // 看板头部计数：7 个规模指标 + 复用风险口径（一次查询拿全）
-const DASHBOARD_COUNTS = `
-CREATE VIEW IF NOT EXISTS v_dashboard_counts AS
+const DASHBOARD_COUNTS = {
+  name: "v_dashboard_counts",
+  sql: `
+CREATE VIEW v_dashboard_counts AS
 SELECT
   (SELECT COUNT(*) FROM equipment_types WHERE is_active = 1)                    AS equipment_types_active,
   (SELECT COUNT(*) FROM equipment_models)                                       AS equipment_models,
@@ -41,36 +48,50 @@ SELECT
   risk.open_eco                                                                 AS open_eco,
   risk.open_field_service                                                       AS open_field_service
 FROM v_risk_counts risk
-`;
+`,
+};
 
-// 按状态分组（工单 / 工序 / 项目）
-const WORK_ORDER_STATUS = `
-CREATE VIEW IF NOT EXISTS v_work_order_status_counts AS
+const WORK_ORDER_STATUS = {
+  name: "v_work_order_status_counts",
+  sql: `
+CREATE VIEW v_work_order_status_counts AS
 SELECT status, COUNT(*) AS c FROM work_orders GROUP BY status
-`;
+`,
+};
 
-const PROCESS_NODE_STATUS = `
-CREATE VIEW IF NOT EXISTS v_process_node_status_counts AS
+const PROCESS_NODE_STATUS = {
+  name: "v_process_node_status_counts",
+  sql: `
+CREATE VIEW v_process_node_status_counts AS
 SELECT status, COUNT(*) AS c FROM process_nodes GROUP BY status
-`;
+`,
+};
 
-const INSTANCE_STATUS = `
-CREATE VIEW IF NOT EXISTS v_instance_status_counts AS
+const INSTANCE_STATUS = {
+  name: "v_instance_status_counts",
+  sql: `
+CREATE VIEW v_instance_status_counts AS
 SELECT status, COUNT(*) AS c FROM equipment_instances GROUP BY status
-`;
+`,
+};
 
 // 长交期关键件（>= 12 周）：原来在接口里 JOIN key_components + materials
-const LONG_LEADTIME = `
-CREATE VIEW IF NOT EXISTS v_long_leadtime_components AS
+const LONG_LEADTIME = {
+  name: "v_long_leadtime_components",
+  sql: `
+CREATE VIEW v_long_leadtime_components AS
 SELECT m.material_code, m.material_name, kc.lead_time_weeks, kc.supplier, kc.unit_price
 FROM key_components kc
 JOIN materials m ON m.id = kc.material_id
 WHERE kc.lead_time_weeks >= 12
-`;
+`,
+};
 
 // 实例级健康指标：一次查询拿到 8 个环节所需的全部计数（原来每实例 ~22 次 count）
-const INSTANCE_HEALTH_METRICS = `
-CREATE VIEW IF NOT EXISTS v_instance_health_metrics AS
+const INSTANCE_HEALTH_METRICS = {
+  name: "v_instance_health_metrics",
+  sql: `
+CREATE VIEW v_instance_health_metrics AS
 SELECT
   ei.id                       AS instance_id,
   ei.instance_code            AS instance_code,
@@ -129,11 +150,14 @@ SELECT
   (SELECT COUNT(*) FROM project_cost_entries c WHERE c.equipment_instance_id = ei.id AND c.deleted_at IS NULL) AS cost_entries,
   (SELECT COUNT(DISTINCT c.cost_type) FROM project_cost_entries c WHERE c.equipment_instance_id = ei.id AND c.deleted_at IS NULL) AS cost_types
 FROM equipment_instances ei
-`;
+`,
+};
 
 // 现场实时状态：在健康指标视图上再收敛一层，接口只读这一张
-const INSTANCE_LIVE_STATUS = `
-CREATE VIEW IF NOT EXISTS v_instance_live_status AS
+const INSTANCE_LIVE_STATUS = {
+  name: "v_instance_live_status",
+  sql: `
+CREATE VIEW v_instance_live_status AS
 SELECT
   instance_id AS id,
   instance_code,
@@ -143,9 +167,10 @@ SELECT
   active_orders,
   blocked_nodes
 FROM v_instance_health_metrics
-`;
+`,
+};
 
-// 顺序有依赖：v_dashboard_counts 依赖 v_risk_counts
+// 顺序有依赖：v_dashboard_counts 依赖 v_risk_counts；live_status 依赖 health_metrics
 const READ_MODEL_VIEWS = [
   RISK_COUNTS,
   DASHBOARD_COUNTS,
@@ -158,12 +183,14 @@ const READ_MODEL_VIEWS = [
 ];
 
 /**
- * 创建只读视图（幂等）。
- * 由 reportService 的 register 调用；DDL 计入 reportService 的 schemaVersion。
+ * 重建只读视图（幂等）。
+ * SQLite 不支持 CREATE OR REPLACE VIEW，所以先 DROP 再 CREATE；
+ * DDL 计入 reportService 的 schemaVersion（改定义必须升版本）。
  */
 function ensureReadModel(db) {
-  for (const sql of READ_MODEL_VIEWS) {
-    db.exec(sql);
+  for (const view of READ_MODEL_VIEWS) {
+    db.exec(`DROP VIEW IF EXISTS ${view.name}`);
+    db.exec(view.sql);
   }
 }
 

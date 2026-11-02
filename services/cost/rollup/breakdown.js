@@ -2,7 +2,8 @@
 const { wrap } = require('../../../middleware/asyncHandler');
 // services/cost/rollup/breakdown.js
 // GET /api/equipment_instances/:id/cost_rollup/breakdown
-// 明细行: 关键件 + 普通物料 + 工时, 每行 cost_status
+// 明细行: 关键件 + 普通物料 + 工时 + 成本台账, 每行 cost_status
+// 2026-11-02：跨域读改为只读视图（readModel.js），不再直接 JOIN 业务表
 // Author: 三狗子 | Date: 2026-06-24
 
 const { round2 } = require("./queries");
@@ -10,62 +11,60 @@ const { round2 } = require("./queries");
 function register(app, db) {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
   const get = (sql, ...p) => db.prepare(sql).get(...p);
-  const tableExists = (name) => !!get("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", name);
-  
+  // 成本台账视图依赖 project_cost_entries；老库/精简测试库里可能没有该表，查询失败按空处理
+  const safeAll = (sql, ...p) => {
+    try { return all(sql, ...p); } catch (_error) { return []; }
+  };
 
   app.get('/api/equipment_instances/:id/cost_rollup/breakdown', wrap((req, res) => {
-    const inst = get('SELECT * FROM equipment_instances WHERE id = ?', req.params.id);
+    const inst = get('SELECT id, instance_code, instance_name FROM v_instance_contract_summary WHERE id = ?', req.params.id);
     if (!inst) return res.status(404).json({ error: 'equipment_instance not found' });
 
     const keyRows = all(`
       SELECT
         'key_component' AS line_type,
-        ib.id           AS bom_id,
-        kc.id           AS item_id,
-        m.material_code,
-        m.material_name,
-        kc.component_type,
-        kc.supplier,
-        ib.quantity,
-        kc.unit_price   AS estimated_unit_price,
-        kcp.actual_price AS actual_unit_price,
-        kcp.contract_no,
-        ROUND(kc.unit_price * ib.quantity, 2) AS estimated_total,
-        ROUND(COALESCE(kcp.actual_price, kc.unit_price) * ib.quantity, 2) AS actual_total,
-        ROUND(COALESCE(kcp.actual_price, kc.unit_price) * ib.quantity - kc.unit_price * ib.quantity, 2) AS price_diff,
+        bom_id,
+        key_component_id AS item_id,
+        material_code,
+        material_name,
+        component_type,
+        supplier,
+        quantity,
+        estimated_unit_price,
+        actual_unit_price,
+        contract_no,
+        ROUND(estimated_unit_price * quantity, 2) AS estimated_total,
+        ROUND(COALESCE(actual_unit_price, estimated_unit_price) * quantity, 2) AS actual_total,
+        ROUND(COALESCE(actual_unit_price, estimated_unit_price) * quantity - estimated_unit_price * quantity, 2) AS price_diff,
         CASE
-          WHEN kcp.actual_price IS NULL THEN 'no_contract_yet'
-          WHEN kcp.actual_price <= kc.unit_price THEN 'on_or_under_budget'
-          WHEN kcp.actual_price > kc.unit_price * 1.2 THEN 'over_20pct'
+          WHEN actual_unit_price IS NULL THEN 'no_contract_yet'
+          WHEN actual_unit_price <= estimated_unit_price THEN 'on_or_under_budget'
+          WHEN actual_unit_price > estimated_unit_price * 1.2 THEN 'over_20pct'
           ELSE 'over_10pct'
         END AS cost_status
-      FROM instance_bom ib
-      JOIN key_components kc ON kc.material_id = ib.material_id
-      JOIN materials m       ON m.id = ib.material_id
-      LEFT JOIN key_component_prices kcp ON kcp.id = kc.last_price_id
-      WHERE ib.equipment_instance_id = ? AND ib.is_key_component = 1
+      FROM v_instance_bom_key_component_lines
+      WHERE instance_id = ?
     `, req.params.id);
 
     const matRows = all(`
       SELECT
         'material' AS line_type,
-        ib.id      AS bom_id,
-        m.id       AS item_id,
-        m.material_code,
-        m.material_name,
-        m.material_type,
-        m.unit,
-        ib.quantity,
-        m.estimated_unit_price AS estimated_unit_price,
-        m.estimated_unit_price AS actual_unit_price,
+        bom_id,
+        material_id AS item_id,
+        material_code,
+        material_name,
+        material_type,
+        unit,
+        quantity,
+        estimated_unit_price,
+        estimated_unit_price AS actual_unit_price,
         NULL AS contract_no,
-        ROUND(m.estimated_unit_price * ib.quantity, 2) AS estimated_total,
-        ROUND(m.estimated_unit_price * ib.quantity, 2) AS actual_total,
+        ROUND(estimated_unit_price * quantity, 2) AS estimated_total,
+        ROUND(estimated_unit_price * quantity, 2) AS actual_total,
         0 AS price_diff,
         'estimated_only' AS cost_status
-      FROM instance_bom ib
-      JOIN materials m ON m.id = ib.material_id
-      WHERE ib.equipment_instance_id = ? AND COALESCE(ib.is_key_component, 0) = 0
+      FROM v_instance_bom_material_lines
+      WHERE instance_id = ?
     `, req.params.id);
 
     const laborRow = get(`
@@ -89,19 +88,15 @@ function register(app, db) {
           WHEN actual_hours < estimated_hours        THEN 'under_budget'
           ELSE 'on_or_under_budget'
         END AS cost_status
-      FROM (
-        SELECT
-          COALESCE(SUM(estimated_hours), 0) AS estimated_hours,
-          COALESCE(SUM(actual_hours), 0)    AS actual_hours
-        FROM work_orders WHERE equipment_instance_id = ?
-      )
+      FROM v_instance_labor_totals
+      WHERE instance_id = ?
     `, req.params.id);
 
-    const projectCostRows = tableExists("project_cost_entries") ? all(`
+    const projectCostRows = safeAll(`
       SELECT
         'project_cost_entry' AS line_type,
         bom_node_id AS bom_id,
-        id AS item_id,
+        item_id,
         cost_type AS material_code,
         description AS material_name,
         cost_type AS material_type,
@@ -115,22 +110,14 @@ function register(app, db) {
         0 AS price_diff,
         status AS cost_status,
         cost_type,
-        CASE cost_type
-          WHEN 'outsourcing' THEN '外协'
-          WHEN 'depreciation' THEN '折旧'
-          WHEN 'rework' THEN '返工'
-          WHEN 'quality_loss' THEN '质量损失'
-          ELSE cost_type
-        END AS cost_type_label,
+        cost_type_label,
         source_type,
         vendor,
         occurred_on,
         notes
-      FROM project_cost_entries
-      WHERE equipment_instance_id = ?
-        AND deleted_at IS NULL
-        AND status != 'void'
-    `, req.params.id) : [];
+      FROM v_instance_cost_entry_lines
+      WHERE instance_id = ?
+    `, req.params.id);
 
     const items = [...keyRows, ...matRows, ...projectCostRows];
     if (laborRow && (Number(laborRow.estimated_total) > 0 || Number(laborRow.actual_total) > 0)) {

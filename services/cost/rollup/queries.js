@@ -1,60 +1,58 @@
 "use strict";
 // services/cost/rollup/queries.js
 // rollup 与 breakdown 共享的 SQL 与工具
+// 2026-11-02：改为读只读视图（services/cost/rollup/readModel.js），不再直接 JOIN 业务表。
 // Author: 三狗子 | Date: 2026-06-24
 
 function round2(n) { return Math.round(n * 100) / 100; }
 
+// 关键件成本（按关键件聚合，含最近合同价）
 const KEY_COMP_SQL = `
     SELECT
-      kc.id                              AS key_component_id,
-      m.id                              AS material_id,
-      m.material_code,
-      m.material_name,
-      kc.component_type,
-      kc.supplier,
-      SUM(ib.quantity)                   AS quantity,
-      kc.unit_price                     AS estimated_unit_price,
-      kcp.actual_price                  AS actual_unit_price,
-      kcp.id                            AS price_id,
-      kcp.contract_no,
-      kcp.vendor_po,
-      kcp.currency,
-      kcp.valid_from,
-      kcp.valid_to
-    FROM key_components kc
-    JOIN materials m ON m.id = kc.material_id
-    JOIN instance_bom ib
-      ON ib.material_id = kc.material_id AND ib.equipment_instance_id = ? AND ib.is_key_component = 1
-    LEFT JOIN key_component_prices kcp ON kcp.id = kc.last_price_id
-    GROUP BY kc.id
-    ORDER BY kc.id
+      key_component_id,
+      material_id,
+      material_code,
+      material_name,
+      component_type,
+      supplier,
+      quantity,
+      estimated_unit_price,
+      actual_unit_price,
+      price_id,
+      contract_no,
+      vendor_po,
+      currency,
+      valid_from,
+      valid_to
+    FROM v_instance_key_component_costs
+    WHERE instance_id = ?
+    ORDER BY key_component_id
   `;
 
+// 普通物料成本（按物料聚合）
 const NORMAL_MAT_SQL = `
     SELECT
-      m.id                              AS material_id,
-      m.material_code,
-      m.material_name,
-      m.material_type,
-      m.unit,
-      SUM(ib.quantity)                  AS quantity,
-      m.estimated_unit_price            AS estimated_unit_price
-    FROM instance_bom ib
-    JOIN materials m ON m.id = ib.material_id
-    WHERE ib.equipment_instance_id = ? AND COALESCE(ib.is_key_component, 0) = 0
-    GROUP BY m.id
-    ORDER BY m.id
+      material_id,
+      material_code,
+      material_name,
+      material_type,
+      unit,
+      quantity,
+      estimated_unit_price
+    FROM v_instance_material_costs
+    WHERE instance_id = ?
+    ORDER BY material_id
   `;
 
+// 工时汇总（每实例一行）
 const HOURS_SQL = `
     SELECT
-      COALESCE(SUM(estimated_hours), 0)  AS estimated_hours,
-      COALESCE(SUM(actual_hours), 0)     AS actual_hours,
-      COUNT(*)                            AS work_order_count,
-      SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count
-    FROM work_orders
-    WHERE equipment_instance_id = ?
+      estimated_hours,
+      actual_hours,
+      work_order_count,
+      completed_count
+    FROM v_instance_labor_totals
+    WHERE instance_id = ?
   `;
 
 module.exports = { round2, KEY_COMP_SQL, NORMAL_MAT_SQL, HOURS_SQL };

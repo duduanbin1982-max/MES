@@ -4,6 +4,7 @@ const { wrap } = require('../../../middleware/asyncHandler');
 // GET /api/equipment_instances/:id/cost_rollup
 // 主成本归集: 关键件 + 普通物料 + 工时 + 合同毛利
 // 聚合逻辑 (aggregateKeyComponents/aggregateMaterials/deriveContractMetrics) 抽到 aggregate.js
+// 2026-11-02：跨域读改为只读视图（readModel.js）
 // Author: 三狗子 | Date: 2026-06-24
 
 const { KEY_COMP_SQL, NORMAL_MAT_SQL, HOURS_SQL } = require("./queries");
@@ -13,9 +14,14 @@ const { aggregateKeyComponents, aggregateMaterials, deriveContractMetrics } = re
 function register(app, db) {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
   const get = (sql, ...p) => db.prepare(sql).get(...p);
-  
+
   app.get('/api/equipment_instances/:id/cost_rollup', wrap((req, res) => {
-    const inst = get('SELECT * FROM equipment_instances WHERE id = ?', req.params.id);
+    const inst = get(
+      `SELECT id, instance_code, instance_name, customer_name, contract_no,
+              contract_amount, contract_amount_unit, status, progress_pct
+       FROM v_instance_contract_summary WHERE id = ?`,
+      req.params.id
+    );
     if (!inst) return res.status(404).json({ error: 'equipment_instance not found' });
 
     const keys  = all(KEY_COMP_SQL,   req.params.id);

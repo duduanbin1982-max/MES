@@ -22,9 +22,9 @@
       "ddlStatements": 4
     },
     "cost": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "7655b6fb1e59cc39b42294d598dd05583c6c77b39eec6b984b529d19282c86e5",
-      "ddlStatements": 3
+      "schemaVersion": 6,
+      "ddlFingerprint": "91b6810c758dd41c977a872b8bc1b2cc2f849cba55009087bc42bd96a6cbe44e",
+      "ddlStatements": 11
     },
     "criticalPartsService": {
       "schemaVersion": 2,
@@ -177,9 +177,9 @@
       "ddlStatements": 4
     },
     "reportService": {
-      "schemaVersion": 3,
-      "ddlFingerprint": "8ed7c34d82fd2acea7c03c4338e5509c8ccbbbc89abbeb47f233df39ba100fed",
-      "ddlStatements": 11
+      "schemaVersion": 4,
+      "ddlFingerprint": "5f05161789132502cfa483b42c646d23218eac0e8b13f72a8646f3b92d1c0079",
+      "ddlStatements": 12
     },
     "resourceService": {
       "schemaVersion": 2,
