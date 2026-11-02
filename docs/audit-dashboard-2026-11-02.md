@@ -356,3 +356,32 @@ F-10 计数口径、F-11 去重复请求、F-12 加轮询/WS 刷新、F-13 阈�
 | `evidence/dashboard-usage.txt` | 4 个子接口的前端/文档/测试引用情况 |
 | `evidence/dashboard-menu.txt` / `dashboard-home.txt` | 菜单权限策略与角色默认落地页 |
 | `evidence/dashboard-util.txt` | OEE 与 live_status 利用率对照 |
+
+---
+
+## 9. 整改记录（2026-11-02 当晚）
+
+业务确认口径「延误要区分已开工超期和未开工计划过期」后，3 个 P1 + F-04 一半已整改（提交 `7325322`）。
+
+| 发现 | 整改内容 | 结果 |
+|---|---|---|
+| **F-01** 权限缺口 | `apiPermissions.js:87` 正则补 `risk-summary` / `long-leadtime` / `live-status` / `process-health`；新增 `tests/apiPermissionsDashboard.test.js`（8 接口 × 7 角色矩阵） | welder/worker 由 **200 → 403**；planner/qc/sales 仍 200 ✅ |
+| **F-02** 延误信号失效 | 延误拆三档：已开工超期（in_progress/paused）/ 未开工计划过期（pending/ready）/ 受阻；风险合计只算执行风险，未开工过期单列 backlog | 风险合计 **135 → 12**（执行中超期 5 + 长交期 6 + ECO 1）；延误明细仍 128（5 + 123）✅ |
+| **F-03** 长交期双阈值 | 风险视图同时输出 12 周 / 16 周两档；前端 ≥16 周标「紧急」 | 12 周 6 条 / 16 周 3 条，文案区分「紧急」✅ |
+| **F-04** 一半 | `/api/dashboard` 补 `instances.by_type`（新增视图 `v_instance_type_counts`）；前端「装备类型」饼图不再空白 | 返回 `[{"type":"盾构机/掘进机","c":5}]` ✅ |
+
+**仍待整改**（按审计建议顺序）：
+
+| 级别 | 未完成项 |
+|---|---|
+| P2 | F-04 剩余（删 2 个死接口 + 2 个视图、`/dashboard/alerts` 迁出 dashboard 前缀） |
+| P2 | F-05 静默失败（degraded 标记 + 前端健康检查失败提示） |
+| P2 | F-06 时区口径（planned_end 本地时间 vs UTC 比较，最多少算 8h） |
+| P2 | F-07 利用率两套定义（OEE 工时利用率 vs 设备忙闲率） |
+| P2 | F-08 数据质量（127 个工序的计划时间在 7–9 月，需业务重排程） |
+| P2 | F-10 计数口径（归档实例 / equipment_models 的 is_active） |
+| P3 | F-11 去重复请求、F-12 自动刷新、F-13 阈值配置化、F-14 扩展性、F-15 路由权限、F-16 未知实例 404 |
+
+**整改后评级**：B（原 B-）。权限与口径两个 P1 已消除，剩余均为体验/一致性/数据质量问题。
+
+**证据**：`git log 7325322`；`docs/delay-definition.md`（两档口径全文）；`tests/apiPermissionsDashboard.test.js`。
