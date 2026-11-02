@@ -94,6 +94,13 @@ const RULES = [
   match(/^\/equipment_instance_templates(?:\/.*)?$/, READ, ["equipment:read"]),
   match(/^\/equipment_instance_templates(?:\/.*)?$/, WRITE, ["equipment:write"]),
   match(/^\/equipment_instances(?:\/\d+)?$/, WRITE, ["equipment:write"]),
+  // 2026-11-02：交付单 / 验收单
+  match(/^\/equipment_instances\/\d+\/(?:deliveries|acceptances)$/, READ, ["equipment:read"]),
+  match(/^\/equipment_instances\/\d+\/(?:deliveries|acceptances)$/, ["POST"], ["equipment:write"]),
+  match(/^\/deliveries\/\d+$/, ["PUT", "DELETE"], ["equipment:write"]),
+  match(/^\/deliveries\/\d+\/status$/, ["POST"], ["equipment:write"]),
+  match(/^\/acceptances\/\d+$/, ["PUT", "DELETE"], ["equipment:write"]),
+  match(/^\/acceptances\/\d+\/sign$/, ["POST"], ["equipment:write"]),
   // 2026-11-02：项目进度补数（回写由触发器完成，这两个接口用于历史数据补算）
   match(/^\/equipment_instances\/\d+\/progress\/recalc$/, WRITE, ["equipment:write"]),
   match(/^\/equipment_instances\/progress\/recalc-all$/, WRITE, ["equipment:write"]),

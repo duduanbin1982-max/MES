@@ -123,3 +123,24 @@ test("PH.12 新建空实例：BOM 已挂批次=0、无领料/序列号 → 齐�
   assert.equal(stage.score, 0);
   assert.ok(stage.blockers.some((b) => /批次/.test(b)));
 });
+
+test("PH.13 交付与成本：交付证据（里程碑或交付单）+ 验收单提示", () => {
+  // 只有里程碑、没有交付单 → 已通（兼容老项目）
+  const milestoneOnly = evaluateStage("delivery_cost", metrics({ delivery_milestones: 2, delivery_orders: 0, acceptance_records: 0, cost_entries: 5, cost_types: 2 }));
+  assert.equal(milestoneOnly.status, "ok");
+  assert.ok(milestoneOnly.blockers.some((b) => /验收记录/.test(b)), "有交付但没验收要提示");
+
+  // 只有交付单、没有里程碑 → 也算已通（新模型：单据是事实）
+  const orderOnly = evaluateStage("delivery_cost", metrics({ delivery_milestones: 0, delivery_orders: 1, acceptance_records: 1, cost_entries: 5, cost_types: 2 }));
+  assert.equal(orderOnly.status, "ok");
+  assert.equal(orderOnly.blockers.some((b) => /验收记录/.test(b)), false, "有验收记录就不再提示");
+
+  // 两者都没有 → 部分，且卡点说明交付记录缺失
+  const nothing = evaluateStage("delivery_cost", metrics({ delivery_milestones: 0, delivery_orders: 0, acceptance_records: 0, cost_entries: 3, cost_types: 1 }));
+  assert.equal(nothing.status, "partial");
+  assert.ok(nothing.blockers.some((b) => /交付记录/.test(b)));
+
+  // 交付证据齐 + 成本两类才 ok
+  assert.equal(evaluateStage("delivery_cost", metrics({ delivery_orders: 1, cost_entries: 3, cost_types: 2 })).status, "ok");
+  assert.equal(evaluateStage("delivery_cost", metrics({ delivery_orders: 1, cost_entries: 3, cost_types: 1 })).status, "partial");
+});

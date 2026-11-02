@@ -32,6 +32,8 @@ const TABLE_DDL = [
   "CREATE TABLE ndt_records (id INTEGER PRIMARY KEY, work_order_id INTEGER)",
   "CREATE TABLE assembly_records (id INTEGER PRIMARY KEY, work_order_id INTEGER)",
   "CREATE TABLE documents (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, work_order_id INTEGER)",
+  "CREATE TABLE delivery_orders (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, status TEXT)",
+  "CREATE TABLE acceptance_records (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER)",
   "CREATE TABLE project_cost_entries (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, deleted_at TEXT, cost_type TEXT)",
   "CREATE TABLE work_order_operations (id INTEGER PRIMARY KEY, work_order_id INTEGER, hours_worked REAL)",
 ];
@@ -76,6 +78,8 @@ function seed(db) {
     INSERT INTO ndt_records (id, work_order_id) VALUES (1, 1);
     INSERT INTO assembly_records (id, work_order_id) VALUES (1, 1);
     INSERT INTO documents (id, equipment_instance_id, work_order_id) VALUES (1, 1, NULL), (2, NULL, 1);
+    INSERT INTO delivery_orders (id, equipment_instance_id, status) VALUES (1, 1, 'shipped'), (2, 1, 'cancelled');
+    INSERT INTO acceptance_records (id, equipment_instance_id) VALUES (1, 1);
     INSERT INTO project_cost_entries (id, equipment_instance_id, deleted_at, cost_type) VALUES
       (1, 1, NULL, 'material'), (2, 1, NULL, 'labor'), (3, 1, '2026-10-01', 'material');
     INSERT INTO key_components (id, material_id, lead_time_weeks, supplier, unit_price) VALUES
@@ -160,6 +164,8 @@ test("RMV.3 v_instance_health_metrics：8 环节指标按实例一次成型", ()
   assert.equal(row.assembly, 1);
   assert.equal(row.documents, 2, "直接挂实例 + 挂工单的都要算");
   assert.equal(row.delivery_milestones, 1);
+  assert.equal(row.delivery_orders, 1, "作废的交付单不计入");
+  assert.equal(row.acceptance_records, 1);
   assert.equal(row.cost_entries, 2, "已删除的不算");
   assert.equal(row.cost_types, 2, "material + labor");
 

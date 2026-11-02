@@ -147,6 +147,8 @@ SELECT
   (SELECT COUNT(*) FROM instance_milestones m
     WHERE m.equipment_instance_id = ei.id
       AND (m.phase_code LIKE '%deliver%' OR m.phase_name LIKE '%交付%' OR m.phase_name LIKE '%验收%')) AS delivery_milestones,
+  (SELECT COUNT(*) FROM delivery_orders d WHERE d.equipment_instance_id = ei.id AND d.status <> 'cancelled') AS delivery_orders,
+  (SELECT COUNT(*) FROM acceptance_records a WHERE a.equipment_instance_id = ei.id) AS acceptance_records,
   (SELECT COUNT(*) FROM project_cost_entries c WHERE c.equipment_instance_id = ei.id AND c.deleted_at IS NULL) AS cost_entries,
   (SELECT COUNT(DISTINCT c.cost_type) FROM project_cost_entries c WHERE c.equipment_instance_id = ei.id AND c.deleted_at IS NULL) AS cost_types
 FROM equipment_instances ei

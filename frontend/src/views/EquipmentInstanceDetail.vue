@@ -166,6 +166,10 @@
             </el-table>
           </el-card>
         </el-tab-pane>
+
+        <el-tab-pane label="交付验收" name="delivery">
+          <InstanceDeliveryTab :instance-id="id" />
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -223,6 +227,7 @@ import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
+import InstanceDeliveryTab from './delivery/InstanceDeliveryTab.vue'
 import { EQUIPMENT_LIFECYCLE_META, EQUIPMENT_LIFECYCLE_OPTIONS, statusLabel as catalogStatusLabel, statusTag as catalogStatusTag } from '../domain/statusCatalog'
 import { buildInstancePatch, normalizeProgressPct } from '../domain/instanceEdit'
 

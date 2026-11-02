@@ -103,12 +103,17 @@ function evaluateStage(key, metrics) {
     status = docs > 0 ? "ok" : "empty";
     if (!docs) blockers.push("还没有关联到该项目的文档（图纸/SOP/证书）");
   } else if (key === "delivery_cost") {
-    const delivery = get("delivery_milestones");
+    const milestones = get("delivery_milestones");
+    const orders = get("delivery_orders");
+    const acceptances = get("acceptance_records");
     const cost = get("cost_entries");
     const costTypes = get("cost_types");
-    if (delivery > 0 && costTypes >= 2) status = "ok";
-    else if (delivery > 0 || cost > 0) status = "partial";
-    if (!delivery) blockers.push("还没有交付/验收相关的里程碑");
+    // 交付证据：里程碑 或 交付单；验收单单独作为提示（不参与 ok 判定，避免在建项目永远不达标）
+    const hasDelivery = milestones > 0 || orders > 0;
+    if (hasDelivery && costTypes >= 2) status = "ok";
+    else if (hasDelivery || cost > 0) status = "partial";
+    if (!hasDelivery) blockers.push("还没有交付记录（交付里程碑或交付单）");
+    else if (acceptances === 0) blockers.push("还没有验收记录（验收单未签署）");
     if (!cost) blockers.push("还没有成本台账（成本偏差无从计算）");
     else if (costTypes < 2) blockers.push(`成本台账只有 ${costTypes} 类（建议至少材料+人工/外协）`);
   }
@@ -144,7 +149,7 @@ function partialProgress(key, get, metricsByKey) {
     return get("contract") > 0 ? 100 : 0;
   }
   if (key === "delivery_cost") {
-    const delivery = get("delivery_milestones") > 0 ? 1 : 0;
+    const delivery = (get("delivery_milestones") > 0 || get("delivery_orders") > 0) ? 1 : 0;
     const cost = Math.min(get("cost_types") / 2, 1);
     return ((delivery + cost) / 2) * 100;
   }

@@ -42,9 +42,9 @@
       "ddlStatements": 0
     },
     "deliveryService": {
-      "schemaVersion": 3,
-      "ddlFingerprint": "d79023485f215d21429e0f7dbfa1c94560401c231af9073d4d585e82f6e76066",
-      "ddlStatements": 4
+      "schemaVersion": 4,
+      "ddlFingerprint": "48d45bcb404c94fb0b8afafca80ddcd5eed885dd8c0c764483d1db0fa074c28e",
+      "ddlStatements": 5
     },
     "digitalTwinService": {
       "schemaVersion": 1,
@@ -177,8 +177,8 @@
       "ddlStatements": 4
     },
     "reportService": {
-      "schemaVersion": 4,
-      "ddlFingerprint": "5f05161789132502cfa483b42c646d23218eac0e8b13f72a8646f3b92d1c0079",
+      "schemaVersion": 5,
+      "ddlFingerprint": "94aa537a6f928e5e12a8367d83e270f5d966addb8fc180b68d7bfa4ba073b77c",
       "ddlStatements": 12
     },
     "resourceService": {

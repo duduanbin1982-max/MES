@@ -174,6 +174,8 @@ function register(app, db) {
       ],
       delivery_cost: [
         metric("delivery_milestones", "交付/验收里程碑", n('delivery_milestones')),
+        metric("delivery_orders", "交付单", n('delivery_orders')),
+        metric("acceptance_records", "验收单", n('acceptance_records')),
         metric("cost_entries", "成本台账", n('cost_entries')),
         metric("cost_types", "成本类型数", n('cost_types')),
       ],

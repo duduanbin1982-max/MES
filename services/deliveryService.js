@@ -9,9 +9,12 @@ const { runMigration } = require("./delivery/migration");
 const { createReadModel } = require("./delivery/readModel");
 const { registerDeliveryRoutes } = require("./delivery/routes");
 const { createSourceSync } = require("./delivery/sourceSync");
+const { initDeliveryRecordsSchema, registerDeliveryRecordRoutes } = require("./delivery/records");
 
 function register(app, db) {
   runMigration(db);
+  // 2026-11-02：交付单 / 验收单（补「交付/验收无单据表」断点）
+  initDeliveryRecordsSchema(db);
   const dbContext = createDeliveryDbContext(db);
   const caseStore = createCaseStore({ db, audit, ...dbContext });
   const escalation = createEscalationService({ ...dbContext, ...caseStore });
@@ -45,6 +48,8 @@ function register(app, db) {
     sendExceptionNotice: escalation.sendExceptionNotice,
     alreadyNotifiedToday: escalation.alreadyNotifiedToday,
   });
+
+  registerDeliveryRecordRoutes(app, db);
 }
 
 module.exports = { register };
