@@ -157,9 +157,9 @@
       "ddlStatements": 0
     },
     "processTree": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "c44c261843ae20353084e93abd37600df7185d67e94681c2c86f2aef38822aec",
-      "ddlStatements": 5
+      "schemaVersion": 3,
+      "ddlFingerprint": "8b1fe63232171e3190710dc4ace35d08c69c1b8d1e94132d6fb570fca3158a96",
+      "ddlStatements": 6
     },
     "projectMasterService": {
       "schemaVersion": 1,
@@ -177,9 +177,9 @@
       "ddlStatements": 4
     },
     "reportService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "fc0c77d4278cda59bbdbcd626f6689d65c95b5f9578e538a73844c0d231543ac",
-      "ddlStatements": 3
+      "schemaVersion": 3,
+      "ddlFingerprint": "8ed7c34d82fd2acea7c03c4338e5509c8ccbbbc89abbeb47f233df39ba100fed",
+      "ddlStatements": 11
     },
     "resourceService": {
       "schemaVersion": 2,
