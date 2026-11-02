@@ -2,7 +2,7 @@
   <div class="delivery-tab">
     <el-row :gutter="16">
       <!-- 交付单 -->
-      <el-col :span="12">
+      <el-col :span="24" style="margin-bottom: 16px">
         <el-card shadow="never">
           <template #header>
             <div class="card-head">
@@ -34,7 +34,7 @@
                 <div class="muted">{{ row.tracking_no || '-' }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="170" align="center">
+            <el-table-column label="操作" width="190" align="center" fixed="right">
               <template #default="{ row }">
                 <el-dropdown v-if="nextDeliveryStatuses(row.status).length" trigger="click" @command="(status: string) => changeStatus(row, status)">
                   <el-button size="small" type="primary" link>推进状态<el-icon><ArrowDown /></el-icon></el-button>
@@ -55,7 +55,7 @@
       </el-col>
 
       <!-- 验收单 -->
-      <el-col :span="12">
+      <el-col :span="24">
         <el-card shadow="never">
           <template #header>
             <div class="card-head">
@@ -81,7 +81,7 @@
                 <div v-if="row.condition_note" class="muted">说明：{{ row.condition_note }}</div>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="160" align="center">
+            <el-table-column label="操作" width="180" align="center" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" type="primary" link @click="openSign(row)">
                   {{ row.result === 'pending' ? '签署' : '重签' }}
