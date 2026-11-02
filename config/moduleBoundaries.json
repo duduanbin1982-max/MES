@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "description": "模块边界白名单。跨服务 require 与跨域写必须在此登记（带原因），否则 scripts/check-module-boundaries.js 会失败。规则见 docs/module-boundaries.md。",
+  "allowedRequires": [
+    { "from": "dashboardAlerts", "to": "material", "reason": "驾驶舱告警复用物料服务的安全库存/缺料查询" },
+    { "from": "delayAlerts", "to": "material", "reason": "延误告警复用物料服务的交期查询口径" },
+    { "from": "materialPlanner", "to": "material", "reason": "物料计划与物料主数据同域，共用 db helper 与库存查询" },
+    { "from": "materialService", "to": "material", "reason": "物料主数据服务与物料库存服务同域，共用 helper" },
+    { "from": "andonService", "to": "material", "reason": "安灯缺料事件复用物料库存查询" },
+    { "from": "scanner", "to": "process", "reason": "扫码报工需要按工序节点定位任务" },
+    { "from": "tbmAdvanced", "to": "purchase", "reason": "TBM 采购跟踪与采购服务共用 purchase_tracking 存储模块" },
+    { "from": "process", "to": "processMasterService", "reason": "工序动作复用工序主数据（模板/岗位）" }
+  ],
+  "allowedWrites": [
+    {
+      "from": "criticalPartsService",
+      "to": "tbmAdvanced",
+      "table": "critical_part_certificates",
+      "reason": "registry 已声明 dependsOn: [tbmAdvanced]；证书表由 tbmAdvanced 建表，criticalPartsService 在其上扩展 document_id 并写入"
+    }
+  ],
+  "sharedTables": []
+}
