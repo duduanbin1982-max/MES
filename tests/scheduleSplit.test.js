@@ -27,6 +27,9 @@ const EXPECTED_ROUTES = [
   ["POST", "/api/schedule/reschedule/apply"],
   ["GET", "/api/schedule/reschedule/batches"],
   ["POST", "/api/schedule/reschedule/batches/:id/undo"],
+  // 2026-11-04：甘特图视图
+  ["GET", "/api/schedule/gantt"],
+  ["PUT", "/api/schedule/process-nodes/:id/dates"],
 ];
 
 function makeApp() {
@@ -117,7 +120,7 @@ test("SCHED.2 拆分目录里每个相对 require 都能解析", () => {
   assert.deepEqual(missing, []);
 });
 
-test("SCHED.3 register 装配的路由 = 拆分前 6 条 + 批量重排程 4 条", () => {
+test("SCHED.3 register 装配的路由 = 拆分前 6 条 + 批量重排程 4 条 + 甘特图 2 条", () => {
   const db = makeDb();
   const app = makeApp();
   schedule.register(app, db);

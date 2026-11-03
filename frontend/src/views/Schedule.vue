@@ -13,7 +13,7 @@
       </div>
     </div>
 
-    <el-tabs v-model="activeTab" @tab-change="onTabChange">
+    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <!-- ------------------------------------------------------------ 本周任务 -->
       <el-tab-pane label="本周任务" name="weekly">
         <!-- KPI 摘要 -->
@@ -256,6 +256,65 @@
         </el-card>
         <el-empty v-else description="先选择一个项目" :image-size="70" />
       </el-tab-pane>
+
+      <!-- ------------------------------------------------------------ 甘特图 -->
+      <el-tab-pane label="甘特图" name="gantt">
+        <el-card class="toolbar-card" shadow="never">
+          <div class="filter-bar">
+            <div class="filter-item">
+              <span class="filter-label">月份</span>
+              <el-button-group>
+                <el-button size="small" @click="shiftGanttMonth(-1)">上一月</el-button>
+                <el-button size="small" @click="goGanttToday">本月</el-button>
+                <el-button size="small" @click="shiftGanttMonth(1)">下一月</el-button>
+              </el-button-group>
+              <span class="gantt-range">{{ ganttRangeLabel }}</span>
+            </div>
+            <div class="filter-item">
+              <span class="filter-label">项目</span>
+              <el-select v-model="ganttInstance" clearable placeholder="全部项目" style="width: 220px" @change="loadGantt">
+                <el-option
+                  v-for="item in instances"
+                  :key="item.id"
+                  :label="`${item.instance_code || ''} · ${item.instance_name || ''}`"
+                  :value="item.id"
+                />
+              </el-select>
+            </div>
+            <div class="filter-item">
+              <span class="filter-label">缩放</span>
+              <el-radio-group v-model="ganttZoom" size="small">
+                <el-radio-button value="day">日</el-radio-button>
+                <el-radio-button value="week">周</el-radio-button>
+                <el-radio-button value="month">月</el-radio-button>
+              </el-radio-group>
+            </div>
+            <el-button size="small" :loading="ganttLoading" @click="loadGantt">刷新</el-button>
+            <span class="result-hint">{{ ganttSummaryText }}</span>
+          </div>
+        </el-card>
+
+        <el-alert v-if="ganttUnscheduled.length" type="warning" :closable="false" show-icon class="gantt-alert">
+          <template #title>
+            还有 {{ ganttUnscheduled.length }} 个工序没有计划时间（不会显示在图上）
+            <el-button link type="primary" size="small" @click="openReschedule">批量重排程</el-button>
+          </template>
+        </el-alert>
+
+        <GanttChart
+          v-if="ganttGroups.length"
+          :groups="ganttGroups"
+          :from="ganttFrom"
+          :to="ganttTo"
+          :zoom="ganttZoom"
+          :loading="ganttLoading"
+          @move="onGanttMove"
+          @select="onGanttSelect"
+        />
+        <el-empty v-else-if="!ganttLoading" description="当前月份没有已排程的工序" :image-size="70">
+          <el-button type="primary" plain @click="openReschedule">批量重排程</el-button>
+        </el-empty>
+      </el-tab-pane>
     </el-tabs>
 
     <!-- ------------------------------------------------------------ 分配 / 改期 -->
@@ -383,6 +442,8 @@ import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
 import { useSchedulePage } from '../composables/useSchedulePage'
+import GanttChart from './schedule/GanttChart.vue'
+import { monthRange, parseDay, toDayString } from '../domain/gantt'
 import {
   NODE_PHASE_META,
   NODE_STATUS_META,
@@ -547,6 +608,75 @@ const onRowCommand = async (row: any, command: string) => {
     return
   }
   await nodeAction(row, command)
+}
+
+// ------------------------------------------------------------ 甘特图（2026-11-04）
+const ganttLoading = ref(false)
+const ganttGroups = ref<any[]>([])
+const ganttUnscheduled = ref<any[]>([])
+const ganttAnchor = ref(toDayString(new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
+const ganttZoom = ref<'day' | 'week' | 'month'>('day')
+const ganttInstance = ref<number | null>(null)
+
+const ganttFrom = computed(() => monthRange(parseDay(ganttAnchor.value) || new Date()).from)
+const ganttTo = computed(() => monthRange(parseDay(ganttAnchor.value) || new Date()).to)
+const ganttRangeLabel = computed(() => `${ganttFrom.value} ~ ${ganttTo.value}`)
+const ganttSummaryText = computed(() => {
+  const scheduled = ganttGroups.value.reduce((sum, group) => sum + (group.nodes?.length || 0), 0)
+  return `已排程 ${scheduled} 条 · 未排程 ${ganttUnscheduled.value.length} 条`
+})
+
+const loadGantt = async () => {
+  ganttLoading.value = true
+  try {
+    const data: any = await Api.get('/schedule/gantt', {
+      params: {
+        from: ganttFrom.value,
+        to: ganttTo.value,
+        instance_id: ganttInstance.value || undefined,
+      },
+    })
+    ganttGroups.value = data.groups || []
+    ganttUnscheduled.value = data.unscheduled || []
+  } catch (error: any) {
+    ElMessage.error('加载甘特图失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    ganttLoading.value = false
+  }
+}
+
+const shiftGanttMonth = (delta: number) => {
+  const base = parseDay(ganttAnchor.value) || new Date()
+  ganttAnchor.value = toDayString(new Date(base.getFullYear(), base.getMonth() + delta, 1))
+  loadGantt()
+}
+
+const goGanttToday = () => {
+  ganttAnchor.value = toDayString(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+  loadGantt()
+}
+
+const onGanttMove = async (payload: { node: any; planned_start: string | null; planned_end: string | null; delta_days: number }) => {
+  try {
+    await Api.put(`/schedule/process-nodes/${payload.node.id}/dates`, {
+      planned_start: payload.planned_start,
+      planned_end: payload.planned_end,
+    })
+    ElMessage.success(`已改期：${payload.node.operation_name || '工序'} ${payload.delta_days > 0 ? '+' : ''}${payload.delta_days} 天`)
+    await Promise.all([loadGantt(), loadWeekly()])
+  } catch (error: any) {
+    ElMessage.error('改期失败: ' + (error?.response?.data?.message || error?.message || error))
+    await loadGantt()
+  }
+}
+
+const onGanttSelect = async (node: any) => {
+  await openAssign(node)
+}
+
+const handleTabChange = (tab: string) => {
+  onTabChange(tab)
+  if (tab === 'gantt' && !ganttGroups.value.length) loadGantt()
 }
 
 // ------------------------------------------------------------ 批次记录
@@ -891,5 +1021,14 @@ const applyReschedule = async () => {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+.gantt-range {
+  font-size: 12px;
+  color: var(--el-color-info);
+  margin-left: 6px;
+}
+
+.gantt-alert {
+  margin-bottom: 12px;
 }
 </style>
