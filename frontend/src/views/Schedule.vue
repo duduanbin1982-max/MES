@@ -1,18 +1,63 @@
 <template>
-  <div class="page" v-loading="loading">
+  <div class="page schedule-page" v-loading="loading">
     <div class="page-header">
-      <div class="page-title"><el-icon><Calendar /></el-icon> 调度看板</div>
+      <div>
+        <div class="page-title"><el-icon><Calendar /></el-icon> 项目排程</div>
+        <div class="page-subtitle">按周看各项目的工序计划、执行状态与异常（超期 / 受阻 / 未排程）</div>
+      </div>
       <div class="page-actions">
-        <el-button type="primary" plain @click="openReschedule">批量重排程</el-button>
-        <el-button @click="load">刷新</el-button>
+        <span v-if="refreshAtText" class="refresh-hint">更新于 {{ refreshAtText }}</span>
+        <el-button @click="refreshAll"><el-icon><Refresh /></el-icon> 刷新</el-button>
+        <el-button @click="openBatches"><el-icon><Tickets /></el-icon> 批次记录</el-button>
+        <el-button type="primary" @click="openReschedule"><el-icon><MagicStick /></el-icon> 批量重排程</el-button>
       </div>
     </div>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
+      <!-- ------------------------------------------------------------ 本周任务 -->
       <el-tab-pane label="本周任务" name="weekly">
-        <el-card class="toolbar-card">
-          <el-form :inline="true" class="toolbar-form">
-            <el-form-item label="周次">
+        <!-- KPI 摘要 -->
+        <div class="board-summary">
+          <div class="summary-tile tile-total">
+            <div class="tile-label">本周计划</div>
+            <div class="tile-value">{{ weekPlannedCount }}<small>条</small></div>
+            <div class="tile-hint">{{ weekLabel || '—' }} · 未完成合计 {{ boardSummary.total }}</div>
+          </div>
+          <div class="summary-tile tile-done">
+            <div class="tile-label">完成率</div>
+            <div class="tile-value">{{ boardSummary.completionRate }}<small>%</small></div>
+            <el-progress :percentage="boardSummary.completionRate" :stroke-width="6" :show-text="false" class="tile-progress" />
+            <div class="tile-hint">完成 {{ boardSummary.completed }} / {{ boardSummary.total }}</div>
+          </div>
+          <div class="summary-tile tile-running">
+            <div class="tile-label">进行中</div>
+            <div class="tile-value">{{ boardSummary.running }}<small>条</small></div>
+            <div class="tile-hint">已开工未完成</div>
+          </div>
+          <div
+            class="summary-tile tile-abnormal"
+            :class="{ 'tile-active': filters.onlyAbnormal }"
+            role="button"
+            tabindex="0"
+            @click="toggleAbnormal"
+            @keyup.enter="toggleAbnormal"
+          >
+            <div class="tile-label">
+              异常
+              <el-tag v-if="filters.onlyAbnormal" size="small" type="danger" effect="dark">已筛选</el-tag>
+            </div>
+            <div class="tile-value">{{ abnormalCount }}<small>条</small></div>
+            <div class="tile-hint">
+              超期 {{ boardSummary.overdue }} · 受阻 {{ boardSummary.blocked }} · 未排程 {{ boardSummary.unscheduled }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 筛选栏 -->
+        <el-card class="toolbar-card" shadow="never">
+          <div class="filter-bar">
+            <div class="filter-item">
+              <span class="filter-label">周次</span>
               <el-date-picker
                 v-model="weeklyWeek"
                 type="week"
@@ -21,130 +66,205 @@
                 value-format="YYYY-MM-DD"
                 @change="loadWeekly"
               />
-            </el-form-item>
-            <el-form-item>
-              <el-button @click="goCurrentWeek">本周</el-button>
-            </el-form-item>
-          </el-form>
-        </el-card>
-
-        <el-card v-if="weeklyData" class="summary-card">
-          <div class="summary-tags">
-            <el-tag type="info">总计 {{ weeklySummary.total }}</el-tag>
-            <el-tag type="success">已完成 {{ weeklySummary.completed }}</el-tag>
-            <el-tag type="warning">进行中 {{ weeklySummary.in_progress }}</el-tag>
-            <el-tag type="info">待开始 {{ weeklySummary.pending }}</el-tag>
-            <el-tag type="danger">延期/阻塞 {{ weeklySummary.delayed }}</el-tag>
+              <el-button-group class="week-buttons">
+                <el-button size="small" @click="shiftWeek(-7)">上一周</el-button>
+                <el-button size="small" @click="goCurrentWeek">本周</el-button>
+                <el-button size="small" @click="shiftWeek(7)">下一周</el-button>
+              </el-button-group>
+            </div>
+            <div class="filter-item">
+              <span class="filter-label">项目</span>
+              <el-select v-model="filters.instanceId" clearable placeholder="全部项目" style="width: 220px">
+                <el-option
+                  v-for="item in instanceOptions"
+                  :key="item.id"
+                  :label="`${item.instance_code || ''} · ${item.instance_name || ''}`"
+                  :value="item.id"
+                />
+              </el-select>
+            </div>
+            <div class="filter-item">
+              <el-input v-model="filters.keyword" clearable placeholder="搜工序 / 工位 / 负责人" style="width: 200px">
+                <template #prefix><el-icon><Search /></el-icon></template>
+              </el-input>
+            </div>
+            <div class="filter-item">
+              <el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 130px">
+                <el-option v-for="(meta, key) in NODE_STATUS_META" :key="key" :label="meta.label" :value="key" />
+              </el-select>
+            </div>
+            <div class="filter-item">
+              <el-checkbox v-model="filters.onlyAbnormal" border size="small">只看异常</el-checkbox>
+            </div>
+            <el-button v-if="hasFilter" link type="primary" @click="resetFilters">清除筛选</el-button>
+            <span class="result-hint">命中 {{ filteredCount }} / {{ boardSummary.total }} 条</span>
           </div>
         </el-card>
 
-        <el-card v-if="weeklyData">
-          <el-collapse v-if="weeklyEquipments.length" v-model="activeEquipments">
-            <el-collapse-item
-              v-for="eq in weeklyEquipments"
-              :key="eq.id || eq.instance_id"
-              :name="eq.id || eq.instance_id"
-            >
-              <template #title>
-                <div class="equipment-title">
-                  <span class="equipment-name">[{{ eq.instance_code }}] {{ eq.instance_name }}</span>
-                  <span class="progress-text">进度 {{ eq.progress_pct || 0 }}%</span>
-                  <el-progress
-                    :percentage="eq.progress_pct || 0"
-                    class="equipment-progress"
-                    :status="eq.progress_pct === 100 ? 'success' : ''"
-                  />
-                </div>
-              </template>
+        <!-- 按项目分组的工序表 -->
+        <template v-if="boards.length">
+          <el-card v-for="board in boards" :key="board.id" class="equipment-card" shadow="never">
+            <div class="equipment-head">
+              <div class="equipment-title">
+                <span class="eq-code">{{ board.instance_code }}</span>
+                <span class="eq-name">{{ board.instance_name }}</span>
+                <el-tag v-if="board.stats.overdue" type="danger" size="small">超期 {{ board.stats.overdue }}</el-tag>
+                <el-tag v-if="board.stats.blocked" type="danger" size="small" effect="plain">受阻 {{ board.stats.blocked }}</el-tag>
+                <el-tag v-if="board.stats.unscheduled" type="info" size="small">未排程 {{ board.stats.unscheduled }}</el-tag>
+              </div>
+              <div class="equipment-stats">
+                <span class="stats-text">完成 {{ board.stats.completed }} / {{ board.stats.total }}</span>
+                <el-progress :percentage="board.stats.completionRate" :stroke-width="8" class="stats-progress" />
+              </div>
+            </div>
 
-              <el-table
-                :data="eq.process_nodes || eq.nodes || []"
-                stripe
-                size="small"
-                class="clickable-table"
-                @row-click="openAssign"
-              >
-                <el-table-column prop="sequence" label="序号" width="60" />
-                <el-table-column prop="operation_name" label="工序" min-width="140" />
-                <el-table-column label="阶段" width="90">
-                  <template #default="{ row }">
-                    <el-tag size="small">{{ row.phase_code || '-' }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="estimated_hours" label="预估工时(h)" width="120" />
-                <el-table-column label="计划时间" width="230">
-                  <template #default="{ row }">{{ row.planned_start || '-' }} ~ {{ row.planned_end || '-' }}</template>
-                </el-table-column>
-                <el-table-column label="工位" width="120">
-                  <template #default="{ row }">{{ row.workstation_name || '-' }}</template>
-                </el-table-column>
-                <el-table-column label="负责人" width="110">
-                  <template #default="{ row }">{{ row.assigned_name || '-' }}</template>
-                </el-table-column>
-                <el-table-column label="状态" width="95">
-                  <template #default="{ row }">
-                    <el-tag :type="nodeStatusTag(row.status)" size="small">{{ nodeStatusLabel(row.status) }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="快速操作" width="270" fixed="right">
-                  <template #default="{ row }">
-                    <el-button size="small" type="primary" @click.stop="nodeAction(row, 'in_progress')" :disabled="row.status === 'completed' || row.status === 'in_progress'">开始</el-button>
-                    <el-button size="small" type="success" @click.stop="nodeAction(row, 'completed')" :disabled="row.status === 'completed'"><el-icon><Select /></el-icon> 完成</el-button>
-                    <el-button size="small" type="danger" @click.stop="nodeAction(row, 'blocked')" :disabled="row.status === 'blocked'"><el-icon><CircleClose /></el-icon> 阻塞</el-button>
-                    <el-button size="small" type="warning" @click.stop="nodeAction(row, 'pending')" :disabled="row.status === 'pending'">暂停</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-collapse-item>
-          </el-collapse>
-          <el-empty v-else description="本周暂无任务" :image-size="60" />
-        </el-card>
+            <el-table
+              :data="board.nodes"
+              size="small"
+              stripe
+              :row-class-name="rowClassName"
+              class="node-table"
+              @row-click="openAssign"
+            >
+              <el-table-column prop="sequence" label="序号" width="60" align="center" />
+              <el-table-column label="工序" min-width="200">
+                <template #default="{ row }">
+                  <div class="node-name">
+                    <span>{{ row.operation_name || '（未命名工序）' }}</span>
+                    <el-tag
+                      v-if="nodePhaseTag(row)"
+                      :type="nodePhaseTag(row)!.tone"
+                      size="small"
+                      effect="plain"
+                    >{{ nodePhaseTag(row)!.label }}</el-tag>
+                  </div>
+                  <div v-if="row.assigned_name" class="node-sub">负责人 {{ row.assigned_name }}</div>
+                </template>
+              </el-table-column>
+              <el-table-column label="阶段" width="86" align="center">
+                <template #default="{ row }">
+                  <span class="phase-code">{{ row.phase_code || '—' }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="计划时间" min-width="200">
+                <template #default="{ row }">
+                  <span :class="{ 'plan-overdue': isOverdue(row) }" :title="`${row.planned_start || '—'} ~ ${row.planned_end || '—'}`">
+                    {{ formatPlanRange(row) }}
+                  </span>
+                  <el-tag v-if="isOverdue(row)" type="danger" size="small" class="overdue-tag">超 {{ overdueDays(row) }} 天</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="工时" width="80" align="right">
+                <template #default="{ row }">{{ row.estimated_hours ?? '—' }}</template>
+              </el-table-column>
+              <el-table-column label="工位" width="130">
+                <template #default="{ row }">{{ row.workstation_name || '—' }}</template>
+              </el-table-column>
+              <el-table-column label="负责人" width="100">
+                <template #default="{ row }">{{ row.assigned_name || '未派工' }}</template>
+              </el-table-column>
+              <el-table-column label="状态" width="96" align="center">
+                <template #default="{ row }">
+                  <el-tag :type="nodeStatusTag(row.status)" size="small">{{ nodeStatusLabel(row.status) }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="170" fixed="right" align="center">
+                <template #default="{ row }">
+                  <el-button
+                    v-if="primaryAction(row)"
+                    size="small"
+                    :type="primaryAction(row)!.key === 'start' ? 'primary' : 'success'"
+                    @click.stop="nodeAction(row, primaryAction(row)!.key === 'start' ? 'in_progress' : 'completed')"
+                  >
+                    {{ primaryAction(row)!.label }}
+                  </el-button>
+                  <el-dropdown trigger="click" @command="(command: string) => onRowCommand(row, command)">
+                    <el-button size="small" text>更多<el-icon><ArrowDown /></el-icon></el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="paused" :disabled="row.status === 'paused'">暂停</el-dropdown-item>
+                        <el-dropdown-item command="blocked" :disabled="row.status === 'blocked'">标记受阻</el-dropdown-item>
+                        <el-dropdown-item command="pending" :disabled="row.status === 'pending'">回到待开始</el-dropdown-item>
+                        <el-dropdown-item command="assign" divided>分配 / 改期</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                </template>
+              </el-table-column>
+            </el-table>
+          </el-card>
+        </template>
+
+        <el-empty v-else-if="!loading" :description="emptyText" :image-size="80">
+          <el-button v-if="hasFilter" type="primary" plain @click="resetFilters">清除筛选</el-button>
+          <el-button v-else type="primary" @click="openReschedule">去批量重排程</el-button>
+        </el-empty>
       </el-tab-pane>
 
-      <el-tab-pane label="项目排程" name="schedule">
-        <el-card class="toolbar-card">
-          <el-form :inline="true" :model="filters" class="toolbar-form">
-            <el-form-item label="实例">
-              <el-select v-model="selectedInstance" placeholder="选实例" style="width: 280px" @change="loadSchedule">
-                <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
+      <!-- ------------------------------------------------------------ 项目里程碑 -->
+      <el-tab-pane label="项目里程碑" name="schedule">
+        <el-card class="toolbar-card" shadow="never">
+          <div class="filter-bar">
+            <div class="filter-item">
+              <span class="filter-label">项目</span>
+              <el-select v-model="selectedInstance" placeholder="选择项目" style="width: 280px" @change="loadSchedule">
+                <el-option
+                  v-for="i in instances"
+                  :key="i.id"
+                  :label="`${i.instance_code || ''} · ${i.instance_name || ''}`"
+                  :value="i.id"
+                />
               </el-select>
-            </el-form-item>
-          </el-form>
+            </div>
+            <span v-if="milestones.length" class="result-hint">共 {{ milestones.length }} 个里程碑，已完成 {{ milestoneDoneCount }}</span>
+          </div>
         </el-card>
-        <el-card v-if="selectedInstance" class="content-card">
+
+        <el-card v-if="selectedInstance" class="content-card" shadow="never">
           <el-table v-if="milestones.length" :data="milestones" stripe size="small">
-            <el-table-column prop="phase_code" label="阶段" width="80" />
-            <el-table-column prop="phase_name" label="名称" width="140" />
-            <el-table-column label="状态" width="105">
+            <el-table-column prop="phase_code" label="阶段" width="80" align="center" />
+            <el-table-column prop="phase_name" label="名称" min-width="160" />
+            <el-table-column label="状态" width="105" align="center">
               <template #default="{ row }">
                 <el-tag :type="msTagType(row.status)" size="small">{{ milestoneStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="计划时间" width="240">
-              <template #default="{ row }">{{ row.planned_start || '-' }} → {{ row.planned_end || '-' }}</template>
+            <el-table-column label="计划时间" min-width="170">
+              <template #default="{ row }">{{ row.planned_start || '—' }} → {{ row.planned_end || '—' }}</template>
             </el-table-column>
-            <el-table-column label="实际时间" width="240">
-              <template #default="{ row }">{{ row.actual_start || '-' }} → {{ row.actual_end || '-' }}</template>
+            <el-table-column label="实际时间" min-width="170">
+              <template #default="{ row }">{{ row.actual_start || '—' }} → {{ row.actual_end || '—' }}</template>
             </el-table-column>
-            <el-table-column label="进度" min-width="260">
+            <el-table-column label="进度" min-width="220">
               <template #default="{ row }">
-                <el-progress :percentage="msProgress(row)" :status="row.status === 'completed' ? 'success' : (row.status === 'delayed' ? 'exception' : '')" />
+                <el-progress
+                  :percentage="msProgress(row)"
+                  :status="row.status === 'completed' ? 'success' : (row.status === 'delayed' ? 'exception' : '')"
+                />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="170">
+            <el-table-column label="操作" width="160" align="center">
               <template #default="{ row }">
-                <el-button v-if="row.status !== 'completed'" size="small" type="success" @click="markComplete(row)"><el-icon><Select /></el-icon> 完成</el-button>
+                <el-button v-if="row.status !== 'completed'" size="small" type="success" @click="markComplete(row)">完成</el-button>
                 <el-button v-if="row.status === 'pending'" size="small" type="primary" @click="markActive(row)">开始</el-button>
               </template>
             </el-table-column>
           </el-table>
-          <el-empty v-else description="该实例没有里程碑" :image-size="60" />
+          <el-empty v-else description="该实例还没有里程碑" :image-size="70">
+            <el-button type="primary" plain @click="$router.push('/process-tree')">去工艺树排程</el-button>
+          </el-empty>
         </el-card>
+        <el-empty v-else description="先选择一个项目" :image-size="70" />
       </el-tab-pane>
     </el-tabs>
 
+    <!-- ------------------------------------------------------------ 分配 / 改期 -->
     <el-dialog v-model="assignDialogVisible" title="分配 / 调整工序" width="520px" @close="assignRow = null">
-      <el-form v-if="assignRow" label-width="100px">
+      <el-form v-if="assignRow" label-width="100px" size="small">
+        <el-form-item label="工序">
+          <span class="assign-node-name">{{ assignRow.operation_name || '（未命名工序）' }}</span>
+          <el-tag :type="nodeStatusTag(assignRow.status)" size="small" style="margin-left: 8px">{{ nodeStatusLabel(assignRow.status) }}</el-tag>
+        </el-form-item>
         <el-form-item label="负责人" required>
           <el-select v-model="assignForm.assigned_id" placeholder="选择工人" style="width: 100%" filterable>
             <el-option v-for="worker in workers" :key="worker.id" :label="worker.full_name || worker.name || worker.username" :value="worker.id" />
@@ -168,7 +288,35 @@
       </template>
     </el-dialog>
 
-    <!-- 2026-11-03：批量重排程（只改计划时间，可撤销） -->
+    <!-- ------------------------------------------------------------ 批次记录 -->
+    <el-drawer v-model="batchDrawerVisible" title="批量重排程批次记录" size="560px">
+      <div class="batch-toolbar">
+        <span class="result-hint">最近 {{ batches.length }} 个批次（应用后可整批撤销）</span>
+        <el-button size="small" :loading="batchLoading" @click="loadBatches">刷新</el-button>
+      </div>
+      <el-table :data="batches" size="small" v-loading="batchLoading" empty-text="还没有重排批次">
+        <el-table-column prop="batch_no" label="批次号" min-width="140" />
+        <el-table-column label="范围" min-width="150">
+          <template #default="{ row }">{{ formatBatchScope(row) }}</template>
+        </el-table-column>
+        <el-table-column prop="node_count" label="节点" width="70" align="right" />
+        <el-table-column label="时间" width="140">
+          <template #default="{ row }">{{ String(row.created_at || '').slice(5, 16) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.undone_at ? 'info' : 'success'" size="small">{{ row.undone_at ? '已撤销' : '生效中' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="90" align="center">
+          <template #default="{ row }">
+            <el-button v-if="!row.undone_at" size="small" type="danger" link :loading="batchLoading" @click="confirmUndo(row)">撤销</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-drawer>
+
+    <!-- ------------------------------------------------------------ 批量重排程 -->
     <el-dialog v-model="rescheduleVisible" title="批量重排程（只改计划时间）" width="820px" :close-on-click-modal="false">
       <el-form :model="rescheduleForm" label-width="110px" size="small">
         <el-form-item label="项目范围">
@@ -231,33 +379,45 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
 import { useSchedulePage } from '../composables/useSchedulePage'
+import {
+  NODE_PHASE_META,
+  NODE_STATUS_META,
+  buildEquipmentBoard,
+  formatBatchScope,
+  formatPlanRange,
+  formatWeekLabel,
+  isAbnormal,
+  isOverdue,
+  nodePhase,
+  nodeStatusLabel as labelOfStatus,
+  nodeStatusTone,
+  overlapsWeek,
+  overdueDays,
+  primaryAction,
+  summarizeNodes,
+} from '../domain/scheduleBoard'
 
 const {
   activeTab,
   instances,
   selectedInstance,
   milestones,
-  filters,
   loading,
   weeklyWeek,
   weeklyData,
-  activeEquipments,
+  weeklyEquipments,
+  workers,
+  workstations,
   assignDialogVisible,
   assignRow,
   assignForm,
-  workers,
-  workstations,
-  weeklyEquipments,
-  weeklySummary,
   msTagType,
   milestoneStatusLabel,
   msProgress,
-  nodeStatusTag,
-  nodeStatusLabel,
   loadSchedule,
   markActive,
   markComplete,
@@ -268,9 +428,143 @@ const {
   submitAssign,
   onTabChange,
   load,
+  refreshAt,
+  batches,
+  batchLoading,
+  loadBatches,
+  undoBatch,
 } = useSchedulePage()
 
-// ---------------- 批量重排程（2026-11-03） ----------------
+// 状态展示统一走 domain（composable 已同步同一份映射，这里直接用函数便于模板调用）
+const nodeStatusTag = (status?: string) => nodeStatusTone(status)
+const nodeStatusLabel = (status?: string) => labelOfStatus(status)
+
+// ------------------------------------------------------------ 筛选与看板数据
+const filters = ref<{ instanceId: number | null; keyword: string; status: string | null; onlyAbnormal: boolean }>({
+  instanceId: null,
+  keyword: '',
+  status: null,
+  onlyAbnormal: false,
+})
+
+const boards = computed(() => {
+  const equipment = weeklyEquipments.value || []
+  const scoped = filters.value.instanceId
+    ? equipment.filter((item: any) => Number(item.id ?? item.instance_id) === Number(filters.value.instanceId))
+    : equipment
+  return buildEquipmentBoard(scoped, filters.value)
+})
+
+const instanceOptions = computed(() => {
+  const seen = new Set<number>()
+  const list: any[] = []
+  for (const equipment of weeklyEquipments.value || []) {
+    const id = Number(equipment.id ?? equipment.instance_id)
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    list.push({ id, instance_code: equipment.instance_code, instance_name: equipment.instance_name })
+  }
+  return list
+})
+
+const boardSummary = computed(() => {
+  const all = (weeklyEquipments.value || []).flatMap((item: any) => item.nodes || item.process_nodes || [])
+  const scoped = filters.value.instanceId
+    ? (weeklyEquipments.value || [])
+      .filter((item: any) => Number(item.id ?? item.instance_id) === Number(filters.value.instanceId))
+      .flatMap((item: any) => item.nodes || item.process_nodes || [])
+    : all
+  return summarizeNodes(scoped)
+})
+
+const abnormalCount = computed(() => boardSummary.value.overdue + boardSummary.value.blocked + boardSummary.value.unscheduled)
+
+// 「本周计划」= 计划时间与当前周重叠的节点数（接口会把所有未完成节点都返回，不能直接当本周任务）
+const weekPlannedCount = computed(() => {
+  const weekStart = weeklyData.value?.week_start
+  const weekEnd = weeklyData.value?.week_end
+  if (!weekStart) return 0
+  const scoped = filters.value.instanceId
+    ? (weeklyEquipments.value || [])
+      .filter((item: any) => Number(item.id ?? item.instance_id) === Number(filters.value.instanceId))
+      .flatMap((item: any) => item.nodes || item.process_nodes || [])
+    : (weeklyEquipments.value || []).flatMap((item: any) => item.nodes || item.process_nodes || [])
+  return scoped.filter((node: any) => overlapsWeek(node, weekStart, weekEnd)).length
+})
+const filteredCount = computed(() => boards.value.reduce((sum, board) => sum + board.nodes.length, 0))
+const hasFilter = computed(() => Boolean(filters.value.keyword || filters.value.status || filters.value.onlyAbnormal || filters.value.instanceId))
+
+const emptyText = computed(() => {
+  if (hasFilter.value) return '没有符合筛选条件的工序，试试清除筛选'
+  return '本周没有排程任务：可以在工艺树里排程，或用「批量重排程」把过期计划顺延'
+})
+
+const weekLabel = computed(() => formatWeekLabel(weeklyData.value?.week_start, weeklyData.value?.week_end))
+const refreshAtText = computed(() => {
+  const value = refreshAt.value
+  if (!value) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
+})
+
+const milestoneDoneCount = computed(() => milestones.value.filter((item: any) => item.status === 'completed').length)
+
+// 只对"有异常"的行做提示色：超期/受阻/未排程
+const rowClassName = ({ row }: { row: any }) => {
+  if (isAbnormal(row)) return 'row-abnormal'
+  if (isOverdue(row)) return 'row-overdue'
+  return ''
+}
+
+const nodePhaseTag = (row: any) => {
+  const phase = nodePhase(row)
+  if (phase === 'done' || phase === 'running' || phase === 'upcoming') return null
+  return NODE_PHASE_META[phase] || null
+}
+
+const toggleAbnormal = () => {
+  filters.value.onlyAbnormal = !filters.value.onlyAbnormal
+}
+
+const resetFilters = () => {
+  filters.value = { instanceId: null, keyword: '', status: null, onlyAbnormal: false }
+}
+
+const shiftWeek = (days: number) => {
+  const current = weeklyWeek.value instanceof Date ? weeklyWeek.value : new Date(String(weeklyWeek.value || new Date()))
+  const next = new Date(current.getTime() + days * 86400000)
+  weeklyWeek.value = next
+  loadWeekly()
+}
+
+const refreshAll = async () => {
+  await load()
+}
+
+const onRowCommand = async (row: any, command: string) => {
+  if (command === 'assign') {
+    await openAssign(row)
+    return
+  }
+  await nodeAction(row, command)
+}
+
+// ------------------------------------------------------------ 批次记录
+const batchDrawerVisible = ref(false)
+const openBatches = async () => {
+  batchDrawerVisible.value = true
+  await loadBatches()
+}
+const confirmUndo = async (batch: any) => {
+  try {
+    await ElMessageBox.confirm(`撤销批次 ${batch.batch_no}（${batch.node_count} 个节点）的计划时间调整？`, '撤销确认', { type: 'warning' })
+  } catch {
+    return
+  }
+  await undoBatch(batch)
+}
+
+// ------------------------------------------------------------ 批量重排程（保留原有能力）
 const rescheduleVisible = ref(false)
 const previewLoading = ref(false)
 const applyingReschedule = ref(false)
@@ -314,7 +608,7 @@ const loadReschedulePreview = async () => {
     previewStats.value = data.stats
     previewShiftDays.value = data.shift_days
     previewItems.value = data.items || []
-    if (!data.stats?.total) ElMessage.warning('没有符合条件的工序节点（检查范围与"只处理过期"选项）')
+    if (!data.stats?.total) ElMessage.warning('没有符合条件的工序节点（检查范围与「只处理未开工且过期」选项）')
   } catch (error: any) {
     ElMessage.error('预览失败: ' + (error?.response?.data?.message || error?.message || error))
   } finally {
@@ -330,7 +624,9 @@ const applyReschedule = async () => {
       '确认批量重排程',
       { type: 'warning' },
     )
-  } catch { return }
+  } catch {
+    return
+  }
   applyingReschedule.value = true
   try {
     const result: any = await Api.post('/schedule/reschedule/apply', reschedulePayload())
@@ -338,7 +634,7 @@ const applyReschedule = async () => {
     rescheduleVisible.value = false
     previewStats.value = null
     previewItems.value = []
-    await load()
+    await Promise.all([loadWeekly(), loadBatches()])
   } catch (error: any) {
     ElMessage.error('应用失败: ' + (error?.response?.data?.message || error?.message || error))
   } finally {
@@ -348,45 +644,219 @@ const applyReschedule = async () => {
 </script>
 
 <style scoped>
-.toolbar-card,
-.summary-card,
-.content-card {
-  margin-bottom: 12px;
+.schedule-page {
+  --schedule-card-radius: 14px;
 }
 
-.toolbar-form {
-  margin-bottom: 0;
+.page-subtitle {
+  color: var(--el-color-info);
+  font-size: 12px;
+  margin-top: 4px;
 }
 
-.summary-tags,
-.equipment-title {
+.refresh-hint {
+  color: var(--el-color-info);
+  font-size: 12px;
+  margin-right: 4px;
+}
+
+/* KPI */
+.board-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.summary-tile {
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--schedule-card-radius);
+  background: linear-gradient(180deg, var(--color-surface-raised, #fff), var(--el-bg-color-overlay, #fff));
+  min-height: 96px;
+}
+
+.summary-tile.tile-abnormal {
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.summary-tile.tile-abnormal:hover {
+  border-color: var(--el-color-danger-light-5);
+  box-shadow: var(--shadow-sm, 0 2px 10px rgba(0, 0, 0, 0.06));
+}
+
+.summary-tile.tile-active {
+  border-color: var(--el-color-danger);
+  box-shadow: 0 0 0 2px var(--el-color-danger-light-7);
+}
+
+.tile-label {
+  font-size: 12px;
+  color: var(--el-color-info);
   display: flex;
-  gap: 12px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.equipment-title {
-  width: 100%;
-}
-
-.equipment-name {
+.tile-value {
+  font-size: 26px;
   font-weight: 600;
+  line-height: 1.25;
+  margin-top: 4px;
 }
 
-.progress-text {
-  font-size: 13px;
+.tile-value small {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--el-color-info);
+  margin-left: 4px;
+}
+
+.tile-hint {
+  font-size: 12px;
   color: var(--el-color-info);
 }
 
-.equipment-progress {
-  flex: 1;
-  max-width: 300px;
+.tile-progress {
+  margin: 8px 0 2px;
 }
 
-.clickable-table {
+.tile-done .tile-value {
+  color: var(--el-color-success);
+}
+
+.tile-running .tile-value {
+  color: var(--el-color-warning);
+}
+
+.tile-abnormal .tile-value {
+  color: var(--el-color-danger);
+}
+
+/* 筛选栏 */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-label {
+  font-size: 12px;
+  color: var(--el-color-info);
+}
+
+.week-buttons {
+  margin-left: 4px;
+}
+
+.result-hint {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--el-color-info);
+}
+
+/* 项目分组 */
+.equipment-card {
+  margin-bottom: 14px;
+  border-radius: var(--schedule-card-radius);
+}
+
+.equipment-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.equipment-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eq-code {
+  font-family: Consolas, monospace;
+  font-weight: 600;
+}
+
+.eq-name {
+  color: var(--color-text-secondary, #606266);
+  font-size: 13px;
+}
+
+.equipment-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--el-color-info);
+}
+
+.stats-progress {
+  width: 150px;
+}
+
+.node-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-sub {
+  font-size: 12px;
+  color: var(--el-color-info);
+  margin-top: 2px;
+}
+
+.phase-code {
+  font-size: 12px;
+  color: var(--el-color-info);
+}
+
+.plan-overdue {
+  color: var(--el-color-danger);
+  font-weight: 500;
+}
+
+.overdue-tag {
+  margin-left: 6px;
+}
+
+:deep(.row-abnormal) {
+  background: var(--el-color-danger-light-9);
+}
+
+:deep(.row-abnormal:hover > td),
+:deep(.row-overdue:hover > td) {
+  background: var(--el-color-danger-light-8) !important;
+}
+
+.node-table :deep(.el-table__row) {
   cursor: pointer;
 }
+
+.assign-node-name {
+  font-weight: 600;
+}
+
+/* 批次抽屉 */
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
 .reschedule-tip {
   color: var(--el-color-info);
   font-size: 12px;
@@ -400,5 +870,26 @@ const applyReschedule = async () => {
   background: var(--el-color-warning-light-9);
   color: var(--color-text);
   font-size: 13px;
+}
+
+@media (max-width: 1200px) {
+  .board-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .board-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .result-hint {
+    margin-left: 0;
+  }
+
+  .equipment-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

@@ -1,6 +1,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../api'
+import {
+  nodeStatusLabel as scheduleNodeStatusLabel,
+  nodeStatusTone as scheduleNodeStatusTone,
+} from '../domain/scheduleBoard'
 
 export function useSchedulePage() {
 
@@ -23,6 +27,36 @@ export function useSchedulePage() {
 
   const weeklyEquipments = computed(() => weeklyData.value?.equipment_instances || weeklyData.value?.equipment || [])
 
+  // 2026-11-04：批次记录（可撤销）+ 数据更新时间
+  const refreshAt = ref<Date | null>(null)
+  const batches = ref<any[]>([])
+  const batchLoading = ref(false)
+
+  const loadBatches = async () => {
+    batchLoading.value = true
+    try {
+      const result = await api.get('/schedule/reschedule/batches', { params: { limit: 20 } })
+      batches.value = result?.items || result || []
+    } catch (error: any) {
+      ElMessage.error('加载批次记录失败: ' + (error?.message || error))
+    } finally {
+      batchLoading.value = false
+    }
+  }
+
+  const undoBatch = async (batch: any) => {
+    batchLoading.value = true
+    try {
+      const result = await api.post('/schedule/reschedule/batches/' + batch.id + '/undo')
+      ElMessage.success(`已撤销 ${result.batch_no}：还原 ${result.restored} 条${result.skipped ? `，跳过 ${result.skipped} 条（时间已被改过）` : ''}`)
+      await Promise.all([loadBatches(), loadWeekly()])
+    } catch (error: any) {
+      ElMessage.error('撤销失败: ' + (error?.message || error))
+    } finally {
+      batchLoading.value = false
+    }
+  }
+
   const weeklySummary = computed(() => {
     const summary = weeklyData.value?.summary || {}
     return {
@@ -43,15 +77,9 @@ export function useSchedulePage() {
     return 0
   }
 
-  const nodeStatusTag = (status: string) => {
-    const map: Record<string, string> = { completed: 'success', in_progress: 'warning', pending: 'info', delayed: 'danger', blocked: 'danger' }
-    return map[status] || 'info'
-  }
-
-  const nodeStatusLabel = (status: string) => {
-    const map: Record<string, string> = { completed: '已完成', in_progress: '进行中', pending: '待开始', delayed: '延期', blocked: '阻塞' }
-    return map[status] || status || '待开始'
-  }
+  // 2026-11-04：状态文案/色调统一走 domain/scheduleBoard（支持 ready/paused 等，避免出现英文原值）
+  const nodeStatusTag = (status: string) => scheduleNodeStatusTone(status)
+  const nodeStatusLabel = (status: string) => scheduleNodeStatusLabel(status)
 
   const loadSchedule = async () => {
     loading.value = true
@@ -59,6 +87,7 @@ export function useSchedulePage() {
       if (instances.value.length === 0) instances.value = await api.get('/equipment_instances')
       if (selectedInstance.value) {
         milestones.value = await api.get('/equipment_instances/' + selectedInstance.value + '/milestones')
+        refreshAt.value = new Date()
       }
     } catch (error: any) {
       ElMessage.error('加载调度数据失败: ' + (error?.message || error))
@@ -101,6 +130,7 @@ export function useSchedulePage() {
       const dateStr = selectedDate instanceof Date ? selectedDate.toISOString().slice(0, 10) : String(selectedDate).slice(0, 10)
       weeklyData.value = await api.get('/schedule/weekly', { params: { date: dateStr } })
       activeEquipments.value = weeklyEquipments.value.map((equipment: any) => equipment.id || equipment.instance_id)
+      refreshAt.value = new Date()
     } catch (error: any) {
       ElMessage.error('加载周调度失败: ' + (error?.message || error))
     } finally {
@@ -223,5 +253,10 @@ export function useSchedulePage() {
     submitAssign,
     onTabChange,
     load,
+    refreshAt,
+    batches,
+    batchLoading,
+    loadBatches,
+    undoBatch,
   }
 }
