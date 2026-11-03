@@ -290,6 +290,10 @@
               </el-radio-group>
             </div>
             <el-button size="small" :loading="ganttLoading" @click="loadGantt">刷新</el-button>
+            <div class="filter-item">
+              <span class="filter-label">依赖箭头</span>
+              <el-switch v-model="showGanttDeps" size="small" />
+            </div>
             <span class="result-hint">{{ ganttSummaryText }}</span>
           </div>
         </el-card>
@@ -308,6 +312,8 @@
           :to="ganttTo"
           :zoom="ganttZoom"
           :loading="ganttLoading"
+          :dependencies="ganttDependencies"
+          :show-dependencies="showGanttDeps"
           @move="onGanttMove"
           @select="onGanttSelect"
         />
@@ -617,13 +623,15 @@ const ganttUnscheduled = ref<any[]>([])
 const ganttAnchor = ref(toDayString(new Date(new Date().getFullYear(), new Date().getMonth(), 1)))
 const ganttZoom = ref<'day' | 'week' | 'month'>('day')
 const ganttInstance = ref<number | null>(null)
+const ganttDependencies = ref<any[]>([])
+const showGanttDeps = ref(true)
 
 const ganttFrom = computed(() => monthRange(parseDay(ganttAnchor.value) || new Date()).from)
 const ganttTo = computed(() => monthRange(parseDay(ganttAnchor.value) || new Date()).to)
 const ganttRangeLabel = computed(() => `${ganttFrom.value} ~ ${ganttTo.value}`)
 const ganttSummaryText = computed(() => {
   const scheduled = ganttGroups.value.reduce((sum, group) => sum + (group.nodes?.length || 0), 0)
-  return `已排程 ${scheduled} 条 · 未排程 ${ganttUnscheduled.value.length} 条`
+  return `已排程 ${scheduled} 条 · 依赖 ${ganttDependencies.value.length} 条 · 未排程 ${ganttUnscheduled.value.length} 条`
 })
 
 const loadGantt = async () => {
@@ -637,6 +645,7 @@ const loadGantt = async () => {
       },
     })
     ganttGroups.value = data.groups || []
+    ganttDependencies.value = data.dependencies || []
     ganttUnscheduled.value = data.unscheduled || []
   } catch (error: any) {
     ElMessage.error('加载甘特图失败: ' + (error?.response?.data?.message || error?.message || error))

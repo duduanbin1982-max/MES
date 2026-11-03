@@ -159,3 +159,45 @@ export function tickLabel(day: GanttDay, zoom: 'day' | 'week' | 'month', index: 
   if (zoom === 'week') return index % 7 === 0 ? String(day.day_of_month) : ''
   return day.is_month_start ? String(day.day_of_month) : ''
 }
+
+// ------------------------------------------------------------ 依赖箭头
+export interface Point {
+  x: number
+  y: number
+}
+
+/** 依赖连线路径：前驱条形右端 → 后继条形左端；目标在左侧时走 S 形回绕 */
+export function dependencyPath(from: Point, to: Point): string {
+  const delta = Math.abs(to.x - from.x)
+  const control = Math.max(12, Math.min(60, delta / 2))
+  return `M ${from.x} ${from.y} C ${from.x + control} ${from.y}, ${to.x - control} ${to.y}, ${to.x} ${to.y}`
+}
+
+/** 箭头样式：两端任一超期/受阻 → 红色告警，否则常规灰蓝 */
+export function dependencyTone(fromPhase: string, toPhase: string): 'normal' | 'danger' {
+  const risk = new Set(['overdue', 'blocked'])
+  return risk.has(fromPhase) || risk.has(toPhase) ? 'danger' : 'normal'
+}
+
+export interface DependencyLike {
+  id: number
+  predecessor_id: number
+  successor_id: number
+  dep_type?: string | null
+  lag_hours?: number | null
+}
+
+export interface RectLike {
+  left: number
+  right: number
+  top: number
+  height: number
+}
+
+/** 把两端的矩形转成箭头端点（前驱右端、后继左端，纵向取中点） */
+export function arrowEndpoints(predecessor: RectLike, successor: RectLike): { from: Point; to: Point } {
+  return {
+    from: { x: predecessor.right, y: predecessor.top + predecessor.height / 2 },
+    to: { x: successor.left, y: successor.top + successor.height / 2 },
+  }
+}

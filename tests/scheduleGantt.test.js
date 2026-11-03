@@ -34,6 +34,20 @@ function freshDb() {
     INSERT INTO equipment_instances (id, instance_code, instance_name) VALUES (1, 'TBM-1', '一号机'), (2, 'TBM-2', '二号机');
     INSERT INTO users (id, full_name) VALUES (7, '张三');
     INSERT INTO workstations (id, name) VALUES (3, '装配工位A');
+    CREATE TABLE process_dependencies (
+      id INTEGER PRIMARY KEY,
+      equipment_instance_id INTEGER,
+      predecessor_id INTEGER,
+      successor_id INTEGER,
+      dep_type TEXT,
+      lag_hours REAL,
+      created_at TEXT
+    );
+    INSERT INTO process_dependencies (id, equipment_instance_id, predecessor_id, successor_id, dep_type, lag_hours) VALUES
+      (1, 1, 1, 2, 'FS', 0),
+      (2, 1, 2, 5, 'FS', 0),
+      (3, 1, 2, 3, 'FS', 0),
+      (4, 2, 2, 4, 'FS', 0);
   `);
   const insert = db.prepare(`INSERT INTO process_nodes
     (id, equipment_instance_id, operation_name, sequence, status, phase_code, planned_start, planned_end, estimated_hours, assigned_to, required_workstation_id)
@@ -88,6 +102,10 @@ test("SG.1 甘特数据：按区间取重叠节点，按项目分组", () => {
   const first = group.nodes.find((node) => node.id === 1);
   assert.equal(first.assigned_name, "张三");
   assert.equal(first.workstation_name, "装配工位A");
+  // 依赖：两端都要在本次返回集合内（1→2、2→5 满足；2→3 的 3 未排程、2→4 的 4 在 12 月）
+  assert.equal(body.total_dependencies, 2);
+  assert.deepEqual(body.dependencies.map((dep) => dep.id).sort(), [1, 2]);
+  assert.equal(body.dependencies[0].dep_type, "FS");
   db.close();
 });
 
@@ -98,6 +116,7 @@ test("SG.2 甘特数据：实例过滤 + 未排程列表", () => {
 
   const all = call(routes, "GET", "/api/schedule/gantt", { query: { from: "2026-11-01", to: "2026-12-31" } });
   assert.equal(all.payload.body.groups.length, 2, "两个项目都有节点");
+  assert.equal(all.payload.body.total_dependencies, 3, "2→4 进区间后依赖变 3 条（2→3 仍未排程被排除）");
   assert.equal(all.payload.body.unscheduled.length, 1, "未排程工序单独返回");
   assert.equal(all.payload.body.unscheduled[0].operation_name, "未排程工序");
 

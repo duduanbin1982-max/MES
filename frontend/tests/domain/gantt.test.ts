@@ -8,6 +8,9 @@ import {
   monthRange,
   monthSegments,
   parseDay,
+  arrowEndpoints,
+  dependencyPath,
+  dependencyTone,
   shiftDates,
   tickLabel,
   toDayString,
@@ -98,4 +101,30 @@ test('GT.8 日期工具：parseDay / toDayString / 跨月加法', () => {
   assert.equal(parseDay(null), null)
   const scale = buildScale('2026-12-30', '2027-01-02', 'day')
   assert.deepEqual(scale.days.map((day) => day.date), ['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02'])
+})
+
+test('GT.9 dependencyPath：正向走贝塞尔，反向走回绕', () => {
+  const forward = dependencyPath({ x: 100, y: 20 }, { x: 240, y: 80 })
+  assert.match(forward, /^M 100 20 C /)
+  assert.match(forward, /240 80$/)
+  // 反向（后继在前驱左侧）：控制点仍然在两端外侧，形成 S 形
+  const backward = dependencyPath({ x: 300, y: 20 }, { x: 120, y: 80 })
+  assert.match(backward, /^M 300 20 C /)
+  assert.match(backward, /120 80$/)
+  // 控制点偏移有上下限
+  assert.match(dependencyPath({ x: 0, y: 0 }, { x: 4, y: 10 }), /C 12 0, -8 10, 4 10/)
+  assert.match(dependencyPath({ x: 0, y: 0 }, { x: 400, y: 10 }), /C 60 0, 340 10, 400 10/)
+})
+
+test('GT.10 dependencyTone：超期/受阻链条标红，其余常规', () => {
+  assert.equal(dependencyTone('upcoming', 'upcoming'), 'normal')
+  assert.equal(dependencyTone('done', 'running'), 'normal')
+  assert.equal(dependencyTone('overdue', 'upcoming'), 'danger')
+  assert.equal(dependencyTone('done', 'blocked'), 'danger')
+})
+
+test('GT.11 arrowEndpoints：前驱右端到后继左端，纵向取中点', () => {
+  const result = arrowEndpoints({ left: 10, right: 110, top: 20, height: 20 }, { left: 200, right: 320, top: 60, height: 20 })
+  assert.deepEqual(result.from, { x: 110, y: 30 })
+  assert.deepEqual(result.to, { x: 200, y: 70 })
 })

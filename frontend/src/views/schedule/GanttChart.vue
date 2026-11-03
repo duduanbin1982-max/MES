@@ -1,7 +1,11 @@
 <template>
   <div class="gantt-wrap" v-loading="loading">
     <div class="gantt-scroll">
-      <div class="gantt" :style="{ '--gantt-day-width': scale.dayWidth + 'px', '--gantt-total-width': scale.totalWidth + 'px' }">
+      <div
+      ref="containerRef"
+      class="gantt"
+      :style="{ '--gantt-day-width': scale.dayWidth + 'px', '--gantt-total-width': scale.totalWidth + 'px' }"
+    >
         <!-- 表头 -->
         <div class="gantt-header">
           <div class="gantt-header-left">项目 / 工序</div>
@@ -69,6 +73,9 @@
                   :class="['bar-' + nodePhase(node), { 'is-dragging': drag && drag.id === node.id }]"
                   :style="barStyle(node)"
                   :title="barTooltip(node)"
+                  :data-node-id="node.id"
+                  @pointerenter="hoveredId = node.id"
+                  @pointerleave="hoveredId = null"
                   @pointerdown="startDrag($event, node)"
                 >
                   <span class="gantt-bar-label">{{ node.operation_name }}</span>
@@ -77,6 +84,32 @@
             </div>
           </template>
         </div>
+
+        <!-- 依赖箭头层（2026-11-04） -->
+        <svg
+          v-if="showDependencies && arrows.length"
+          class="gantt-arrows"
+          :width="svgSize.width"
+          :height="svgSize.height"
+          aria-hidden="true"
+        >
+          <defs>
+            <marker id="gantt-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--el-color-info)" />
+            </marker>
+            <marker id="gantt-arrow-danger" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--el-color-danger)" />
+            </marker>
+          </defs>
+          <path
+            v-for="arrow in arrows"
+            :key="arrow.id"
+            :d="arrow.path"
+            class="gantt-arrow"
+            :class="[`arrow-${arrow.tone}`, { 'is-active': hoveredId !== null && (arrow.from_id === hoveredId || arrow.to_id === hoveredId) }]"
+            :marker-end="arrow.tone === 'danger' ? 'url(#gantt-arrow-danger)' : 'url(#gantt-arrow)'"
+          />
+        </svg>
 
         <!-- 今天标线 -->
         <div v-if="todayOffsetValue !== null" class="gantt-today-line" :style="{ left: `calc(var(--gantt-left-width) + ${todayOffsetValue}px)` }">
@@ -91,17 +124,21 @@
       <span class="legend-item"><span class="legend-dot dot-overdue"></span>超期</span>
       <span class="legend-item"><span class="legend-dot dot-blocked"></span>受阻</span>
       <span class="legend-item"><span class="legend-dot dot-upcoming"></span>待开始</span>
+      <span class="legend-item"><span class="legend-line"></span>前置依赖（红=链条有超期/受阻）</span>
       <span class="legend-hint">拖动条形可直接改期（按天吸附）；双击行查看详情</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { nodePhase } from '../../domain/scheduleBoard'
 import {
+  arrowEndpoints,
   barGeometry,
   buildScale,
+  dependencyPath,
+  dependencyTone,
   diffDays,
   monthSegments,
   parseDay,
@@ -109,6 +146,7 @@ import {
   tickLabel,
   toDayString,
   todayOffset,
+  type DependencyLike,
   type GanttNodeLike,
 } from '../../domain/gantt'
 
@@ -118,6 +156,8 @@ const props = defineProps<{
   to: string
   zoom: 'day' | 'week' | 'month'
   loading?: boolean
+  dependencies?: DependencyLike[]
+  showDependencies?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -155,6 +195,65 @@ const barTooltip = (node: GanttNodeLike) => [
 const drag = ref<null | { id: number; startX: number; deltaDays: number }>(null)
 const selectedId = ref<number | null>(null)
 
+// ---------------- 依赖箭头（2026-11-04） ----------------
+const containerRef = ref<HTMLElement | null>(null)
+const hoveredId = ref<number | null>(null)
+const arrows = ref<Array<{ id: number; path: string; tone: 'normal' | 'danger'; from_id: number; to_id: number }>>([])
+const svgSize = ref({ width: 0, height: 0 })
+
+const measureArrows = () => {
+  const root = containerRef.value
+  if (!root) return
+  const rootRect = root.getBoundingClientRect()
+  const rects = new Map<number, DOMRect>()
+  root.querySelectorAll<HTMLElement>('[data-node-id]').forEach((element) => {
+    rects.set(Number(element.dataset.nodeId), element.getBoundingClientRect())
+  })
+  const nodeById = new Map<number, GanttNodeLike>()
+  for (const group of props.groups) for (const node of group.nodes) nodeById.set(node.id, node)
+  const next: typeof arrows.value = []
+  if (props.showDependencies !== false) {
+    for (const dep of props.dependencies || []) {
+      const a = rects.get(dep.predecessor_id)
+      const b = rects.get(dep.successor_id)
+      if (!a || !b) continue
+      const { from, to } = arrowEndpoints(
+        { left: a.left - rootRect.left, right: a.right - rootRect.left, top: a.top - rootRect.top, height: a.height },
+        { left: b.left - rootRect.left, right: b.right - rootRect.left, top: b.top - rootRect.top, height: b.height },
+      )
+      const previous = nodeById.get(dep.predecessor_id)
+      const nextNode = nodeById.get(dep.successor_id)
+      next.push({
+        id: dep.id,
+        path: dependencyPath(from, to),
+        tone: dependencyTone(previous ? nodePhase(previous) : 'upcoming', nextNode ? nodePhase(nextNode) : 'upcoming'),
+        from_id: dep.predecessor_id,
+        to_id: dep.successor_id,
+      })
+    }
+  }
+  arrows.value = next
+  svgSize.value = { width: root.scrollWidth, height: root.scrollHeight }
+}
+
+watch(
+  () => [props.groups, props.from, props.to, props.zoom, props.showDependencies, props.dependencies],
+  async () => {
+    await nextTick()
+    measureArrows()
+  },
+  { deep: true },
+)
+
+let resizeObserver: ResizeObserver | null = null
+onMounted(() => {
+  measureArrows()
+  if (typeof ResizeObserver !== 'undefined' && containerRef.value) {
+    resizeObserver = new ResizeObserver(() => measureArrows())
+    resizeObserver.observe(containerRef.value)
+  }
+})
+
 const onPointerMove = (event: PointerEvent) => {
   if (!drag.value) return
   const deltaPx = event.clientX - drag.value.startX
@@ -189,6 +288,7 @@ const selectNode = (node: GanttNodeLike) => {
 onUnmounted(() => {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
+  resizeObserver?.disconnect()
 })
 </script>
 
@@ -369,6 +469,7 @@ onUnmounted(() => {
   white-space: nowrap;
   cursor: grab;
   user-select: none;
+  z-index: 2;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
   transition: box-shadow 120ms ease;
 }
@@ -445,7 +546,7 @@ onUnmounted(() => {
   width: 1px;
   background: var(--el-color-danger);
   opacity: 0.65;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
 }
 
@@ -458,6 +559,41 @@ onUnmounted(() => {
   background: var(--el-bg-color);
   padding: 0 2px;
   white-space: nowrap;
+}
+
+/* 依赖箭头 */
+.gantt-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.gantt-arrow {
+  fill: none;
+  stroke: var(--el-color-info-light-3);
+  stroke-width: 1.2;
+  opacity: 0.7;
+}
+
+.gantt-arrow.arrow-danger {
+  stroke: var(--el-color-danger-light-5);
+  opacity: 0.9;
+}
+
+.gantt-arrow.is-active {
+  stroke: var(--el-color-primary);
+  stroke-width: 2;
+  opacity: 1;
+}
+
+.legend-line {
+  width: 14px;
+  height: 2px;
+  background: var(--el-color-info-light-3);
+  display: inline-block;
 }
 
 /* 图例 */

@@ -131,6 +131,30 @@ module.exports = function registerGanttRoutes(app, db, ctx) {
       });
     }
 
+    // 2026-11-04：工序依赖（两端都在本次区间内的才返回，用于甘特图画箭头）
+    const nodeIds = new Set(nodes.map((node) => node.id));
+    let dependencies = [];
+    if (nodeIds.size) {
+      const depConditions = [
+        "p.planned_start IS NOT NULL",
+        "date(p.planned_start) <= ?",
+        "date(COALESCE(p.planned_end, p.planned_start)) >= ?",
+      ];
+      const depParams = [to, from];
+      if (instanceId) {
+        depConditions.push("p.equipment_instance_id = ?");
+        depParams.push(instanceId);
+      }
+      const depRows = all(`
+        SELECT d.id, d.predecessor_id, d.successor_id, d.dep_type, d.lag_hours
+          FROM process_dependencies d
+          JOIN process_nodes p ON p.id = d.predecessor_id
+         WHERE ${depConditions.join(" AND ")}
+         LIMIT 5000
+      `, depParams);
+      dependencies = depRows.filter((row) => nodeIds.has(row.predecessor_id) && nodeIds.has(row.successor_id));
+    }
+
     let unscheduled = [];
     if (includeUnscheduled) {
       const unscheduledConditions = ["pn.planned_start IS NULL", "pn.planned_end IS NULL", "pn.status NOT IN ('completed', 'cancelled')"];
@@ -155,8 +179,10 @@ module.exports = function registerGanttRoutes(app, db, ctx) {
       to,
       days: daysBetween(fromDate, toDate),
       groups: [...groupMap.values()],
+      dependencies,
       unscheduled,
       total_nodes: nodes.length,
+      total_dependencies: dependencies.length,
       truncated,
     });
   }));

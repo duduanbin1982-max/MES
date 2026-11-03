@@ -81,7 +81,29 @@
 - 拖拽保存：节点 #296 计划时间 `2027-01-11 ~ 2027-01-19` → PUT 改成 `2026-11-11 ~ 2026-11-19 08:00:00` → 库中已更新 → 还原后逐字节一致。
 - 单测：后端 `tests/scheduleGantt.test.js` **5/5**；前端 `tests/domain/gantt.test.ts` **8/8**；`scheduleSplit` 5/5（路由清单 12 条）。
 
-## 6. 已知边界
+
+
+## 7. 依赖箭头（2026-11-04 追加）
+
+数据来自 `process_dependencies(predecessor_id, successor_id, dep_type, lag_hours)`（当前生产 89 条）。
+
+- **接口**：`GET /api/schedule/gantt` 响应新增 `dependencies` 与 `total_dependencies`；
+  只返回**两端都在本次区间结果里**的依赖（前驱在区间内、后继也在区间内）。
+- **画法**：前驱条形右端 → 后继条形左端，贝塞尔曲线（控制点 12~60px，正向/回绕都成立）；
+  箭头用 SVG `marker-end` 自动定向。
+- **颜色**：两端任一为「超期 / 受阻」→ 红色告警；否则灰蓝常规线。
+- **交互**：
+  - 工具栏「依赖箭头」开关可整层关闭；
+  - 鼠标悬停某条形时，与它相连的依赖线高亮为蓝色加粗（快速看上下游）。
+- **实现**：`GanttChart.vue` 在渲染后读取每个条形 `data-node-id` 的 `getBoundingClientRect`，
+  相对容器换算成 SVG 坐标；`watch(groups/from/to/zoom/showDependencies)` + `ResizeObserver` 自动重算。
+  与滚动无关（SVG 和条形在同一个滚动内容里）。
+- **单测**：`GT.9 dependencyPath`（正向/回绕/控制点上下限）、`GT.10 dependencyTone`、`GT.11 arrowEndpoints`。
+- **后端单测**：`SG.1` 断言依赖只保留两端在窗口内的（2→3 的未排程、2→4 的跨月都会被正确排除）。
+
+已知边界：`dep_type` 目前只有 `FS`（完成-开始）语义，尚未对 `lag_hours` 做可视化偏移（只作为提示字段保留）。
+
+## 8. 已知边界
 
 1. **不画依赖箭头**：`process_nodes` 的先后关系暂未在图上连线（可后续加 `process_node_dependencies`）。
 2. **不做跨项目资源冲突提示**：同工位撞期不会高亮（需要按工位聚合计工时）。
