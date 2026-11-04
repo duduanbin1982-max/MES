@@ -1,5 +1,15 @@
 <template>
   <div class="gantt-wrap" v-loading="loading">
+    <!-- 2026-11-04：选中节点后只看它的上下游依赖，其余淡出 -->
+    <div v-if="selectedNode" class="gantt-select-bar">
+      <span class="select-label">已选：</span>
+      <strong>{{ selectedNode.operation_name || '（未命名工序）' }}</strong>
+      <el-tag size="small" type="primary" effect="plain">上游 {{ neighbors.upstream.length }}</el-tag>
+      <el-tag size="small" type="success" effect="plain">下游 {{ neighbors.downstream.length }}</el-tag>
+      <span class="select-hint">其余工序与依赖已淡出；按 Esc 或点空白处清除</span>
+      <el-button link type="primary" size="small" @click="clearSelection">清除选中</el-button>
+    </div>
+
     <div class="gantt-scroll">
       <div
       ref="containerRef"
@@ -39,7 +49,7 @@
                 <span class="group-name">{{ group.instance_name }}</span>
                 <el-tag size="small" type="info">{{ group.nodes.length }} 个工序</el-tag>
               </div>
-              <div class="gantt-row-track gantt-group-track" :style="{ width: scale.totalWidth + 'px' }">
+              <div class="gantt-row-track gantt-group-track" :style="{ width: scale.totalWidth + 'px' }" @click="clearSelection">
                 <div class="gantt-month-separators">
                   <span
                     v-for="day in scale.days.filter((item) => item.is_month_start)"
@@ -55,7 +65,7 @@
               v-for="node in group.nodes"
               :key="node.id"
               class="gantt-row"
-              :class="{ 'is-selected': selectedId === node.id }"
+              :class="rowClass(node)"
             >
               <div class="gantt-row-left" :title="`${node.operation_name || ''} ${node.planned_start || ''} ~ ${node.planned_end || ''}`">
                 <span class="node-dot" :class="'dot-' + nodePhase(node)"></span>
@@ -65,7 +75,7 @@
               <div
                 class="gantt-row-track"
                 :style="{ width: scale.totalWidth + 'px' }"
-                @dblclick="selectNode(node)"
+                @click="clearSelection"
               >
                 <div
                   v-if="geometry(node)"
@@ -77,6 +87,8 @@
                   @pointerenter="hoveredId = node.id"
                   @pointerleave="hoveredId = null"
                   @pointerdown="startDrag($event, node)"
+                  @click.stop="onBarClick(node)"
+                  @dblclick.stop="selectNode(node)"
                 >
                   <span class="gantt-bar-label">{{ node.operation_name }}</span>
                 </div>
@@ -100,14 +112,20 @@
             <marker id="gantt-arrow-danger" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
               <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--el-color-danger)" />
             </marker>
+            <marker id="gantt-arrow-upstream" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--el-color-primary)" />
+            </marker>
+            <marker id="gantt-arrow-downstream" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" fill="var(--el-color-success)" />
+            </marker>
           </defs>
           <path
             v-for="arrow in arrows"
             :key="arrow.id"
             :d="arrow.path"
             class="gantt-arrow"
-            :class="[`arrow-${arrow.tone}`, { 'is-active': hoveredId !== null && (arrow.from_id === hoveredId || arrow.to_id === hoveredId) }]"
-            :marker-end="arrow.tone === 'danger' ? 'url(#gantt-arrow-danger)' : 'url(#gantt-arrow)'"
+            :class="arrowClass(arrow)"
+            :marker-end="arrowMarker(arrow)"
           />
         </svg>
 
@@ -125,7 +143,7 @@
       <span class="legend-item"><span class="legend-dot dot-blocked"></span>受阻</span>
       <span class="legend-item"><span class="legend-dot dot-upcoming"></span>待开始</span>
       <span class="legend-item"><span class="legend-line"></span>前置依赖（红=链条有超期/受阻）</span>
-      <span class="legend-hint">拖动条形可直接改期（按天吸附）；双击行查看详情</span>
+      <span class="legend-hint">单击条形只看它的上下游依赖（Esc 清除）· 拖动可直接改期 · 双击看详情</span>
     </div>
   </div>
 </template>
@@ -136,6 +154,9 @@ import { nodePhase } from '../../domain/scheduleBoard'
 import {
   arrowEndpoints,
   barGeometry,
+  dependencyRelation,
+  neighborIds,
+  nodeRelation,
   buildScale,
   dependencyPath,
   dependencyTone,
@@ -195,6 +216,78 @@ const barTooltip = (node: GanttNodeLike) => [
 const drag = ref<null | { id: number; startX: number; deltaDays: number }>(null)
 const selectedId = ref<number | null>(null)
 
+// ---------------- 只看选中节点依赖（2026-11-04） ----------------
+const selectedNode = computed(() => {
+  if (selectedId.value === null) return null
+  for (const group of props.groups) {
+    const found = group.nodes.find((node) => node.id === selectedId.value)
+    if (found) return found
+  }
+  return null
+})
+
+const neighbors = computed(() => neighborIds(props.dependencies || [], selectedId.value))
+
+let suppressClick = false
+
+const onBarClick = (node: GanttNodeLike) => {
+  if (suppressClick) {
+    suppressClick = false
+    return
+  }
+  selectedId.value = selectedId.value === node.id ? null : node.id
+}
+
+const clearSelection = () => {
+  selectedId.value = null
+}
+
+const rowClass = (node: GanttNodeLike) => {
+  const relation = nodeRelation(node.id, selectedId.value, neighbors.value)
+  return {
+    'is-selected': relation === 'self',
+    'row-upstream': relation === 'upstream',
+    'row-downstream': relation === 'downstream',
+    'row-dimmed': selectedId.value !== null && relation === 'none',
+  }
+}
+
+const arrowClass = (arrow: { tone: string; from_id: number; to_id: number }) => {
+  if (selectedId.value === null) {
+    return [
+      `arrow-${arrow.tone}`,
+      { 'is-active': hoveredId.value !== null && (arrow.from_id === hoveredId.value || arrow.to_id === hoveredId.value) },
+    ]
+  }
+  const relation = dependencyRelation({ id: 0, predecessor_id: arrow.from_id, successor_id: arrow.to_id }, selectedId.value)
+  if (relation === 'upstream') return 'is-upstream'
+  if (relation === 'downstream') return 'is-downstream'
+  return 'is-dimmed'
+}
+
+const arrowMarker = (arrow: { tone: string; from_id: number; to_id: number }) => {
+  if (selectedId.value !== null) {
+    const relation = dependencyRelation({ id: 0, predecessor_id: arrow.from_id, successor_id: arrow.to_id }, selectedId.value)
+    if (relation === 'upstream') return 'url(#gantt-arrow-upstream)'
+    if (relation === 'downstream') return 'url(#gantt-arrow-downstream)'
+  }
+  return arrow.tone === 'danger' ? 'url(#gantt-arrow-danger)' : 'url(#gantt-arrow)'
+}
+
+// Esc 清除选中；选中节点不在当前数据里时自动清除
+const onKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape' && selectedId.value !== null) clearSelection()
+}
+
+watch(
+  () => props.groups,
+  () => {
+    if (selectedId.value === null) return
+    const exists = props.groups.some((group) => group.nodes.some((node) => node.id === selectedId.value))
+    if (!exists) selectedId.value = null
+  },
+)
+
 // ---------------- 依赖箭头（2026-11-04） ----------------
 const containerRef = ref<HTMLElement | null>(null)
 const hoveredId = ref<number | null>(null)
@@ -247,6 +340,7 @@ watch(
 
 let resizeObserver: ResizeObserver | null = null
 onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
   measureArrows()
   if (typeof ResizeObserver !== 'undefined' && containerRef.value) {
     resizeObserver = new ResizeObserver(() => measureArrows())
@@ -265,6 +359,8 @@ const onPointerUp = () => {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   drag.value = null
+  // 拖动过就抑制紧随其后的 click，避免"拖完顺手选中"
+  if (current && current.deltaDays !== 0) suppressClick = true
   if (!current || current.deltaDays === 0) return
   const node = props.groups.flatMap((group) => group.nodes).find((item) => item.id === current.id)
   if (!node) return
@@ -289,6 +385,7 @@ onUnmounted(() => {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   resizeObserver?.disconnect()
+  window.removeEventListener('keydown', onKeydown)
 })
 </script>
 
@@ -623,5 +720,51 @@ onUnmounted(() => {
 
 .legend-hint {
   margin-left: auto;
+}
+.gantt-select-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  background: var(--el-color-primary-light-9);
+  font-size: 12px;
+}
+
+.select-label {
+  color: var(--el-color-info);
+}
+
+.select-hint {
+  color: var(--el-color-info);
+}
+
+.gantt-row.row-upstream {
+  background: var(--el-color-primary-light-9);
+}
+
+.gantt-row.row-downstream {
+  background: var(--el-color-success-light-9);
+}
+
+.gantt-row.row-dimmed {
+  opacity: 0.45;
+}
+
+.gantt-arrow.is-upstream {
+  stroke: var(--el-color-primary);
+  stroke-width: 2;
+  opacity: 1;
+}
+
+.gantt-arrow.is-downstream {
+  stroke: var(--el-color-success);
+  stroke-width: 2;
+  opacity: 1;
+}
+
+.gantt-arrow.is-dimmed {
+  opacity: 0.07;
 }
 </style>

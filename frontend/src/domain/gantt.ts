@@ -201,3 +201,37 @@ export function arrowEndpoints(predecessor: RectLike, successor: RectLike): { fr
     to: { x: successor.left, y: successor.top + successor.height / 2 },
   }
 }
+// ------------------------------------------------------------ 选中节点的依赖关系
+export type DependencyRelation = 'none' | 'upstream' | 'downstream'
+
+/** 依赖与选中节点的关系：to=选中 → upstream（选中节点是后继）；from=选中 → downstream */
+export function dependencyRelation(dep: DependencyLike, selectedId: number | null): DependencyRelation {
+  if (selectedId === null || selectedId === undefined) return 'none'
+  if (dep.successor_id === selectedId) return 'upstream'
+  if (dep.predecessor_id === selectedId) return 'downstream'
+  return 'none'
+}
+
+/** 直接上下游（一跳）：上游 = 以选中节点为后继的依赖前驱；下游 = 以选中节点为前驱的后继 */
+export function neighborIds(dependencies: DependencyLike[], selectedId: number | null): { upstream: number[]; downstream: number[] } {
+  if (selectedId === null || selectedId === undefined) return { upstream: [], downstream: [] }
+  const upstream = new Set<number>()
+  const downstream = new Set<number>()
+  for (const dep of dependencies) {
+    if (dep.successor_id === selectedId) upstream.add(dep.predecessor_id)
+    if (dep.predecessor_id === selectedId) downstream.add(dep.successor_id)
+  }
+  return {
+    upstream: [...upstream].sort((a, b) => a - b),
+    downstream: [...downstream].sort((a, b) => a - b),
+  }
+}
+
+/** 节点在选中上下文中的角色：self / upstream / downstream / none */
+export function nodeRelation(nodeId: number, selectedId: number | null, neighbors: { upstream: number[]; downstream: number[] }): 'self' | 'upstream' | 'downstream' | 'none' {
+  if (selectedId === null || selectedId === undefined) return 'none'
+  if (nodeId === selectedId) return 'self'
+  if (neighbors.upstream.includes(nodeId)) return 'upstream'
+  if (neighbors.downstream.includes(nodeId)) return 'downstream'
+  return 'none'
+}

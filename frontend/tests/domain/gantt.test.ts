@@ -10,7 +10,10 @@ import {
   parseDay,
   arrowEndpoints,
   dependencyPath,
+  dependencyRelation,
   dependencyTone,
+  neighborIds,
+  nodeRelation,
   shiftDates,
   tickLabel,
   toDayString,
@@ -127,4 +130,34 @@ test('GT.11 arrowEndpoints：前驱右端到后继左端，纵向取中点', () 
   const result = arrowEndpoints({ left: 10, right: 110, top: 20, height: 20 }, { left: 200, right: 320, top: 60, height: 20 })
   assert.deepEqual(result.from, { x: 110, y: 30 })
   assert.deepEqual(result.to, { x: 200, y: 70 })
+})
+test('GT.12 dependencyRelation：上游/下游/无关', () => {
+  const dep = { id: 1, predecessor_id: 10, successor_id: 20 }
+  assert.equal(dependencyRelation(dep, null), 'none')
+  assert.equal(dependencyRelation(dep, 20), 'upstream', '选中后继 → 前驱是上游')
+  assert.equal(dependencyRelation(dep, 10), 'downstream', '选中前驱 → 后继是下游')
+  assert.equal(dependencyRelation(dep, 99), 'none')
+})
+
+test('GT.13 neighborIds：只取一跳上下游并去重排序', () => {
+  const deps = [
+    { id: 1, predecessor_id: 1, successor_id: 2 },
+    { id: 2, predecessor_id: 2, successor_id: 3 },
+    { id: 3, predecessor_id: 2, successor_id: 4 },
+    { id: 4, predecessor_id: 5, successor_id: 2 },
+    { id: 5, predecessor_id: 1, successor_id: 2 },
+  ]
+  assert.deepEqual(neighborIds(deps, 2), { upstream: [1, 5], downstream: [3, 4] }, '1 重复出现只算一次；上游 5 也指向 2')
+  assert.deepEqual(neighborIds(deps, 1), { upstream: [], downstream: [2] }, '只取一跳，不含 3/4')
+  assert.deepEqual(neighborIds(deps, 3), { upstream: [2], downstream: [] })
+  assert.deepEqual(neighborIds(deps, null), { upstream: [], downstream: [] })
+})
+
+test('GT.14 nodeRelation：自身/上游/下游/无关', () => {
+  const neighbors = { upstream: [1, 5], downstream: [3, 4] }
+  assert.equal(nodeRelation(2, 2, neighbors), 'self')
+  assert.equal(nodeRelation(5, 2, neighbors), 'upstream')
+  assert.equal(nodeRelation(4, 2, neighbors), 'downstream')
+  assert.equal(nodeRelation(9, 2, neighbors), 'none')
+  assert.equal(nodeRelation(2, null, { upstream: [], downstream: [] }), 'none', '未选中时一律 none')
 })
