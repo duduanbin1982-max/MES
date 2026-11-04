@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import {
   barGeometry,
   buildScale,
+  computeArrowLayer,
   monthRange,
   monthSegments,
   parseDay,
@@ -296,4 +297,41 @@ test('GT.19 expandChain：单向展开（只看上游 / 只看下游）', () => 
   const both = expandChain(deps, 2, 1)
   assert.deepEqual(both.upstreamIds, [1, 5])
   assert.deepEqual(both.downstreamIds, [3])
+})
+
+
+test('GT.22 computeArrowLayer：确定性行布局 + lag 偏移 + 缺失节点跳过', () => {
+  const scale = buildScale('2026-11-01', '2026-11-30', 'day')
+  const groups = [
+    { nodes: [{ id: 1, planned_start: '2026-11-02', planned_end: '2026-11-04' }, { id: 2, planned_start: '2026-11-05', planned_end: '2026-11-06' }] },
+    { nodes: [{ id: 3, planned_start: '2026-11-10', planned_end: '2026-11-12' }] },
+  ]
+  const deps = [
+    { id: 1, predecessor_id: 1, successor_id: 2, dep_type: 'FS', lag_hours: 0 },
+    { id: 2, predecessor_id: 2, successor_id: 3, dep_type: 'FS', lag_hours: 24 },
+    { id: 3, predecessor_id: 1, successor_id: 99, dep_type: 'FS', lag_hours: 0 },
+  ]
+  const layer = computeArrowLayer(groups, deps, { headerHeight: 49, groupHeight: 31, rowHeight: 42, leftWidth: 288, scale })
+  assert.equal(layer.arrows.length, 2, '缺失节点的依赖被跳过')
+  // 第 1 行中心 y = 49 + 31 + 21 = 101；第 2 行 = 143；第二组第 1 行 = 49 + 31 + 42*2 + 31 + 21 = 216
+  assert.equal(layer.height, 49 + 31 + 42 * 2 + 31 + 42)
+  const first = layer.arrows[0]
+  assert.match(first.path, /^M \d+ 101 /)
+  // 1→2：前驱右端 x = 288 + (1..3 天) 的几何右边界；次日开始
+  assert.ok(first.path.includes(' 143') || first.path.includes(',143') || first.path.includes(' 143.5'), '终点在后继行')
+  const lagged = layer.arrows[1]
+  assert.equal(lagged.lagged, true, 'FS+24h 有 lag 偏移')
+  assert.equal(lagged.lag_hours, 24)
+  assert.ok(lagged.path.length > 0)
+})
+
+test('GT.23 computeArrowLayer：关闭依赖时只算高度', () => {
+  const scale = buildScale('2026-11-01', '2026-11-30', 'day')
+  const groups = [{ nodes: [{ id: 1, planned_start: '2026-11-02', planned_end: '2026-11-03' }] }]
+  const layer = computeArrowLayer(groups, [{ id: 1, predecessor_id: 1, successor_id: 1 }], {
+    headerHeight: 49, groupHeight: 31, rowHeight: 42, leftWidth: 288, scale, showDependencies: false,
+  })
+  assert.equal(layer.arrows.length, 0)
+  assert.equal(layer.height, 49 + 31 + 42)
+  assert.equal(layer.width, 288 + scale.totalWidth)
 })

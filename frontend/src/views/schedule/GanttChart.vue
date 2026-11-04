@@ -179,17 +179,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { formatPlanRange, nodePhase } from '../../domain/scheduleBoard'
 import {
   barGeometry,
-  arrowGeometry,
   arrowHop,
+  computeArrowLayer,
   labelPlacement,
   expandChain,
   nodeHop,
   buildScale,
-  dependencyPath,
   dependencyTone,
   diffDays,
   monthSegments,
@@ -386,88 +385,43 @@ watch(
   },
 )
 
-// ---------------- 依赖箭头（2026-11-04） ----------------
-const containerRef = ref<HTMLElement | null>(null)
+// ---------------- 依赖箭头（2026-11-05：确定性布局，不依赖 DOM 测量） ----------------
 const hoveredId = ref<number | null>(null)
-const arrows = ref<Array<{ id: number; path: string; tone: 'normal' | 'danger'; from_id: number; to_id: number; lagged: boolean; lag_hours: number; dep_type: string }>>([])
-const svgSize = ref({ width: 0, height: 0 })
 
-const measureArrows = () => {
-  const root = containerRef.value
-  if (!root) return
-  const rootRect = root.getBoundingClientRect()
-  const rects = new Map<number, DOMRect>()
-  root.querySelectorAll<HTMLElement>('[data-node-id]').forEach((element) => {
-    rects.set(Number(element.dataset.nodeId), element.getBoundingClientRect())
-  })
-  const nodeById = new Map<number, GanttNodeLike>()
-  for (const group of props.groups) for (const node of group.nodes) nodeById.set(node.id, node)
-  const next: typeof arrows.value = []
-  if (props.showDependencies !== false) {
-    for (const dep of props.dependencies || []) {
-      const a = rects.get(dep.predecessor_id)
-      const b = rects.get(dep.successor_id)
-      if (!a || !b) continue
-      const geometry = arrowGeometry(
-        { left: a.left - rootRect.left, right: a.right - rootRect.left, top: a.top - rootRect.top, height: a.height },
-        { left: b.left - rootRect.left, right: b.right - rootRect.left, top: b.top - rootRect.top, height: b.height },
-        { dayWidth: scale.value.dayWidth, lagHours: (dep as any).lag_hours, depType: (dep as any).dep_type },
-      )
-      const previous = nodeById.get(dep.predecessor_id)
-      const nextNode = nodeById.get(dep.successor_id)
-      next.push({
-        id: dep.id,
-        path: dependencyPath(geometry.from, geometry.to),
-        tone: dependencyTone(previous ? nodePhase(previous) : 'upcoming', nextNode ? nodePhase(nextNode) : 'upcoming'),
-        from_id: dep.predecessor_id,
-        to_id: dep.successor_id,
-        lagged: geometry.lagged,
-        lag_hours: Number((dep as any).lag_hours) || 0,
-        dep_type: (dep as any).dep_type || 'FS',
-      })
-    }
+// 行结构常量：必须与下方 CSS 保持一致
+const HEADER_HEIGHT = 49 // 表头（月行 26 + 日行 22 + 边框 1）
+const GROUP_HEIGHT = 31 // 项目分组行
+const ROW_HEIGHT = 42 // 工序行
+const LEFT_WIDTH = 288 // 左侧固定列宽（--gantt-left-width）
+
+const nodeById = computed(() => {
+  const map = new Map<number, GanttNodeLike>()
+  for (const group of props.groups) for (const node of group.nodes) map.set(node.id, node)
+  return map
+})
+
+const arrowLayer = computed(() => computeArrowLayer(props.groups, props.dependencies || [], {
+  headerHeight: HEADER_HEIGHT,
+  groupHeight: GROUP_HEIGHT,
+  rowHeight: ROW_HEIGHT,
+  leftWidth: LEFT_WIDTH,
+  scale: scale.value,
+  showDependencies: props.showDependencies !== false,
+}))
+
+const arrows = computed(() => arrowLayer.value.arrows.map((arrow) => {
+  const previous = nodeById.value.get(arrow.from_id)
+  const nextNode = nodeById.value.get(arrow.to_id)
+  return {
+    ...arrow,
+    tone: dependencyTone(previous ? nodePhase(previous) : 'upcoming', nextNode ? nodePhase(nextNode) : 'upcoming'),
   }
-  arrows.value = next
-  svgSize.value = { width: root.scrollWidth, height: root.scrollHeight }
-}
+}))
 
-watch(
-  () => [props.groups, props.from, props.to, props.zoom, props.showDependencies, props.dependencies],
-  async () => {
-    await nextTick()
-    measureArrowsSoon()
-  },
-  { deep: true, flush: 'post' },
-)
-
-let resizeObserver: ResizeObserver | null = null
-let retryTimer: number | null = null
-
-/** 双帧后再测一次：tab 切换/首帧布局未完成时，第一次测量可能拿到 0 尺寸 */
-const measureArrowsSoon = (retries = 4) => {
-  if (typeof requestAnimationFrame === 'undefined') {
-    measureArrows()
-    return
-  }
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      measureArrows()
-      // 容器或条形还是 0 尺寸（例如 tab 还没显示）→ 稍后重试
-      if (retries > 0 && (!svgSize.value.width || !arrows.value.length)) {
-        retryTimer = window.setTimeout(() => measureArrowsSoon(retries - 1), 120)
-      }
-    })
-  })
-}
+const svgSize = computed(() => ({ width: arrowLayer.value.width, height: arrowLayer.value.height }))
 
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
-  window.addEventListener('resize', measureArrows)
-  measureArrowsSoon()
-  if (typeof ResizeObserver !== 'undefined' && containerRef.value) {
-    resizeObserver = new ResizeObserver(() => measureArrows())
-    resizeObserver.observe(containerRef.value)
-  }
 })
 
 const onPointerMove = (event: PointerEvent) => {
@@ -506,9 +460,6 @@ const selectNode = (node: GanttNodeLike) => {
 onUnmounted(() => {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
-  resizeObserver?.disconnect()
-  if (retryTimer !== null) window.clearTimeout(retryTimer)
-  window.removeEventListener('resize', measureArrows)
   window.removeEventListener('keydown', onKeydown)
 })
 </script>
@@ -538,6 +489,8 @@ onUnmounted(() => {
   position: sticky;
   top: 0;
   z-index: 3;
+  height: 49px;
+  box-sizing: border-box;
   background: var(--el-bg-color);
   border-bottom: 1px solid var(--el-border-color);
 }
@@ -595,12 +548,22 @@ onUnmounted(() => {
   display: flex;
 }
 
+.gantt-month-row {
+  height: 26px;
+  align-items: center;
+}
+
+.gantt-day-row {
+  height: 22px;
+}
+
 .gantt-month {
   font-size: 12px;
   font-weight: 600;
+  line-height: 26px;
   color: var(--el-color-info);
   border-right: 1px solid var(--el-border-color-lighter);
-  padding: 4px 6px;
+  padding: 0 6px;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -635,6 +598,8 @@ onUnmounted(() => {
 }
 
 .gantt-group-row {
+  height: 31px;
+  box-sizing: border-box;
   background: var(--el-fill-color-light);
   position: sticky;
   left: 0;
@@ -655,6 +620,7 @@ onUnmounted(() => {
 
 .gantt-row {
   height: 42px;
+  box-sizing: border-box;
 }
 
 .gantt-row:hover {

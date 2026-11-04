@@ -411,3 +411,82 @@ export function labelPlacement(options: {
   if (leftSpace >= estimatedWidth) return { mode: 'outside-left', estimated_width: estimatedWidth }
   return { mode: 'inside', estimated_width: estimatedWidth }
 }
+
+// ------------------------------------------------------------ 依赖箭头层（确定性布局）
+export interface ArrowLayerArrow {
+  id: number
+  path: string
+  from_id: number
+  to_id: number
+  lagged: boolean
+  lag_hours: number
+  dep_type: string
+}
+
+export interface ArrowLayer {
+  arrows: ArrowLayerArrow[]
+  width: number
+  height: number
+}
+
+export interface ArrowLayerOptions {
+  headerHeight: number
+  groupHeight: number
+  rowHeight: number
+  leftWidth: number
+  scale: GanttScale
+  /** 默认 true；false 时只算高度不生成箭头 */
+  showDependencies?: boolean
+}
+
+/**
+ * 2026-11-05：不依赖 DOM 测量，按"行结构 + 条形几何"直接算出箭头坐标。
+ * 行结构：表头 headerHeight → 每组 groupHeight → 每行 rowHeight（条形垂直居中）。
+ */
+export function computeArrowLayer(
+  groups: Array<{ nodes: GanttNodeLike[] }>,
+  dependencies: DependencyLike[],
+  options: ArrowLayerOptions,
+): ArrowLayer {
+  const { headerHeight, groupHeight, rowHeight, leftWidth, scale } = options
+  const positions = new Map<number, { left: number; right: number; y: number }>()
+  let y = headerHeight
+  for (const group of groups || []) {
+    y += groupHeight
+    for (const node of group.nodes || []) {
+      const geometry = barGeometry(node, scale)
+      if (geometry) positions.set(node.id, { left: geometry.left, right: geometry.left + geometry.width, y: y + rowHeight / 2 })
+      y += rowHeight
+    }
+  }
+
+  const arrows: ArrowLayerArrow[] = []
+  if (options.showDependencies !== false) {
+    for (const dep of dependencies || []) {
+      const from = positions.get(dep.predecessor_id)
+      const to = positions.get(dep.successor_id)
+      if (!from || !to) continue
+      const depType = String(dep.dep_type || 'FS').toUpperCase()
+      const lagPx = depType === 'FS' ? lagOffsetPx(dep.lag_hours, scale.dayWidth) : 0
+      const startX = leftWidth + from.right
+      const endX = leftWidth + to.left
+      // lag 偏移：起点右移，最多推到后继起点前 6px
+      const fromX = lagPx > 0 ? Math.min(startX + lagPx, Math.max(startX + 2, endX - 6)) : startX
+      arrows.push({
+        id: dep.id,
+        path: dependencyPath({ x: fromX, y: from.y }, { x: endX, y: to.y }),
+        from_id: dep.predecessor_id,
+        to_id: dep.successor_id,
+        lagged: lagPx > 0,
+        lag_hours: Number(dep.lag_hours) || 0,
+        dep_type: depType,
+      })
+    }
+  }
+
+  return {
+    arrows,
+    width: leftWidth + scale.totalWidth,
+    height: y,
+  }
+}
