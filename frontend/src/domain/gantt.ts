@@ -235,3 +235,105 @@ export function nodeRelation(nodeId: number, selectedId: number | null, neighbor
   if (neighbors.downstream.includes(nodeId)) return 'downstream'
   return 'none'
 }
+// ------------------------------------------------------------ N 跳依赖链展开
+export interface ChainResult {
+  /** nodeId -> 跳数（1 = 直接前驱/后继） */
+  upstream: Map<number, number>
+  downstream: Map<number, number>
+  upstreamIds: number[]
+  downstreamIds: number[]
+  /** 超过 protectLimit 时截断（避免"全部"展开爆量） */
+  truncated: boolean
+}
+
+/**
+ * 展开选中节点的依赖链（BFS，逐跳扩散；自动防环）。
+ * maxDepth = 1 即"只取直接上下游"，Infinity / 'all' 表示一直展开到边界。
+ */
+export function expandChain(
+  dependencies: DependencyLike[],
+  selectedId: number | null,
+  maxDepth: number = 1,
+  protectLimit = 300,
+): ChainResult {
+  const upstream = new Map<number, number>()
+  const downstream = new Map<number, number>()
+  if (selectedId === null || selectedId === undefined) {
+    return { upstream, downstream, upstreamIds: [], downstreamIds: [], truncated: false }
+  }
+  const depthLimit = Number.isFinite(maxDepth) ? Math.max(1, Math.floor(maxDepth)) : Number.POSITIVE_INFINITY
+  const preds = new Map<number, number[]>()
+  const succs = new Map<number, number[]>()
+  for (const dep of dependencies) {
+    if (!preds.has(dep.successor_id)) preds.set(dep.successor_id, [])
+    preds.get(dep.successor_id)!.push(dep.predecessor_id)
+    if (!succs.has(dep.predecessor_id)) succs.set(dep.predecessor_id, [])
+    succs.get(dep.predecessor_id)!.push(dep.successor_id)
+  }
+
+  const walk = (edges: Map<number, number[]>, store: Map<number, number>) => {
+    let frontier = [selectedId]
+    let depth = 1
+    while (frontier.length && depth <= depthLimit) {
+      const next: number[] = []
+      for (const current of frontier) {
+        for (const neighbor of edges.get(current) || []) {
+          if (neighbor === selectedId || store.has(neighbor)) continue
+          store.set(neighbor, depth)
+          next.push(neighbor)
+          if (store.size + upstream.size + downstream.size >= protectLimit) return true
+        }
+      }
+      frontier = next
+      depth += 1
+    }
+    return false
+  }
+
+  let truncated = walk(preds, upstream)
+  if (!truncated) truncated = walk(succs, downstream)
+
+  return {
+    upstream,
+    downstream,
+    upstreamIds: [...upstream.keys()].sort((a, b) => a - b),
+    downstreamIds: [...downstream.keys()].sort((a, b) => a - b),
+    truncated,
+  }
+}
+
+export interface HopInfo {
+  relation: 'none' | 'upstream' | 'downstream'
+  depth: number
+}
+
+/** 节点在依赖链里的位置：自身 / 上游(第几跳) / 下游(第几跳) / 无关 */
+export function nodeHop(nodeId: number, selectedId: number | null, chain: ChainResult): HopInfo {
+  if (selectedId === null || selectedId === undefined) return { relation: 'none', depth: 0 }
+  if (nodeId === selectedId) return { relation: 'none', depth: 0 }
+  const up = chain.upstream.get(nodeId)
+  if (up) return { relation: 'upstream', depth: up }
+  const down = chain.downstream.get(nodeId)
+  if (down) return { relation: 'downstream', depth: down }
+  return { relation: 'none', depth: 0 }
+}
+
+/**
+ * 依赖线在链里的位置（跳数 = 线另一端节点的跳数 + 1）。
+ * 上游线看后继节点：后继是选中节点自己 → 第 1 跳；后继在 upstream(d) → 第 d+1 跳。
+ * 下游线看前驱节点：前驱是选中节点自己 → 第 1 跳；前驱在 downstream(d) → 第 d+1 跳。
+ */
+export function arrowHop(dep: DependencyLike, selectedId: number | null, chain: ChainResult): HopInfo {
+  if (selectedId === null || selectedId === undefined) return { relation: 'none', depth: 0 }
+  const upDepth = dep.successor_id === selectedId ? 0 : chain.upstream.get(dep.successor_id)
+  const downDepth = dep.predecessor_id === selectedId ? 0 : chain.downstream.get(dep.predecessor_id)
+  // 环里可能两边都命中，取更近的一侧
+  if (upDepth !== undefined && downDepth !== undefined) {
+    return upDepth <= downDepth
+      ? { relation: 'upstream', depth: upDepth + 1 }
+      : { relation: 'downstream', depth: downDepth + 1 }
+  }
+  if (upDepth !== undefined) return { relation: 'upstream', depth: upDepth + 1 }
+  if (downDepth !== undefined) return { relation: 'downstream', depth: downDepth + 1 }
+  return { relation: 'none', depth: 0 }
+}

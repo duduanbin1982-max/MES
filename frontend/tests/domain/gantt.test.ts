@@ -10,7 +10,10 @@ import {
   parseDay,
   arrowEndpoints,
   dependencyPath,
+  arrowHop,
   dependencyRelation,
+  expandChain,
+  nodeHop,
   dependencyTone,
   neighborIds,
   nodeRelation,
@@ -160,4 +163,60 @@ test('GT.14 nodeRelation：自身/上游/下游/无关', () => {
   assert.equal(nodeRelation(4, 2, neighbors), 'downstream')
   assert.equal(nodeRelation(9, 2, neighbors), 'none')
   assert.equal(nodeRelation(2, null, { upstream: [], downstream: [] }), 'none', '未选中时一律 none')
+})
+test('GT.15 expandChain：1 跳 / 2 跳 / 全部 / 防环 / 截断', () => {
+  // 链：1→2→3→4，另 5→2（汇入），9→1（更长上游）
+  const deps = [
+    { id: 1, predecessor_id: 1, successor_id: 2 },
+    { id: 2, predecessor_id: 2, successor_id: 3 },
+    { id: 3, predecessor_id: 3, successor_id: 4 },
+    { id: 4, predecessor_id: 5, successor_id: 2 },
+    { id: 5, predecessor_id: 9, successor_id: 1 },
+  ]
+  const one = expandChain(deps, 2, 1)
+  assert.deepEqual(one.upstreamIds, [1, 5], '直接前驱 1、5')
+  assert.deepEqual(one.downstreamIds, [3], '直接后继 3')
+  assert.equal(one.upstream.get(9), undefined, '1 跳不含 9')
+
+  const two = expandChain(deps, 2, 2)
+  assert.deepEqual(two.upstreamIds, [1, 5, 9], '2 跳把 9 带进来')
+  assert.equal(two.upstream.get(9), 2)
+  assert.deepEqual(two.downstreamIds, [3, 4], '2 跳下游到 4，深度 2')
+  assert.equal(two.downstream.get(4), 2)
+
+  const all = expandChain(deps, 2, Number.POSITIVE_INFINITY)
+  assert.deepEqual(all.downstreamIds, [3, 4], '到边界为止')
+  assert.equal(all.truncated, false)
+
+  // 防环：2↔3 成环
+  const cyclic = expandChain([
+    { id: 1, predecessor_id: 2, successor_id: 3 },
+    { id: 2, predecessor_id: 3, successor_id: 2 },
+  ], 2, 5)
+  assert.deepEqual(cyclic.upstreamIds, [3])
+  assert.deepEqual(cyclic.downstreamIds, [3], '环不会无限展开（3 已访问）')
+
+  // 截断
+  const many = Array.from({ length: 6 }, (_, index) => ({ id: index + 1, predecessor_id: 100 + index, successor_id: 2 }))
+  assert.equal(expandChain(many, 2, 1, 3).truncated, true)
+  assert.equal(expandChain(many, 2, 1, 100).truncated, false)
+})
+
+test('GT.16 nodeHop / arrowHop：按跳数分类，环取更近一侧', () => {
+  const deps = [
+    { id: 1, predecessor_id: 1, successor_id: 2 },
+    { id: 2, predecessor_id: 2, successor_id: 3 },
+    { id: 3, predecessor_id: 3, successor_id: 4 },
+  ]
+  const chain = expandChain(deps, 2, 3)
+  assert.deepEqual(nodeHop(2, 2, chain), { relation: 'none', depth: 0 }, '选中自己')
+  assert.deepEqual(nodeHop(1, 2, chain), { relation: 'upstream', depth: 1 })
+  assert.deepEqual(nodeHop(3, 2, chain), { relation: 'downstream', depth: 1 })
+  assert.deepEqual(nodeHop(4, 2, chain), { relation: 'downstream', depth: 2 })
+  assert.deepEqual(nodeHop(99, 2, chain), { relation: 'none', depth: 0 })
+
+  assert.deepEqual(arrowHop(deps[0], 2, chain), { relation: 'upstream', depth: 1 }, '1→2：前驱线')
+  assert.deepEqual(arrowHop(deps[1], 2, chain), { relation: 'downstream', depth: 1 }, '2→3：后继线')
+  assert.deepEqual(arrowHop(deps[2], 2, chain), { relation: 'downstream', depth: 2 }, '3→4：2 跳下游')
+  assert.deepEqual(arrowHop(deps[0], null, chain), { relation: 'none', depth: 0 })
 })

@@ -4,8 +4,16 @@
     <div v-if="selectedNode" class="gantt-select-bar">
       <span class="select-label">已选：</span>
       <strong>{{ selectedNode.operation_name || '（未命名工序）' }}</strong>
-      <el-tag size="small" type="primary" effect="plain">上游 {{ neighbors.upstream.length }}</el-tag>
-      <el-tag size="small" type="success" effect="plain">下游 {{ neighbors.downstream.length }}</el-tag>
+      <el-tag size="small" type="primary" effect="plain">上游 {{ chain.upstreamIds.length }}</el-tag>
+      <el-tag size="small" type="success" effect="plain">下游 {{ chain.downstreamIds.length }}</el-tag>
+      <span class="select-label">展开</span>
+      <el-radio-group v-model="hopDepth" size="small">
+        <el-radio-button :value="1">1 跳</el-radio-button>
+        <el-radio-button :value="2">2 跳</el-radio-button>
+        <el-radio-button :value="3">3 跳</el-radio-button>
+        <el-radio-button :value="0">全部</el-radio-button>
+      </el-radio-group>
+      <el-tag v-if="chain.truncated" size="small" type="warning">链条过长，已截断</el-tag>
       <span class="select-hint">其余工序与依赖已淡出；按 Esc 或点空白处清除</span>
       <el-button link type="primary" size="small" @click="clearSelection">清除选中</el-button>
     </div>
@@ -70,6 +78,7 @@
               <div class="gantt-row-left" :title="`${node.operation_name || ''} ${node.planned_start || ''} ~ ${node.planned_end || ''}`">
                 <span class="node-dot" :class="'dot-' + nodePhase(node)"></span>
                 <span class="node-title">{{ node.operation_name || '（未命名工序）' }}</span>
+                <span v-if="hopBadge(node)" class="hop-badge" :class="'hop-' + hopBadge(node)!.relation">{{ hopBadge(node)!.label }}</span>
                 <span v-if="node.assigned_name" class="node-meta">{{ node.assigned_name }}</span>
               </div>
               <div
@@ -154,9 +163,9 @@ import { nodePhase } from '../../domain/scheduleBoard'
 import {
   arrowEndpoints,
   barGeometry,
-  dependencyRelation,
-  neighborIds,
-  nodeRelation,
+  arrowHop,
+  expandChain,
+  nodeHop,
   buildScale,
   dependencyPath,
   dependencyTone,
@@ -226,7 +235,9 @@ const selectedNode = computed(() => {
   return null
 })
 
-const neighbors = computed(() => neighborIds(props.dependencies || [], selectedId.value))
+// 2026-11-04：N 跳展开（0 = 全部）
+const hopDepth = ref<number>(1)
+const chain = computed(() => expandChain(props.dependencies || [], selectedId.value, hopDepth.value === 0 ? Number.POSITIVE_INFINITY : hopDepth.value))
 
 let suppressClick = false
 
@@ -235,20 +246,40 @@ const onBarClick = (node: GanttNodeLike) => {
     suppressClick = false
     return
   }
-  selectedId.value = selectedId.value === node.id ? null : node.id
+  if (selectedId.value === node.id) {
+    selectedId.value = null
+    hopDepth.value = 1
+    return
+  }
+  selectedId.value = node.id
+  hopDepth.value = 1
 }
 
 const clearSelection = () => {
   selectedId.value = null
+  hopDepth.value = 1
+}
+
+/** 行上的跳数徽标：↑1 = 上游 1 跳；↓2 = 下游 2 跳 */
+const hopBadge = (node: GanttNodeLike) => {
+  const hop = nodeHop(node.id, selectedId.value, chain.value)
+  if (hop.relation === 'none') return null
+  return {
+    relation: hop.relation,
+    label: `${hop.relation === 'upstream' ? '↑' : '↓'}${hop.depth}`,
+  }
 }
 
 const rowClass = (node: GanttNodeLike) => {
-  const relation = nodeRelation(node.id, selectedId.value, neighbors.value)
+  const hop = nodeHop(node.id, selectedId.value, chain.value)
+  const self = selectedId.value === node.id
+  const related = hop.relation !== 'none'
   return {
-    'is-selected': relation === 'self',
-    'row-upstream': relation === 'upstream',
-    'row-downstream': relation === 'downstream',
-    'row-dimmed': selectedId.value !== null && relation === 'none',
+    'is-selected': self,
+    'row-upstream': hop.relation === 'upstream',
+    'row-downstream': hop.relation === 'downstream',
+    'row-dimmed': selectedId.value !== null && !self && !related,
+    'row-hop-far': related && hop.depth >= 2,
   }
 }
 
@@ -259,17 +290,19 @@ const arrowClass = (arrow: { tone: string; from_id: number; to_id: number }) => 
       { 'is-active': hoveredId.value !== null && (arrow.from_id === hoveredId.value || arrow.to_id === hoveredId.value) },
     ]
   }
-  const relation = dependencyRelation({ id: 0, predecessor_id: arrow.from_id, successor_id: arrow.to_id }, selectedId.value)
-  if (relation === 'upstream') return 'is-upstream'
-  if (relation === 'downstream') return 'is-downstream'
-  return 'is-dimmed'
+  const hop = arrowHop({ id: 0, predecessor_id: arrow.from_id, successor_id: arrow.to_id }, selectedId.value, chain.value)
+  if (hop.relation === 'none') return 'is-dimmed'
+  return [
+    `is-${hop.relation}`,
+    `hop-depth-${Math.min(hop.depth, 3)}`,
+  ]
 }
 
 const arrowMarker = (arrow: { tone: string; from_id: number; to_id: number }) => {
   if (selectedId.value !== null) {
-    const relation = dependencyRelation({ id: 0, predecessor_id: arrow.from_id, successor_id: arrow.to_id }, selectedId.value)
-    if (relation === 'upstream') return 'url(#gantt-arrow-upstream)'
-    if (relation === 'downstream') return 'url(#gantt-arrow-downstream)'
+    const hop = arrowHop({ id: 0, predecessor_id: arrow.from_id, successor_id: arrow.to_id }, selectedId.value, chain.value)
+    if (hop.relation === 'upstream') return 'url(#gantt-arrow-upstream)'
+    if (hop.relation === 'downstream') return 'url(#gantt-arrow-downstream)'
   }
   return arrow.tone === 'danger' ? 'url(#gantt-arrow-danger)' : 'url(#gantt-arrow)'
 }
@@ -766,5 +799,41 @@ onUnmounted(() => {
 
 .gantt-arrow.is-dimmed {
   opacity: 0.07;
+}
+.hop-badge {
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  flex: none;
+  color: #fff;
+}
+
+.hop-badge.hop-upstream {
+  background: var(--el-color-primary);
+}
+
+.hop-badge.hop-downstream {
+  background: var(--el-color-success);
+}
+
+.gantt-row.row-hop-far {
+  opacity: 0.85;
+}
+
+/* 跳数越远，线越细越淡 */
+.gantt-arrow.hop-depth-1 {
+  stroke-width: 2;
+  opacity: 1;
+}
+
+.gantt-arrow.hop-depth-2 {
+  stroke-width: 1.6;
+  opacity: 0.8;
+}
+
+.gantt-arrow.hop-depth-3 {
+  stroke-width: 1.2;
+  opacity: 0.6;
 }
 </style>
