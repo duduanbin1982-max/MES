@@ -289,6 +289,7 @@
                 <el-radio-button value="month">月</el-radio-button>
               </el-radio-group>
             </div>
+            <el-button size="small" type="primary" plain @click="openDependencyAdmin">依赖维护</el-button>
             <el-button size="small" :loading="ganttLoading" @click="loadGantt">刷新</el-button>
             <div class="filter-item">
               <span class="filter-label">依赖箭头</span>
@@ -440,6 +441,13 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 2026-11-05：依赖维护（类型 / 间隔） -->
+    <DependencyAdminDrawer
+      v-model="dependencyDrawerVisible"
+      :instance-id="ganttInstance"
+      @changed="onDependenciesChanged"
+    />
   </div>
 </template>
 
@@ -449,6 +457,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
 import { useSchedulePage } from '../composables/useSchedulePage'
 import GanttChart from './schedule/GanttChart.vue'
+import DependencyAdminDrawer from './schedule/DependencyAdminDrawer.vue'
 import { monthRange, parseDay, toDayString } from '../domain/gantt'
 import {
   NODE_PHASE_META,
@@ -625,6 +634,16 @@ const ganttZoom = ref<'day' | 'week' | 'month'>('day')
 const ganttInstance = ref<number | null>(null)
 const ganttDependencies = ref<any[]>([])
 const showGanttDeps = ref(true)
+// 2026-11-05：依赖维护抽屉
+const dependencyDrawerVisible = ref(false)
+
+const openDependencyAdmin = () => {
+  dependencyDrawerVisible.value = true
+}
+
+const onDependenciesChanged = async () => {
+  await loadGantt()
+}
 
 const ganttFrom = computed(() => monthRange(parseDay(ganttAnchor.value) || new Date()).from)
 const ganttTo = computed(() => monthRange(parseDay(ganttAnchor.value) || new Date()).to)

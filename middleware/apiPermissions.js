@@ -124,7 +124,9 @@ const RULES = [
   match(/^\/process(?:\/.*)?$/, WRITE, ["process:write"]),
   match(/^\/process_nodes(?:\/.*)?$/, READ, ["process:read"]),
   match(/^\/process_nodes(?:\/.*)?$/, WRITE, ["process:write"]),
-  match(/^\/process_dependencies(?:\/.*)?$/, WRITE, ["process:write"]),
+  // 2026-11-05：依赖维护需要读权限；写允许 process:write（工艺）或 equipment:write（排程/计划员）
+  match(/^\/process_dependencies(?:\/.*)?$/, READ, ["process:read"]),
+  match(/^\/process_dependencies(?:\/.*)?$/, WRITE, ["process:write", "equipment:write"]),
   match(/^\/process-hours(?:\/.*)?$/, READ, ["work_order:read"]),
   match(/^\/work-reports(?:\/.*)?$/, READ, ["work_order:read"]),
   match(/^\/work-reports(?:\/.*)?$/, ["POST"], ["work_order:write"]),
