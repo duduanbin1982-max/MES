@@ -10,7 +10,9 @@ import {
   parseDay,
   arrowEndpoints,
   dependencyPath,
+  arrowGeometry,
   arrowHop,
+  lagOffsetPx,
   dependencyRelation,
   expandChain,
   nodeHop,
@@ -219,4 +221,58 @@ test('GT.16 nodeHop / arrowHop：按跳数分类，环取更近一侧', () => {
   assert.deepEqual(arrowHop(deps[1], 2, chain), { relation: 'downstream', depth: 1 }, '2→3：后继线')
   assert.deepEqual(arrowHop(deps[2], 2, chain), { relation: 'downstream', depth: 2 }, '3→4：2 跳下游')
   assert.deepEqual(arrowHop(deps[0], null, chain), { relation: 'none', depth: 0 })
+})
+
+test('GT.17 lagOffsetPx：小时换算成时间轴像素', () => {
+  assert.equal(lagOffsetPx(0, 30), 0)
+  assert.equal(lagOffsetPx(null, 30), 0)
+  assert.equal(lagOffsetPx(undefined, 30), 0)
+  assert.equal(lagOffsetPx(-8, 30), 0, '负 lag 不偏移')
+  assert.equal(lagOffsetPx(8, 30), 10, '8 小时 = 1/3 天 = 10px')
+  assert.equal(lagOffsetPx(24, 30), 30)
+  assert.equal(lagOffsetPx(8, 0), 0, 'dayWidth 为 0 时不偏移')
+})
+
+test('GT.18 arrowGeometry：FS 带 lag 时起点右移并留出空隙', () => {
+  const pred = { left: 0, right: 100, top: 10, height: 20 }
+  const succ = { left: 300, right: 360, top: 60, height: 20 }
+  const plain = arrowGeometry(pred, succ, { dayWidth: 30, lagHours: 0, depType: 'FS' })
+  assert.deepEqual(plain.from, { x: 100, y: 20 })
+  assert.deepEqual(plain.to, { x: 300, y: 70 })
+  assert.equal(plain.lagged, false)
+
+  const lagged = arrowGeometry(pred, succ, { dayWidth: 30, lagHours: 8, depType: 'FS' })
+  assert.equal(lagged.from.x, 110, '起点右移 10px')
+  assert.deepEqual(lagged.to, { x: 300, y: 70 }, '终点不变')
+  assert.equal(lagged.lagged, true)
+  assert.equal(lagged.lag_px, 10)
+
+  // lag 太大时夹到"后继起点前 6px"，避免箭头反向
+  const clamped = arrowGeometry(pred, succ, { dayWidth: 30, lagHours: 24 * 30, depType: 'FS' })
+  assert.equal(clamped.from.x, 294)
+
+  // 非 FS 类型不偏移（当前数据只有 FS，保留扩展位）
+  const ss = arrowGeometry(pred, succ, { dayWidth: 30, lagHours: 8, depType: 'SS' })
+  assert.equal(ss.from.x, 100)
+  assert.equal(ss.lagged, false)
+})
+
+test('GT.19 expandChain：单向展开（只看上游 / 只看下游）', () => {
+  const deps = [
+    { id: 1, predecessor_id: 1, successor_id: 2 },
+    { id: 2, predecessor_id: 2, successor_id: 3 },
+    { id: 3, predecessor_id: 5, successor_id: 2 },
+  ]
+  const upstreamOnly = expandChain(deps, 2, 3, 300, 'upstream')
+  assert.deepEqual(upstreamOnly.upstreamIds, [1, 5])
+  assert.deepEqual(upstreamOnly.downstreamIds, [], '只看上游时下游为空')
+  assert.equal(upstreamOnly.truncated, false)
+
+  const downstreamOnly = expandChain(deps, 2, 3, 300, 'downstream')
+  assert.deepEqual(downstreamOnly.upstreamIds, [])
+  assert.deepEqual(downstreamOnly.downstreamIds, [3])
+
+  const both = expandChain(deps, 2, 1)
+  assert.deepEqual(both.upstreamIds, [1, 5])
+  assert.deepEqual(both.downstreamIds, [3])
 })

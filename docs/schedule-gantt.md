@@ -145,7 +145,36 @@
 生产实测（2026-11~12 区间）：**82 条依赖、120 个节点**；最长上游链 **3 跳**、最长下游链 **3 跳**；
 下游链深度分布：叶子 38 个、1 跳 38 个、2 跳 35 个、3 跳 9 个 —— 所以"全部"确有必要。
 
-## 10. 已知边界
+
+## 10. lag 小时偏移 + 单向展开（2026-11-05 追加）
+
+### 10.1 lag_hours 箭头偏移
+
+- FS 语义下，后继要在「前驱结束 + lag」之后开始，所以箭头起点从"前驱条形右端"**右移 lag 对应像素**
+  （`lag_px = lag_hours / 24 × dayWidth`），与后继条形之间自然留出一段空隙，减少同 x 处的线重叠；
+- 起点最多推到"后继起点前 6px"，避免 lag 过大导致箭头反向；
+- **有 lag 的线画成虚线**（`stroke-dasharray: 5 3`），图例新增"FS 有间隔（虚线=lag 小时数）"；
+- 鼠标悬停虚线可看到 tooltip：`FS · 间隔 8h`；
+- 非 FS 类型（SS/FF/SF）暂不偏移，保留扩展位。
+
+> 生产现状：89 条依赖全部是 `FS` 且 `lag_hours = 0`，所以目前所有线都是实线；
+> 一旦计划员在依赖里填了间隔，线会自动变成虚线并错开——功能已就绪，等数据。
+
+### 10.2 单向展开开关
+
+选择条新增「方向」：**双向（默认）/ 只看上游 / 只看下游**。
+
+- 只看上游 → 下游链条不展开（`chain.downstreamIds` 为空），下游行与线全部淡出；
+- 只看下游 → 上游同理；
+- 与跳数、选中过滤叠加使用：`只看上游 + 3 跳` = 只看三层前驱；
+- 切换节点/清除选中时方向回到「双向」。
+
+实现：`domain/gantt.ts`
+- `expandChain(..., direction)` 支持 `'both' | 'upstream' | 'downstream'`（内部 BFS 按方向裁剪）；
+- `lagOffsetPx(lagHours, dayWidth)`、`arrowGeometry(predRect, succRect, { dayWidth, lagHours, depType })` → `{ from, to, lagged, lag_px }`。
+单测：`GT.17 lagOffsetPx`（0/负/8h/24h/dayWidth=0）、`GT.18 arrowGeometry`（偏移、夹取、非 FS 不偏移）、`GT.19 expandChain 单向`。
+
+## 11. 已知边界
 
 1. **不画依赖箭头**：`process_nodes` 的先后关系暂未在图上连线（可后续加 `process_node_dependencies`）。
 2. **不做跨项目资源冲突提示**：同工位撞期不会高亮（需要按工位聚合计工时）。

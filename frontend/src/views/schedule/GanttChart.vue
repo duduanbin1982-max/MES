@@ -13,6 +13,12 @@
         <el-radio-button :value="3">3 跳</el-radio-button>
         <el-radio-button :value="0">全部</el-radio-button>
       </el-radio-group>
+      <span class="select-label">方向</span>
+      <el-radio-group v-model="direction" size="small">
+        <el-radio-button value="both">双向</el-radio-button>
+        <el-radio-button value="upstream">只看上游</el-radio-button>
+        <el-radio-button value="downstream">只看下游</el-radio-button>
+      </el-radio-group>
       <el-tag v-if="chain.truncated" size="small" type="warning">链条过长，已截断</el-tag>
       <span class="select-hint">其余工序与依赖已淡出；按 Esc 或点空白处清除</span>
       <el-button link type="primary" size="small" @click="clearSelection">清除选中</el-button>
@@ -133,9 +139,11 @@
             :key="arrow.id"
             :d="arrow.path"
             class="gantt-arrow"
-            :class="arrowClass(arrow)"
+            :class="[arrowClass(arrow), { 'is-lagged': arrow.lagged }]"
             :marker-end="arrowMarker(arrow)"
-          />
+          >
+            <title>{{ arrowTooltip(arrow) }}</title>
+          </path>
         </svg>
 
         <!-- 今天标线 -->
@@ -152,6 +160,7 @@
       <span class="legend-item"><span class="legend-dot dot-blocked"></span>受阻</span>
       <span class="legend-item"><span class="legend-dot dot-upcoming"></span>待开始</span>
       <span class="legend-item"><span class="legend-line"></span>前置依赖（红=链条有超期/受阻）</span>
+      <span class="legend-item"><span class="legend-line legend-line--dashed"></span>FS 有间隔（虚线=lag 小时数）</span>
       <span class="legend-hint">单击条形只看它的上下游依赖（Esc 清除）· 拖动可直接改期 · 双击看详情</span>
     </div>
   </div>
@@ -161,8 +170,8 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { nodePhase } from '../../domain/scheduleBoard'
 import {
-  arrowEndpoints,
   barGeometry,
+  arrowGeometry,
   arrowHop,
   expandChain,
   nodeHop,
@@ -237,7 +246,16 @@ const selectedNode = computed(() => {
 
 // 2026-11-04：N 跳展开（0 = 全部）
 const hopDepth = ref<number>(1)
-const chain = computed(() => expandChain(props.dependencies || [], selectedId.value, hopDepth.value === 0 ? Number.POSITIVE_INFINITY : hopDepth.value))
+const direction = ref<'both' | 'upstream' | 'downstream'>('both')
+const chain = computed(() =>
+  expandChain(
+    props.dependencies || [],
+    selectedId.value,
+    hopDepth.value === 0 ? Number.POSITIVE_INFINITY : hopDepth.value,
+    300,
+    direction.value,
+  ),
+)
 
 let suppressClick = false
 
@@ -249,15 +267,18 @@ const onBarClick = (node: GanttNodeLike) => {
   if (selectedId.value === node.id) {
     selectedId.value = null
     hopDepth.value = 1
+    direction.value = 'both'
     return
   }
   selectedId.value = node.id
   hopDepth.value = 1
+  direction.value = 'both'
 }
 
 const clearSelection = () => {
   selectedId.value = null
   hopDepth.value = 1
+  direction.value = 'both'
 }
 
 /** 行上的跳数徽标：↑1 = 上游 1 跳；↓2 = 下游 2 跳 */
@@ -298,6 +319,11 @@ const arrowClass = (arrow: { tone: string; from_id: number; to_id: number }) => 
   ]
 }
 
+const arrowTooltip = (arrow: { dep_type: string; lag_hours: number; lagged: boolean }) => {
+  const lagText = arrow.lag_hours > 0 ? ` · 间隔 ${arrow.lag_hours}h` : ''
+  return `${arrow.dep_type}${lagText}`
+}
+
 const arrowMarker = (arrow: { tone: string; from_id: number; to_id: number }) => {
   if (selectedId.value !== null) {
     const hop = arrowHop({ id: 0, predecessor_id: arrow.from_id, successor_id: arrow.to_id }, selectedId.value, chain.value)
@@ -324,7 +350,7 @@ watch(
 // ---------------- 依赖箭头（2026-11-04） ----------------
 const containerRef = ref<HTMLElement | null>(null)
 const hoveredId = ref<number | null>(null)
-const arrows = ref<Array<{ id: number; path: string; tone: 'normal' | 'danger'; from_id: number; to_id: number }>>([])
+const arrows = ref<Array<{ id: number; path: string; tone: 'normal' | 'danger'; from_id: number; to_id: number; lagged: boolean; lag_hours: number; dep_type: string }>>([])
 const svgSize = ref({ width: 0, height: 0 })
 
 const measureArrows = () => {
@@ -343,18 +369,22 @@ const measureArrows = () => {
       const a = rects.get(dep.predecessor_id)
       const b = rects.get(dep.successor_id)
       if (!a || !b) continue
-      const { from, to } = arrowEndpoints(
+      const geometry = arrowGeometry(
         { left: a.left - rootRect.left, right: a.right - rootRect.left, top: a.top - rootRect.top, height: a.height },
         { left: b.left - rootRect.left, right: b.right - rootRect.left, top: b.top - rootRect.top, height: b.height },
+        { dayWidth: scale.value.dayWidth, lagHours: (dep as any).lag_hours, depType: (dep as any).dep_type },
       )
       const previous = nodeById.get(dep.predecessor_id)
       const nextNode = nodeById.get(dep.successor_id)
       next.push({
         id: dep.id,
-        path: dependencyPath(from, to),
+        path: dependencyPath(geometry.from, geometry.to),
         tone: dependencyTone(previous ? nodePhase(previous) : 'upcoming', nextNode ? nodePhase(nextNode) : 'upcoming'),
         from_id: dep.predecessor_id,
         to_id: dep.successor_id,
+        lagged: geometry.lagged,
+        lag_hours: Number((dep as any).lag_hours) || 0,
+        dep_type: (dep as any).dep_type || 'FS',
       })
     }
   }
@@ -835,5 +865,12 @@ onUnmounted(() => {
 .gantt-arrow.hop-depth-3 {
   stroke-width: 1.2;
   opacity: 0.6;
+}
+.gantt-arrow.is-lagged {
+  stroke-dasharray: 5 3;
+}
+
+.legend-line--dashed {
+  background: repeating-linear-gradient(90deg, var(--el-color-info-light-3) 0 4px, transparent 4px 7px);
 }
 </style>

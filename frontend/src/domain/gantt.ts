@@ -201,6 +201,33 @@ export function arrowEndpoints(predecessor: RectLike, successor: RectLike): { fr
     to: { x: successor.left, y: successor.top + successor.height / 2 },
   }
 }
+
+/** lag 小时数换算成时间轴像素（1 天 = dayWidth 像素） */
+export function lagOffsetPx(lagHours: number | null | undefined, dayWidth: number): number {
+  const hours = Number(lagHours)
+  if (!Number.isFinite(hours) || hours <= 0 || !dayWidth) return 0
+  return (hours / 24) * dayWidth
+}
+
+/**
+ * 带 lag 的箭头几何（2026-11-05）。
+ * FS 语义：后继在前驱结束 + lag 之后才能开始，所以箭头起点从"前驱右端"右移 lag 的像素距离，
+ * 与后继条形之间留出一段可见空隙，避免多条线挤在同一个 x 上。
+ * 非 FS 类型暂不偏移（当前数据全是 FS）。
+ */
+export function arrowGeometry(
+  predecessor: RectLike,
+  successor: RectLike,
+  options: { dayWidth: number; lagHours?: number | null; depType?: string | null },
+): { from: Point; to: Point; lagged: boolean; lag_px: number } {
+  const base = arrowEndpoints(predecessor, successor)
+  const depType = String(options.depType ?? 'FS').toUpperCase()
+  const lagPx = depType === 'FS' ? lagOffsetPx(options.lagHours, options.dayWidth) : 0
+  if (!lagPx) return { from: base.from, to: base.to, lagged: false, lag_px: 0 }
+  // 起点最多推到"后继起点前 6px"，保证箭头仍然可见
+  const startX = Math.min(base.from.x + lagPx, Math.max(base.from.x + 2, base.to.x - 6))
+  return { from: { x: startX, y: base.from.y }, to: base.to, lagged: true, lag_px: lagPx }
+}
 // ------------------------------------------------------------ 选中节点的依赖关系
 export type DependencyRelation = 'none' | 'upstream' | 'downstream'
 
@@ -250,11 +277,14 @@ export interface ChainResult {
  * 展开选中节点的依赖链（BFS，逐跳扩散；自动防环）。
  * maxDepth = 1 即"只取直接上下游"，Infinity / 'all' 表示一直展开到边界。
  */
+export type ChainDirection = 'both' | 'upstream' | 'downstream'
+
 export function expandChain(
   dependencies: DependencyLike[],
   selectedId: number | null,
   maxDepth: number = 1,
   protectLimit = 300,
+  direction: ChainDirection = 'both',
 ): ChainResult {
   const upstream = new Map<number, number>()
   const downstream = new Map<number, number>()
@@ -290,8 +320,10 @@ export function expandChain(
     return false
   }
 
-  let truncated = walk(preds, upstream)
-  if (!truncated) truncated = walk(succs, downstream)
+  // 2026-11-05：支持单向展开（只看上游 / 只看下游）
+  let truncated = false
+  if (direction !== 'downstream') truncated = walk(preds, upstream)
+  if (!truncated && direction !== 'upstream') truncated = walk(succs, downstream)
 
   return {
     upstream,
