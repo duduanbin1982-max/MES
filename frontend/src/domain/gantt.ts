@@ -166,9 +166,18 @@ export interface Point {
   y: number
 }
 
-/** 依赖连线路径：前驱条形右端 → 后继条形左端；目标在左侧时走 S 形回绕 */
+/**
+ * 依赖连线路径：前驱条形右端 → 后继条形左端。
+ * 横向空间不足（首尾相邻/重叠，<24px）时改走折线：
+ * 先右出 16px → 竖直到后继所在行 → 左折进入后继起点，避免"零长度曲线看不见"。
+ * 其余情况用贝塞尔，目标在左侧时自然形成 S 形回绕。
+ */
 export function dependencyPath(from: Point, to: Point): string {
-  const delta = Math.abs(to.x - from.x)
+  const delta = to.x - from.x
+  if (delta < 24) {
+    const stub = Math.max(14, Math.min(28, Math.abs(delta) + 14))
+    return `M ${from.x} ${from.y} H ${from.x + stub} V ${to.y} H ${to.x}`
+  }
   const control = Math.max(12, Math.min(60, delta / 2))
   return `M ${from.x} ${from.y} C ${from.x + control} ${from.y}, ${to.x - control} ${to.y}, ${to.x} ${to.y}`
 }

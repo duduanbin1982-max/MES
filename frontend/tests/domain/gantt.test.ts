@@ -112,17 +112,16 @@ test('GT.8 日期工具：parseDay / toDayString / 跨月加法', () => {
   assert.deepEqual(scale.days.map((day) => day.date), ['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02'])
 })
 
-test('GT.9 dependencyPath：正向走贝塞尔，反向走回绕', () => {
+test('GT.9 dependencyPath：正向贝塞尔 / 空间不足折线', () => {
   const forward = dependencyPath({ x: 100, y: 20 }, { x: 240, y: 80 })
   assert.match(forward, /^M 100 20 C /)
   assert.match(forward, /240 80$/)
-  // 反向（后继在前驱左侧）：控制点仍然在两端外侧，形成 S 形
-  const backward = dependencyPath({ x: 300, y: 20 }, { x: 120, y: 80 })
-  assert.match(backward, /^M 300 20 C /)
-  assert.match(backward, /120 80$/)
-  // 控制点偏移有上下限
-  assert.match(dependencyPath({ x: 0, y: 0 }, { x: 4, y: 10 }), /C 12 0, -8 10, 4 10/)
-  assert.match(dependencyPath({ x: 0, y: 0 }, { x: 400, y: 10 }), /C 60 0, 340 10, 400 10/)
+
+  // 横向空间不足（<24px）→ 折线，避免零长度曲线看不见
+  assert.equal(dependencyPath({ x: 100, y: 20 }, { x: 104, y: 80 }), 'M 100 20 H 118 V 80 H 104')
+
+  // 后继在前驱左侧 → 也走折线：先右出再折回
+  assert.equal(dependencyPath({ x: 300, y: 20 }, { x: 120, y: 80 }), 'M 300 20 H 328 V 80 H 120')
 })
 
 test('GT.10 dependencyTone：超期/受阻链条标红，其余常规', () => {

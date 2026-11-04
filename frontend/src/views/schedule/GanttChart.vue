@@ -169,7 +169,9 @@
       <span class="legend-item"><span class="legend-dot dot-overdue"></span>超期</span>
       <span class="legend-item"><span class="legend-dot dot-blocked"></span>受阻</span>
       <span class="legend-item"><span class="legend-dot dot-upcoming"></span>待开始</span>
-      <span class="legend-item"><span class="legend-line"></span>前置依赖（红=链条有超期/受阻）</span>
+      <span class="legend-item">
+        <span class="legend-line"></span>前置依赖（{{ arrows.length }}/{{ (dependencies || []).length }} 条 · 红=链条有超期/受阻）
+      </span>
       <span class="legend-item"><span class="legend-line legend-line--dashed"></span>FS 有间隔（虚线=lag 小时数）</span>
       <span class="legend-hint">单击条形只看它的上下游依赖（Esc 清除）· 拖动可直接改期 · 双击看详情</span>
     </div>
@@ -433,15 +435,35 @@ watch(
   () => [props.groups, props.from, props.to, props.zoom, props.showDependencies, props.dependencies],
   async () => {
     await nextTick()
-    measureArrows()
+    measureArrowsSoon()
   },
-  { deep: true },
+  { deep: true, flush: 'post' },
 )
 
 let resizeObserver: ResizeObserver | null = null
+let retryTimer: number | null = null
+
+/** 双帧后再测一次：tab 切换/首帧布局未完成时，第一次测量可能拿到 0 尺寸 */
+const measureArrowsSoon = (retries = 4) => {
+  if (typeof requestAnimationFrame === 'undefined') {
+    measureArrows()
+    return
+  }
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      measureArrows()
+      // 容器或条形还是 0 尺寸（例如 tab 还没显示）→ 稍后重试
+      if (retries > 0 && (!svgSize.value.width || !arrows.value.length)) {
+        retryTimer = window.setTimeout(() => measureArrowsSoon(retries - 1), 120)
+      }
+    })
+  })
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
-  measureArrows()
+  window.addEventListener('resize', measureArrows)
+  measureArrowsSoon()
   if (typeof ResizeObserver !== 'undefined' && containerRef.value) {
     resizeObserver = new ResizeObserver(() => measureArrows())
     resizeObserver.observe(containerRef.value)
@@ -485,6 +507,8 @@ onUnmounted(() => {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   resizeObserver?.disconnect()
+  if (retryTimer !== null) window.clearTimeout(retryTimer)
+  window.removeEventListener('resize', measureArrows)
   window.removeEventListener('keydown', onKeydown)
 })
 </script>
@@ -821,9 +845,9 @@ onUnmounted(() => {
 
 .gantt-arrow {
   fill: none;
-  stroke: var(--el-color-info-light-3);
-  stroke-width: 1.2;
-  opacity: 0.7;
+  stroke: var(--el-color-info);
+  stroke-width: 1.5;
+  opacity: 0.85;
 }
 
 .gantt-arrow.arrow-danger {
