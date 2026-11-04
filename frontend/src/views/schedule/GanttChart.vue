@@ -81,11 +81,15 @@
               class="gantt-row"
               :class="rowClass(node)"
             >
-              <div class="gantt-row-left" :title="`${node.operation_name || ''} ${node.planned_start || ''} ~ ${node.planned_end || ''}`">
-                <span class="node-dot" :class="'dot-' + nodePhase(node)"></span>
-                <span class="node-title">{{ node.operation_name || '（未命名工序）' }}</span>
-                <span v-if="hopBadge(node)" class="hop-badge" :class="'hop-' + hopBadge(node)!.relation">{{ hopBadge(node)!.label }}</span>
-                <span v-if="node.assigned_name" class="node-meta">{{ node.assigned_name }}</span>
+              <div class="gantt-row-left" :title="rowLeftTooltip(node)">
+                <div class="row-left-main">
+                  <span class="node-dot" :class="'dot-' + nodePhase(node)"></span>
+                  <span class="node-title">{{ node.operation_name || '（未命名工序）' }}</span>
+                  <span v-if="hopBadge(node)" class="hop-badge" :class="'hop-' + hopBadge(node)!.relation">{{ hopBadge(node)!.label }}</span>
+                </div>
+                <div class="row-left-sub">
+                  {{ formatPlanRange(node) }}<template v-if="node.assigned_name"> · {{ node.assigned_name }}</template>
+                </div>
               </div>
               <div
                 class="gantt-row-track"
@@ -105,8 +109,14 @@
                   @click.stop="onBarClick(node)"
                   @dblclick.stop="selectNode(node)"
                 >
-                  <span class="gantt-bar-label">{{ node.operation_name }}</span>
+                  <span v-if="placement(node).mode === 'inside'" class="gantt-bar-label">{{ node.operation_name }}</span>
                 </div>
+                <span
+                  v-if="geometry(node) && placement(node).mode !== 'inside'"
+                  class="gantt-bar-outer"
+                  :class="'is-' + placement(node).mode.replace('outside-', '')"
+                  :style="outerLabelStyle(node)"
+                >{{ node.operation_name }}</span>
               </div>
             </div>
           </template>
@@ -168,11 +178,12 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { nodePhase } from '../../domain/scheduleBoard'
+import { formatPlanRange, nodePhase } from '../../domain/scheduleBoard'
 import {
   barGeometry,
   arrowGeometry,
   arrowHop,
+  labelPlacement,
   expandChain,
   nodeHop,
   buildScale,
@@ -210,6 +221,32 @@ const todayString = toDayString(new Date())
 const todayOffsetValue = computed(() => todayOffset(scale.value))
 
 const geometry = (node: GanttNodeLike) => barGeometry(node, scale.value)
+
+// 2026-11-05：标签放不下条内时移到条外（右侧优先，其次左侧，都放不下才截断）
+const placement = (node: GanttNodeLike) => {
+  const geo = geometry(node)
+  return labelPlacement({
+    barLeft: geo?.left ?? 0,
+    barWidth: geo?.width ?? 0,
+    trackWidth: scale.value.totalWidth,
+    textLength: String(node.operation_name || '工序').length,
+  })
+}
+
+const outerLabelStyle = (node: GanttNodeLike) => {
+  const geo = geometry(node)
+  if (!geo) return {}
+  if (placement(node).mode === 'outside-right') return { left: `${geo.left + geo.width + 6}px` }
+  return { right: `${scale.value.totalWidth - geo.left + 6}px` }
+}
+
+const rowLeftTooltip = (node: GanttNodeLike) => [
+  node.operation_name || '（未命名工序）',
+  `计划：${node.planned_start || '—'} ~ ${node.planned_end || '—'}`,
+  node.assigned_name ? `负责人：${node.assigned_name}` : '',
+  node.workstation_name ? `工位：${node.workstation_name}` : '',
+  node.estimated_hours ? `工时：${node.estimated_hours}h` : '',
+].filter(Boolean).join('\n')
 const barStyle = (node: GanttNodeLike) => {
   const geo = geometry(node)
   if (!geo) return {}
@@ -454,7 +491,7 @@ onUnmounted(() => {
 
 <style scoped>
 .gantt-wrap {
-  --gantt-left-width: 260px;
+  --gantt-left-width: 288px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 12px;
   background: var(--el-bg-color);
@@ -495,6 +532,29 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+}
+
+.gantt-row-left {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+}
+
+.row-left-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.row-left-sub {
+  max-width: 100%;
+  font-size: 11px;
+  color: var(--el-color-info);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gantt-header-left {
@@ -570,7 +630,7 @@ onUnmounted(() => {
 }
 
 .gantt-row {
-  height: 34px;
+  height: 42px;
 }
 
 .gantt-row:hover {
@@ -617,13 +677,13 @@ onUnmounted(() => {
 /* 条形 */
 .gantt-bar {
   position: absolute;
-  top: 7px;
-  height: 20px;
+  top: 10px;
+  height: 22px;
   border-radius: 5px;
   display: flex;
   align-items: center;
   padding: 0 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: #fff;
   overflow: hidden;
   white-space: nowrap;
@@ -647,6 +707,34 @@ onUnmounted(() => {
 .gantt-bar-label {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 条外标签：文字完整显示，不挡拖拽 */
+.gantt-bar-outer {
+  position: absolute;
+  top: 10px;
+  height: 22px;
+  line-height: 22px;
+  max-width: 320px;
+  font-size: 12px;
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 2;
+  text-shadow:
+    0 0 2px var(--el-bg-color),
+    0 0 2px var(--el-bg-color);
+}
+
+.gantt-bar-outer.is-right {
+  padding-left: 2px;
+}
+
+.gantt-bar-outer.is-left {
+  text-align: right;
+  padding-right: 2px;
 }
 
 .bar-done {

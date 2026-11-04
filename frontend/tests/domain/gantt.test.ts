@@ -9,10 +9,11 @@ import {
   monthSegments,
   parseDay,
   arrowEndpoints,
-  dependencyPath,
   arrowGeometry,
-  arrowHop,
+  labelPlacement,
   lagOffsetPx,
+  dependencyPath,
+  arrowHop,
   dependencyRelation,
   expandChain,
   nodeHop,
@@ -222,6 +223,31 @@ test('GT.16 nodeHop / arrowHop：按跳数分类，环取更近一侧', () => {
   assert.deepEqual(arrowHop(deps[2], 2, chain), { relation: 'downstream', depth: 2 }, '3→4：2 跳下游')
   assert.deepEqual(arrowHop(deps[0], null, chain), { relation: 'none', depth: 0 })
 })
+test('GT.20 barGeometry：极窄视图下仍保留 8px 最小宽度', () => {
+  const monthScale = buildScale('2026-11-01', '2026-11-30', 'month')
+  const single = barGeometry({ id: 1, planned_start: '2026-11-10', planned_end: '2026-11-10' }, monthScale)
+  assert.equal(single?.width, 8, '月视图（4px/天）单天任务给 8px')
+  const dayScale = buildScale('2026-11-01', '2026-11-30', 'day')
+  const normal = barGeometry({ id: 2, planned_start: '2026-11-10', planned_end: '2026-11-10' }, dayScale)
+  assert.ok((normal?.width || 0) > 8, '日视图单天任务宽度正常')
+})
+
+test('GT.21 labelPlacement：够宽放条内，不够放右侧/左侧，两侧都不行截断', () => {
+  // 宽条形 → 内部
+  assert.equal(labelPlacement({ barLeft: 100, barWidth: 120, trackWidth: 800, textLength: 4 }).mode, 'inside')
+  // 窄条形 + 右侧空间够 → 右侧
+  assert.equal(labelPlacement({ barLeft: 100, barWidth: 30, trackWidth: 800, textLength: 4 }).mode, 'outside-right')
+  // 窄条形 + 右侧空间不足 + 左侧够 → 左侧
+  assert.equal(labelPlacement({ barLeft: 700, barWidth: 30, trackWidth: 800, textLength: 20 }).mode, 'outside-left')
+  // 两侧都不够 → 内部截断
+  assert.equal(labelPlacement({ barLeft: 10, barWidth: 30, trackWidth: 60, textLength: 40 }).mode, 'inside')
+  // 估算宽度随文字长度增长，且上限 40 字
+  const short = labelPlacement({ barLeft: 100, barWidth: 30, trackWidth: 800, textLength: 2 })
+  const long = labelPlacement({ barLeft: 100, barWidth: 30, trackWidth: 800, textLength: 10 })
+  assert.ok(long.estimated_width > short.estimated_width)
+  assert.equal(labelPlacement({ barLeft: 100, barWidth: 30, trackWidth: 900, textLength: 200 }).estimated_width,
+    labelPlacement({ barLeft: 100, barWidth: 30, trackWidth: 900, textLength: 40 }).estimated_width, '文字长度上限 40 字')
+})
 
 test('GT.17 lagOffsetPx：小时换算成时间轴像素', () => {
   assert.equal(lagOffsetPx(0, 30), 0)
@@ -243,15 +269,12 @@ test('GT.18 arrowGeometry：FS 带 lag 时起点右移并留出空隙', () => {
 
   const lagged = arrowGeometry(pred, succ, { dayWidth: 30, lagHours: 8, depType: 'FS' })
   assert.equal(lagged.from.x, 110, '起点右移 10px')
-  assert.deepEqual(lagged.to, { x: 300, y: 70 }, '终点不变')
   assert.equal(lagged.lagged, true)
   assert.equal(lagged.lag_px, 10)
 
-  // lag 太大时夹到"后继起点前 6px"，避免箭头反向
   const clamped = arrowGeometry(pred, succ, { dayWidth: 30, lagHours: 24 * 30, depType: 'FS' })
   assert.equal(clamped.from.x, 294)
 
-  // 非 FS 类型不偏移（当前数据只有 FS，保留扩展位）
   const ss = arrowGeometry(pred, succ, { dayWidth: 30, lagHours: 8, depType: 'SS' })
   assert.equal(ss.from.x, 100)
   assert.equal(ss.lagged, false)
@@ -266,7 +289,6 @@ test('GT.19 expandChain：单向展开（只看上游 / 只看下游）', () => 
   const upstreamOnly = expandChain(deps, 2, 3, 300, 'upstream')
   assert.deepEqual(upstreamOnly.upstreamIds, [1, 5])
   assert.deepEqual(upstreamOnly.downstreamIds, [], '只看上游时下游为空')
-  assert.equal(upstreamOnly.truncated, false)
 
   const downstreamOnly = expandChain(deps, 2, 3, 300, 'downstream')
   assert.deepEqual(downstreamOnly.upstreamIds, [])

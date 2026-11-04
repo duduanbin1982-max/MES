@@ -174,7 +174,27 @@
 - `lagOffsetPx(lagHours, dayWidth)`、`arrowGeometry(predRect, succRect, { dayWidth, lagHours, depType })` → `{ from, to, lagged, lag_px }`。
 单测：`GT.17 lagOffsetPx`（0/负/8h/24h/dayWidth=0）、`GT.18 arrowGeometry`（偏移、夹取、非 FS 不偏移）、`GT.19 expandChain 单向`。
 
-## 11. 已知边界
+
+## 11. 条形/文字可读性优化（2026-11-05）
+
+问题：条形宽度由工期决定，1 天任务在日视图只有 30px、周视图 10px、月视图 4px，**条内文字被截断到看不见**。
+
+改动：
+
+| 项 | 之前 | 现在 |
+|---|---|---|
+| 条形内文字 | 永远塞在条内，窄条被截断 | **够宽（≥56px）才放条内**；不够就放到条形右侧；右侧放不下放左侧；两侧都不行才截断 |
+| 极窄条形 | 月视图下 2.4px，几乎看不见 | 最小宽度 **8px**，保证可见可拖 |
+| 行高 | 34px | **42px**，条形 22px 高，更易点中 |
+| 左栏 | 单行：名称 + 负责人，窄了截断 | **两行**：第一行名称 + 跳数徽标；第二行 `计划时间 · 负责人`（超长省略号）；悬停显示完整信息（含工位、工时） |
+| 左栏宽度 | 260px | **288px** |
+| 条外标签 | 无 | 文字完整显示、带底色描边防遮挡、`pointer-events:none` 不挡拖拽 |
+
+实现：`domain/gantt.ts` 的 `labelPlacement({ barLeft, barWidth, trackWidth, textLength })` → `inside / outside-right / outside-left`（文字估算宽度 = 字数 × 7 + 8，上限 40 字）；
+`GanttChart.vue` 用 `placement()`、`outerLabelStyle()` 决定条内/条外渲染位置。
+单测：`GT.20`（月视图最小 8px）、`GT.21`（四种摆放判定与文字长度上限）。
+
+## 12. 已知边界
 
 1. **不画依赖箭头**：`process_nodes` 的先后关系暂未在图上连线（可后续加 `process_node_dependencies`）。
 2. **不做跨项目资源冲突提示**：同工位撞期不会高亮（需要按工位聚合计工时）。

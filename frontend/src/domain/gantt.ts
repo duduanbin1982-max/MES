@@ -109,8 +109,8 @@ export function barGeometry(node: GanttNodeLike, scale: GanttScale): BarGeometry
   endIndex = Math.max(startIndex, Math.min(totalDays - 1, endIndex))
   return {
     left: startIndex * scale.dayWidth,
-    // 单天任务也至少给半天宽度，避免看不见
-    width: Math.max((endIndex - startIndex + 1) * scale.dayWidth - 2, scale.dayWidth * 0.6),
+    // 单天任务也至少给半天宽度，且不低于 8px（月视图 4px/天时仍能看见）
+    width: Math.max((endIndex - startIndex + 1) * scale.dayWidth - 2, Math.max(8, scale.dayWidth * 0.6)),
   }
 }
 
@@ -368,4 +368,37 @@ export function arrowHop(dep: DependencyLike, selectedId: number | null, chain: 
   if (upDepth !== undefined) return { relation: 'upstream', depth: upDepth + 1 }
   if (downDepth !== undefined) return { relation: 'downstream', depth: downDepth + 1 }
   return { relation: 'none', depth: 0 }
+}
+// ------------------------------------------------------------ 条形标签摆放（2026-11-05）
+export interface LabelPlacement {
+  mode: 'inside' | 'outside-right' | 'outside-left'
+  estimated_width: number
+}
+
+/**
+ * 决定条形文字放哪：
+ *   条形够宽（≥ insideMin）→ 放条形内部；
+ *   放不下 → 放条形右侧；右侧空间不够 → 放左侧；两侧都不行 → 内部截断。
+ * charWidth 为 12px 字号下单字宽的经验值，gap 为线条/条形的间距。
+ */
+export function labelPlacement(options: {
+  barLeft: number
+  barWidth: number
+  trackWidth: number
+  textLength: number
+  charWidth?: number
+  insideMin?: number
+  gap?: number
+}): LabelPlacement {
+  const charWidth = options.charWidth ?? 7
+  const insideMin = options.insideMin ?? 56
+  const gap = options.gap ?? 8
+  const textLength = Math.max(1, Math.min(options.textLength || 0, 40))
+  const estimatedWidth = Math.ceil(textLength * charWidth) + 8
+  if (options.barWidth >= insideMin) return { mode: 'inside', estimated_width: estimatedWidth }
+  const rightSpace = options.trackWidth - (options.barLeft + options.barWidth) - gap
+  if (rightSpace >= estimatedWidth) return { mode: 'outside-right', estimated_width: estimatedWidth }
+  const leftSpace = options.barLeft - gap
+  if (leftSpace >= estimatedWidth) return { mode: 'outside-left', estimated_width: estimatedWidth }
+  return { mode: 'inside', estimated_width: estimatedWidth }
 }
