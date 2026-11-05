@@ -43,6 +43,11 @@ function freshDb() {
       lag_hours REAL,
       created_at TEXT
     );
+    CREATE TABLE process_reschedule_batches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, batch_no TEXT, shift_days INTEGER, instance_id INTEGER,
+      subsystem_id INTEGER, only_overdue INTEGER, anchor_date TEXT, node_count INTEGER,
+      items_json TEXT, note TEXT, undone_at TEXT, created_by INTEGER, created_at TEXT
+    );
     INSERT INTO process_dependencies (id, equipment_instance_id, predecessor_id, successor_id, dep_type, lag_hours) VALUES
       (1, 1, 1, 2, 'FS', 0),
       (2, 1, 2, 5, 'FS', 0),
@@ -151,6 +156,13 @@ test("SG.4 拖拽改期：成功更新计划时间并保留原格式", () => {
   const row = db.prepare("SELECT planned_start, planned_end FROM process_nodes WHERE id = 2").get();
   assert.equal(row.planned_start, "2026-11-08");
   assert.equal(row.planned_end, "2026-11-11 08:00:00");
+  // 2026-11-05（审计 F-03）：拖拽改期必须记批次，便于撤销
+  assert.match(String(result.payload.body.batch_no), /^DT-\d{8}-\d{3}$/);
+  const batch = db.prepare("SELECT * FROM process_reschedule_batches WHERE batch_no = ?").get(result.payload.body.batch_no);
+  assert.equal(batch.node_count, 1);
+  const items = JSON.parse(batch.items_json);
+  assert.equal(items[0].old_planned_start, "2026-11-05");
+  assert.equal(items[0].new_planned_start, "2026-11-08");
   db.close();
 });
 
@@ -183,5 +195,24 @@ test("SG.5 拖拽改期：校验（结束早于开始 / 格式 / 已完成 / 不
 
   const empty = call(routes, "PUT", "/api/schedule/process-nodes/:id/dates", { params: { id: "2" }, body: {} });
   assert.equal(empty.error.status, 400);
+  db.close();
+});
+
+
+test("SG.6 拖拽改期：破坏前驱依赖时返回 warnings（不阻断）", () => {
+  const db = freshDb();
+  const { app, routes } = makeApp();
+  registerGanttRoutes(app, db, makeDbHelpers(db));
+  // 节点 2 的前驱是 1（计划结束 2026-11-03 08:00），把 2 挪到 11-01 会早于前驱结束
+  const result = call(routes, "PUT", "/api/schedule/process-nodes/:id/dates", {
+    params: { id: "2" },
+    body: { planned_start: "2026-11-01", planned_end: "2026-11-02" },
+  });
+  assert.equal(result.error, null);
+  const warnings = result.payload.body.warnings;
+  assert.ok(Array.isArray(warnings) && warnings.length >= 1, "应提示前驱/后继被破坏");
+  assert.match(warnings[0], /前驱|后继/);
+  // 不阻断：日期仍然写入
+  assert.equal(db.prepare("SELECT planned_start FROM process_nodes WHERE id = 2").get().planned_start, "2026-11-01");
   db.close();
 });

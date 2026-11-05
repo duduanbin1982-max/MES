@@ -3,7 +3,10 @@
     <div class="page-header">
       <div>
         <div class="page-title"><el-icon><Calendar /></el-icon> 项目排程</div>
-        <div class="page-subtitle">按周看各项目的工序计划、执行状态与异常（超期 / 受阻 / 未排程）</div>
+        <div class="page-subtitle">
+          按周看各项目的工序计划、执行状态与异常（超期 / 受阻 / 未排程）。
+          本周任务 = 与所选周重叠的工序 + 未排程工序；跨项目视角，单项目深度视图见「单项目甘特」。
+        </div>
       </div>
       <div class="page-actions">
         <span v-if="refreshAtText" class="refresh-hint">更新于 {{ refreshAtText }}</span>
@@ -296,6 +299,7 @@
               <el-switch v-model="showGanttDeps" size="small" />
             </div>
             <span class="result-hint">{{ ganttSummaryText }}</span>
+            <el-button size="small" link type="primary" @click="$router.push('/gantt')">单项目甘特（依赖/进度/重算）→</el-button>
           </div>
         </el-card>
 
@@ -686,12 +690,18 @@ const goGanttToday = () => {
 
 const onGanttMove = async (payload: { node: any; planned_start: string | null; planned_end: string | null; delta_days: number }) => {
   try {
-    await Api.put(`/schedule/process-nodes/${payload.node.id}/dates`, {
+    const result: any = await Api.put(`/schedule/process-nodes/${payload.node.id}/dates`, {
       planned_start: payload.planned_start,
       planned_end: payload.planned_end,
     })
-    ElMessage.success(`已改期：${payload.node.operation_name || '工序'} ${payload.delta_days > 0 ? '+' : ''}${payload.delta_days} 天`)
-    await Promise.all([loadGantt(), loadWeekly()])
+    // 2026-11-05（审计 F-03）：后端已记录 DT- 批次（可在「批次记录」撤销），并返回依赖破环告警
+    const base = `已改期：${payload.node.operation_name || '工序'} ${payload.delta_days > 0 ? '+' : ''}${payload.delta_days} 天`
+    if (result?.warnings?.length) {
+      ElMessage.warning(`${base}；注意：${result.warnings.slice(0, 2).join('；')}${result.warnings.length > 2 ? ' 等' : ''}`)
+    } else {
+      ElMessage.success(result?.batch_no ? `${base}（批次 ${result.batch_no}，可在批次记录撤销）` : base)
+    }
+    await Promise.all([loadGantt(), loadWeekly(), loadBatches()])
   } catch (error: any) {
     ElMessage.error('改期失败: ' + (error?.response?.data?.message || error?.message || error))
     await loadGantt()

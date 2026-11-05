@@ -15,6 +15,7 @@
           />
         </el-select>
         <el-button @click="loadAll">刷新</el-button>
+        <el-button @click="$router.push('/schedule')">多项目排程 →</el-button>
         <el-button type="primary" :loading="scheduling" :disabled="!selectedInstance" @click="openScheduler">重新排程</el-button>
       </div>
     </div>

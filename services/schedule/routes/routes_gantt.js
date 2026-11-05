@@ -210,14 +210,65 @@ module.exports = function registerGanttRoutes(app, db, ctx) {
       if (end.getTime() < start.getTime()) throw ApiError.validation("planned_end 不能早于 planned_start");
     }
 
+    const nodeInfo = get("SELECT equipment_instance_id, operation_name FROM process_nodes WHERE id = ?", nodeId);
+
     run("UPDATE process_nodes SET planned_start = ?, planned_end = ?, updated_at = datetime('now') WHERE id = ?", [
       nextStart || null, nextEnd || null, nodeId,
     ]);
+
+    // 2026-11-05（审计 F-03）：拖拽改期也记批次（DT-…），支持从「批次记录」撤销，
+    // 并检查直接前后置依赖是否被破坏（只告警，不阻断 —— 用户可能就是想先挪再顺）。
+    const pad = (value) => String(value).padStart(2, "0");
+    const now = new Date();
+    const day = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`;
+    const seqRow = db.prepare("SELECT COUNT(*) AS c FROM process_reschedule_batches WHERE batch_no LIKE ?").get(`DT-${day}-%`);
+    const batchNo = `DT-${day}-${String(Number(seqRow.c) + 1).padStart(3, "0")}`;
+    db.prepare(`INSERT INTO process_reschedule_batches
+        (batch_no, shift_days, instance_id, subsystem_id, only_overdue, anchor_date, node_count, items_json, note)
+      VALUES (?,?,?,?,?,?,?,?,?)`).run(
+      batchNo, 0, nodeInfo ? nodeInfo.equipment_instance_id : null, null, 0, null, 1,
+      JSON.stringify([{
+        id: nodeId,
+        status: node.status,
+        old_planned_start: node.planned_start || null,
+        old_planned_end: node.planned_end || null,
+        new_planned_start: nextStart || null,
+        new_planned_end: nextEnd || null,
+      }]),
+      "drag dates",
+    );
+
+    const warnings = [];
+    if (nextStart) {
+      const predecessors = all(`SELECT d.predecessor_id, pn.operation_name, pn.planned_end
+                                  FROM process_dependencies d
+                                  JOIN process_nodes pn ON pn.id = d.predecessor_id
+                                 WHERE d.successor_id = ?`, nodeId);
+      for (const predecessor of predecessors) {
+        if (predecessor.planned_end && String(predecessor.planned_end) > String(nextStart)) {
+          warnings.push(`前驱「${predecessor.operation_name || predecessor.predecessor_id}」计划结束 ${predecessor.planned_end} 晚于本工序新开始 ${nextStart}`);
+        }
+      }
+    }
+    if (nextEnd) {
+      const successors = all(`SELECT d.successor_id, pn.operation_name, pn.planned_start
+                                FROM process_dependencies d
+                                JOIN process_nodes pn ON pn.id = d.successor_id
+                               WHERE d.predecessor_id = ?`, nodeId);
+      for (const successor of successors) {
+        if (successor.planned_start && String(successor.planned_start) < String(nextEnd)) {
+          warnings.push(`后继「${successor.operation_name || successor.successor_id}」计划开始 ${successor.planned_start} 早于本工序新结束 ${nextEnd}`);
+        }
+      }
+    }
+
     res.json({
       ok: true,
       process_node_id: nodeId,
       planned_start: nextStart || null,
       planned_end: nextEnd || null,
+      batch_no: batchNo,
+      warnings,
     });
   }));
 };

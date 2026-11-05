@@ -1,5 +1,5 @@
 import { ref, onMounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
 import {
   nodeStatusLabel as scheduleNodeStatusLabel,
@@ -96,10 +96,25 @@ export function useSchedulePage() {
     }
   }
 
+  // 2026-11-05（审计 F-01/F-05）：本地日期格式化（不要 toISOString，东八区会变成前一天）
+  const formatLocalDate = (value: Date = new Date()) => {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+  }
+
   const markActive = async (milestone: any) => {
+    try {
+      await ElMessageBox.confirm(
+        `确认开始「${milestone.phase_name || milestone.phase_code}」？实际开始日期记为今天（${formatLocalDate()}）。`,
+        '开始里程碑',
+        { type: 'warning' },
+      )
+    } catch {
+      return
+    }
     loading.value = true
     try {
-      await api.put('/milestones/' + milestone.id, { status: 'active', actual_start: new Date().toISOString().slice(0, 10) })
+      await api.put('/milestones/' + milestone.id, { status: 'active', actual_start: formatLocalDate() })
       ElMessage.success(milestone.phase_code + ' 已开始')
       await loadSchedule()
     } catch (error: any) {
@@ -110,9 +125,18 @@ export function useSchedulePage() {
   }
 
   const markComplete = async (milestone: any) => {
+    try {
+      await ElMessageBox.confirm(
+        `确认完成「${milestone.phase_name || milestone.phase_code}」？实际完成日期记为今天（${formatLocalDate()}），完成后不可回退。`,
+        '完成里程碑',
+        { type: 'warning' },
+      )
+    } catch {
+      return
+    }
     loading.value = true
     try {
-      await api.put('/milestones/' + milestone.id, { status: 'completed', actual_end: new Date().toISOString().slice(0, 10) })
+      await api.put('/milestones/' + milestone.id, { status: 'completed', actual_end: formatLocalDate() })
       ElMessage.success(milestone.phase_code + ' 已完成')
       await loadSchedule()
     } catch (error: any) {
@@ -127,7 +151,8 @@ export function useSchedulePage() {
     try {
       const selectedDate = weeklyWeek.value
       if (!selectedDate) return
-      const dateStr = selectedDate instanceof Date ? selectedDate.toISOString().slice(0, 10) : String(selectedDate).slice(0, 10)
+      // 2026-11-05（审计 F-01）：本地日期，避免 toISOString 把周一变成周日
+      const dateStr = selectedDate instanceof Date ? formatLocalDate(selectedDate) : String(selectedDate).slice(0, 10)
       weeklyData.value = await api.get('/schedule/weekly', { params: { date: dateStr } })
       activeEquipments.value = weeklyEquipments.value.map((equipment: any) => equipment.id || equipment.instance_id)
       refreshAt.value = new Date()

@@ -48,12 +48,35 @@ function register(app, db) {
     if (!row) throw ApiError.notFound("Milestone not found");
 
     const allowed = ["phase_name", "planned_start", "planned_end", "actual_start", "actual_end", "status", "notes"];
+    const body = req.body || {};
+
+    // 2026-11-05（审计 F-05）：里程碑状态流转校验 + 自动补实际时间（本地日期，避免 UTC 早 8 点记成昨天）
+    const TRANSITIONS = {
+      pending: ["active", "delayed"],
+      delayed: ["active"],
+      active: ["completed", "delayed"],
+      completed: [],
+    };
+    const pad = (value) => String(value).padStart(2, "0");
+    const todayLocal = () => {
+      const value = new Date();
+      return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+    };
+    if (body.status && body.status !== row.status) {
+      const allowedNext = TRANSITIONS[String(row.status || "pending")] || [];
+      if (!allowedNext.includes(body.status)) {
+        throw ApiError.validation(`里程碑不能从「${row.status}」直接改为「${body.status}」`, { current: row.status, target: body.status, allowed: allowedNext });
+      }
+      if (body.status === "active" && !body.actual_start) body.actual_start = todayLocal();
+      if (body.status === "completed" && !body.actual_end) body.actual_end = todayLocal();
+    }
+
     const sets = [];
     const params = [];
     for (const field of allowed) {
-      if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
+      if (Object.prototype.hasOwnProperty.call(body, field)) {
         sets.push(`${field} = ?`);
-        params.push(req.body[field] || null);
+        params.push(body[field] || null);
       }
     }
     if (!sets.length) throw ApiError.validation("No editable fields supplied");

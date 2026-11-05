@@ -17,8 +17,28 @@ const { all, get, run } = ctx;
       throw ApiError.validation(`status must be one of: ${validStatuses.join(", ")}`);
     }
 
-    const node = get("SELECT id FROM process_nodes WHERE id = ?", nodeId);
+    const node = get("SELECT id, status, actual_start, actual_end FROM process_nodes WHERE id = ?", nodeId);
     if (!node) throw ApiError.notFound("Process node not found");
+
+    // 2026-11-05（审计 F-04）：状态流转校验。
+    // 原先任意状态可互转，"已完成 → 进行中"会让 actual_end 与 status 自相矛盾。
+    const TRANSITIONS = {
+      pending: ["in_progress", "completed", "blocked", "delayed"],
+      ready: ["in_progress", "completed", "blocked", "delayed"],
+      paused: ["in_progress", "completed", "blocked", "delayed"],
+      in_progress: ["completed", "blocked", "delayed"],
+      blocked: ["in_progress", "completed", "delayed"],
+      delayed: ["in_progress", "completed", "blocked"],
+      completed: [],
+    };
+    const currentStatus = String(node.status || "pending");
+    if (currentStatus === status) {
+      return res.json({ ok: true, process_node_id: nodeId, status, unchanged: true });
+    }
+    const allowed = TRANSITIONS[currentStatus];
+    if (allowed && !allowed.includes(status)) {
+      throw ApiError.validation(`不能从「${currentStatus}」直接改为「${status}」`, { current: currentStatus, target: status, allowed });
+    }
 
     const updates = ["status = ?", "updated_at = datetime('now')"];
     const params = [status];
