@@ -3,7 +3,12 @@
 // GET /api/equipment_instances/:id/gantt
 // 单项目甘特：优先使用 process_nodes 的真实 planned_start/planned_end；
 // 未排程节点才按依赖关系和标准工时做只读 fallback，避免 Gantt 与项目排程口径脱节。
-// (原 services/equipment/gantt/instanceGantt.js 第 117-218 行)
+//
+// 2026-11-05（审计 F-06 整改）：
+//   · 进度不再只按状态给 0/50/100：进行中节点按"已开工时长 / 计划跨度"估算（5%~95%），
+//     并返回 progress_basis 说明依据；
+//   · 返回项目级 progress_pct（按工时加权），供页面顶部展示；
+//   · 依赖查询带上 dep_type / lag_hours，交给 fallback 使用（F-05）。
 
 const { formatDateTime, parseDate, addHours, hoursBetween, daysBetween, HOURS_PER_WORKDAY } = require("./_time");
 const { nodeWorkHours, buildFallbackScheduler } = require("./_scheduler");
@@ -14,6 +19,23 @@ function all(db, sql, ...params) {
 
 function get(db, sql, ...params) {
   return db.prepare(sql).get(...params);
+}
+
+/** 进度估算：完成 100；进行中按已开工时长占计划跨度估算（5~95）；其它 0 */
+function computeProgress(node, plannedStart, plannedEnd, nowMs) {
+  const status = String(node.status || "pending");
+  if (status === "completed") return { pct: 100, basis: "status" };
+  if (status === "in_progress" || status === "paused") {
+    const actualStart = parseDate(node.actual_start);
+    const span = plannedEnd.getTime() - plannedStart.getTime();
+    if (actualStart && span > 0) {
+      const elapsed = Math.max(0, Math.min(nowMs, plannedEnd.getTime()) - actualStart.getTime());
+      const pct = Math.round((elapsed / span) * 100);
+      return { pct: Math.max(5, Math.min(95, pct)), basis: "actual_elapsed" };
+    }
+    return { pct: 50, basis: "status" };
+  }
+  return { pct: 0, basis: "status" };
 }
 
 function getInstanceGantt(req, res, db) {
@@ -44,14 +66,17 @@ function getInstanceGantt(req, res, db) {
       total_days: 0,
       total_weeks: 0,
       total_work_hours: 0,
+      progress_pct: 0,
       bars: [],
       status_summary: {},
     });
   }
 
-  const deps = all(db, "SELECT predecessor_id, successor_id FROM process_dependencies WHERE equipment_instance_id = ?", instanceId);
+  // 依赖带上类型与间隔（F-05：fallback 需要）
+  const deps = all(db, "SELECT id, predecessor_id, successor_id, dep_type, lag_hours FROM process_dependencies WHERE equipment_instance_id = ?", instanceId);
   const fallback = buildFallbackScheduler(nodes, deps, configuredStart);
   const bars = [];
+  const nowMs = Date.now();
 
   for (const node of nodes) {
     const plannedStart = parseDate(node.planned_start) || fallback.calcStart(Number(node.id));
@@ -64,6 +89,7 @@ function getInstanceGantt(req, res, db) {
     const calendarHours = Math.max(1, hoursBetween(plannedStart, plannedEnd));
     const workHours = Math.max(0, Number(node.estimated_hours || 0)) || calendarHours;
     const subsystem = node.subsystem_name || node.subsystem_code || node.phase_code || "未分组";
+    const progress = computeProgress(node, plannedStart, plannedEnd, nowMs);
 
     bars.push({
       id: node.id,
@@ -78,12 +104,14 @@ function getInstanceGantt(req, res, db) {
       planned_end: formatDateTime(plannedEnd),
       actual_start: actualStart ? formatDateTime(actualStart) : null,
       actual_end: actualEnd ? formatDateTime(actualEnd) : null,
+      has_actual_start: Boolean(actualStart),
+      has_actual_end: Boolean(actualEnd),
       duration_days: daysBetween(plannedStart, plannedEnd),
       duration_hours: Math.round(workHours * 10) / 10,
       calendar_hours: Math.round(calendarHours * 10) / 10,
       status: node.status || "pending",
-      progress: node.status === "completed" ? 100 : (node.status === "in_progress" ? 50 : 0),
-      bom_node_id: node.bom_node_id,
+      progress: progress.pct,
+      progress_basis: progress.basis,
       scheduled: Boolean(node.planned_start && node.planned_end),
     });
   }
@@ -101,7 +129,13 @@ function getInstanceGantt(req, res, db) {
 
   const totalCalendarHours = Math.max(0, hoursBetween(minStart, maxEnd));
   const statusSummary = {};
-  for (const bar of bars) statusSummary[bar.status] = (statusSummary[bar.status] || 0) + 1;
+  let weightedHours = 0;
+  let weightedProgress = 0;
+  for (const bar of bars) {
+    statusSummary[bar.status] = (statusSummary[bar.status] || 0) + 1;
+    weightedHours += Number(bar.duration_hours || 0);
+    weightedProgress += Number(bar.duration_hours || 0) * Number(bar.progress || 0);
+  }
 
   res.json({
     instance: { id: inst.id, code: inst.instance_code, name: inst.instance_name },
@@ -111,6 +145,7 @@ function getInstanceGantt(req, res, db) {
     total_days: Math.ceil(totalCalendarHours / 24),
     total_weeks: Math.round(totalCalendarHours / (24 * 7) * 10) / 10,
     total_work_hours: Math.round(bars.reduce((sum, bar) => sum + Number(bar.duration_hours || 0), 0) * 10) / 10,
+    progress_pct: weightedHours > 0 ? Math.round(weightedProgress / weightedHours) : 0,
     scheduled_count: bars.filter((bar) => bar.scheduled).length,
     unscheduled_count: bars.filter((bar) => !bar.scheduled).length,
     dependency_count: deps.length,
@@ -119,4 +154,4 @@ function getInstanceGantt(req, res, db) {
   });
 }
 
-module.exports = { getInstanceGantt };
+module.exports = { getInstanceGantt, computeProgress };

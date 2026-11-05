@@ -9,9 +9,11 @@
 const time = require("./_time");
 const { nodeWorkHours, buildFallbackScheduler } = require("./_scheduler");
 const { getInstanceGantt } = require("./gantt");
+const { getInstanceAlerts } = require("./alerts");
 
 module.exports = {
   getInstanceGantt,
+  getInstanceAlerts,
   nodeWorkHours,
   buildFallbackScheduler,
   time,

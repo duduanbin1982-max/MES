@@ -26,6 +26,7 @@ export function createEquipmentApi() {
     freezeInstance: (id: number, data?: any) => api.post(`/equipment_instances/${id}/freeze`, data || {}),
     archiveInstance: (id: number, data?: any) => api.post(`/equipment_instances/${id}/archive`, data || {}),
     instanceGantt: (id: number) => api.get(`/equipment_instances/${id}/gantt`),
+    instanceAlerts: (id: number) => api.get(`/equipment_instances/${id}/alerts`),
     instanceBomTree: (id: number) => api.get(`/equipment_instances/${id}/process_tree`),
     scheduleInstance: (id: number) => api.post(`/equipment_instances/${id}/schedule`),
     workOrders: (params?: any) => api.get('/work_orders', { params }),

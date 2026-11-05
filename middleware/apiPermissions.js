@@ -105,7 +105,7 @@ const RULES = [
   // 2026-11-02：项目进度补数（回写由触发器完成，这两个接口用于历史数据补算）
   match(/^\/equipment_instances\/\d+\/progress\/recalc$/, WRITE, ["equipment:write"]),
   match(/^\/equipment_instances\/progress\/recalc-all$/, WRITE, ["equipment:write"]),
-  match(/^\/equipment_instances\/\d+\/(?:dashboard|overview|gantt|schedule|critical_path|process_progress|subsystems|cross_subsystem_deps|parts_tree|parts_tree\/path|bom|bom\/health|bom\/levels|bom\/cost|bom\/validate|bom\/compare|material_alerts|kit_check|milestones|eco|cost_rollup|cost_rollup\/breakdown)$/, READ, ["equipment:read"]),
+  match(/^\/equipment_instances\/\d+\/(?:dashboard|overview|gantt|alerts|schedule|critical_path|process_progress|subsystems|cross_subsystem_deps|parts_tree|parts_tree\/path|bom|bom\/health|bom\/levels|bom\/cost|bom\/validate|bom\/compare|material_alerts|kit_check|milestones|eco|cost_rollup|cost_rollup\/breakdown)$/, READ, ["equipment:read"]),
   match(/^\/equipment_instances\/\d+\/(?:schedule|lifecycle|freeze|archive|process_tree\/generate|bom|bom\/import|bom\/init-minimum|milestones\/auto-generate|eco)$/, WRITE, ["equipment:write"]),
   match(/^\/milestones\/\d+$/, WRITE, ["equipment:write"]),
   match(/^\/bom\/\d+$/, WRITE, ["equipment:write"]),

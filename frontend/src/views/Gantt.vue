@@ -55,9 +55,9 @@
         </el-col>
         <el-col :span="6">
           <div class="stat-card">
-            <div class="stat-label">告警</div>
-            <div class="stat-value warning-text">{{ alerts.by_severity?.warning || 0 }}</div>
-            <div class="stat-label">警告</div>
+            <div class="stat-label">本项目告警</div>
+            <div class="stat-value warning-text">{{ alerts.count || 0 }}</div>
+            <div class="stat-label">紧急 {{ alerts.by_severity?.danger || 0 }} · 警告 {{ alerts.by_severity?.warning || 0 }}</div>
           </div>
         </el-col>
       </el-row>
@@ -72,6 +72,16 @@
           </div>
         </template>
 
+        <div class="gantt-legend">
+          <span class="legend-item"><i class="lg-plan"></i>计划</span>
+          <span class="legend-item"><i class="lg-actual"></i>实际进度（完成后变深）</span>
+          <span class="legend-item"><i class="lg-unscheduled"></i>未排程（按依赖推算）</span>
+          <span class="legend-item"><i class="lg-today"></i>今天</span>
+          <span class="legend-item legend-progress">
+            项目进度
+            <el-progress :percentage="gantt.progress_pct || 0" :stroke-width="10" :show-text="true" style="width: 160px" />
+          </span>
+        </div>
         <div v-if="!displayRows.length" class="empty-wrap small">
           <el-empty description="该项目暂无可展示工序" :image-size="80">
             <el-button type="primary" plain @click="$router.push('/process-tree')">去工艺树排程</el-button>
@@ -110,7 +120,7 @@
                 <template v-else>
                   <span class="node-id">#{{ row.id }}</span>
                   <span class="node-name">{{ row.name }}</span>
-                  <el-tag v-if="!row.scheduled" size="small" type="warning">未排程</el-tag>
+                  <el-tag v-if="!row.scheduled" size="small" type="warning">未排程·推算</el-tag>
                 </template>
               </div>
               <div class="gantt-timeline" :style="{ width: timeline.totalWidth + 'px' }">
@@ -121,7 +131,15 @@
                   :style="barStyle(row)"
                   :title="barTitle(row)"
                 >
-                  <span v-if="barRectOf(row)!.width >= 56">{{ barText(row) }}</span>
+                  <span class="bar-progress" :style="{ width: (row.progress || 0) + '%' }"></span>
+                  <span v-if="!row.scheduled" class="bar-hatch"></span>
+                  <span v-if="barRectOf(row)!.width >= 56" class="bar-text">{{ barText(row) }}</span>
+                  <span
+                    v-if="row.has_actual_start"
+                    class="bar-actual-mark"
+                    :style="actualMarkStyle(row)"
+                    title="实际开始"
+                  ></span>
                 </div>
               </div>
             </div>
@@ -138,7 +156,8 @@
 
       <el-card>
         <template #header>
-          <span><el-icon><Bell /></el-icon> 系统告警</span>
+          <span><el-icon><Bell /></el-icon> 本项目告警</span>
+          <span class="muted">仅统计当前项目（{{ gantt.instance?.code || '-' }}）</span>
         </template>
         <el-row :gutter="16" class="summary-row compact">
           <el-col :span="8"><div class="stat-card"><div class="stat-label">紧急</div><div class="stat-value danger-text">{{ alerts.by_severity?.danger || 0 }}</div></div></el-col>
@@ -153,7 +172,9 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="type" label="类型" width="180" />
+          <el-table-column label="类型" width="160">
+            <template #default="{ row }">{{ row.type_label || row.type }}</template>
+          </el-table-column>
           <el-table-column prop="message" label="内容" min-width="300" />
         </el-table>
       </el-card>
@@ -228,7 +249,7 @@ import { ref, computed, onMounted } from 'vue'
 import type { CSSProperties } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
-import { barRect, buildTimeline, formatSpanLabel } from '../domain/singleGantt'
+import { barRect, buildTimeline, formatSpanLabel, parseDateLoose } from '../domain/singleGantt'
 
 const instances = ref<any[]>([])
 const selectedInstance = ref<any>(undefined)
@@ -289,6 +310,16 @@ const barStyle = (bar: any): CSSProperties => {
   }
 }
 
+/** 实际开始标记：在计划跨度内的相对位置（0~100%） */
+const actualMarkStyle = (bar: any): CSSProperties => {
+  const start = parseDateLoose(bar.start)
+  const actual = parseDateLoose(bar.actual_start)
+  const end = parseDateLoose(bar.end)
+  if (!start || !actual || !end || end.getTime() <= start.getTime()) return {}
+  const ratio = Math.max(0, Math.min(100, ((actual.getTime() - start.getTime()) / (end.getTime() - start.getTime())) * 100))
+  return { left: ratio + '%' }
+}
+
 const barColor = (status: string) => {
   const colors: Record<string, string> = {
     pending: 'var(--el-color-info)',
@@ -310,6 +341,7 @@ const barTitle = (bar: any) => [
   `工时：${bar.duration_hours || 0}h / 跨度：${bar.duration_days || 0}天`,
   `工位：${bar.workstation_name || '-'}`,
   `状态：${bar.status || '-'}${bar.scheduled ? '' : '（未排程，按依赖推算）'}`,
+  `进度：${bar.progress || 0}%（${bar.progress_basis === 'actual_elapsed' ? '按已开工时长估算' : '按状态'}）`,
   bar.actual_start ? `实际：${bar.actual_start} → ${bar.actual_end || '-'}` : ''
 ].filter(Boolean).join('\n')
 
@@ -333,7 +365,7 @@ const loadAll = async () => {
   try {
     instances.value = await Api.instances()
     if (instances.value.length > 0 && !selectedInstance.value) selectedInstance.value = instances.value[0].id
-    alerts.value = await Api.dashboardAlerts()
+    alerts.value = await Api.instanceAlerts(selectedInstance.value)
   } catch (error: any) {
     ElMessage.error('加载基础数据失败: ' + (error?.response?.data?.message || error?.message || error))
   } finally {
@@ -596,6 +628,104 @@ onMounted(loadAll)
   align-items: center;
   white-space: nowrap;
   transition: all 0.2s;
+  position: absolute;
+}
+
+/* 实际进度：从左侧覆盖一层深色（已完成部分） */
+.bar-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+/* 未排程：斜纹，一眼区分"推算值" */
+.bar-hatch {
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.5) 0,
+    rgba(255, 255, 255, 0.5) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  pointer-events: none;
+}
+
+.bar-text {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-actual-mark {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--el-color-danger);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);
+  pointer-events: none;
+}
+
+.gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-progress {
+  margin-left: auto;
+}
+
+.lg-plan,
+.lg-actual,
+.lg-unscheduled,
+.lg-today {
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border-radius: 4px;
+}
+
+.lg-plan {
+  background: var(--el-color-primary-light-5);
+}
+
+.lg-actual {
+  background: linear-gradient(90deg, var(--el-color-primary) 0 50%, var(--el-color-primary-light-5) 50% 100%);
+}
+
+.lg-unscheduled {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--el-color-warning-light-5) 0,
+    var(--el-color-warning-light-5) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  border: 1px dashed var(--el-color-warning);
+}
+
+.lg-today {
+  width: 2px;
+  height: 14px;
+  border-radius: 0;
+  background: var(--el-color-danger);
 }
 
 .gantt-bar:hover {

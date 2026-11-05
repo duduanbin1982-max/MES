@@ -13,6 +13,7 @@
       "total_days": 8,
       "total_weeks": 1,
       "total_work_hours": 40,
+      "progress_pct": 59,
       "scheduled_count": 3,
       "unscheduled_count": 1,
       "dependency_count": 0,
@@ -35,12 +36,14 @@
           "planned_end": "2026-10-07 08:00:00",
           "actual_start": "2026-10-05 09:00:00",
           "actual_end": "2026-10-07 07:00:00",
+          "has_actual_start": true,
+          "has_actual_end": true,
           "duration_days": 2,
           "duration_hours": 16,
           "calendar_hours": 48,
           "status": "completed",
           "progress": 100,
-          "bom_node_id": 5,
+          "progress_basis": "status",
           "scheduled": true
         },
         {
@@ -56,12 +59,14 @@
           "planned_end": "2026-10-05 16:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 8,
           "calendar_hours": 8,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         },
         {
@@ -77,12 +82,14 @@
           "planned_end": "2026-10-08 08:00:00",
           "actual_start": "2026-10-07 09:00:00",
           "actual_end": null,
+          "has_actual_start": true,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 8,
           "calendar_hours": 24,
           "status": "in_progress",
-          "progress": 50,
-          "bom_node_id": null,
+          "progress": 95,
+          "progress_basis": "actual_elapsed",
           "scheduled": true
         },
         {
@@ -98,12 +105,14 @@
           "planned_end": "2026-10-12 16:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 8,
           "calendar_hours": 8,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": true
         }
       ]
@@ -123,6 +132,7 @@
       "total_days": 1,
       "total_weeks": 0.1,
       "total_work_hours": 18,
+      "progress_pct": 0,
       "scheduled_count": 0,
       "unscheduled_count": 3,
       "dependency_count": 2,
@@ -143,12 +153,14 @@
           "planned_end": "2026-10-06 04:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 4,
           "calendar_hours": 4,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         },
         {
@@ -164,12 +176,14 @@
           "planned_end": "2026-10-06 12:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 8,
           "calendar_hours": 8,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         },
         {
@@ -185,12 +199,14 @@
           "planned_end": "2026-10-06 18:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 6,
           "calendar_hours": 6,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         }
       ]
@@ -209,6 +225,7 @@
       "total_days": 0,
       "total_weeks": 0,
       "total_work_hours": 0,
+      "progress_pct": 0,
       "bars": [],
       "status_summary": {}
     }
@@ -227,6 +244,7 @@
       "total_days": 1,
       "total_weeks": 0.1,
       "total_work_hours": 15,
+      "progress_pct": 0,
       "scheduled_count": 0,
       "unscheduled_count": 3,
       "dependency_count": 3,
@@ -247,12 +265,14 @@
           "planned_end": "2026-10-08 13:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 5,
           "calendar_hours": 5,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         },
         {
@@ -268,12 +288,14 @@
           "planned_end": "2026-10-08 18:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 5,
           "calendar_hours": 5,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         },
         {
@@ -289,12 +311,14 @@
           "planned_end": "2026-10-08 23:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 5,
           "calendar_hours": 5,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         }
       ]
@@ -314,6 +338,7 @@
       "total_days": 3,
       "total_weeks": 0.3,
       "total_work_hours": 17,
+      "progress_pct": 12,
       "scheduled_count": 2,
       "unscheduled_count": 2,
       "dependency_count": 0,
@@ -335,12 +360,14 @@
           "planned_end": "2026-10-09 12:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 4,
           "calendar_hours": 4,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": true
         },
         {
@@ -356,12 +383,14 @@
           "planned_end": "2026-10-09 16:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 8,
           "calendar_hours": 8,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         },
         {
@@ -377,12 +406,14 @@
           "planned_end": "2026-10-10 11:00:00",
           "actual_start": null,
           "actual_end": null,
+          "has_actual_start": false,
+          "has_actual_end": false,
           "duration_days": 1,
           "duration_hours": 3,
           "calendar_hours": 3,
           "status": "pending",
           "progress": 0,
-          "bom_node_id": null,
+          "progress_basis": "status",
           "scheduled": false
         },
         {
@@ -398,12 +429,14 @@
           "planned_end": "2026-10-11 10:00:00",
           "actual_start": "2026-10-11 08:10:00",
           "actual_end": "2026-10-11 09:50:00",
+          "has_actual_start": true,
+          "has_actual_end": true,
           "duration_days": 1,
           "duration_hours": 2,
           "calendar_hours": 2,
           "status": "completed",
           "progress": 100,
-          "bom_node_id": 9,
+          "progress_basis": "status",
           "scheduled": true
         }
       ]

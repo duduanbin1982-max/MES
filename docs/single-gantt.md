@@ -74,10 +74,58 @@ GET  /api/equipment_instances/:id/schedule                             # 同应�
 | 前端单测 | `frontend/tests/domain/singleGantt.test.ts` **8/8**（月份真实天数、首尾裁剪、跨年 2 月、条形对齐回归、今天线） |
 | 闸门 | **696/0**；前端 domain 118/118 |
 
-## 5. 已知边界（P2/P3，未在本次整改范围）
 
-1. 未排程条仍用依赖推算位置（已加虚线边框 + tooltip 说明）；
-2. fallback 推算只按 FS，不读 SS/FF/SF 与 lag（scheduler 主算法支持）；
-3. 实际时间（`actual_start/actual_end`）尚未叠加为"计划 vs 实际"；
-4. 告警区仍是全局告警（`/dashboard/alerts`）；
-5. 无缩放档位（固定 8px/天）、无多选批量改期。
+## 6. 实际进度（F-06）
+
+- 后端 `bars[].progress` + `progress_basis`：
+  - `completed` → 100（basis=status）
+  - `in_progress` / `paused`：有 `actual_start` 时按 **已开工时长 ÷ 计划跨度** 估算，夹在 5%~95%（basis=actual_elapsed）；没有实际开工时间则给 50%（basis=status）
+  - 其它 → 0
+- 项目级 `progress_pct`：按工时加权（Σ 工时×进度 ÷ Σ 工时），页面图例右侧用进度条展示；
+- 条形：计划色为底色，**实际进度用左侧深色覆盖层**（宽度 = progress%），已完成节点整条变深；
+- **实际开始标记**：`actual_start` 在计划跨度内的相对位置画一条红色竖线（悬停显示"实际开始"）；
+- tooltip 增加：进度%（含依据）、实际起止时间；
+- 生产实测：TBM-2026-001 项目进度 **24%**；有实际时间的节点 2 个（数据现状，功能已就绪）。
+
+## 7. 本项目告警（F-07）
+
+新接口：`GET /api/equipment_instances/:id/alerts`（权限 `equipment:read`，与页面一致；不再依赖 `report:read` 的全局 `/dashboard/alerts`）。
+
+| 类型 | 判定 | 分级 |
+|---|---|---|
+| 工序超期 | `planned_end` 已过且未完成/取消 | >7 天 danger、≥3 天 warning、其余 info |
+| 工序受阻 | status=blocked | danger |
+| 工序未排程 | planned_start 与 planned_end 都为空 | warning |
+| 里程碑延期 | `instance_milestones.planned_end` 已过且未完成 | 同超期分级 |
+| 工单长运行 | 工单 in_progress 且实际开工 >30 天 | warning |
+
+响应：`{ instance, count, by_severity:{danger,warning,info}, alerts:[{type,type_label,severity,message,ref}] }`，按危险度排序、最多 200 条。
+
+生产实测：TBM-2026-001 共 **32 条**（danger 4 条工序超期、warning 28 条：27 条未排程 + 1 条里程碑延期），且**只统计本项目**（另一项目告警不会串入）。
+
+## 8. 未排程条视觉区分（F-04）
+
+- 条形加**斜纹覆盖层** + 虚线边框（原只有虚线边框，容易和真实计划混淆）；
+- 行标签由「未排程」改为「**未排程·推算**」；
+- tooltip 明确「未排程，按依赖推算」及推算依据。
+
+## 9. fallback 支持依赖类型与间隔（F-05）
+
+未排程节点的只读推算（`instanceGantt/_scheduler.js`）现在与正式排程同一套约束：
+
+| 类型 | 约束 |
+|---|---|
+| FS | 前驱结束 |
+| SS | 前驱开始 |
+| FF | 前驱结束 − 本节点工时 |
+| SF | 前驱开始 − 本节点工时 |
+
+并叠加 `dep.lag_hours`。单测 IGANTT.8 覆盖 5 种情形（FS / FS+lag / SS / FF / SF）。
+
+## 10. 已知边界（剩余 P2/P3）
+
+1. 无缩放档位（固定 8px/天）；
+2. 无多选批量改期（单节点拖拽/逐条改）；
+3. 实际进度对"进行中但无 actual_start"的节点只能给 50%（数据未录入）；
+4. 里程碑/工单告警只做超期与长运行，未做资源冲突类告警（跨项目冲突在 `/multi-schedule`）；
+5. 告警不支持点击跳转到对应工序/工单（只带 `ref` 字段，前端暂未做跳转）。

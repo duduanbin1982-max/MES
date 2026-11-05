@@ -164,3 +164,41 @@ test("IGANTT.6 buildFallbackScheduler 按前任结束时间推后继，且带环
 
   db.close();
 });
+
+
+test("IGANTT.7 进度字段（F-06）：完成=100，进行中给依据，项目级按工时加权", () => {
+  const bars = GOLDEN.instance1.body.bars;
+  const completed = bars.filter((b) => b.status === "completed");
+  assert.ok(completed.length >= 1, "样本里应有已完成节点");
+  for (const bar of completed) {
+    assert.equal(bar.progress, 100);
+    assert.equal(bar.progress_basis, "status");
+  }
+  for (const bar of bars) {
+    assert.equal(typeof bar.progress, "number");
+    assert.ok(bar.progress >= 0 && bar.progress <= 100);
+    assert.ok(["status", "actual_elapsed"].includes(bar.progress_basis));
+    assert.equal(typeof bar.has_actual_start, "boolean");
+    assert.equal(typeof bar.has_actual_end, "boolean");
+  }
+  const pct = GOLDEN.instance1.body.progress_pct;
+  assert.equal(typeof pct, "number");
+  assert.ok(pct >= 0 && pct <= 100);
+  assert.equal(GOLDEN.instance3.body.progress_pct, 0, "无节点进度为 0");
+});
+
+test("IGANTT.8 fallback 支持 SS/FF/SF 与 lag（F-05）", () => {
+  const { buildFallbackScheduler, time } = instanceGantt;
+  const fmt = (date) => time.formatDateTime(date);
+  const nodes = [
+    { id: 1, operation_name: "前置", status: "ready", estimated_hours: 8, planned_start: "2026-07-01 08:00:00", planned_end: "2026-07-01 16:00:00" },
+    { id: 2, operation_name: "后继", status: "ready", estimated_hours: 4 },
+  ];
+  const projectStart = new Date(2026, 6, 1, 0, 0, 0);
+  const calc = (dep) => fmt(buildFallbackScheduler(nodes, [dep], projectStart).calcStart(2));
+  assert.equal(calc({ predecessor_id: 1, successor_id: 2 }), "2026-07-01 16:00:00", "FS：前驱结束");
+  assert.equal(calc({ predecessor_id: 1, successor_id: 2, dep_type: "FS", lag_hours: 4 }), "2026-07-01 20:00:00", "FS + lag 4h");
+  assert.equal(calc({ predecessor_id: 1, successor_id: 2, dep_type: "SS" }), "2026-07-01 08:00:00", "SS：前驱开始");
+  assert.equal(calc({ predecessor_id: 1, successor_id: 2, dep_type: "FF" }), "2026-07-01 12:00:00", "FF：前驱结束 - 后继工时");
+  assert.equal(calc({ predecessor_id: 1, successor_id: 2, dep_type: "SF" }), "2026-07-01 04:00:00", "SF：前驱开始 - 后继工时");
+});
