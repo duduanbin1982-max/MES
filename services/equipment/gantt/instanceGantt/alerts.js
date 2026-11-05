@@ -111,7 +111,7 @@ function getInstanceAlerts(req, res, db) {
         type_label: "工单长运行",
         severity: "warning",
         message: `${wo.wo_code || ""} ${wo.title || ""} 已开工 ${runningDays} 天`,
-        ref: { work_order_id: wo.id },
+        ref: { work_order_id: wo.id, wo_code: wo.wo_code || null },
       });
     }
   }

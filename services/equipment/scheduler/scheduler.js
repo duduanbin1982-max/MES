@@ -7,18 +7,39 @@
 //   1) 默认跳过已完成/已取消节点（不重写历史计划）；
 //   2) dryRun 返回"将被变更"的明细（旧 → 新），前端先预览再确认；
 //   3) 真正写库时记录批次（process_reschedule_batches，批次号 SC-…），可用既有撤销接口回滚。
-const { makeHelpers, addHours, maxDate } = require('./_helpers')
+//
+// 2026-11-05（P3）：新增多选批量改期
+//   POST /api/equipment_instances/:id/nodes/date-shift { node_ids: [], shift_days: N }[?dryRun=1]
+//   同样跳过已完成/已取消与未排程节点，写入批次 MS-…（可撤销）。
+const { makeHelpers, addHours, maxDate, parseDateUtc } = require('./_helpers')
 const { topologicalSort } = require('./topo')
 
 const PROTECTED_STATUSES = new Set(['completed', 'cancelled'])
+const MAX_SHIFT_DAYS = 3650
+const MAX_BATCH_NODES = 500
+
+function formatDateLike(original, date) {
+  const iso = date.toISOString()
+  const text = iso.slice(0, 19).replace('T', ' ')
+  return String(original || '').trim().length === 10 ? text.slice(0, 10) : text
+}
 
 function register(app, db) {
   const { all, get, wrap } = makeHelpers(db)
 
-  function nextBatchNo() {
+  function nextBatchNo(prefix) {
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const row = db.prepare('SELECT COUNT(*) AS c FROM process_reschedule_batches WHERE batch_no LIKE ?').get(`SC-${day}-%`)
-    return `SC-${day}-${String(Number(row.c) + 1).padStart(3, '0')}`
+    const row = db.prepare('SELECT COUNT(*) AS c FROM process_reschedule_batches WHERE batch_no LIKE ?').get(`${prefix}-${day}-%`)
+    return `${prefix}-${day}-${String(Number(row.c) + 1).padStart(3, '0')}`
+  }
+
+  /** 统一记录批次（供撤销接口使用） */
+  function recordBatch(prefix, instanceId, items, note) {
+    const batchNo = nextBatchNo(prefix)
+    const inserted = db.prepare(`INSERT INTO process_reschedule_batches
+        (batch_no, shift_days, instance_id, subsystem_id, only_overdue, anchor_date, node_count, items_json, note)
+      VALUES (?,?,?,?,?,?,?,?,?)`).run(batchNo, 0, instanceId, null, 0, null, items.length, JSON.stringify(items), note)
+    return { batch_id: inserted.lastInsertRowid, batch_no: batchNo }
   }
 
   function scheduleInstance(req, res) {
@@ -125,11 +146,9 @@ function register(app, db) {
 
     // 6) 写回 DB（除非 dryRun / 有错误）
     let writtenCount = 0
-    let batchNo = null
-    let batchId = null
+    let batch = null
     if (!dryRun && errors.length === 0 && changedRows.length) {
-      batchNo = nextBatchNo()
-      const update = db.prepare('UPDATE process_nodes SET planned_start = ?, planned_end = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      const update = db.prepare("UPDATE process_nodes SET planned_start = ?, planned_end = ?, updated_at = datetime('now') WHERE id = ?")
       const items = changedRows.map((item) => ({
         id: item.id,
         status: item.status,
@@ -143,10 +162,7 @@ function register(app, db) {
           update.run(item.planned_start, item.planned_end, item.id)
           writtenCount++
         }
-        const inserted = db.prepare(`INSERT INTO process_reschedule_batches
-            (batch_no, shift_days, instance_id, subsystem_id, only_overdue, anchor_date, node_count, items_json, note)
-          VALUES (?,?,?,?,?,?,?,?,?)`).run(batchNo, 0, instanceId, null, 0, null, writtenCount, JSON.stringify(items), 'scheduler apply')
-        batchId = inserted.lastInsertRowid
+        batch = recordBatch('SC', instanceId, items, 'scheduler apply')
       })
       tx()
     }
@@ -164,16 +180,91 @@ function register(app, db) {
       changed_count: changedRows.length,
       unchanged_count: changes.length - changedRows.length,
       dry_run: !!dryRun,
-      batch_no: batchNo,
-      batch_id: batchId,
+      batch_no: batch ? batch.batch_no : null,
+      batch_id: batch ? batch.batch_id : null,
       errors,
       sample: changes.slice(0, 5),
       full: dryRun ? changes : undefined,
     })
   }
 
+  // ---------------- 多选批量改期（2026-11-05 P3） ----------------
+  function shiftNodes(req, res) {
+    const instanceId = parseInt(req.params.id, 10)
+    const dryRun = req.query.dryRun === '1'
+    const inst = get('SELECT id, instance_code FROM equipment_instances WHERE id = ?', instanceId)
+    if (!inst) return res.status(404).json({ error: 'instance not found' })
+
+    const body = req.body || {}
+    const rawIds = Array.isArray(body.node_ids) ? body.node_ids : []
+    const nodeIds = [...new Set(rawIds.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))]
+    const shiftDays = Number(body.shift_days)
+    if (!nodeIds.length) return res.status(400).json({ error: 'node_ids 不能为空' })
+    if (nodeIds.length > MAX_BATCH_NODES) return res.status(400).json({ error: `单次最多 ${MAX_BATCH_NODES} 条` })
+    if (!Number.isInteger(shiftDays) || shiftDays === 0) return res.status(400).json({ error: 'shift_days 必须是非零整数' })
+    if (Math.abs(shiftDays) > MAX_SHIFT_DAYS) return res.status(400).json({ error: `shift_days 超出范围（±${MAX_SHIFT_DAYS} 天）` })
+
+    const placeholders = nodeIds.map(() => '?').join(',')
+    // 注意：_helpers 的 all(sql, params) 只接一个参数，这里用 db.prepare 直接展开绑定
+    const rows = db.prepare(`SELECT id, operation_name, status, planned_start, planned_end FROM process_nodes
+                       WHERE equipment_instance_id = ? AND id IN (${placeholders})`).all(instanceId, ...nodeIds)
+    const rowById = new Map(rows.map((row) => [Number(row.id), row]))
+
+    const changes = []
+    const skipped = []
+    for (const id of nodeIds) {
+      const row = rowById.get(id)
+      if (!row) { skipped.push({ id, reason: '不属于该项目' }); continue }
+      if (PROTECTED_STATUSES.has(String(row.status))) { skipped.push({ id, reason: '已完成/已取消，不改动' }); continue }
+      if (!row.planned_start || !row.planned_end) { skipped.push({ id, reason: '未排程，无法改期' }); continue }
+      const start = parseDateUtc(row.planned_start)
+      const end = parseDateUtc(row.planned_end)
+      if (!start || !end) { skipped.push({ id, reason: '计划时间格式异常' }); continue }
+      const nextStart = new Date(start.getTime() + shiftDays * 86400000)
+      const nextEnd = new Date(end.getTime() + shiftDays * 86400000)
+      changes.push({
+        id,
+        operation_name: row.operation_name || null,
+        status: row.status,
+        old_planned_start: row.planned_start,
+        old_planned_end: row.planned_end,
+        new_planned_start: formatDateLike(row.planned_start, nextStart),
+        new_planned_end: formatDateLike(row.planned_end, nextEnd),
+      })
+    }
+
+    let batch = null
+    let writtenCount = 0
+    if (!dryRun && changes.length) {
+      const update = db.prepare("UPDATE process_nodes SET planned_start = ?, planned_end = ?, updated_at = datetime('now') WHERE id = ?")
+      const tx = db.transaction(() => {
+        for (const item of changes) {
+          update.run(item.new_planned_start, item.new_planned_end, item.id)
+          writtenCount++
+        }
+        batch = recordBatch('MS', instanceId, changes, `manual shift ${shiftDays} days`)
+      })
+      tx()
+    }
+
+    res.json({
+      instance_id: instanceId,
+      instance_code: inst.instance_code,
+      dry_run: !!dryRun,
+      requested_count: nodeIds.length,
+      changed_count: changes.length,
+      written_count: writtenCount,
+      skipped,
+      shift_days: shiftDays,
+      batch_no: batch ? batch.batch_no : null,
+      batch_id: batch ? batch.batch_id : null,
+      full: dryRun ? changes : undefined,
+    })
+  }
+
   app.post('/api/equipment_instances/:id/schedule', wrap(scheduleInstance))
   app.get('/api/equipment_instances/:id/schedule', wrap(scheduleInstance))
+  app.post('/api/equipment_instances/:id/nodes/date-shift', wrap(shiftNodes))
 }
 
 module.exports = { register, PROTECTED_STATUSES }

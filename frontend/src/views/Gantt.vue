@@ -21,8 +21,8 @@
 
     <el-alert v-if="lastBatch" type="success" :closable="false" show-icon class="schedule-alert">
       <template #title>
-        本次排程已应用（批次 {{ lastBatch.batch_no }}，{{ lastBatch.written }} 个节点）。
-        <el-button link type="primary" size="small" :loading="undoing" @click="undoLastSchedule">撤销本次排程</el-button>
+        本次{{ lastBatch.kind }}已应用（批次 {{ lastBatch.batch_no }}，{{ lastBatch.written }} 个节点）。
+        <el-button link type="primary" size="small" :loading="undoing" @click="undoLastSchedule">撤销本次操作</el-button>
       </template>
     </el-alert>
 
@@ -67,6 +67,11 @@
           <div class="card-header">
             <span><el-icon><DataAnalysis /></el-icon> 子系统分组甘特</span>
             <div class="header-right">
+              <template v-if="selectedIds.length">
+                <el-tag type="primary" size="small">已选 {{ selectedIds.length }} 条</el-tag>
+                <el-button size="small" type="primary" plain @click="openShift">批量改期</el-button>
+                <el-button size="small" @click="clearSelection">清空</el-button>
+              </template>
               <el-button-group>
                 <el-button
                   v-for="level in ZOOM_LEVELS"
@@ -131,6 +136,13 @@
                   <el-tag size="small" type="info">{{ row.count }} 项</el-tag>
                 </template>
                 <template v-else>
+                  <el-checkbox
+                    :model-value="selectedIds.includes(row.id)"
+                    size="small"
+                    class="row-select"
+                    @click.stop
+                    @change="toggleSelect(row.id)"
+                  />
                   <span class="node-id">#{{ row.id }}</span>
                   <span class="node-name">{{ row.name }}</span>
                   <el-tag v-if="!row.scheduled" size="small" type="warning">未排程·推算</el-tag>
@@ -143,6 +155,7 @@
                   :class="{ 'is-unscheduled': !row.scheduled }"
                   :style="barStyle(row)"
                   :title="barTitle(row)"
+                  @click.stop="toggleSelect(row.id)"
                 >
                   <span class="bar-progress" :style="{ width: (row.progress || 0) + '%' }"></span>
                   <span v-if="!row.scheduled" class="bar-hatch"></span>
@@ -268,6 +281,58 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 2026-11-05（P3）：多选批量改期 -->
+    <el-dialog v-model="shiftVisible" title="批量改期（先预览，确认后再写入）" width="760px" :close-on-click-modal="false">
+      <div class="scheduler-toolbar">
+        <span class="muted">已选 {{ selectedIds.length }} 条</span>
+        <span class="muted">整体平移</span>
+        <el-input-number v-model="shiftDays" :min="-3650" :max="3650" :step="1" :precision="0" style="width: 130px" />
+        <span class="muted">天（可负数）</span>
+        <el-button size="small" :loading="shiftPreviewing" @click="previewShift">预览</el-button>
+      </div>
+
+      <div v-if="shiftPreview" class="scheduler-summary">
+        <el-tag type="primary">将变更 {{ shiftPreview.changed_count }}</el-tag>
+        <el-tag v-if="shiftPreview.skipped?.length" type="warning">跳过 {{ shiftPreview.skipped.length }}</el-tag>
+        <el-tag>平移 {{ shiftPreview.shift_days }} 天</el-tag>
+      </div>
+
+      <el-table v-if="shiftPreview?.full?.length" :data="shiftPreview.full" size="small" border max-height="320">
+        <el-table-column label="工序" min-width="130">
+          <template #default="{ row }">#{{ row.id }} {{ row.operation_name || '' }}</template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="90" />
+        <el-table-column label="原计划" min-width="180">
+          <template #default="{ row }">{{ row.old_planned_start }} → {{ row.old_planned_end }}</template>
+        </el-table-column>
+        <el-table-column label="新计划" min-width="180">
+          <template #default="{ row }"><span class="plan-changed">{{ row.new_planned_start }} → {{ row.new_planned_end }}</span></template>
+        </el-table-column>
+      </el-table>
+      <el-alert
+        v-if="shiftPreview?.skipped?.length"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="schedule-alert"
+        :title="shiftPreview.skipped.slice(0, 3).map((s: any) => `#${s.id} ${s.reason}`).join('；')"
+      />
+      <el-empty v-else-if="!shiftPreviewing && !shiftPreview" description="点「预览」查看改期结果" :image-size="60" />
+
+      <template #footer>
+        <el-button @click="shiftVisible = false">取消</el-button>
+        <el-button :loading="shiftPreviewing" @click="previewShift">预览</el-button>
+        <el-button
+          type="primary"
+          :loading="shifting"
+          :disabled="!shiftPreview || !shiftPreview.changed_count"
+          @click="applyShift"
+        >
+          确认改期{{ shiftPreview?.changed_count ? `（${shiftPreview.changed_count} 条）` : '' }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -301,16 +366,22 @@ const undoing = ref(false)
 const schedulerVisible = ref(false)
 const schedulerStart = ref<string>('')
 const preview = ref<any>(null)
-const lastBatch = ref<{ id: number; batch_no: string; written: number } | null>(null)
+const lastBatch = ref<{ id: number; batch_no: string; written: number; kind: string } | null>(null)
 
 const rowHeight = 28
 const groupRowHeight = 30
 
-// 缩放档位（2026-11-05）：日 24px / 周 8px / 月 4px
-const zoom = ref<ZoomLevel>('week')
+// 缩放档位（2026-11-05）：日 24px / 周 8px / 月 4px，选择记忆到 localStorage
+const ZOOM_STORAGE_KEY = 'factory-mes:single-gantt:zoom'
+const readZoom = (): ZoomLevel => {
+  const saved = (() => { try { return localStorage.getItem(ZOOM_STORAGE_KEY) } catch { return null } })()
+  return saved === 'day' || saved === 'week' || saved === 'month' ? saved : 'week'
+}
+const zoom = ref<ZoomLevel>(readZoom())
 const dayWidth = computed(() => dayWidthOf(zoom.value))
 const setZoom = (level: ZoomLevel) => {
   zoom.value = level
+  try { localStorage.setItem(ZOOM_STORAGE_KEY, level) } catch { /* 隐私模式下忽略 */ }
 }
 
 const timeline = computed(() => buildTimeline(gantt.value.project_start, gantt.value.project_end, dayWidth.value, 30))
@@ -322,6 +393,67 @@ const timelineGridStyle = computed<CSSProperties>(() => {
     backgroundImage: `repeating-linear-gradient(90deg, transparent 0, transparent ${step - 1}px, var(--el-border-color-extra-light) ${step - 1}px, var(--el-border-color-extra-light) ${step}px)`,
   }
 })
+
+// 多选批量改期（2026-11-05 P3）
+const selectedIds = ref<number[]>([])
+const shiftVisible = ref(false)
+const shiftDays = ref(7)
+const shiftPreviewing = ref(false)
+const shifting = ref(false)
+const shiftPreview = ref<any>(null)
+
+const toggleSelect = (id: number) => {
+  const index = selectedIds.value.indexOf(id)
+  if (index >= 0) selectedIds.value.splice(index, 1)
+  else selectedIds.value.push(id)
+}
+const clearSelection = () => { selectedIds.value = [] }
+const openShift = async () => {
+  if (!selectedIds.value.length) return
+  shiftPreview.value = null
+  shiftVisible.value = true
+  await previewShift()
+}
+const previewShift = async () => {
+  if (!selectedInstance.value || !selectedIds.value.length) return
+  shiftPreviewing.value = true
+  try {
+    shiftPreview.value = await Api.post(
+      `/equipment_instances/${selectedInstance.value}/nodes/date-shift`,
+      { node_ids: selectedIds.value, shift_days: Number(shiftDays.value) },
+      { params: { dryRun: 1 } },
+    )
+    if (!shiftPreview.value.changed_count) ElMessage.info('所选工序都不需要改期（可能已完成或未排程）')
+  } catch (error: any) {
+    ElMessage.error('预览失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    shiftPreviewing.value = false
+  }
+}
+const applyShift = async () => {
+  if (!shiftPreview.value?.changed_count) return
+  try {
+    await ElMessageBox.confirm(`将平移 ${shiftPreview.value.changed_count} 条工序 ${shiftDays.value} 天，确认写入？`, '确认批量改期', { type: 'warning' })
+  } catch {
+    return
+  }
+  shifting.value = true
+  try {
+    const result: any = await Api.post(
+      `/equipment_instances/${selectedInstance.value}/nodes/date-shift`,
+      { node_ids: selectedIds.value, shift_days: Number(shiftDays.value) },
+    )
+    shiftVisible.value = false
+    clearSelection()
+    lastBatch.value = result.batch_id ? { id: result.batch_id, batch_no: result.batch_no, written: result.written_count, kind: '批量改期' } : null
+    await loadGantt()
+    ElMessage.success(`已改期 ${result.written_count} 条${result.batch_no ? `（批次 ${result.batch_no}，可撤销）` : ''}`)
+  } catch (error: any) {
+    ElMessage.error('改期失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    shifting.value = false
+  }
+}
 
 // 告警点击定位
 const focusedNodeId = ref<number | null>(null)
@@ -343,7 +475,10 @@ const onAlertClick = async (alert: any) => {
     return
   }
   if (ref.work_order_id) {
-    router.push({ path: '/work-orders', query: { instance_id: String(selectedInstance.value) } })
+    router.push({
+      path: '/work-orders',
+      query: { instance_id: String(selectedInstance.value), ...(ref.wo_code ? { wo: String(ref.wo_code) } : {}) },
+    })
     return
   }
   if (ref.milestone_id) {
@@ -429,6 +564,7 @@ const barText = (bar: any) => String(bar.name || '').slice(0, 12)
 
 const loadGantt = async () => {
   if (!selectedInstance.value) return
+  clearSelection()
   loading.value = true
   try {
     gantt.value = await Api.instanceGantt(selectedInstance.value)
@@ -498,7 +634,7 @@ const applySchedule = async () => {
     if (schedulerStart.value) params.start = schedulerStart.value
     const result: any = await Api.post(`/equipment_instances/${selectedInstance.value}/schedule`, {}, { params })
     schedulerVisible.value = false
-    lastBatch.value = result.batch_id ? { id: result.batch_id, batch_no: result.batch_no, written: result.written_count } : null
+    lastBatch.value = result.batch_id ? { id: result.batch_id, batch_no: result.batch_no, written: result.written_count, kind: '重新排程' } : null
     await loadGantt()
     ElMessage.success(`排程完成：${result.written_count} 个节点已更新${result.batch_no ? `（批次 ${result.batch_no}，可撤销）` : ''}`)
   } catch (error: any) {
@@ -711,6 +847,11 @@ onMounted(loadAll)
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.row-select {
+  margin-right: 2px;
 }
 
 .gantt-bar {

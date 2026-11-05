@@ -37,7 +37,7 @@
             </el-button-group>
           </div>
 
-          <el-table :data="rows" stripe v-loading="loading" size="small">
+          <el-table :data="rows" stripe v-loading="loading" size="small" :row-class-name="woRowClass">
             <el-table-column prop="wo_code" label="工单号" width="160" />
             <el-table-column prop="instance_code" label="实例" width="140" />
             <el-table-column prop="subsystem_name" label="子系统" width="100" />
@@ -170,7 +170,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { nextTick, ref, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
@@ -240,6 +240,18 @@ const setQuickFilter = (val: string) => {
 
 const resetFilters = () => { filters.equipment_instance_id = undefined; filters.status = ''; quickFilter.value = 'all'; load() }
 
+// 2026-11-05：从单项目甘特点「工单长运行」告警跳过来时，高亮并滚动到该工单
+const highlightWo = ref<string>('')
+const woRowClass = ({ row }: { row: any }) => (highlightWo.value && row.wo_code === highlightWo.value ? 'wo-row-highlight' : '')
+const focusWorkOrder = async () => {
+  const wo = String(route.query.wo || '')
+  highlightWo.value = wo
+  if (!wo) return
+  await nextTick()
+  const el = document.querySelector('.wo-row-highlight') as HTMLElement | null
+  el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
 const load = async () => {
   loading.value = true
   try {
@@ -251,6 +263,7 @@ const load = async () => {
   } finally {
     loading.value = false
   }
+  await focusWorkOrder()
 }
 
 const loadDispatchable = async () => {
@@ -288,6 +301,8 @@ const onTabChange = (name: string | number) => {
     load()
   }
 }
+
+watch(() => route.query.wo, () => { focusWorkOrder() })
 
 watch(() => route.query.tab, () => {
   const next = routeTab()
@@ -356,3 +371,10 @@ onMounted(() => {
   if (activeTab.value === 'dispatch') loadDispatchable()
 })
 </script>
+
+<style scoped>
+/* 2026-11-05：从单项目甘特告警跳转过来时高亮目标工单 */
+:deep(.wo-row-highlight) td {
+  background: var(--el-color-warning-light-8) !important;
+}
+</style>
