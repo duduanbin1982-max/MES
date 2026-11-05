@@ -66,9 +66,21 @@
         <template #header>
           <div class="card-header">
             <span><el-icon><DataAnalysis /></el-icon> 子系统分组甘特</span>
-            <span class="muted">
-              计划：{{ formatSpanLabel(gantt.project_start, gantt.project_end, gantt.total_days) }}
-            </span>
+            <div class="header-right">
+              <el-button-group>
+                <el-button
+                  v-for="level in ZOOM_LEVELS"
+                  :key="level.value"
+                  size="small"
+                  :type="zoom === level.value ? 'primary' : 'default'"
+                  :title="level.hint"
+                  @click="setZoom(level.value)"
+                >{{ level.label }}</el-button>
+              </el-button-group>
+              <span class="muted">
+                计划：{{ formatSpanLabel(gantt.project_start, gantt.project_end, gantt.total_days) }}
+              </span>
+            </div>
           </div>
         </template>
 
@@ -109,7 +121,8 @@
               v-for="row in displayRows"
               :key="row.row_key"
               class="gantt-row"
-              :class="{ 'group-row': row.type === 'group' }"
+              :class="{ 'group-row': row.type === 'group', 'row-focused': row.type === 'bar' && row.id === focusedNodeId }"
+              :data-node-id="row.type === 'bar' ? row.id : undefined"
               :style="{ height: (row.type === 'group' ? groupRowHeight : rowHeight) + 'px' }"
             >
               <div class="gantt-row-label" :title="row.type === 'bar' ? rowTitle(row) : row.name">
@@ -123,7 +136,7 @@
                   <el-tag v-if="!row.scheduled" size="small" type="warning">未排程·推算</el-tag>
                 </template>
               </div>
-              <div class="gantt-timeline" :style="{ width: timeline.totalWidth + 'px' }">
+              <div class="gantt-timeline" :style="{ width: timeline.totalWidth + 'px', ...timelineGridStyle }">
                 <div
                   v-if="row.type === 'bar' && barRectOf(row)"
                   class="gantt-bar"
@@ -164,7 +177,14 @@
           <el-col :span="8"><div class="stat-card"><div class="stat-label">警告</div><div class="stat-value warning-text">{{ alerts.by_severity?.warning || 0 }}</div></div></el-col>
           <el-col :span="8"><div class="stat-card"><div class="stat-label">信息</div><div class="stat-value info-text">{{ alerts.by_severity?.info || 0 }}</div></div></el-col>
         </el-row>
-        <el-table :data="alerts.alerts || []" stripe size="small" empty-text="暂无告警">
+        <el-table
+          :data="alerts.alerts || []"
+          stripe
+          size="small"
+          empty-text="暂无告警"
+          :row-class-name="alertRowClass"
+          @row-click="onAlertClick"
+        >
           <el-table-column label="级别" width="80">
             <template #default="{ row }">
               <el-tag :type="row.severity === 'danger' ? 'danger' : row.severity === 'warning' ? 'warning' : 'info'" size="small">
@@ -176,6 +196,13 @@
             <template #default="{ row }">{{ row.type_label || row.type }}</template>
           </el-table-column>
           <el-table-column prop="message" label="内容" min-width="300" />
+          <el-table-column label="操作" width="90" align="center">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click.stop="onAlertClick(row)">
+                {{ alertTargetLabel(row) }}
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </el-card>
     </div>
@@ -245,11 +272,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import type { CSSProperties } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
-import { barRect, buildTimeline, formatSpanLabel, parseDateLoose } from '../domain/singleGantt'
+import {
+  ZOOM_LEVELS,
+  barRect,
+  buildTimeline,
+  dayWidthOf,
+  formatSpanLabel,
+  parseDateLoose,
+  type ZoomLevel,
+} from '../domain/singleGantt'
+
+const router = useRouter()
 
 const instances = ref<any[]>([])
 const selectedInstance = ref<any>(undefined)
@@ -267,9 +305,51 @@ const lastBatch = ref<{ id: number; batch_no: string; written: number } | null>(
 
 const rowHeight = 28
 const groupRowHeight = 30
-const dayWidth = 8
 
-const timeline = computed(() => buildTimeline(gantt.value.project_start, gantt.value.project_end, dayWidth, 30))
+// 缩放档位（2026-11-05）：日 24px / 周 8px / 月 4px
+const zoom = ref<ZoomLevel>('week')
+const dayWidth = computed(() => dayWidthOf(zoom.value))
+const setZoom = (level: ZoomLevel) => {
+  zoom.value = level
+}
+
+const timeline = computed(() => buildTimeline(gantt.value.project_start, gantt.value.project_end, dayWidth.value, 30))
+
+// 网格：日视图画每天线，周/月视图画每 7 天线
+const timelineGridStyle = computed<CSSProperties>(() => {
+  const step = dayWidth.value >= 16 ? dayWidth.value : dayWidth.value * 7
+  return {
+    backgroundImage: `repeating-linear-gradient(90deg, transparent 0, transparent ${step - 1}px, var(--el-border-color-extra-light) ${step - 1}px, var(--el-border-color-extra-light) ${step}px)`,
+  }
+})
+
+// 告警点击定位
+const focusedNodeId = ref<number | null>(null)
+const alertRowClass = ({ row }: { row: any }) => 'alert-row-clickable'
+const alertTargetLabel = (alert: any) => {
+  if (alert?.ref?.node_id) return '定位工序'
+  if (alert?.ref?.work_order_id) return '看工单'
+  if (alert?.ref?.milestone_id) return '看项目'
+  return '—'
+}
+const onAlertClick = async (alert: any) => {
+  const ref = alert?.ref || {}
+  if (ref.node_id) {
+    focusedNodeId.value = Number(ref.node_id)
+    await nextTick()
+    const row = document.querySelector(`[data-node-id="${ref.node_id}"]`) as HTMLElement | null
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    window.setTimeout(() => { focusedNodeId.value = null }, 3000)
+    return
+  }
+  if (ref.work_order_id) {
+    router.push({ path: '/work-orders', query: { instance_id: String(selectedInstance.value) } })
+    return
+  }
+  if (ref.milestone_id) {
+    router.push(`/instances/${selectedInstance.value}`)
+  }
+}
 
 const displayRows = computed(() => {
   const bars = gantt.value.bars || []
@@ -287,7 +367,7 @@ const displayRows = computed(() => {
   return rows
 })
 
-const barRectOf = (bar: any) => barRect(bar, gantt.value.project_start, dayWidth)
+const barRectOf = (bar: any) => barRect(bar, gantt.value.project_start, dayWidth.value)
 
 const barStyle = (bar: any): CSSProperties => {
   const rect = barRectOf(bar)
@@ -613,14 +693,24 @@ onMounted(loadAll)
 
 .gantt-timeline {
   position: relative;
-  /* 每 7 天一条淡线（周刻度） */
-  background-image: repeating-linear-gradient(
-    90deg,
-    transparent 0,
-    transparent calc(7 * 8px - 1px),
-    var(--el-border-color-extra-light) calc(7 * 8px - 1px),
-    var(--el-border-color-extra-light) calc(7 * 8px)
-  );
+  background-repeat: repeat-x;
+}
+
+/* 告警点击定位后的高亮行 */
+.gantt-row.row-focused {
+  background: var(--el-color-warning-light-9);
+  outline: 1px solid var(--el-color-warning);
+  outline-offset: -1px;
+}
+
+:deep(.alert-row-clickable) {
+  cursor: pointer;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .gantt-bar {

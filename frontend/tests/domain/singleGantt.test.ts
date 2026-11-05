@@ -3,7 +3,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  ZOOM_DAY_WIDTH,
+  ZOOM_LEVELS,
   barRect,
+  dayWidthOf,
   buildTimeline,
   formatSpanLabel,
   parseDateLoose,
@@ -80,4 +83,24 @@ test('SG.8 辅助函数：日期解析、跨度文案', () => {
   assert.equal(parseDateLoose(undefined), null)
   assert.equal(formatSpanLabel('2026-07-01 00:00:00', '2026-11-11 08:00:00', 134), '2026-07-01 → 2026-11-11（134 天）')
   assert.equal(formatSpanLabel(null, null), '—')
+})
+
+
+test('SG.9 缩放档位：日/周/月三档宽度与时间轴等比缩放', () => {
+  assert.deepEqual({ ...ZOOM_DAY_WIDTH }, { day: 24, week: 8, month: 4 })
+  assert.equal(ZOOM_LEVELS.length, 3)
+  assert.deepEqual(ZOOM_LEVELS.map((z) => z.value), ['day', 'week', 'month'])
+  assert.equal(dayWidthOf('day'), 24)
+  assert.equal(dayWidthOf('week'), 8)
+  assert.equal(dayWidthOf('month'), 4)
+
+  const wide = buildTimeline('2026-07-01', '2026-08-31', ZOOM_DAY_WIDTH.day)
+  const normal = buildTimeline('2026-07-01', '2026-08-31', ZOOM_DAY_WIDTH.week)
+  assert.equal(wide.totalDays, normal.totalDays)
+  assert.equal(wide.totalWidth, normal.totalWidth * 3, '日视图宽度是周视图的 3 倍')
+  assert.equal(wide.months[0].width, 31 * 24)
+  assert.equal(normal.months[0].width, 31 * 8)
+
+  const rect = barRect({ start: '2026-07-05', end: '2026-07-07' }, '2026-07-01', ZOOM_DAY_WIDTH.month)
+  assert.deepEqual(rect, { left: 16, width: 8 })
 })

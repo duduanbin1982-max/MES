@@ -3,6 +3,21 @@
 // 关键修正：月份列宽必须按"该月真实天数"算，而不是固定 30 天——否则条形会落在错误月份下。
 // （原实现：monthWidth = 30 * 8px，条形 left = 真实天数 * 8px → 到 11 月错位 24px）
 
+/** 缩放档位：每天占多少像素（日/周/月） */
+export const ZOOM_DAY_WIDTH = { day: 24, week: 8, month: 4 } as const
+
+export type ZoomLevel = keyof typeof ZOOM_DAY_WIDTH
+
+export const ZOOM_LEVELS: Array<{ value: ZoomLevel; label: string; hint: string }> = [
+  { value: 'day', label: '日', hint: '每天 24px，适合看近期细排' },
+  { value: 'week', label: '周', hint: '每天 8px，适合看整月排程（默认）' },
+  { value: 'month', label: '月', hint: '每天 4px，适合看整季/全年' },
+]
+
+export function dayWidthOf(level: ZoomLevel): number {
+  return ZOOM_DAY_WIDTH[level] || ZOOM_DAY_WIDTH.week
+}
+
 export interface TimelineMonth {
   key: string
   label: string
