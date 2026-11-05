@@ -21,11 +21,16 @@ function analyzeNode(db, node) {
   const results = [];
   
   for (const param of PARAM_COLS) {
+    // 2026-11-05: analyze chronologically (was DESC, reversing trend rules)
     const rows = db.prepare(
-      `SELECT ${param} AS value FROM process_params WHERE process_node_id = ? AND ${param} IS NOT NULL ORDER BY recorded_at DESC LIMIT 200`
+      `SELECT value FROM (
+         SELECT ${param} AS value, recorded_at FROM process_params
+         WHERE process_node_id = ? AND ${param} IS NOT NULL
+         ORDER BY recorded_at DESC LIMIT 200
+       ) ORDER BY recorded_at ASC`
     ).all(node.id);
     
-    const values = rows.map(r => r.value);
+    const values = rows.map((row) => Number(row.value)).filter((value) => Number.isFinite(value));
     if (values.length < 15) continue;
 
     // Get spec limits

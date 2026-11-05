@@ -3,6 +3,7 @@
 "use strict";
 
 const { ApiError } = require("../app/errors");
+const { todaySqlDate } = require("../shared/datetime");
 const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
 
@@ -18,7 +19,8 @@ function register(app, db) {
 
     // 维保计划概览
     const plans = all(`SELECT * FROM maintenance_plans ${instFilter} ORDER BY next_due_date ASC`, params);
-    const overduePlans = plans.filter(p => p.next_due_date && p.next_due_date < new Date().toISOString().slice(0,10) && p.status !== "completed");
+    const today = todaySqlDate();
+    const overduePlans = plans.filter(p => p.next_due_date && p.next_due_date < today && !["completed", "cancelled"].includes(p.status));
     const dueSoonPlans = plans.filter(p => {
       if (!p.next_due_date || p.status === "completed") return false;
       const due = new Date(p.next_due_date);
@@ -77,16 +79,37 @@ function register(app, db) {
     });
   }));
 
-  // 快速完成维保
+  // 2026-11-05 rework: plan stays active (next_due by frequency); supports spare consumption
   app.post("/api/maintenance/plans/:id/complete", wrap((req, res) => {
     const plan = get("SELECT * FROM maintenance_plans WHERE id = ?", [req.params.id]);
     if (!plan) throw ApiError.notFound("维保计划不存在");
     const body = req.body || {};
-    run(`UPDATE maintenance_plans SET status = 'completed', last_done_date = date('now'), next_due_date = date('now', '+' || frequency_days || ' days'), updated_at = datetime('now') WHERE id = ?`, [req.params.id]);
-    run(`INSERT INTO maintenance_logs (plan_id, equipment_instance_id, performed_by, hours_spent, findings, actions_taken, status) VALUES (?, ?, ?, ?, ?, ?, 'completed')`, [
-      plan.id, plan.equipment_instance_id, body.performed_by || 1, body.hours_spent || 1, body.findings || null, body.actions_taken || "维保完成"
-    ]);
-    res.json({ ok: true, completed: true });
+    const spares = Array.isArray(body.spares) ? body.spares : [];
+    const frequencyDays = Math.max(1, Number(plan.frequency_days) || 30);
+    const tx = db.transaction(() => {
+      const logResult = run(`INSERT INTO maintenance_logs (plan_id, equipment_instance_id, performed_by, hours_spent, findings, actions_taken, parts_replaced, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')`, [
+        plan.id, plan.equipment_instance_id, body.performed_by || 1, body.hours_spent || 1,
+        body.findings || null, body.actions_taken || "维保完成",
+        spares.length ? spares.map((row) => "#" + row.spare_part_id + "x" + row.quantity).join(", ") : null,
+      ]);
+      const consumed = [];
+      for (const row of spares) {
+        const spare = get("SELECT * FROM spare_parts WHERE id = ?", [row.spare_part_id]);
+        if (!spare) throw ApiError.notFound("备件不存在: " + row.spare_part_id);
+        const quantity = Number(row.quantity);
+        if (!(quantity > 0)) throw ApiError.validation("备件数量必须 > 0: " + row.spare_part_id);
+        if (Number(spare.quantity) < quantity) {
+          throw ApiError.validation("备件库存不足: " + spare.part_name + " 现有 " + spare.quantity + ", 需要 " + quantity);
+        }
+        run("INSERT INTO maintenance_spare_parts (plan_id, spare_part_id, quantity) VALUES (?, ?, ?)", [plan.id, spare.id, quantity]);
+        run("UPDATE spare_parts SET quantity = quantity - ?, updated_at = datetime('now') WHERE id = ?", [quantity, spare.id]);
+        consumed.push({ spare_part_id: spare.id, part_name: spare.part_name, quantity });
+      }
+      run("UPDATE maintenance_plans SET status = 'active', last_done_date = date('now'), next_due_date = date('now', '+' || ? || ' days'), updated_at = datetime('now') WHERE id = ?", [frequencyDays, plan.id]);
+      return { log_id: logResult.lastInsertRowid, consumed };
+    });
+    const result = tx();
+    res.json({ ok: true, completed: true, plan_status: "active", next_due_days: frequencyDays, log_id: result.log_id, spares_consumed: result.consumed });
   }));
 
   logger.info("[maintenanceDashboard] Registered");

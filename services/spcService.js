@@ -29,20 +29,21 @@ function register(app, db) {
        LIMIT ?`,
       [nodeId, limit || 200]
     );
-    return rows.map((r) => r.value);
+    // 2026-11-05: filter non-numeric values to avoid NaN in control charts
+    return rows.map((r) => Number(r.value)).filter((value) => Number.isFinite(value));
   }
 
   function getSpecLimits(nodeId, param) {
-    const row = get(
-      "SELECT custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY id DESC LIMIT 1",
-      nodeId
+    // 2026-11-05: look back across rows (latest custom_json may not contain this param)
+    const rows = all(
+      "SELECT custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY recorded_at DESC, id DESC LIMIT 50",
+      [nodeId]
     );
-    if (!row) return { usl: null, lsl: null };
-    try {
-      const j = JSON.parse(row.custom_json);
-      if (j.spc && j.spc[param]) return j.spc[param];
-    } catch (_error) {
-      return { usl: null, lsl: null };
+    for (const row of rows) {
+      try {
+        const parsed = JSON.parse(row.custom_json);
+        if (parsed && parsed.spc && parsed.spc[param]) return parsed.spc[param];
+      } catch (_error) { /* skip bad json */ }
     }
     return { usl: null, lsl: null };
   }

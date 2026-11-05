@@ -139,24 +139,36 @@ function register(app, db) {
 
   // ========== OVERDUE ==========
   app.get("/api/field-service/overdue", wrap(function(req, res) {
-    const plans = all("SELECT mp.*, ei.instance_code FROM maintenance_plans mp LEFT JOIN equipment_instances ei ON mp.equipment_instance_id = ei.id WHERE mp.status = 'active' AND mp.next_due_date IS NOT NULL AND mp.next_due_date < datetime('now') ORDER BY mp.next_due_date ASC");
+    const plans = all(`SELECT mp.*, ei.instance_code FROM maintenance_plans mp
+                       LEFT JOIN equipment_instances ei ON mp.equipment_instance_id = ei.id
+                       WHERE mp.status IN ('active','pending') AND mp.next_due_date IS NOT NULL
+                         AND date(mp.next_due_date) < date('now','localtime')
+                       ORDER BY mp.next_due_date ASC`);
     res.json(plans);
   }));
 
   // ========== MAINTENANCE DASHBOARD ==========
   app.get("/api/field-service/dashboard", wrap(function(req, res) {
     const totalPlans = (get("SELECT COUNT(*) c FROM maintenance_plans WHERE status != 'cancelled'") || {c:0}).c;
-    const overduePlans = (get("SELECT COUNT(*) c FROM maintenance_plans WHERE status = 'active' AND next_due_date IS NOT NULL AND next_due_date < datetime('now')") || {c:0}).c;
-    const upcomingPlans = (get("SELECT COUNT(*) c FROM maintenance_plans WHERE status = 'active' AND next_due_date BETWEEN datetime('now') AND datetime('now','+7 days')") || {c:0}).c;
+    const overduePlans = (get("SELECT COUNT(*) c FROM maintenance_plans WHERE status IN ('active','pending') AND next_due_date IS NOT NULL AND date(next_due_date) < date('now','localtime')") || {c:0}).c;
+    const upcomingPlans = (get("SELECT COUNT(*) c FROM maintenance_plans WHERE status IN ('active','pending') AND next_due_date BETWEEN date('now','localtime') AND date('now','localtime','+7 days')") || {c:0}).c;
     const totalBreakdowns = (get("SELECT COUNT(*) c FROM breakdown_reports") || {c:0}).c;
     const openBreakdowns = (get("SELECT COUNT(*) c FROM breakdown_reports WHERE status NOT IN ('resolved','closed')") || {c:0}).c;
     const lowStockParts = (get("SELECT COUNT(*) c FROM spare_parts WHERE quantity < min_stock") || {c:0}).c;
     const logs30d = (get("SELECT COUNT(*) c FROM maintenance_logs WHERE performed_at >= datetime('now','-30 days')") || {c:0}).c;
-    const mtbf = (get("SELECT ROUND(AVG(downtime_hours),1) AS mtbf FROM breakdown_reports WHERE downtime_hours IS NOT NULL AND reported_at >= datetime('now','-90 days')") || {mtbf:0}).mtbf;
+    // 2026-11-05: old mtbf was actually MTTR
+    const repairStats = get(`SELECT COUNT(*) AS failures, COALESCE(SUM(downtime_hours),0) AS downtime
+                             FROM breakdown_reports
+                             WHERE downtime_hours IS NOT NULL AND reported_at >= datetime('now','-90 days')`) || { failures: 0, downtime: 0 };
+    const failures = Number(repairStats.failures) || 0;
+    const totalDowntime = Number(repairStats.downtime) || 0;
+    const mttrHours = failures > 0 ? Math.round((totalDowntime / failures) * 10) / 10 : 0;
+    const mtbfHours = failures > 0 ? Math.round(((90 * 24 - totalDowntime) / failures) * 10) / 10 : null;
     res.json({
       total_plans: totalPlans, overdue_plans: overduePlans, upcoming_7d: upcomingPlans,
       total_breakdowns: totalBreakdowns, open_breakdowns: openBreakdowns,
-      low_stock_parts: lowStockParts, logs_30d: logs30d, mtbf_hours: mtbf,
+      low_stock_parts: lowStockParts, logs_30d: logs30d,
+      mtbf_hours: mtbfHours, mttr_hours: mttrHours, breakdown_failures: failures,
     });
   }));
 
