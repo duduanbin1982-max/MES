@@ -41,6 +41,37 @@
       </el-col>
     </el-row>
 
+    <el-row :gutter="16" class="kpi-row">
+      <el-col :span="6">
+        <el-card class="kpi-card">
+          <div class="stat-label">交付单</div>
+          <div class="stat-value">{{ summary.deliveries?.total || 0 }}</div>
+          <div class="stat-sub">已交付 {{ summary.deliveries?.accepted || 0 }} · 在途 {{ summary.deliveries?.in_flight || 0 }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="kpi-card">
+          <div class="stat-label">验收</div>
+          <div class="stat-value">{{ summary.acceptances?.passed || 0 }} / {{ summary.acceptances?.total || 0 }}</div>
+          <div class="stat-sub">让步 {{ summary.acceptances?.conditional || 0 }} · 拒收 {{ summary.acceptances?.rejected || 0 }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="kpi-card">
+          <div class="stat-label">已回款</div>
+          <div class="stat-value success">¥{{ (summary.payments?.total_amount || 0).toLocaleString() }}</div>
+          <div class="stat-sub">合同额 ¥{{ (summary.payments?.contract_amount || 0).toLocaleString() }}</div>
+        </el-card>
+      </el-col>
+      <el-col :span="6">
+        <el-card class="kpi-card">
+          <div class="stat-label">回款率</div>
+          <div class="stat-value">{{ summary.payments?.payment_rate_pct || 0 }}%</div>
+          <div class="stat-sub">已回款 / 合同额</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-alert
       v-if="loadError"
       class="load-alert"

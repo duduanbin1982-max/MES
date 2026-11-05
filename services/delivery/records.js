@@ -15,6 +15,7 @@
 
 const { wrap } = require("../../middleware/asyncHandler");
 const { ApiError } = require("../../app/errors");
+const { todaySqlDate } = require("../../shared/datetime");
 
 const DELIVERY_STATUSES = ["planned", "shipped", "in_transit", "arrived", "accepted", "cancelled"];
 const DELIVERY_TRANSITIONS = {
@@ -179,7 +180,8 @@ function registerDeliveryRecordRoutes(app, db) {
     if (!DELIVERY_STATUSES.includes(next)) throw ApiError.validation(`status 必须是 ${DELIVERY_STATUSES.join("/")}`);
     const allowed = DELIVERY_TRANSITIONS[existing.status] || [];
     if (!allowed.includes(next)) throw ApiError.validation(`不合法的状态流转：${existing.status} → ${next}（允许：${allowed.join("/") || "无"}）`);
-    const actualDate = next === "shipped" || next === "arrived" ? (req.body.actual_date || new Date().toISOString().slice(0, 10)) : existing.actual_date;
+    // 2026-11-05（交付链路深挖）：用本地日期，避免 toISOString 的 UTC 偏移导致跨天
+    const actualDate = next === "shipped" || next === "arrived" ? (req.body.actual_date || todaySqlDate()) : existing.actual_date;
     run("UPDATE delivery_orders SET status = ?, actual_date = COALESCE(?, actual_date), updated_at = datetime('now') WHERE id = ?", [next, actualDate, req.params.id]);
     res.json({ ok: true, id: existing.id, from: existing.status, to: next, item: get("SELECT * FROM delivery_orders WHERE id = ?", [req.params.id]) });
   }));
@@ -254,7 +256,7 @@ function registerDeliveryRecordRoutes(app, db) {
     if (result === "conditional" && !String(body.condition_note || "").trim()) {
       throw ApiError.validation("让步接收必须填写 condition_note");
     }
-    const signedAt = body.signed_at || new Date().toISOString().slice(0, 19).replace("T", " ");
+    const signedAt = body.signed_at || `${todaySqlDate()} ${new Date().toTimeString().slice(0, 8)}`;
     const actualDate = body.actual_date || signedAt.slice(0, 10);
     run(
       `UPDATE acceptance_records
@@ -265,7 +267,25 @@ function registerDeliveryRecordRoutes(app, db) {
       [result, signerName, body.signer_title ?? null, signedAt, actualDate,
         body.condition_note ?? null, body.report_document_id ?? null, req.params.id]
     );
-    res.json({ ok: true, id: existing.id, result, item: get("SELECT * FROM acceptance_records WHERE id = ?", [req.params.id]) });
+
+    // 2026-11-05（交付链路深挖）：验收结论联动交付单与合同里程碑，避免"验收通过但交付单还停在 arrived"。
+    const warnings = [];
+    if (["passed", "conditional"].includes(result)) {
+      if (existing.delivery_order_id) {
+        const delivery = get("SELECT * FROM delivery_orders WHERE id = ?", [existing.delivery_order_id]);
+        if (!delivery) {
+          warnings.push("关联交付单不存在: " + existing.delivery_order_id);
+        } else if (delivery.status === "arrived") {
+          run("UPDATE delivery_orders SET status = 'accepted', actual_date = COALESCE(actual_date, ?), updated_at = datetime('now') WHERE id = ?", [actualDate, delivery.id]);
+        } else if (delivery.status !== "accepted") {
+          warnings.push(`交付单当前状态为 ${delivery.status}（需先到 arrived 才能自动置 accepted）`);
+        }
+      }
+      if (existing.milestone_id) {
+        run("UPDATE contract_milestones SET status = 'completed', actual_date = COALESCE(actual_date, ?), updated_at = datetime('now') WHERE id = ? AND status <> 'completed'", [actualDate, existing.milestone_id]);
+      }
+    }
+    res.json({ ok: true, id: existing.id, result, warnings, item: get("SELECT * FROM acceptance_records WHERE id = ?", [req.params.id]) });
   }));
 }
 

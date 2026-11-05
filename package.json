@@ -30,6 +30,7 @@
   "acceptance:health": "node scripts/acceptance-e2e.js --health",
   "acceptance:purchase": "node scripts/acceptance-purchase-chain.js",
   "acceptance:material": "node scripts/acceptance-material-chain.js",
+  "acceptance:delivery": "node scripts/acceptance-delivery-chain.js",
   "predeploy": "bash scripts/pre-deploy-test.sh",
     "schema:check": "node scripts/check-service-schema-versions.js",
     "schema:write": "node scripts/check-service-schema-versions.js --write",

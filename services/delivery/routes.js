@@ -63,6 +63,13 @@ function registerDeliveryRoutes(app, ctx) {
     const criticalProjects = projects.filter((p) => p.risk_level === "critical").length;
     const blockedProjects = projects.filter((p) => p.workflow_status === "blocked").length;
     const workflowBlockers = projects.reduce((sum, p) => sum + Number(p.workflow_blocker_count || 0), 0);
+    // 2026-11-05（交付链路深挖）：看板补交付/验收/回款维度
+    const deliveryStats = safeGet("SELECT COUNT(*) AS total, SUM(CASE WHEN status='accepted' THEN 1 ELSE 0 END) AS accepted, SUM(CASE WHEN status IN ('shipped','in_transit') THEN 1 ELSE 0 END) AS in_flight FROM delivery_orders") || {};
+    const acceptanceStats = safeGet("SELECT COUNT(*) AS total, SUM(CASE WHEN result='passed' THEN 1 ELSE 0 END) AS passed, SUM(CASE WHEN result='conditional' THEN 1 ELSE 0 END) AS conditional, SUM(CASE WHEN result='rejected' THEN 1 ELSE 0 END) AS rejected FROM acceptance_records") || {};
+    const paymentStats = safeGet("SELECT COALESCE(SUM(amount),0) AS total FROM project_payments") || {};
+    const contractStats = safeGet("SELECT COALESCE(SUM(contract_amount),0) AS total FROM equipment_instances") || {};
+    const paidAmount = Number(paymentStats.total || 0);
+    const contractAmount = Number(contractStats.total || 0);
     res.json({
       summary: {
         total_projects: projects.length,
@@ -72,6 +79,22 @@ function registerDeliveryRoutes(app, ctx) {
         blocked_projects: blockedProjects,
         workflow_blockers: workflowBlockers,
         open_exceptions: exceptions.length,
+        deliveries: {
+          total: Number(deliveryStats.total || 0),
+          accepted: Number(deliveryStats.accepted || 0),
+          in_flight: Number(deliveryStats.in_flight || 0),
+        },
+        acceptances: {
+          total: Number(acceptanceStats.total || 0),
+          passed: Number(acceptanceStats.passed || 0),
+          conditional: Number(acceptanceStats.conditional || 0),
+          rejected: Number(acceptanceStats.rejected || 0),
+        },
+        payments: {
+          total_amount: paidAmount,
+          contract_amount: contractAmount,
+          payment_rate_pct: contractAmount > 0 ? Math.round((paidAmount / contractAmount) * 100) : 0,
+        },
       },
       exception_summary: exceptionSummary(exceptions),
       workflow: {
