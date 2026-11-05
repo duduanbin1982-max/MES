@@ -42,9 +42,21 @@ function recordDocumentEvent(db, event) {
   }
 }
 
+// 去掉尾部版本后缀：ZZ-001-A0 / ZZ-001_A1 → ZZ-001
+function documentFamilyBase(code) {
+  if (!code) return "";
+  return String(code).replace(/[-_ ]?[A-Za-z]{1,3}\d{1,4}$/, "").trim();
+}
+
 function documentFamilyIds(db, current) {
   if (!current) return [];
   if (current.doc_code) {
+    const base = documentFamilyBase(current.doc_code);
+    if (base && base !== String(current.doc_code)) {
+      return db.prepare("SELECT id FROM documents WHERE doc_code = ? OR doc_code LIKE ? OR doc_code LIKE ? ORDER BY id")
+        .all(base, base + "-%", base + "_%")
+        .map((row) => row.id);
+    }
     return db.prepare("SELECT id FROM documents WHERE doc_code = ? ORDER BY id").all(current.doc_code).map((row) => row.id);
   }
   if (current.file_hash) {
@@ -65,4 +77,4 @@ function documentEvents(db, documentIds) {
   `).all(...documentIds);
 }
 
-module.exports = { ensureDocumentHistorySchema, recordDocumentEvent, documentFamilyIds, documentEvents };
+module.exports = { ensureDocumentHistorySchema, recordDocumentEvent, documentFamilyBase, documentFamilyIds, documentEvents };

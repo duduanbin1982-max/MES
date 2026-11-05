@@ -78,10 +78,11 @@ function registerUploadRoute(app, db) {
         file_size: buffer.length,
         mime_type: mimeType,
         file_hash: fileHash,
-        status: meta.status || "draft",
-        issued_to: meta.issued_to || null,
-        issued_at: meta.status === "issued" ? new Date().toISOString() : null,
-        issued_by: meta.issued_by || userId,
+        // 2026-11-05（文档链路深挖）：上传只能是 draft，签发必须走 PUT /:id/issue
+        status: "draft",
+        issued_to: null,
+        issued_at: null,
+        issued_by: null,
         description: meta.description || null,
         tags: meta.tags ? JSON.stringify(meta.tags) : null,
         uploaded_by: userId,
@@ -109,6 +110,7 @@ function registerLifecycleRoutes(app, db) {
       if (!issued_to || !ISSUE_TARGETS.includes(issued_to)) return next(ApiError.validation(`issued_to 必须是: ${ISSUE_TARGETS.join("/")}`));
       const current = db.prepare("SELECT id, status, file_path, file_name, version FROM documents WHERE id = ?").get(req.params.id);
       if (!current) return next(ApiError.notFound("文档不存在"));
+      if (current.status === "issued") return next(ApiError.validation("文档已签发，不能重复签发"));
       if (["revoked", "archived"].includes(current.status)) return next(ApiError.unprocessable("已收回/归档的文档不能签发"));
       if (!hasStoredFile(current.file_path)) return next(ApiError.unprocessable(`文件不存在，不能签发: ${current.file_name || req.params.id}`));
       db.prepare("UPDATE documents SET status='issued', issued_to=?, issued_at=datetime('now'), issued_by=?, updated_at=datetime('now') WHERE id=?")
@@ -126,6 +128,10 @@ function registerLifecycleRoutes(app, db) {
       const reason = req.body?.reason || "未指定原因";
       const current = db.prepare("SELECT id, status, version, issued_to FROM documents WHERE id = ?").get(req.params.id);
       if (!current) return next(ApiError.notFound("文档不存在"));
+      // 2026-11-05（文档链路深挖）：收回只能针对已签发文档，草稿/已归档不可收回
+      if (current.status !== "issued") {
+        return next(ApiError.validation("只能收回已签发的文档（当前状态: " + current.status + "）"));
+      }
       db.prepare("UPDATE documents SET status='revoked', revoke_reason=?, revoked_at=datetime('now'), updated_at=datetime('now') WHERE id=?")
         .run(reason, req.params.id);
       recordDocumentEvent(db, {

@@ -79,11 +79,15 @@ function registerDetailRoutes(app, db) {
   app.get("/api/documents/:id/versions", (req, res) => {
     const current = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
     if (!current) return res.json({ items: [], current: null });
+    // 2026-11-05（文档链路深挖）：doc_code 常带版本后缀（ZZ-001-A0/A1），按 family 聚合版本
+    const familyIds = documentFamilyIds(db, current);
     let items = [];
-    if (current.doc_code) {
-      items = db.prepare("SELECT id, version, file_name, file_size, file_hash, status, issued_to, issued_at, COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by FROM documents WHERE doc_code = ? ORDER BY COALESCE(uploaded_at, uploaded_at) DESC").all(current.doc_code);
-    } else if (current.file_hash) {
-      items = db.prepare("SELECT id, version, file_name, file_size, file_hash, status, issued_to, issued_at, COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by FROM documents WHERE file_hash = ? ORDER BY COALESCE(uploaded_at, uploaded_at) DESC").all(current.file_hash);
+    if (familyIds.length) {
+      const placeholders = familyIds.map(() => "?").join(",");
+      items = db.prepare(`SELECT id, version, file_name, file_size, file_hash, status, issued_to, issued_at,
+                                 COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by
+                          FROM documents WHERE id IN (${placeholders})
+                          ORDER BY version DESC, COALESCE(uploaded_at, uploaded_at) DESC`).all(...familyIds);
     }
     items.forEach((row) => { row.human_size = humanSize(row.file_size); });
     res.json({ items, current: req.params.id, events: documentEvents(db, documentFamilyIds(db, current)) });

@@ -1,18 +1,29 @@
 "use strict";
 
+const { ApiError } = require("../../app/errors");
 const { recordDocumentEvent } = require("./history");
+
+function currentUserId(req) {
+  return (req.user && (req.user.uid || req.user.id)) || null;
+}
 
 function registerAcknowledgementRoutes(app, db) {
   app.get("/api/documents/pending-ack", (req, res) => {
-    const userId = req.user ? req.user.id : 1;
+    const userId = currentUserId(req);
+    if (!userId) return res.json({ pending: [], count: 0 });
     const documents = db.prepare("SELECT d.*, ei.instance_code FROM documents d LEFT JOIN equipment_instances ei ON d.equipment_instance_id = ei.id WHERE d.status = 'issued' AND d.id NOT IN (SELECT doc_id FROM doc_acknowledgements WHERE ack_by = ?) ORDER BY d.issued_at DESC LIMIT 50").all(userId);
     res.json({ pending: documents, count: documents.length });
   });
 
-  app.post("/api/documents/:id/acknowledge", (req, res) => {
-    const document = db.prepare("SELECT id FROM documents WHERE id = ?").get(req.params.id);
+  app.post("/api/documents/:id/acknowledge", (req, res, next) => {
+    const document = db.prepare("SELECT id, status FROM documents WHERE id = ?").get(req.params.id);
     if (!document) return res.status(404).json({ error: "not found" });
-    const userId = req.user ? req.user.id : 1;
+    // 2026-11-05（文档链路深挖）：只有已签发文档可签收；草稿/已收回/已归档不能签收
+    if (document.status !== "issued") {
+      return next(ApiError.validation("只能签收已签发的文档（当前状态: " + document.status + "）"));
+    }
+    const userId = currentUserId(req);
+    if (!userId) return next(ApiError.unauthorized("未登录，不能签收"));
     if (db.prepare("SELECT id FROM doc_acknowledgements WHERE doc_id = ? AND ack_by = ?").get(req.params.id, userId)) {
       return res.json({ ok: true, already: true });
     }
