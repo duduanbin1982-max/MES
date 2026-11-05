@@ -14,6 +14,7 @@
 
 const { wrap } = require("../../middleware/asyncHandler");
 const { ApiError } = require("../../app/errors");
+const { formatSqlDate } = require("../../shared/datetime");
 
 const MAX_SHIFT_DAYS = 365;
 const SHIFTABLE_STATUSES = ["pending", "ready", "blocked"];
@@ -61,7 +62,7 @@ function shiftDateTime(value, days) {
   if (!parsed) return value;
   const base = new Date(`${parsed.date}T00:00:00Z`);
   base.setUTCDate(base.getUTCDate() + days);
-  const nextDate = base.toISOString().slice(0, 10);
+  const nextDate = formatSqlDate(base);
   return parsed.time ? `${nextDate} ${parsed.time}` : nextDate;
 }
 
@@ -161,7 +162,7 @@ function summarize(items) {
 }
 
 function nextBatchNo(db) {
-  const day = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const day = formatSqlDate().replace(/-/g, "");
   const row = db.prepare("SELECT COUNT(*) AS c FROM process_reschedule_batches WHERE batch_no LIKE ?").get(`RS-${day}-%`);
   return `RS-${day}-${String(Number(row.c) + 1).padStart(3, "0")}`;
 }

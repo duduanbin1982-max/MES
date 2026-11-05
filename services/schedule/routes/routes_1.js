@@ -108,6 +108,14 @@ const { all, get, run } = ctx;
       if (!workstation) throw ApiError.notFound("Workstation not found or inactive");
     }
 
+    // 2026-11-05（审计 F-06）：派工前做资质校验（技能 / 证书 / 文档签收），与工艺树派工同一套规则。
+    // force=true 时只告警不阻断（应急派工），并把校验结果写进响应。
+    const { validateAssignment } = require("../../../shared/assignmentValidation");
+    const validation = validateAssignment(db, { process_node_id: nodeId, user_id: userId });
+    if (!validation.ok && body.force !== true) {
+      throw ApiError.validation("人员资质不满足该工序要求（可勾选强制派工）", validation);
+    }
+
     const plannedStart = normalizeDate(body.planned_start);
     const plannedEnd = normalizeDate(body.planned_end);
     const nextStatus = node.status || "pending";
@@ -146,6 +154,6 @@ const { all, get, run } = ctx;
       assignmentId = result.lastInsertRowid;
     }
 
-    res.json({ ok: true, process_node_id: nodeId, user_id: userId, assignment_id: assignmentId, status: nextStatus });
+    res.json({ ok: true, process_node_id: nodeId, user_id: userId, validation, assignment_id: assignmentId, status: nextStatus });
   }));
 };

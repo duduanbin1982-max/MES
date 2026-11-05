@@ -192,7 +192,9 @@ export function useSchedulePage() {
         assigned_id: row.assigned_id || row.assigned_to || null,
         planned_start: row.planned_start || '',
         planned_end: row.planned_end || '',
-        workstation_id: row.workstation_id || row.required_workstation_id || null
+        workstation_id: row.workstation_id || row.required_workstation_id || null,
+        // 2026-11-05（审计 F-06）：无资质时允许应急强制派工（勾选后重试）
+        force: false,
       }
       const [workerResult, workstationResult] = await Promise.all([
         api.get('/resources/workers', { params: { available: 1 } }),
@@ -216,17 +218,29 @@ export function useSchedulePage() {
         ElMessage.warning('请选择负责人')
         return
       }
-      await api.put('/schedule/process-nodes/' + assignRow.value.id + '/assign', {
+      const result: any = await api.put('/schedule/process-nodes/' + assignRow.value.id + '/assign', {
         user_id: assignForm.value.assigned_id,
         planned_start: assignForm.value.planned_start || null,
         planned_end: assignForm.value.planned_end || null,
-        workstation_id: assignForm.value.workstation_id || null
+        workstation_id: assignForm.value.workstation_id || null,
+        force: Boolean((assignForm.value as any).force),
       })
-      ElMessage.success('分配成功')
+      const missing = result?.validation?.missing
+      if (missing?.length) {
+        ElMessage.warning('已强制派工，但该人员仍缺：' + missing.slice(0, 2).join('；'))
+      } else {
+        ElMessage.success('分配成功')
+      }
       assignDialogVisible.value = false
       await loadWeekly()
     } catch (error: any) {
-      ElMessage.error('提交分配失败: ' + (error?.message || error))
+      const details = error?.response?.data?.details
+      const missing = details?.missing
+      if (missing?.length) {
+        ElMessage.error('人员资质不满足：' + missing.slice(0, 3).join('；') + '（可勾选「强制派工」）')
+      } else {
+        ElMessage.error('提交分配失败: ' + (error?.response?.data?.message || error?.message || error))
+      }
     } finally {
       loading.value = false
     }

@@ -8,7 +8,7 @@
 ## 0. 结论摘要
 
 **总体评级：C+（页面信息量大，但"本周"窗口算错、KPI 口径失真、三条改期路径保障不一致）**  
-**整改后：A-（3 个 P1 + 2 个 P2 已修，边界文档补齐）**
+**整改后：A（3 个 P1 + 2 个 P2 + 4 项 P2/P3 已全部修完，含生产里程碑数据治理）**
 
 | 维度 | 评价 | 说明 |
 |---|---|---|
@@ -146,12 +146,27 @@ summary: total=87, completed=0, in_progress=4, pending=83
 | F-05 | 里程碑：前端二次确认；后端状态转移 `pending→active→completed`（禁止跳级/回退），`active` 自动补本地 actual_start、`completed` 自动补本地 actual_end | 单测 MS.1~MS.5 |
 | F-07 | 两页互加跳转入口（`/schedule` 甘特 tab → 单项目甘特；`/gantt` → 多项目排程）；新增边界文档 `docs/schedule-vs-gantt.md` | 构建产物包含入口；文档入库 |
 
-### 5.3 未整改（P2/P3）
 
-- F-06 派工资质校验：`/schedule/process-nodes/:id/assign` 仍只校验用户/工位有效性；`validateAssignment` 在 process 域，跨服务调用受模块边界约束，需先抽公共校验模块。
-- F-08 日期格式统一（历史数据里 `T` 分隔与空格混用）。
-- F-09 里程碑 `planned_end` 数据治理（需业务补计划完成日期）。
-- F-10 周看板行内改期、入口引导。
+
+### 5.4 第二轮整改（同日）：P2/P3 清零
+
+| 项 | 整改内容 | 验证 |
+|---|---|---|
+| **F-06** 派工资质校验 | 新增 `shared/assignmentValidation.js`（技能等级 / 资质证书 / 必需文档签收）；`services/processMaster/assignment.js` 改为复用同一实现；`PUT /schedule/process-nodes/:id/assign` 派工前校验，不满足返回 400 + `missing` 明细，`force=true` 可强制（仍返回校验结果）；前端派工弹窗加「无资质强制派工」勾选并展示缺失项 | 单测 AV.1~AV.6 6/6；生产实测：给需要 `cutting` 的 #135 派无技能人员 → `400 缺少 cutting L1+ 技能`（未写库）；force 路径单测通过 |
+| **F-08** 时间格式统一 | 新增 `shared/datetime.js`：`formatSqlDate / formatSqlDateTime / nowSqlDateTime / normalizeSqlDateTime`；排程状态写入改本地 `'YYYY-MM-DD HH:MM:SS'`（原 `toISOString().slice(0,19)` 带 T 且是 UTC）；`normalizeDate` 兼容 ISO 带 T/Z/毫秒并归一；reschedule 的日期计算改本地日期 | 单测 DT.1~DT.4 4/4（含"状态接口写入不带 T"回归）；生产库当前 0 条 T 格式脏数据，后续写入统一 |
+| **F-09** 里程碑计划数据治理 | 新增 `POST /api/equipment_instances/:id/milestones/backfill`（支持 `?dryRun=1`）：未完成里程碑按阶段权重重新规划、已完成保留原计划（仅缺 end 补 end）；前端里程碑页加「补齐计划日期（N 条）」+ 每行「计划」编辑弹窗 | 单测 MSB.1~MSB.4 4/4；**生产数据已执行**：28/44 条缺计划 → **0/44**；实例 1 的 S1~S10 变为 2026-07-01 ~ 2026-12-29 顺序不重叠 |
+| **F-10** 周看板行内改期 + 入口引导 | 周看板行下拉新增「只改计划时间」→ 弹窗改 `planned_start/end`（走 `PUT /schedule/process-nodes/:id/dates`，自动记 DT 批次、返回依赖告警）；本周无计划且有未排程/超期时，看板顶部出现引导条：「去单项目甘特重算」「批量平移」 | 构建通过；产物含「补齐计划日期」「只改计划时间」 |
+
+**整改后评级：C+ → A**（P1/P2/P3 全部清零；剩余为数据治理习惯与后续增强）。
+
+**仍未做（增强项，非缺陷）**：
+- 历史日期格式统一只在写入侧收口，若发现外部导入的 `T` 格式可再跑一次数据清洗；
+- 派工资质校验已共用，但 `force` 强制派工目前只提示、未落审计日志表（可在后续接入审计）。
+
+### 5.5 未整改（增强项，非缺陷）
+
+- 派工「强制派工」建议后续写审计日志（当前只在响应里返回校验结果）；
+- 若外部系统导入带 `T/Z` 的时间字符串，可再跑一次数据清洗脚本（写入侧已收口）。
 
 ---
 

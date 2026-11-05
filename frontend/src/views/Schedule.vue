@@ -104,6 +104,20 @@
           </div>
         </el-card>
 
+        <el-alert
+          v-if="weekGuidance"
+          class="guidance-alert"
+          :type="weekGuidance.type"
+          :closable="false"
+          show-icon
+        >
+          <template #title>
+            <span>{{ weekGuidance.text }}</span>
+            <el-button link type="primary" size="small" @click="$router.push('/gantt')">去单项目甘特重算 →</el-button>
+            <el-button link type="primary" size="small" @click="openReschedule">批量平移 →</el-button>
+          </template>
+        </el-alert>
+
         <!-- 按项目分组的工序表 -->
         <template v-if="boards.length">
           <el-card v-for="board in boards" :key="board.id" class="equipment-card" shadow="never">
@@ -188,7 +202,8 @@
                         <el-dropdown-item command="paused" :disabled="row.status === 'paused'">暂停</el-dropdown-item>
                         <el-dropdown-item command="blocked" :disabled="row.status === 'blocked'">标记受阻</el-dropdown-item>
                         <el-dropdown-item command="pending" :disabled="row.status === 'pending'">回到待开始</el-dropdown-item>
-                        <el-dropdown-item command="assign" divided>分配 / 改期</el-dropdown-item>
+                        <el-dropdown-item command="assign" divided>分配 / 调整工序</el-dropdown-item>
+                        <el-dropdown-item v-if="row.status !== 'completed'" command="dates">只改计划时间</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
@@ -220,6 +235,14 @@
               </el-select>
             </div>
             <span v-if="milestones.length" class="result-hint">共 {{ milestones.length }} 个里程碑，已完成 {{ milestoneDoneCount }}</span>
+            <el-button
+              v-if="milestonesMissingPlan > 0"
+              size="small"
+              type="primary"
+              plain
+              :loading="milestoneBackfilling"
+              @click="backfillMilestones"
+            >补齐计划日期（{{ milestonesMissingPlan }} 条）</el-button>
           </div>
         </el-card>
 
@@ -248,6 +271,7 @@
             </el-table-column>
             <el-table-column label="操作" width="160" align="center">
               <template #default="{ row }">
+                <el-button size="small" @click="openMilestonePlan(row)">计划</el-button>
                 <el-button v-if="row.status !== 'completed'" size="small" type="success" @click="markComplete(row)">完成</el-button>
                 <el-button v-if="row.status === 'pending'" size="small" type="primary" @click="markActive(row)">开始</el-button>
               </template>
@@ -329,6 +353,43 @@
     </el-tabs>
 
     <!-- ------------------------------------------------------------ 分配 / 改期 -->
+    <el-dialog v-model="milestonePlanVisible" title="调整里程碑计划" width="460px">
+      <el-form v-if="milestonePlanRow" label-width="90px" size="small">
+        <el-form-item label="阶段">
+          <span>{{ milestonePlanRow.phase_code }} {{ milestonePlanRow.phase_name }}</span>
+        </el-form-item>
+        <el-form-item label="计划开始">
+          <el-date-picker v-model="milestonePlanForm.planned_start" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="计划结束">
+          <el-date-picker v-model="milestonePlanForm.planned_end" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="milestonePlanVisible = false">取消</el-button>
+        <el-button type="primary" :loading="milestonePlanSaving" @click="saveMilestonePlan">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="planDialogVisible" title="改期（只改计划时间，不动状态）" width="460px">
+      <el-form v-if="planRow" label-width="90px" size="small">
+        <el-form-item label="工序">
+          <span>#{{ planRow.id }} {{ planRow.operation_name }}</span>
+        </el-form-item>
+        <el-form-item label="计划开始">
+          <el-date-picker v-model="planForm.planned_start" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="计划结束">
+          <el-date-picker v-model="planForm.planned_end" type="datetime" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%" />
+        </el-form-item>
+        <el-alert type="info" :closable="false" show-icon title="改期会记录批次（DT-…），可在「批次记录」撤销；若破坏前后置依赖会提示。" />
+      </el-form>
+      <template #footer>
+        <el-button @click="planDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="planSaving" @click="savePlanDates">保存改期</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="assignDialogVisible" title="分配 / 调整工序" width="520px" @close="assignRow = null">
       <el-form v-if="assignRow" label-width="100px" size="small">
         <el-form-item label="工序">
@@ -339,6 +400,7 @@
           <el-select v-model="assignForm.assigned_id" placeholder="选择工人" style="width: 100%" filterable>
             <el-option v-for="worker in workers" :key="worker.id" :label="worker.full_name || worker.name || worker.username" :value="worker.id" />
           </el-select>
+          <el-checkbox v-model="assignForm.force" class="force-checkbox">无资质强制派工（应急，会记录；技能/证书/文档仍会提示）</el-checkbox>
         </el-form-item>
         <el-form-item label="计划开始">
           <el-date-picker v-model="assignForm.planned_start" type="date" placeholder="计划开始" style="width: 100%" value-format="YYYY-MM-DD" />
@@ -622,6 +684,7 @@ const refreshAll = async () => {
 }
 
 const onRowCommand = async (row: any, command: string) => {
+  if (command === 'dates') { openPlanDialog(row); return }
   if (command === 'assign') {
     await openAssign(row)
     return
@@ -711,6 +774,126 @@ const onGanttMove = async (payload: { node: any; planned_start: string | null; p
 const onGanttSelect = async (node: any) => {
   await openAssign(node)
 }
+
+// ------------------------------------------------------------ 里程碑计划：补齐 / 编辑（F-09）
+const milestoneBackfilling = ref(false)
+const milestonePlanVisible = ref(false)
+const milestonePlanSaving = ref(false)
+const milestonePlanRow = ref<any>(null)
+const milestonePlanForm = ref<{ planned_start: string; planned_end: string }>({ planned_start: '', planned_end: '' })
+const milestonesMissingPlan = computed(() => milestones.value.filter((item: any) => !item.planned_start || !item.planned_end).length)
+
+const backfillMilestones = async () => {
+  if (!selectedInstance.value) return
+  try {
+    await ElMessageBox.confirm(
+      `将为该项目 ${milestonesMissingPlan.value} 个缺少计划日期的里程碑按阶段权重补齐（已完成的里程碑保留原计划）。`,
+      '补齐里程碑计划',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
+  milestoneBackfilling.value = true
+  try {
+    const result: any = await Api.post(`/equipment_instances/${selectedInstance.value}/milestones/backfill`)
+    ElMessage.success(`已补齐 ${result.updated || 0} 个里程碑的计划日期`)
+    await loadSchedule()
+  } catch (error: any) {
+    ElMessage.error('补齐失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    milestoneBackfilling.value = false
+  }
+}
+
+const openMilestonePlan = (row: any) => {
+  milestonePlanRow.value = row
+  milestonePlanForm.value = {
+    planned_start: String(row.planned_start || '').slice(0, 10),
+    planned_end: String(row.planned_end || '').slice(0, 10),
+  }
+  milestonePlanVisible.value = true
+}
+
+const saveMilestonePlan = async () => {
+  if (!milestonePlanRow.value) return
+  const form = milestonePlanForm.value
+  if (form.planned_start && form.planned_end && form.planned_end < form.planned_start) {
+    ElMessage.warning('计划结束不能早于计划开始')
+    return
+  }
+  milestonePlanSaving.value = true
+  try {
+    await Api.put(`/milestones/${milestonePlanRow.value.id}`, {
+      planned_start: form.planned_start || null,
+      planned_end: form.planned_end || null,
+    })
+    ElMessage.success('里程碑计划已更新')
+    milestonePlanVisible.value = false
+    await loadSchedule()
+  } catch (error: any) {
+    ElMessage.error('保存失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    milestonePlanSaving.value = false
+  }
+}
+
+// ------------------------------------------------------------ 周看板行内改期（F-10）
+const planDialogVisible = ref(false)
+const planSaving = ref(false)
+const planRow = ref<any>(null)
+const planForm = ref<{ planned_start: string; planned_end: string }>({ planned_start: '', planned_end: '' })
+
+const openPlanDialog = (row: any) => {
+  planRow.value = row
+  planForm.value = {
+    planned_start: String(row.planned_start || '').slice(0, 19),
+    planned_end: String(row.planned_end || '').slice(0, 19),
+  }
+  planDialogVisible.value = true
+}
+
+const savePlanDates = async () => {
+  if (!planRow.value) return
+  planSaving.value = true
+  try {
+    const result: any = await Api.put(`/schedule/process-nodes/${planRow.value.id}/dates`, {
+      planned_start: planForm.value.planned_start || null,
+      planned_end: planForm.value.planned_end || null,
+    })
+    if (result?.warnings?.length) {
+      ElMessage.warning('已改期，但注意：' + result.warnings.slice(0, 2).join('；'))
+    } else {
+      ElMessage.success(`已改期${result?.batch_no ? `（批次 ${result.batch_no}，可撤销）` : ''}`)
+    }
+    planDialogVisible.value = false
+    await Promise.all([loadWeekly(), loadBatches()])
+  } catch (error: any) {
+    ElMessage.error('改期失败: ' + (error?.response?.data?.message || error?.message || error))
+  } finally {
+    planSaving.value = false
+  }
+}
+
+// 入口引导：本周没有计划任务但存在未排程/超期
+const weekGuidance = computed(() => {
+  const unscheduled = Number(boardSummary.value.unscheduled || 0)
+  const overdue = Number(boardSummary.value.overdue || 0)
+  if (weekPlannedCount.value > 0) return null
+  if (unscheduled > 0) {
+    return {
+      type: 'info',
+      text: `本周没有计划任务，但有 ${unscheduled} 条工序未排程：可以到单项目甘特按依赖重算，或用批量平移把过期计划顺延。`,
+    }
+  }
+  if (overdue > 0) {
+    return {
+      type: 'warning',
+      text: `本周没有计划任务，但有 ${overdue} 条超期工序：建议批量平移或到单项目甘特重算。`,
+    }
+  }
+  return null
+})
 
 const handleTabChange = (tab: string) => {
   onTabChange(tab)
@@ -814,6 +997,14 @@ const applyReschedule = async () => {
 <style scoped>
 .schedule-page {
   --schedule-card-radius: 14px;
+}
+
+.guidance-alert {
+  margin-bottom: 12px;
+}
+
+.force-checkbox {
+  margin-top: 6px;
 }
 
 .page-subtitle {

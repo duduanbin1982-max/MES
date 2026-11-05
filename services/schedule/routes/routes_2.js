@@ -6,6 +6,7 @@ const { ApiError } = require("../../../app/errors");
 const { toInt, normalizeDate } = require("../_helpers");
 const { wrap } = require("../../../middleware/asyncHandler");
 const { all, get, run } = ctx;
+  const { nowSqlDateTime } = require("../../../shared/datetime");
 
   app.put("/api/schedule/process-nodes/:id/status", wrap((req, res) => {
     const nodeId = toInt(req.params.id);
@@ -45,14 +46,14 @@ const { all, get, run } = ctx;
 
     if (status === "in_progress") {
       updates.push("actual_start = COALESCE(actual_start, ?)");
-      params.push(normalizeDate(req.body.actual_start) || new Date().toISOString().slice(0, 19));
+      params.push(normalizeDate(req.body.actual_start) || nowSqlDateTime());
     }
 
     if (status === "completed") {
       updates.push("actual_start = COALESCE(actual_start, ?)");
       updates.push("actual_end = ?");
-      params.push(normalizeDate(req.body.actual_start) || new Date().toISOString().slice(0, 19));
-      params.push(normalizeDate(req.body.actual_end) || new Date().toISOString().slice(0, 19));
+      params.push(normalizeDate(req.body.actual_start) || nowSqlDateTime());
+      params.push(normalizeDate(req.body.actual_end) || nowSqlDateTime());
     }
 
     params.push(nodeId);

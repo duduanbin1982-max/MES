@@ -17,8 +17,11 @@ function toInt(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+// 2026-11-05（审计 F-08）：统一成 'YYYY-MM-DD HH:MM:SS'（兼容 ISO 带 T/Z / 纯日期），
+// 不再直接 slice(0,19) —— 那样会把 '2026-11-05T12:00:00.000Z' 存成带 T 的字符串。
 function normalizeDate(value) {
-  return value ? String(value).slice(0, 19) : null;
+  const { normalizeSqlDateTime } = require("../../shared/datetime");
+  return normalizeSqlDateTime(value);
 }
 
 module.exports = { makeDbHelpers, toInt, normalizeDate };
