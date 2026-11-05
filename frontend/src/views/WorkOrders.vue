@@ -45,6 +45,14 @@
               :loading="backfilling"
               @click="backfillPlanDates"
             >补齐计划日期（{{ missingPlanCount }} 条）</el-button>
+            <el-button
+              v-if="canDispatch && unlinkedProcessCount > 0"
+              size="small"
+              type="primary"
+              plain
+              :loading="linkingBackfill"
+              @click="backfillProcessNodes"
+            >关联工序（{{ unlinkedProcessCount }} 条）</el-button>
             <el-tag v-if="unplannedCount > 0" size="small" type="info" style="margin-left: 8px">另有 {{ unplannedCount }} 张完全未排期</el-tag>
           </div>
 
@@ -52,6 +60,12 @@
             <el-table-column prop="wo_code" label="工单号" width="160" />
             <el-table-column prop="instance_code" label="实例" width="140" />
             <el-table-column prop="subsystem_name" label="子系统" width="100" />
+            <el-table-column label="关联工序" width="130">
+              <template #default="{ row }">
+                <span v-if="row.process_node_name">#{{ row.process_node_id }} {{ row.process_node_name }}</span>
+                <el-tag v-else size="small" type="info">未关联</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column prop="title" label="标题" min-width="200" />
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
@@ -144,6 +158,16 @@
         <el-form-item label="标题" required>
           <el-input v-model="createDlg.form.title" placeholder="工单内容" />
         </el-form-item>
+        <el-form-item label="关联工序">
+          <el-select v-model="createDlg.form.process_node_id" clearable filterable placeholder="选择工序（一张工单对应一个工序）" style="width: 100%">
+            <el-option
+              v-for="node in nodeOptions"
+              :key="node.id"
+              :label="`#${node.id} ${node.operation_name}（${node.status}）`"
+              :value="node.id"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="预估工时">
           <el-input-number v-model="createDlg.form.estimated_hours" :min="0" :step="1" style="width: 100%" />
         </el-form-item>
@@ -184,7 +208,23 @@
           <el-descriptions-item label="实际工时">{{ detailDlg.data.actual_hours ?? '—' }}</el-descriptions-item>
           <el-descriptions-item label="计划数量">{{ detailDlg.data.quantity_planned ?? 1 }}</el-descriptions-item>
           <el-descriptions-item label="完成数量">{{ detailDlg.data.quantity_completed ?? 0 }}</el-descriptions-item>
+          <el-descriptions-item label="关联工序" :span="2">
+            <span v-if="detailDlg.data.process_node_name">#{{ detailDlg.data.process_node_id }} {{ detailDlg.data.process_node_name }}（{{ detailDlg.data.process_node_status || '-' }}）</span>
+            <el-tag v-else type="info" size="small">未关联</el-tag>
+          </el-descriptions-item>
         </el-descriptions>
+        <div v-if="canDispatch" class="link-editor">
+          <el-select v-model="detailDlg.linkNodeId" clearable filterable placeholder="选择工序后保存关联" style="width: 320px">
+            <el-option
+              v-for="node in detailNodeOptions"
+              :key="node.id"
+              :label="`#${node.id} ${node.operation_name}（${node.status}）`"
+              :value="node.id"
+            />
+          </el-select>
+          <el-button size="small" type="primary" :loading="detailDlg.linking" @click="saveProcessNodeLink">保存关联</el-button>
+          <el-button size="small" :disabled="!detailDlg.data.process_node_id" :loading="detailDlg.linking" @click="saveProcessNodeLink(true)">解除关联</el-button>
+        </div>
         <div class="detail-section-title">操作 / 报工流水（{{ detailDlg.data.operations?.length || 0 }} 条）</div>
         <el-table :data="detailDlg.data.operations || []" size="small" border max-height="260">
           <el-table-column prop="action" label="动作" width="90" />
@@ -475,12 +515,19 @@ const createDlg = reactive({
     planned_start: null as string | null,
     planned_end: null as string | null,
     priority: 3,
+    process_node_id: null as any,
   },
 })
-const openCreate = () => {
-  createDlg.form = { equipment_instance_id: filters.equipment_instance_id || null, wo_code: '', title: '', estimated_hours: 8, planned_start: null, planned_end: null, priority: 3 }
+const openCreate = async () => {
+  createDlg.form = { equipment_instance_id: filters.equipment_instance_id || null, wo_code: '', title: '', estimated_hours: 8, planned_start: null, planned_end: null, priority: 3, process_node_id: null }
   createDlg.show = true
+  nodeOptions.value = await loadNodeOptions(createDlg.form.equipment_instance_id)
 }
+
+watch(() => createDlg.form.equipment_instance_id, async (value) => {
+  createDlg.form.process_node_id = null
+  nodeOptions.value = await loadNodeOptions(value)
+})
 const submitCreate = async () => {
   const form = createDlg.form
   if (!form.equipment_instance_id || !form.wo_code || !form.title) { ElMessage.warning('项目、工单号、标题必填'); return }
@@ -498,18 +545,77 @@ const submitCreate = async () => {
   }
 }
 
+// ------------------------------------------------------------ 工序关联（1:1）
+const nodeOptions = ref<any[]>([])
+const detailNodeOptions = ref<any[]>([])
+const linkingBackfill = ref(false)
+const unlinkedProcessCount = computed(() => rows.value.filter((row: any) => !row.process_node_id && !['completed', 'cancelled'].includes(row.status)).length)
+
+const loadNodeOptions = async (instanceId: any, onlyUnlinked = true) => {
+  if (!instanceId) return []
+  try {
+    const params: any = { equipment_instance_id: instanceId }
+    if (onlyUnlinked) params.only_unlinked = 1
+    return await Api.get('/work_orders/process-node-options', { params })
+  } catch {
+    return []
+  }
+}
+
+const backfillProcessNodes = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `将为 ${unlinkedProcessCount.value} 张未关联的工单按「同项目 + 同子系统 + 标题包含工序名」自动关联工序（多候选取标题中最先出现者；匹配不到的跳过，可到详情里手工选）。`,
+      '关联工序',
+      { type: 'warning' },
+    )
+  } catch { return }
+  linkingBackfill.value = true
+  try {
+    const result: any = await Api.post('/work_orders/backfill-process-nodes', {})
+    const skipped = result.skipped?.length || 0
+    ElMessage.success(`已关联 ${result.updated || 0} 张工单${skipped ? `，${skipped} 张未匹配到工序需手工选择` : ''}`)
+    await load()
+  } catch (error: any) {
+    ElMessage.error(errorText(error, '关联失败'))
+  } finally {
+    linkingBackfill.value = false
+  }
+}
+
 // ------------------------------------------------------------ 详情
-const detailDlg = reactive<{ show: boolean; loading: boolean; data: any }>({ show: false, loading: false, data: null })
+const detailDlg = reactive<{ show: boolean; loading: boolean; data: any; linkNodeId: any; linking: boolean }>({
+  show: false, loading: false, data: null, linkNodeId: null, linking: false,
+})
 const openDetail = async (row: any) => {
   detailDlg.show = true
   detailDlg.loading = true
   detailDlg.data = null
   try {
     detailDlg.data = await Api.get('/work_orders/' + row.id)
+    detailDlg.linkNodeId = detailDlg.data.process_node_id || null
+    detailNodeOptions.value = await loadNodeOptions(detailDlg.data.equipment_instance_id, false)
   } catch (error: any) {
     ElMessage.error(errorText(error, '加载详情失败'))
   } finally {
     detailDlg.loading = false
+  }
+}
+
+const saveProcessNodeLink = async (clear = false) => {
+  if (!detailDlg.data) return
+  detailDlg.linking = true
+  try {
+    const target = clear ? null : detailDlg.linkNodeId
+    const result: any = await Api.put(`/work_orders/${detailDlg.data.id}/process-node`, { process_node_id: target })
+    ElMessage.success(result.process_node_id ? `已关联工序 #${result.process_node_id} ${result.process_node_name || ''}` : '已解除工序关联')
+    detailDlg.data = await Api.get('/work_orders/' + detailDlg.data.id)
+    detailDlg.linkNodeId = detailDlg.data.process_node_id || null
+    await load()
+  } catch (error: any) {
+    ElMessage.error(errorText(error, '保存关联失败'))
+  } finally {
+    detailDlg.linking = false
   }
 }
 
@@ -576,6 +682,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.link-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
 .detail-section-title {
   margin: 14px 0 8px;
   font-size: 13px;
