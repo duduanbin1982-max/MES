@@ -36,6 +36,8 @@ const PERMISSIONS = {
   'process:admin': '执行工艺节点/自动解锁',
   // 质量
   'quality:read': '查看检验记录',
+  'delivery:read': '查看交付/验收/回款',
+  'delivery:write': '维护交付/验收/回款',
   'quality:write': '创建/更新检验',
   // 报表
   'report:read': '查看所有报表/仪表盘',
@@ -56,49 +58,51 @@ const DEFAULT_ROLE_PERMISSIONS = {
     'shopfloor:read', 'material:read', 'material:write',
     'inventory:read', 'inventory:write', 'pick:read',
     'pick:write', 'document:read', 'work_order:read',
-    'equipment:read',
+    'equipment:read', 'delivery:read',
   ],
   planner: [
     'equipment:read', 'equipment:write', 'work_order:read',
     'work_order:write', 'process:read', 'material:read',
     'material:write', 'purchase:read', 'purchase:write',
-    'report:read',
+    'report:read', 'delivery:read', 'delivery:write',
   ],
   foreman: [
     'work_order:read', 'work_order:write', 'shopfloor:read',
     'equipment:read', 'equipment:write', 'process:read',
     'process:write', 'quality:read', 'quality:write',
-    'material:read', 'report:read',
+    'material:read', 'report:read', 'delivery:read', 'delivery:write',
   ],
   production_supervisor: [
     'work_order:read', 'work_order:write', 'work_order:admin',
     'equipment:read', 'equipment:write', 'process:read',
     'material:read', 'quality:read', 'report:read',
-    'shopfloor:read',
+    'shopfloor:read', 'delivery:read', 'delivery:write',
   ],
   engineer: [
     'equipment:read', 'process:read', 'process:write',
     'material:read', 'document:read', 'document:write',
-    'settings:read', 'report:read',
+    'settings:read', 'report:read', 'delivery:read',
   ],
   qc: [
     'quality:read', 'quality:write', 'work_order:read',
     'material:read', 'document:read', 'report:read',
+    'delivery:read',
   ],
   worker: [
     'shopfloor:read', 'work_order:read', 'quality:read',
-    'document:read', 'pick:read',
+    'document:read', 'pick:read', 'delivery:read',
   ],
   welder: [
     'work_order:read', 'quality:read', 'quality:write',
-    'shopfloor:read',
+    'shopfloor:read', 'delivery:read',
   ],
   sales: [
     'equipment:read', 'document:read', 'report:read',
+    'delivery:read',
   ],
   purchaser: [
     'purchase:read', 'purchase:write', 'material:read',
-    'report:read',
+    'report:read', 'delivery:read',
   ],
 };
 
