@@ -6,8 +6,25 @@
         <div class="page-subtitle">按时间窗口分析工位产能、资源占用、跨项目抢占和日负荷超载。</div>
       </div>
       <div class="page-actions">
-        <el-date-picker v-model="startDate" type="date" value-format="YYYY-MM-DD" style="width: 150px" @change="load" />
-        <el-input-number v-model="days" :min="7" :max="180" :step="7" size="small" style="width: 120px" @change="load" />
+        <el-select
+          v-model="instanceFilter"
+          clearable
+          filterable
+          placeholder="全部项目"
+          size="small"
+          style="width: 220px"
+          @change="onFilterChange"
+        >
+          <el-option
+            v-for="instance in instances"
+            :key="instance.id"
+            :label="instance.instance_code + ' | ' + (instance.instance_name || '')"
+            :value="instance.id"
+          />
+        </el-select>
+        <el-date-picker v-model="startDate" type="date" value-format="YYYY-MM-DD" style="width: 140px" @change="onFilterChange" />
+        <el-input-number v-model="days" :min="7" :max="180" :step="7" size="small" style="width: 110px" @change="onFilterChange" />
+        <el-switch v-model="includeCompleted" size="small" inline-prompt active-text="含历史" inactive-text="仅未来" @change="onFilterChange" />
         <el-button type="primary" :loading="loading" @click="load">刷新</el-button>
       </div>
     </div>
@@ -22,10 +39,18 @@
 
     <el-row :gutter="12" class="summary-row" v-loading="loading">
       <el-col :span="6"><div class="stat-card"><div class="stat-label">项目</div><div class="stat-value">{{ summary.instance_count || 0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">窗口工时</div><div class="stat-value">{{ summary.total_hours || 0 }}h</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">窗口占用工时</div><div class="stat-value">{{ formatHours(summary.window_busy_hours) }}</div><div class="stat-label">任务工时 {{ formatHours(summary.total_hours) }}</div></div></el-col>
       <el-col :span="6"><div class="stat-card"><div class="stat-label">工位数</div><div class="stat-value">{{ summary.workstation_count || 0 }}</div></div></el-col>
-      <el-col :span="6"><div class="stat-card"><div class="stat-label">冲突</div><div class="stat-value" :class="{ danger: (summary.conflict_count || 0) > 0, success: (summary.conflict_count || 0) === 0 }">{{ summary.conflict_count || 0 }}</div></div></el-col>
+      <el-col :span="6"><div class="stat-card"><div class="stat-label">冲突</div><div class="stat-value" :class="{ danger: (summary.conflict_count || 0) > 0, success: (summary.conflict_count || 0) === 0 }">{{ summary.conflict_count || 0 }}</div><div class="stat-label">超载 {{ overloadCount }} · 重叠 {{ overlapCount }}</div></div></el-col>
     </el-row>
+    <el-alert
+      v-if="(summary.excluded_completed_count || 0) > 0 && !includeCompleted"
+      class="range-alert"
+      type="info"
+      :closable="false"
+      show-icon
+      :title="`已自动排除 ${summary.excluded_completed_count} 条已完成/已取消任务（避免历史占用冒充未来负荷）；需要复盘时打开右上「含历史」`"
+    />
 
     <el-card class="content-card">
       <template #header>
@@ -131,10 +156,25 @@
       <template #header>
         <div class="card-header">
           <span><el-icon><Warning /></el-icon> 资源冲突 ({{ conflicts.length }})</span>
-          <el-tag v-if="conflicts.length === 0" type="success" size="small">无冲突</el-tag>
+          <div class="conflict-tools">
+            <el-select v-model="conflictType" size="small" style="width: 150px" placeholder="全部类型">
+              <el-option label="全部类型" value="" />
+              <el-option label="产能超载" value="capacity_overload" />
+              <el-option label="跨项目抢占" value="cross_instance" />
+              <el-option label="同工位重叠" value="same_workstation" />
+            </el-select>
+            <el-tag v-if="conflicts.length === 0" type="success" size="small">无冲突</el-tag>
+          </div>
         </div>
       </template>
-      <el-table :data="conflicts" stripe size="small" empty-text="无资源冲突">
+      <el-alert
+        v-if="shownConflicts.length < conflicts.length"
+        type="info"
+        :closable="false"
+        class="range-alert"
+        :title="`共 ${conflicts.length} 条冲突，表格最多展示 ${CONFLICT_LIMIT} 条（用左侧类型筛选可缩小范围）`"
+      />
+      <el-table :data="shownConflicts" stripe size="small" empty-text="无资源冲突（当前筛选条件）">
         <el-table-column label="类型" width="130">
           <template #default="{ row }">
             <el-tag :type="row.type === 'capacity_overload' || row.type === 'cross_instance' ? 'danger' : 'warning'" size="small">
@@ -143,6 +183,15 @@
           </template>
         </el-table-column>
         <el-table-column prop="workstation" label="工位" width="140" />
+        <el-table-column label="涉及" width="150">
+          <template #default="{ row }">
+            <template v-if="row.items">
+              <el-tag v-for="code in row.instance_codes" :key="code" size="small" class="tag-gap">{{ code }}</el-tag>
+              <div class="stat-label">{{ row.item_count }} 个任务{{ row.peak_concurrency ? ` · 峰值并发 ${row.peak_concurrency}` : '' }}</div>
+            </template>
+            <span v-else class="stat-label">{{ row.day }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="冲突项" min-width="360">
           <template #default="{ row }">
             <div v-if="row.items">
@@ -154,7 +203,7 @@
             <div v-else class="conflict-item">{{ row.day }}：{{ row.busy_hours }}h / 产能 {{ row.capacity_hours }}h，利用率 {{ row.utilization_pct }}%</div>
           </template>
         </el-table-column>
-        <el-table-column prop="overlap_hours" label="重叠/超载小时" width="140" />
+        <el-table-column prop="overlap_hours" label="重叠/超载小时" width="140" sortable />
       </el-table>
     </el-card>
 
@@ -163,7 +212,7 @@
       <el-table v-else :data="cellDlg.items" size="small" border row-key="id">
         <el-table-column label="拖" width="46" align="center">
           <template #default="{ row }">
-            <span v-if="canReassign(row)" class="drag-handle" draggable="true" title="拖到下方工位即可改派"
+            <span v-if="canWrite && canReassign(row)" class="drag-handle" draggable="true" title="拖到下方工位即可改派"
               @dragstart="onTaskDragStart(row)">⋮⋮</span>
             <span v-else class="stat-label">—</span>
           </template>
@@ -186,7 +235,15 @@
           </template>
         </el-table-column>
       </el-table>
-      <div v-if="cellDlg.items.some(canReassign)" class="drop-zones" @dragover.prevent>
+      <el-alert
+        v-if="cellDlg.items.some(canReassign) && !canWrite"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="range-alert"
+        title="当前账号没有改派权限（需要 process:write / work_order:write 或车间主任、管理员），可查看但不能保存"
+      />
+      <div v-if="canWrite && cellDlg.items.some(canReassign)" class="drop-zones" @dragover.prevent>
         <div class="stat-label">拖到工位（把左侧任务拖到下面任一工位 = 改派）：</div>
         <span v-for="ws in workstations" :key="'dz' + ws.id" class="drop-zone"
           :class="{ 'drop-active': cellDlg.dragTaskId }"
@@ -202,7 +259,7 @@
       </div>
       <template #footer>
         <el-button @click="cellDlg.visible = false">取消</el-button>
-        <el-button type="primary" :loading="cellDlg.saving" @click="saveReassign">保存改派</el-button>
+        <el-button type="primary" :loading="cellDlg.saving" :disabled="!canWrite" @click="saveReassign">保存改派</el-button>
       </template>
     </el-dialog>
   </div>
@@ -210,8 +267,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
+import { useAuthStore } from '../stores/auth'
 import {
   applyPresetTarget,
   canReassign,
@@ -226,13 +284,50 @@ import {
   reassignRequest,
 } from '../domain/workload'
 
-const now = new Date()
-const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-// P2-1：演示/上线初期数据集中在 6 月，默认窗口取数据月，避免一打开就是空表（用户可随时改）
-const DATA_START_HINT = '2026-06-01'
-const startDate = ref(DATA_START_HINT || monthStart)
-const days = ref(30)
+// 2026-11-05（审计 F-05）：去掉硬编码 2026-06-01 —— 默认当前月，并记住上次窗口/筛选
+const WINDOW_STORAGE_KEY = 'factory-mes:multi-schedule:window'
+const readWindow = () => {
+  const fallback = {
+    start: new Date().toISOString().slice(0, 8) + '01',
+    days: 30,
+    instance_id: null as number | null,
+    include_completed: false,
+  }
+  try {
+    const raw = localStorage.getItem(WINDOW_STORAGE_KEY)
+    if (!raw) return fallback
+    const saved = JSON.parse(raw)
+    return {
+      start: typeof saved.start === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(saved.start) ? saved.start : fallback.start,
+      days: Number.isFinite(Number(saved.days)) ? Math.min(180, Math.max(7, Number(saved.days))) : fallback.days,
+      instance_id: saved.instance_id ? Number(saved.instance_id) : null,
+      include_completed: Boolean(saved.include_completed),
+    }
+  } catch {
+    return fallback
+  }
+}
+const savedWindow = readWindow()
+const startDate = ref(savedWindow.start)
+const days = ref(savedWindow.days)
+const instanceFilter = ref<number | null>(savedWindow.instance_id)
+const includeCompleted = ref(savedWindow.include_completed)
 const loading = ref(false)
+const instances = ref<any[]>([])
+const auth = useAuthStore()
+// 改派权限：process:write（工序改工位）或 work_order:write（工单改工位）；车间主任/管理员天然有
+const canWrite = computed(() => Boolean(auth.hasAnyPerm('process:write', 'work_order:write')) || ['admin', 'foreman'].includes(auth.role))
+const onFilterChange = () => {
+  try {
+    localStorage.setItem(WINDOW_STORAGE_KEY, JSON.stringify({
+      start: startDate.value,
+      days: days.value,
+      instance_id: instanceFilter.value,
+      include_completed: includeCompleted.value,
+    }))
+  } catch { /* 隐私模式忽略 */ }
+  load()
+}
 const summary = ref<any>({})
 const workstationUtil = ref<any[]>([])
 const instanceBreakdown = ref<any[]>([])
@@ -252,7 +347,19 @@ const cellDlg = ref<any>({
 
 const topBottlenecks = computed(() => bottlenecks.value.top_overloaded || [])
 const topIdle = computed(() => bottlenecks.value.top_idle || [])
-const hasOverload = computed(() => topBottlenecks.value.some((item: any) => Number(item.peak_utilization_pct) >= 100))
+// 2026-11-05（审计 F-04）：超载判定不再只看 Top3 —— 以冲突表/热力图为准，避免"未超载"误报
+const hasOverload = computed(() =>
+  conflicts.value.some((item: any) => item.type === 'capacity_overload')
+  || heatRows.value.some((row: any) => (row.cells || []).some((cell: any) => Number(cell.utilization_pct) >= 100)),
+)
+const overloadCount = computed(() => conflicts.value.filter((item: any) => item.type === 'capacity_overload').length)
+const overlapCount = computed(() => conflicts.value.filter((item: any) => item.type !== 'capacity_overload').length)
+const CONFLICT_LIMIT = 100
+const conflictType = ref('')
+const shownConflicts = computed(() => {
+  const list = conflictType.value ? conflicts.value.filter((item: any) => item.type === conflictType.value) : conflicts.value
+  return list.slice(0, CONFLICT_LIMIT)
+})
 const limited = computed(() => limitDays(heatDays.value, 31))
 const shownDays = computed(() => limited.value.shown)
 const hiddenDays = computed(() => limited.value.hidden)
@@ -326,23 +433,51 @@ const onTaskDrop = (ws: any) => {
 const saveReassign = async () => {
   const targets = cellDlg.value.items.filter((item: any) => canReassign(item) && item._target)
   if (!targets.length) { ElMessage.warning('没有需要改派的任务'); return }
+  const targetName = (id: any) => {
+    const ws = workstations.value.find((item: any) => Number(item.id) === Number(id))
+    return ws ? ws.name : `工位 ${id}`
+  }
+  const groups = new Map<string, number>()
+  for (const item of targets) {
+    const key = targetName(item._target)
+    groups.set(key, (groups.get(key) || 0) + 1)
+  }
+  try {
+    await ElMessageBox.confirm(
+      `将把 ${targets.length} 个任务改派到：${[...groups.entries()].map(([name, count]) => `${name}（${count}）`).join('、')}。` +
+      '改派只调整工位归属，不自动改期；改派后请留意目标工位是否超载。',
+      '确认改派',
+      { type: 'warning' },
+    )
+  } catch {
+    return
+  }
   cellDlg.value.saving = true
+  const failed: string[] = []
+  let okCount = 0
   try {
     for (const item of targets) {
       const request = reassignRequest(item, item._target)
       if (!request) continue
-      await api.put(request.url, request.body)
+      try {
+        await api.put(request.url, request.body)
+        okCount += 1
+      } catch (error: any) {
+        const body = error?.response?.data
+        const reason = body?.message || body?.error || error?.message || '未知错误'
+        failed.push(`${item.name || item.id}：${reason}`)
+      }
     }
-    const orders = targets.filter((item: any) => item.type === 'work_order').length
-    const nodes = targets.length - orders
-    const parts = []
-    if (nodes) parts.push(`${nodes} 道工序`)
-    if (orders) parts.push(`${orders} 张工单`)
-    ElMessage.success(`已改派 ${parts.join(' + ')}`)
-    cellDlg.value.visible = false
-    await load()
-  } catch (error: any) {
-    ElMessage.error('改派失败: ' + (error?.response?.data?.message || error?.message || error))
+    if (okCount) {
+      ElMessage.success(`已改派 ${okCount} 个任务${failed.length ? `，${failed.length} 个失败` : ''}`)
+    }
+    if (failed.length) {
+      ElMessage.warning(`部分改派失败（已成功的不回滚）：${failed.slice(0, 3).join('；')}`)
+    }
+    if (okCount) {
+      cellDlg.value.visible = false
+      await load()
+    }
   } finally {
     cellDlg.value.saving = false
   }
@@ -360,7 +495,10 @@ const conflictLabel = (type: string) => {
 const load = async () => {
   loading.value = true
   try {
-    const data = await api.get('/resources/gantt', { params: { start_date: startDate.value, days: days.value } })
+    const params: any = { start_date: startDate.value, days: days.value }
+    if (instanceFilter.value) params.instance_id = instanceFilter.value
+    if (includeCompleted.value) params.include_completed = 1
+    const data = await api.get('/resources/gantt', { params })
     summary.value = data.summary || {}
     workstationUtil.value = data.workstation_utilization || []
     instanceBreakdown.value = data.instance_breakdown || []
@@ -371,6 +509,9 @@ const load = async () => {
     heatDays.value = (data.heatmap && data.heatmap.days) || []
     items.value = data.items || []
     workstations.value = data.workstations || []
+    if (!instances.value.length) {
+      try { instances.value = await api.instances() } catch { instances.value = [] }
+    }
   } catch (error: any) {
     ElMessage.error('加载资源平衡失败: ' + (error?.message || error))
   } finally {
@@ -392,6 +533,12 @@ onMounted(load)
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.conflict-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .range-alert,

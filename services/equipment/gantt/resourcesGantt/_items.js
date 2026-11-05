@@ -2,6 +2,12 @@
 // services/equipment/gantt/resourcesGantt/_items.js
 // 源数据准备与条目归一化。
 // (原 services/equipment/gantt/resourcesGantt.js 第 9-11、45-85、134-170 行)
+//
+// 2026-11-05（审计 F-03/F-02）：
+//   · 起止时间优先用"计划"（planned_start/planned_end），没有计划才退回实际，避免把历史实际
+//     当成未来负荷（原实现是 actual 优先）；
+//   · 只有 planned_end 没有 planned_start 的行，用「结束 - 工时」回推开始，不再被整条丢弃；
+//   · 条目增加 start_basis / end_basis / hours_basis，前端可解释"这条是计划还是实际"。
 
 const { parseDate, addHours, formatDate, formatDateTime, hoursBetween } = require("./_time");
 
@@ -32,16 +38,37 @@ function workstationDailyCapacity(workstation) {
 }
 
 function normalizeItem(row, type) {
-  const start = parseDate(row.actual_start || row.planned_start);
-  if (!start) return null;
+  const estimatedHours = Number(row.estimated_hours || 0) || 0;
+  const defaultHours = type === "work_order" ? 8 : 4;
+  const deriveHours = estimatedHours > 0 ? estimatedHours : defaultHours;
 
-  const explicitEnd = parseDate(row.actual_end || row.planned_end);
-  const estimatedHours = Number(row.estimated_hours || 0) || (type === "work_order" ? 8 : 4);
-  let end = explicitEnd || addHours(start, estimatedHours);
-  if (!end || end <= start) end = addHours(start, estimatedHours || 1);
+  const plannedStart = parseDate(row.planned_start);
+  const plannedEnd = parseDate(row.planned_end);
+  const actualStart = parseDate(row.actual_start);
+  const actualEnd = parseDate(row.actual_end);
+
+  // 计划优先；只有实际时退回实际；只有结束时间时用「结束 - 工时」回推开始
+  let start = plannedStart || actualStart;
+  let startBasis = plannedStart ? "planned" : actualStart ? "actual" : "derived";
+  let end = plannedEnd || actualEnd;
+  let endBasis = plannedEnd ? "planned" : actualEnd ? "actual" : "derived";
+  if (!start && end) {
+    start = addHours(end, -deriveHours);
+    startBasis = "derived";
+  }
+  if (!start) return null;
+  if (!end) {
+    end = addHours(start, deriveHours);
+    endBasis = "derived";
+  }
+  if (end <= start) {
+    end = addHours(start, deriveHours || 1);
+    endBasis = "derived";
+  }
 
   const calendarHours = Math.max(0.25, hoursBetween(start, end));
   const hours = estimatedHours > 0 ? estimatedHours : calendarHours;
+  const hoursBasis = estimatedHours > 0 ? "estimated" : "calendar";
   return {
     id: `${type === "work_order" ? "wo" : "pn"}_${row.id}`,
     source_id: row.id,
@@ -61,6 +88,9 @@ function normalizeItem(row, type) {
     status: row.status || "pending",
     hours: Math.round(hours * 10) / 10,
     calendar_hours: Math.round(calendarHours * 10) / 10,
+    hours_basis: hoursBasis,
+    start_basis: startBasis,
+    end_basis: endBasis,
   };
 }
 
@@ -68,35 +98,62 @@ function overlapsWindow(item, rangeStart, rangeEnd) {
   return item.end > rangeStart && item.start < rangeEnd;
 }
 
-// (原第 134-137 行) 工单与工序统一归一化，丢掉无法定位开始时间的行
-function collectItems(workOrders, processNodes, rangeStart, rangeEnd) {
+const CLOSED_STATUSES = new Set(["completed", "cancelled"]);
+
+/**
+ * 工单与工序统一归一化，丢掉无法定位开始时间的行。
+ * @param {object} [options] { includeCompleted?: boolean } 默认排除已完成/已取消（规划视角）
+ */
+function collectItems(workOrders, processNodes, rangeStart, rangeEnd, options = {}) {
   const rawItems = [
     ...workOrders.map((row) => normalizeItem(row, "work_order")),
     ...processNodes.map((row) => normalizeItem(row, "process_node")),
   ].filter(Boolean);
 
-  return rawItems
-    .filter((item) => overlapsWindow(item, rangeStart, rangeEnd))
-    .map((item) => ({
-      id: item.id,
-      source_id: item.source_id,
-      type: item.type,
-      name: item.name,
-      workstation: item.workstation,
-      ws_id: item.ws_id,
-      instance_id: item.instance_id,
-      instance_code: item.instance_code,
-      instance_name: item.instance_name,
-      start: item.start_text,
-      end: item.end_text,
-      start_date: item.start_date,
-      end_date: item.end_date,
-      status: item.status,
-      hours: item.hours,
-      calendar_hours: item.calendar_hours,
-      _start: item.start,
-      _end: item.end,
-    }));
+  const windowed = rawItems.filter((item) => overlapsWindow(item, rangeStart, rangeEnd));
+  const visible = options.includeCompleted === true
+    ? windowed
+    : windowed.filter((item) => !CLOSED_STATUSES.has(String(item.status)));
+
+  return visible.map((item) => ({
+    id: item.id,
+    source_id: item.source_id,
+    type: item.type,
+    name: item.name,
+    workstation: item.workstation,
+    ws_id: item.ws_id,
+    instance_id: item.instance_id,
+    instance_code: item.instance_code,
+    instance_name: item.instance_name,
+    start: item.start_text,
+    end: item.end_text,
+    start_date: item.start_date,
+    end_date: item.end_date,
+    status: item.status,
+    hours: item.hours,
+    calendar_hours: item.calendar_hours,
+    hours_basis: item.hours_basis,
+    start_basis: item.start_basis,
+    end_basis: item.end_basis,
+    _start: item.start,
+    _end: item.end,
+  }));
+}
+
+/** 同上，但额外返回被排除的已完成/已取消条数（供页面提示） */
+function collectItemsDetailed(workOrders, processNodes, rangeStart, rangeEnd, options = {}) {
+  const rawItems = [
+    ...workOrders.map((row) => normalizeItem(row, "work_order")),
+    ...processNodes.map((row) => normalizeItem(row, "process_node")),
+  ].filter(Boolean);
+  const windowed = rawItems.filter((item) => overlapsWindow(item, rangeStart, rangeEnd));
+  const visible = options.includeCompleted === true
+    ? windowed
+    : windowed.filter((item) => !CLOSED_STATUSES.has(String(item.status)));
+  return {
+    items: collectItems(workOrders, processNodes, rangeStart, rangeEnd, options),
+    excluded_completed_count: windowed.length - visible.length,
+  };
 }
 
 // (原第 162-170 行)
@@ -112,4 +169,13 @@ function loadWorkstations(db) {
   }));
 }
 
-module.exports = { all, workstationDailyCapacity, normalizeItem, overlapsWindow, collectItems, loadWorkstations };
+module.exports = {
+  all,
+  workstationDailyCapacity,
+  normalizeItem,
+  overlapsWindow,
+  collectItems,
+  collectItemsDetailed,
+  loadWorkstations,
+  CLOSED_STATUSES,
+};

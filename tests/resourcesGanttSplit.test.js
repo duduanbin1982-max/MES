@@ -142,3 +142,52 @@ test("GANTT.6 每个阶段函数可独立调用，且与 golden 的分片一致"
   );
   db.close();
 });
+
+// ---------------------------------------------------------------- 2026-11-05 审计整改回归
+
+test("GANTT.7 默认排除已完成/已取消任务，include_completed=1 才看历史", () => {
+  const unfiltered = capture({ start_date: "2026-10-12", days: "7" });
+  const withHistory = capture({ start_date: "2026-10-12", days: "7", include_completed: "1" });
+  const statuses = unfiltered.items.map((item) => item.status);
+  assert.ok(!statuses.includes("completed"), "默认不含已完成");
+  assert.ok(unfiltered.summary.excluded_completed_count >= 1, "统计被排除的已完成条数");
+  assert.equal(withHistory.summary.excluded_completed_count, 0);
+  assert.ok(withHistory.items.some((item) => item.status === "completed"), "include_completed=1 时包含历史");
+  assert.ok(withHistory.items.length > unfiltered.items.length);
+});
+
+test("GANTT.8 只有 planned_end 的工单不再丢失（用结束 - 工时回推开始）", () => {
+  const db = seedGanttDb();
+  db.prepare(`INSERT INTO work_orders (id, wo_code, title, estimated_hours, planned_start, planned_end, actual_start, actual_end, status, workstation_id, equipment_instance_id)
+              VALUES (6, 'WO-6', '只有结束时间', 8, NULL, '2026-10-14 16:00:00', NULL, NULL, 'pending', 11, 1)`).run();
+  let payload = null;
+  resourcesGantt.getResourcesGantt({ query: { start_date: "2026-10-12", days: "7" } }, { json: (b) => { payload = b; } }, db);
+  const wo6 = payload.items.find((item) => item.id === "wo_6");
+  assert.ok(wo6, "只有 planned_end 的工单应出现在窗口里");
+  assert.equal(wo6.start, "2026-10-14 08:00:00", "开始时间 = planned_end - 8h");
+  assert.equal(wo6.start_basis, "derived");
+  assert.equal(wo6.end_basis, "planned");
+});
+
+test("GANTT.9 同工位重叠按簇聚合：一条冲突带任务数/项目/重叠工时", () => {
+  const unfiltered = GOLDEN.unfiltered;
+  const cluster = unfiltered.conflicts.find((c) => c.type === "same_workstation" || c.type === "cross_instance");
+  assert.ok(cluster, "应存在同工位重叠冲突");
+  assert.ok(cluster.item_count >= 2);
+  assert.ok(Array.isArray(cluster.instance_codes) && cluster.instance_codes.length >= 1);
+  assert.equal(cluster.overlap_hours, 8, "WO-1(8h) 与 PN-1 重叠 8h");
+  assert.ok(cluster.items.length <= 5, "样本任务最多 5 条");
+  assert.ok(cluster.day && cluster.start && cluster.end);
+  // 产能超载排在聚合冲突之前
+  assert.equal(unfiltered.conflicts[0].type, "capacity_overload");
+});
+
+test("GANTT.10 summary 口径：window_busy_hours = 热力图合计，任务工时口径独立", () => {
+  const unfiltered = GOLDEN.unfiltered;
+  const gridTotal = Math.round(unfiltered.heatmap.grid.reduce((sum, row) => sum + Number(row.total_busy_hours || 0), 0) * 10) / 10;
+  assert.equal(unfiltered.summary.window_busy_hours, gridTotal);
+  assert.ok(unfiltered.summary.total_hours >= 0);
+  assert.equal(typeof unfiltered.summary.excluded_completed_count, "number");
+  assert.equal(unfiltered.filter.include_completed, false);
+  assert.equal(unfiltered.items[0].start_basis !== undefined, true, "条目带 start_basis 供解释");
+});

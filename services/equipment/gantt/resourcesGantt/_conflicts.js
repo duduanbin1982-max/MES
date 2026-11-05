@@ -1,39 +1,98 @@
 "use strict";
 // services/equipment/gantt/resourcesGantt/_conflicts.js
-// 冲突检测: 同工位时间重叠 + 单日超出产能。
-// (原 services/equipment/gantt/resourcesGantt.js 第 260-307 行)
+// 冲突检测: 同工位时间重叠 / 跨项目抢占 / 单日超出产能。
+//
+// 2026-11-05（审计 F-07）：同工位重叠原先按"相邻两条"各生成一行 —— 123 个工序叠在同一天时
+// 页面会刷出 115 行几乎相同的冲突。现在按「工位 + 重叠簇」聚合：一个簇一行，
+// 带任务数、涉及项目、超出工时和样本任务；产能超载仍按"工位 × 日"一行。
 
-const { MS_PER_HOUR } = require("./_time");
+const { formatDate, formatDateTime } = require("./_time");
+
+const SAMPLE_LIMIT = 5;
+
+function clusterByWorkstation(items) {
+  const byWorkstation = new Map();
+  for (const item of items) {
+    if (!item.ws_id) continue;
+    const key = Number(item.ws_id);
+    if (!byWorkstation.has(key)) byWorkstation.set(key, []);
+    byWorkstation.get(key).push(item);
+  }
+
+  const clusters = [];
+  for (const [wsId, list] of byWorkstation) {
+    list.sort((a, b) => a._start - b._start || a._end - b._end);
+    let current = null;
+    for (const item of list) {
+      if (!current || item._start.getTime() >= current.end.getTime()) {
+        current = { wsId, items: [item], start: item._start, end: item._end };
+        clusters.push(current);
+      } else {
+        current.items.push(item);
+        if (item._end > current.end) current.end = item._end;
+      }
+    }
+  }
+  return clusters.filter((cluster) => cluster.items.length >= 2);
+}
+
+/** 簇内两两重叠工时（超过 PAIR_LIMIT 条时用"峰值并发"估算，避免 O(n²) 卡死） */
+function clusterOverlap(items, clusterStart, clusterEnd) {
+  const PAIR_LIMIT = 300;
+  const MS = 3600 * 1000;
+  if (items.length > PAIR_LIMIT) {
+    // 峰值并发：按开始/结束事件扫描
+    const events = [];
+    for (const item of items) {
+      events.push({ t: item._start.getTime(), delta: 1 });
+      events.push({ t: item._end.getTime(), delta: -1 });
+    }
+    events.sort((a, b) => a.t - b.t || a.delta - b.delta);
+    let current = 0;
+    let peak = 0;
+    for (const event of events) {
+      current += event.delta;
+      if (current > peak) peak = current;
+    }
+    const spanHours = (clusterEnd.getTime() - clusterStart.getTime()) / MS;
+    return { overlapHours: Math.max(0, (peak - 1) * spanHours), peakConcurrency: peak };
+  }
+  let overlapMs = 0;
+  for (let i = 0; i < items.length - 1; i++) {
+    for (let j = i + 1; j < items.length; j++) {
+      const start = Math.max(items[i]._start.getTime(), items[j]._start.getTime());
+      const end = Math.min(items[i]._end.getTime(), items[j]._end.getTime());
+      if (end > start) overlapMs += end - start;
+    }
+  }
+  return { overlapHours: overlapMs / MS, peakConcurrency: null };
+}
 
 function detectConflicts(items, heatmapGrid, workstationById) {
   const conflicts = [];
-  const byWorkstation = {};
-  for (const item of items) {
-    if (!item.ws_id) continue;
-    if (!byWorkstation[item.ws_id]) byWorkstation[item.ws_id] = [];
-    byWorkstation[item.ws_id].push(item);
-  }
 
-  for (const wsId of Object.keys(byWorkstation)) {
-    const list = byWorkstation[wsId].sort((a, b) => a._start - b._start);
-    for (let index = 0; index < list.length - 1; index++) {
-      const current = list[index];
-      const next = list[index + 1];
-      const overlapMs = Math.min(current._end.getTime(), next._end.getTime()) - Math.max(current._start.getTime(), next._start.getTime());
-      const overlapHours = overlapMs / MS_PER_HOUR;
-      if (overlapHours > 0.05) {
-        conflicts.push({
-          type: current.instance_id !== next.instance_id ? "cross_instance" : "same_workstation",
-          workstation: current.workstation,
-          ws_id: Number.parseInt(wsId, 10),
-          items: [
-            { id: current.id, name: current.name, instance: current.instance_code, start: current.start, end: current.end },
-            { id: next.id, name: next.name, instance: next.instance_code, start: next.start, end: next.end },
-          ],
-          overlap_hours: Math.round(overlapHours * 10) / 10,
-        });
-      }
-    }
+  for (const cluster of clusterByWorkstation(items)) {
+    const instances = [...new Set(cluster.items.map((item) => item.instance_code || "N/A"))];
+    const { overlapHours, peakConcurrency } = clusterOverlap(cluster.items, cluster.start, cluster.end);
+    conflicts.push({
+      type: instances.length > 1 ? "cross_instance" : "same_workstation",
+      workstation: cluster.items[0].workstation,
+      ws_id: cluster.wsId,
+      day: formatDate(cluster.start),
+      start: formatDateTime(cluster.start),
+      end: formatDateTime(cluster.end),
+      item_count: cluster.items.length,
+      instance_codes: instances,
+      peak_concurrency: peakConcurrency,
+      overlap_hours: Math.round(overlapHours * 10) / 10,
+      items: cluster.items.slice(0, SAMPLE_LIMIT).map((item) => ({
+        id: item.id,
+        name: item.name,
+        instance: item.instance_code,
+        start: item.start,
+        end: item.end,
+      })),
+    });
   }
 
   for (const heatmapRow of heatmapGrid) {
@@ -55,7 +114,16 @@ function detectConflicts(items, heatmapGrid, workstationById) {
     }
   }
 
+  const rank = { capacity_overload: 0, cross_instance: 1, same_workstation: 2 };
+  conflicts.sort((a, b) => {
+    const byType = (rank[a.type] ?? 9) - (rank[b.type] ?? 9);
+    if (byType !== 0) return byType;
+    const byHours = Number(b.overlap_hours || 0) - Number(a.overlap_hours || 0);
+    if (byHours !== 0) return byHours;
+    return String(a.day || "").localeCompare(String(b.day || ""));
+  });
+
   return conflicts;
 }
 
-module.exports = { detectConflicts };
+module.exports = { detectConflicts, clusterByWorkstation };
