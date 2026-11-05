@@ -7,6 +7,18 @@ const { ApiError } = require("../../app/errors");
 const { PURCHASE_ORDER_STATUSES: PO_STATUSES } = require("../../app/domain/statusCatalog");
 const { ensureTrackingForPo } = require("./trackingSync");
 
+const PO_TRANSITIONS = {
+  draft: ["submitted", "cancelled"],
+  submitted: ["confirmed", "cancelled"],
+  confirmed: ["in_transit", "cancelled"],
+  in_transit: ["cancelled"],
+  partially_received: ["cancelled"],
+  received: ["closed"],
+  closed: [],
+  cancelled: [],
+};
+const RECEIVE_DERIVED_STATUSES = ["partially_received", "received"];
+
 function ensureReceivingSchema(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS purchase_receiving (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,9 +42,30 @@ function ensureReceivingSchema(db) {
   `);
 }
 
+function ensureInvoiceSchema(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS purchase_invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    po_id INTEGER NOT NULL,
+    invoice_no TEXT NOT NULL,
+    invoice_date TEXT,
+    amount REAL NOT NULL,
+    tax_amount REAL DEFAULT 0,
+    currency TEXT DEFAULT 'CNY',
+    status TEXT NOT NULL DEFAULT 'pending',
+    notes TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_invoices_no ON purchase_invoices(invoice_no);
+    CREATE INDEX IF NOT EXISTS idx_purchase_invoices_po ON purchase_invoices(po_id);
+  `);
+}
+
 function registerPurchaseOrderRoutes(app, db, helpers) {
   const { all, get, run } = helpers;
   ensureReceivingSchema(db);
+  ensureInvoiceSchema(db);
 
   app.get("/api/purchase_orders", wrap((req, res) => {
     const { supplier_id, status, equipment_instance_id } = req.query;
@@ -61,7 +94,29 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
                         JOIN materials m ON pl.material_id = m.id
                         WHERE pl.po_id = ?
                         ORDER BY pl.line_no`, req.params.id);
-    res.json(Object.assign({}, po, { lines }));
+    const receivingHistory = all(`SELECT pr.*, pl.material_id, m.material_code, m.material_name
+                                   FROM purchase_receiving pr
+                                   JOIN po_lines pl ON pl.id = pr.po_item_id
+                                   LEFT JOIN materials m ON m.id = pl.material_id
+                                   WHERE pr.po_id = ?
+                                   ORDER BY pr.id`, req.params.id);
+    const invoices = all("SELECT * FROM purchase_invoices WHERE po_id = ? ORDER BY id", req.params.id);
+    const orderedAmount = Math.round(lines.reduce((sum, line) => sum + Number(line.quantity) * Number(line.unit_price), 0) * 100) / 100;
+    const receivedAmount = Math.round(lines.reduce((sum, line) => sum + Number(line.received_qty || 0) * Number(line.unit_price), 0) * 100) / 100;
+    const invoicedAmount = Math.round(invoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0) * 100) / 100;
+    const variance = Math.round((invoicedAmount - receivedAmount) * 100) / 100;
+    const fullyReceived = lines.every((line) => Number(line.received_qty || 0) >= Number(line.quantity) - 0.0001);
+    const reconciliation = {
+      ordered_amount: orderedAmount,
+      received_amount: receivedAmount,
+      invoiced_amount: invoicedAmount,
+      variance,
+      status: invoices.length === 0 ? "pending" : (Math.abs(variance) <= 0.01 ? "matched" : "variance"),
+      fully_received: fullyReceived,
+      invoice_count: invoices.length,
+      invoices,
+    };
+    res.json(Object.assign({}, po, { lines, receiving_history: receivingHistory, reconciliation }));
   }));
 
   app.post("/api/purchase_orders", wrap((req, res) => {
@@ -70,12 +125,19 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
     const sup = get("SELECT id FROM suppliers WHERE id = ?", supplier_id);
     if (!sup) throw ApiError.notFound("supplier 不存在");
 
+    for (const line of lines) {
+      if (!line.material_id) throw ApiError.validation("lines[].material_id 必填");
+      if (!(Number(line.quantity) > 0)) throw ApiError.validation("lines[].quantity 必须 > 0");
+      if (!(Number(line.unit_price) >= 0)) throw ApiError.validation("lines[].unit_price 必须 >= 0");
+      if (!get("SELECT id FROM materials WHERE id = ?", line.material_id)) throw ApiError.notFound("物料不存在: " + line.material_id);
+    }
     const poNo = nextPoNo(db);
     let subtotal = 0;
     const taxAmount = 0;
     for (const line of lines) {
       subtotal += Number(line.quantity) * Number(line.unit_price);
     }
+    subtotal = Math.round(subtotal * 100) / 100;
     const totalAmount = subtotal;
 
     const tx = db.transaction(() => {
@@ -101,11 +163,25 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
   app.patch("/api/purchase_orders/:id/status", wrap((req, res) => {
     const { status, approved_by } = req.body;
     if (!PO_STATUSES.includes(status)) throw ApiError.validation("status 非法: " + status + " (允许: " + PO_STATUSES.join(", ") + ")");
-    const po = get("SELECT id, status FROM purchase_orders WHERE id = ?", req.params.id);
+    const po = get("SELECT id, status, created_by FROM purchase_orders WHERE id = ?", req.params.id);
     if (!po) throw ApiError.notFound("PO 不存在");
+    if (po.status === status) throw ApiError.validation("采购单已经是「" + status + "」状态");
+    if (RECEIVE_DERIVED_STATUSES.includes(status)) {
+      throw ApiError.validation("「" + status + "」只能由收货接口推进，不能手工设置");
+    }
+    const allowed = PO_TRANSITIONS[po.status] || [];
+    if (!allowed.includes(status)) {
+      throw ApiError.validation("采购单不能从「" + po.status + "」变更为「" + status + "」", { allowed_transitions: allowed });
+    }
     const fields = ["status = ?"];
     const params = [status];
-    if (status === "confirmed" && approved_by) {
+    if (status === "confirmed") {
+      if (!approved_by) throw ApiError.validation("确认采购单必须提供 approved_by（审批人）");
+      const approver = get("SELECT id, full_name FROM users WHERE id = ?", approved_by);
+      if (!approver) throw ApiError.validation("approved_by 用户不存在: " + approved_by);
+      if (po.created_by && Number(po.created_by) === Number(approved_by)) {
+        throw ApiError.validation("审批人不能与创建人相同（职责分离）");
+      }
       fields.push("approved_by = ?", "approved_at = datetime('now')");
       params.push(approved_by);
     }
@@ -139,6 +215,7 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
           throw ApiError.validation("line " + receivedLine.line_id + " 收货超量: 已收 " + line.received_qty + " + 本次 " + recvQty + " > 订单 " + line.quantity);
         }
 
+        const supplierName = po.supplier_id ? (get("SELECT supplier_name FROM suppliers WHERE id = ?", po.supplier_id) || {}).supplier_name || null : null;
         const lotNo = receivedLine.lot_no || (po.po_no + "-L" + line.line_no + "-" + Date.now());
         const dup = get("SELECT id FROM material_lots WHERE lot_no = ?", lotNo);
         if (dup) throw ApiError.validation("lot_no 已存在: " + lotNo);
@@ -146,7 +223,7 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
         const unit = line.unit || mat?.unit || "pcs";
         const location = receivedLine.location || "主仓库-A-01";
         const lotResult = run("INSERT INTO material_lots (material_id, lot_no, supplier, heat_no, certificate_no, received_date, quantity, unit, quality_status, notes) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, 'pending', ?)",
-          [line.material_id, lotNo, po.supplier_id ? null : null, receivedLine.heat_no || null, receivedLine.certificate_no || null, recvQty, unit, "收货自 " + po.po_no]);
+          [line.material_id, lotNo, supplierName, receivedLine.heat_no || null, receivedLine.certificate_no || null, recvQty, unit, "收货自 " + po.po_no]);
         const lotId = lotResult.lastInsertRowid;
         const inventoryResult = run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'quarantined')", [lotId, location, recvQty, unit]);
         const receivingResult = run(`
@@ -179,6 +256,82 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
     const result = tx();
     ensureTrackingForPo(db, get, all, run, po.id);
     res.json(result);
+  }));
+
+  // ---- 对账：录入发票 / 对账汇总 / 发票状态 ----
+  app.post("/api/purchase_orders/:id/invoices", wrap((req, res) => {
+    const po = get("SELECT * FROM purchase_orders WHERE id = ?", req.params.id);
+    if (!po) throw ApiError.notFound("PO 不存在");
+    if (!["partially_received", "received", "closed"].includes(po.status)) {
+      throw ApiError.validation("只有已收货/部分收货的采购单可以录入发票（当前 " + po.status + "）");
+    }
+    const { invoice_no, invoice_date, amount, tax_amount, notes } = req.body;
+    if (!invoice_no) throw ApiError.validation("invoice_no 必填");
+    if (!(Number(amount) > 0)) throw ApiError.validation("amount 必须 > 0");
+    if (get("SELECT id FROM purchase_invoices WHERE invoice_no = ?", invoice_no)) {
+      throw ApiError.validation("发票号已存在: " + invoice_no);
+    }
+    const created = run(`INSERT INTO purchase_invoices (po_id, invoice_no, invoice_date, amount, tax_amount, currency, status, notes)
+                         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
+      [po.id, invoice_no, invoice_date || null, Math.round(Number(amount) * 100) / 100, Math.round(Number(tax_amount || 0) * 100) / 100, po.currency || "CNY", notes || null]);
+    res.json({ id: created.lastInsertRowid, invoice_no, po_id: po.id });
+  }));
+
+  app.get("/api/purchase_orders/:id/reconciliation", wrap((req, res) => {
+    const po = get("SELECT po.*, s.supplier_name FROM purchase_orders po LEFT JOIN suppliers s ON s.id = po.supplier_id WHERE po.id = ?", req.params.id);
+    if (!po) throw ApiError.notFound("PO 不存在");
+    const lines = all(`SELECT pl.*, m.material_code, m.material_name
+                       FROM po_lines pl LEFT JOIN materials m ON m.id = pl.material_id
+                       WHERE pl.po_id = ? ORDER BY pl.line_no`, po.id).map((line) => {
+      const orderedAmount = Math.round(Number(line.quantity) * Number(line.unit_price) * 100) / 100;
+      const receivedAmount = Math.round(Number(line.received_qty || 0) * Number(line.unit_price) * 100) / 100;
+      return Object.assign({}, line, {
+        ordered_amount: orderedAmount,
+        received_amount: receivedAmount,
+        remaining_qty: Math.max(0, Math.round((Number(line.quantity) - Number(line.received_qty || 0)) * 1000) / 1000),
+      });
+    });
+    const invoices = all("SELECT * FROM purchase_invoices WHERE po_id = ? ORDER BY id", po.id);
+    const orderedAmount = Math.round(lines.reduce((sum, line) => sum + line.ordered_amount, 0) * 100) / 100;
+    const receivedAmount = Math.round(lines.reduce((sum, line) => sum + line.received_amount, 0) * 100) / 100;
+    const invoicedAmount = Math.round(invoices.reduce((sum, invoice) => sum + Number(invoice.amount || 0), 0) * 100) / 100;
+    const variance = Math.round((invoicedAmount - receivedAmount) * 100) / 100;
+    const fullyReceived = lines.every((line) => Number(line.received_qty || 0) >= Number(line.quantity) - 0.0001);
+    let status = "pending";
+    if (invoices.length > 0) status = Math.abs(variance) <= 0.01 ? "matched" : "variance";
+    res.json({
+      po: {
+        id: po.id, po_no: po.po_no, status: po.status, supplier_id: po.supplier_id,
+        supplier_name: po.supplier_name, currency: po.currency, total_amount: po.total_amount,
+        approved_by: po.approved_by, approved_at: po.approved_at,
+      },
+      lines,
+      invoices,
+      summary: {
+        ordered_amount: orderedAmount,
+        received_amount: receivedAmount,
+        invoiced_amount: invoicedAmount,
+        variance,
+        status,
+        fully_received: fullyReceived,
+        invoice_count: invoices.length,
+        ordered_qty: Math.round(lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0) * 1000) / 1000,
+        received_qty: Math.round(lines.reduce((sum, line) => sum + Number(line.received_qty || 0), 0) * 1000) / 1000,
+      },
+    });
+  }));
+
+  app.patch("/api/purchase_invoices/:id", wrap((req, res) => {
+    const invoice = get("SELECT * FROM purchase_invoices WHERE id = ?", req.params.id);
+    if (!invoice) throw ApiError.notFound("发票不存在");
+    const { status } = req.body;
+    const transitions = { pending: ["matched", "void"], matched: ["paid"], void: [], paid: [] };
+    if (!Object.keys(transitions).includes(status)) throw ApiError.validation("status 必须是 pending/matched/paid/void");
+    if (!(transitions[invoice.status] || []).includes(status)) {
+      throw ApiError.validation("发票不能从「" + invoice.status + "」变更为「" + status + "」", { allowed_transitions: transitions[invoice.status] || [] });
+    }
+    run("UPDATE purchase_invoices SET status = ?, updated_at = datetime('now') WHERE id = ?", [status, invoice.id]);
+    res.json({ ok: true, status });
   }));
 }
 

@@ -144,6 +144,7 @@ const RULES = [
   match(/^\/purchase(?:\/.*)?$/, WRITE, ["purchase:write"]),
   match(/^\/purchase_orders(?:\/.*)?$/, READ, ["purchase:read"]),
   match(/^\/purchase_orders(?:\/.*)?$/, WRITE, ["purchase:write"]),
+  match(/^\/purchase_invoices\/\d+$/, ["PATCH"], ["purchase:write"]),
   match(/^\/suppliers(?:\/.*)?$/, READ, ["purchase:read"]),
   match(/^\/suppliers(?:\/.*)?$/, WRITE, ["purchase:write"]),
 

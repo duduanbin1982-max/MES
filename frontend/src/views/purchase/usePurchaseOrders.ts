@@ -2,8 +2,10 @@ import { computed, reactive, ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../../api'
 import { poStatuses, poStatusLabel, poStatusTag } from './purchaseShared'
+import { useAuthStore } from '../../stores/auth'
 
 export function usePurchaseOrders(saving: Ref<boolean>) {
+  const auth = useAuthStore()
   const orders = ref<any[]>([])
   const oLoading = ref(false)
   const orderError = ref('')
@@ -69,18 +71,48 @@ export function usePurchaseOrders(saving: Ref<boolean>) {
     try {
       detailPo.value = await Api.get(`/purchase_orders/${row.id}`)
       detailDlg.visible = true
-    } catch (_error: any) { ElMessage.error('加载详情失败') }
+    } catch (error: any) { ElMessage.error(error?.response?.data?.message || '加载详情失败') }
   }
 
   const approveOrder = async (row: any) => {
     try {
       await ElMessageBox.confirm(`确认采购订单 "${row.po_no}" ?`, '确认订单', { type: 'warning' })
-      await Api.patch(`/purchase_orders/${row.id}/status`, { status: 'confirmed' })
+      // 2026-11-05 状态机整改：draft 先提交，再确认；确认必须带审批人（职责分离由后端校验）
+      if (row.status === 'draft') await Api.patch(`/purchase_orders/${row.id}/status`, { status: 'submitted' })
+      await Api.patch(`/purchase_orders/${row.id}/status`, { status: 'confirmed', approved_by: auth.user?.id })
       ElMessage.success('订单已确认')
       loadOrders()
     } catch (error: any) {
       if (error === 'cancel' || error === 'close') return
-      ElMessage.error(error?.message || '采购订单审批失败')
+      ElMessage.error(error?.response?.data?.message || error?.message || '采购订单审批失败')
+    }
+  }
+
+  const invoiceForm = reactive({ invoice_no: '', invoice_date: '', amount: null as number | null, tax_amount: 0 })
+  const invoiceSaving = ref(false)
+  const saveInvoice = async () => {
+    if (!detailPo.value) return
+    if (!invoiceForm.invoice_no || !(Number(invoiceForm.amount) > 0)) {
+      ElMessage.warning('请填写发票号与金额')
+      return
+    }
+    invoiceSaving.value = true
+    try {
+      await Api.post(`/purchase_orders/${detailPo.value.id}/invoices`, {
+        invoice_no: invoiceForm.invoice_no,
+        invoice_date: invoiceForm.invoice_date || undefined,
+        amount: Number(invoiceForm.amount),
+        tax_amount: Number(invoiceForm.tax_amount || 0),
+      })
+      ElMessage.success('发票已录入')
+      invoiceForm.invoice_no = ''
+      invoiceForm.amount = null
+      invoiceForm.tax_amount = 0
+      detailPo.value = await Api.get(`/purchase_orders/${detailPo.value.id}`)
+    } catch (error: any) {
+      ElMessage.error(error?.response?.data?.message || error?.message || '录入发票失败')
+    } finally {
+      invoiceSaving.value = false
     }
   }
 
@@ -115,6 +147,7 @@ export function usePurchaseOrders(saving: Ref<boolean>) {
   return {
     poStatuses, poStatusLabel, poStatusTag, orders, oLoading, orderError, orderFilter, orderDlg,
     orderForm, orderTotal, detailDlg, detailPo, receiveDlg, receivePo, receiveItems,
+    invoiceForm, invoiceSaving, saveInvoice,
     loadOrders, openOrderDialog, resetOrderForm, saveOrder, showOrderDetail,
     approveOrder, openReceiveDialog, doReceive,
   }

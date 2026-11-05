@@ -28,6 +28,7 @@
   "acceptance:e2e:reset": "node scripts/acceptance-e2e.js --reset",
   "acceptance:e2e:keep": "node scripts/acceptance-e2e.js --keep",
   "acceptance:health": "node scripts/acceptance-e2e.js --health",
+  "acceptance:purchase": "node scripts/acceptance-purchase-chain.js",
   "predeploy": "bash scripts/pre-deploy-test.sh",
     "schema:check": "node scripts/check-service-schema-versions.js",
     "schema:write": "node scripts/check-service-schema-versions.js --write",

@@ -49,6 +49,8 @@
         v-model:receive-dlg="receiveDlg"
         :receive-po="receivePo"
         :receive-items="receiveItems"
+        v-model:invoice-form="invoiceForm"
+        :invoice-saving="invoiceSaving"
         @load-orders="loadOrders"
         @open-order-dialog="openOrderDialog"
         @show-order-detail="showOrderDetail"
@@ -57,6 +59,7 @@
         @reset-order-form="resetOrderForm"
         @save-order="saveOrder"
         @do-receive="doReceive"
+        @save-invoice="saveInvoice"
       />
 
       <PurchaseFollowupTab
@@ -168,6 +171,9 @@ const {
   receiveDlg,
   receivePo,
   receiveItems,
+  invoiceForm,
+  invoiceSaving,
+  saveInvoice,
   loadOrders,
   openOrderDialog,
   resetOrderForm,

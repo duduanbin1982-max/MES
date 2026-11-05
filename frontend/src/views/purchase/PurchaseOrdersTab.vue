@@ -90,6 +90,37 @@
                 <template #default="{ row }">¥{{ ((row.quantity || 0) * (row.unit_price || 0)).toLocaleString() }}</template>
               </el-table-column>
             </el-table>
+            <el-divider>对账（订单 / 收货 / 发票）</el-divider>
+            <template v-if="detailPo.reconciliation">
+              <el-descriptions :column="3" border size="small">
+                <el-descriptions-item label="已订金额">¥{{ (detailPo.reconciliation.ordered_amount || 0).toLocaleString() }}</el-descriptions-item>
+                <el-descriptions-item label="已收金额">¥{{ (detailPo.reconciliation.received_amount || 0).toLocaleString() }}</el-descriptions-item>
+                <el-descriptions-item label="已开票金额">¥{{ (detailPo.reconciliation.invoiced_amount || 0).toLocaleString() }}</el-descriptions-item>
+                <el-descriptions-item label="差异">
+                  <span :class="Math.abs(detailPo.reconciliation.variance || 0) > 0.01 ? 'recon-diff' : ''">¥{{ (detailPo.reconciliation.variance || 0).toLocaleString() }}</span>
+                </el-descriptions-item>
+                <el-descriptions-item label="对账状态">
+                  <el-tag :type="detailPo.reconciliation.status === 'matched' ? 'success' : (detailPo.reconciliation.status === 'variance' ? 'danger' : 'info')" size="small">
+                    {{ detailPo.reconciliation.status === 'matched' ? '已匹配' : (detailPo.reconciliation.status === 'variance' ? '有差异' : '待开票') }}
+                  </el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="发票数">{{ detailPo.reconciliation.invoice_count || 0 }}</el-descriptions-item>
+              </el-descriptions>
+              <el-table v-if="(detailPo.reconciliation.invoices || []).length" :data="detailPo.reconciliation.invoices" size="small" max-height="160" style="margin-top:8px">
+                <el-table-column prop="invoice_no" label="发票号" width="150" />
+                <el-table-column prop="invoice_date" label="开票日期" width="120" />
+                <el-table-column label="金额" width="120" align="right">
+                  <template #default="{ row }">¥{{ (row.amount || 0).toLocaleString() }}</template>
+                </el-table-column>
+                <el-table-column prop="status" label="状态" width="100" />
+              </el-table>
+              <div class="invoice-form">
+                <el-input v-model="invoiceForm.invoice_no" placeholder="发票号" style="width:160px" />
+                <el-date-picker v-model="invoiceForm.invoice_date" type="date" value-format="YYYY-MM-DD" placeholder="开票日期" style="width:150px" />
+                <el-input-number v-model="invoiceForm.amount" :min="0" :precision="2" placeholder="金额" style="width:140px" />
+                <el-button type="primary" size="small" :loading="invoiceSaving" @click="emit('save-invoice')">录入发票</el-button>
+              </div>
+            </template>
             <el-divider v-if="detailPo.receiving_history && detailPo.receiving_history.length">收货记录</el-divider>
             <el-table v-if="detailPo.receiving_history && detailPo.receiving_history.length" :data="detailPo.receiving_history" size="small" max-height="200">
               <el-table-column prop="material_name" label="物料" min-width="140" />
@@ -139,6 +170,7 @@ defineProps<{
   detailPo: any
   receivePo: any
   receiveItems: any[]
+  invoiceSaving: boolean
 }>()
 // 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
 // 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
@@ -147,6 +179,7 @@ const orderDlg = defineModel<any>('orderDlg', { required: true })
 const orderForm = defineModel<any>('orderForm', { required: true })
 const detailDlg = defineModel<any>('detailDlg', { required: true })
 const receiveDlg = defineModel<any>('receiveDlg', { required: true })
+const invoiceForm = defineModel<any>('invoiceForm', { required: true })
 
 
 const emit = defineEmits<{
@@ -158,6 +191,7 @@ const emit = defineEmits<{
   (event: 'reset-order-form'): void
   (event: 'save-order'): void
   (event: 'do-receive'): void
+  (event: 'save-invoice'): void
 }>()
 </script>
 
@@ -166,4 +200,6 @@ const emit = defineEmits<{
 .order-error { margin-bottom: 12px; }
 .order-error__body { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .remaining-qty { width: 100px; color: var(--el-text-color-secondary); }
+.invoice-form { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.recon-diff { color: var(--el-color-danger); font-weight: 600; }
 </style>

@@ -22,6 +22,7 @@ function freshDb() {
   db.exec('CREATE TABLE inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, location TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, status TEXT DEFAULT "available", last_updated TEXT DEFAULT "2026-01-01 00:00:00")');
   db.exec('CREATE TABLE material_movements (id INTEGER PRIMARY KEY AUTOINCREMENT, material_lot_id INTEGER NOT NULL, movement_type TEXT NOT NULL, quantity REAL NOT NULL, unit TEXT, from_location TEXT, to_location TEXT, work_order_id INTEGER, project_id INTEGER, operator_id INTEGER, notes TEXT, created_at TEXT DEFAULT "2026-01-01 00:00:00")');
   db.exec('CREATE TABLE purchase_receiving (id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER, po_item_id INTEGER, received_qty REAL, quality_status TEXT DEFAULT "pending", inspected_by INTEGER, lot_no TEXT, warehouse_location TEXT, received_at TEXT DEFAULT "2026-01-01 00:00:00", notes TEXT)');
+  db.exec('CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, full_name TEXT, role TEXT, is_active INTEGER DEFAULT 1)');
   db.exec('CREATE TABLE purchase_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, po_no TEXT UNIQUE NOT NULL, supplier_id INTEGER NOT NULL, equipment_instance_id INTEGER, status TEXT NOT NULL DEFAULT "draft", ordered_date TEXT, expected_date TEXT, subtotal REAL DEFAULT 0, tax_amount REAL DEFAULT 0, total_amount REAL DEFAULT 0, currency TEXT DEFAULT "CNY", payment_terms TEXT, created_by INTEGER, approved_by INTEGER, approved_at TEXT, closed_at TEXT, notes TEXT, created_at TEXT DEFAULT "2026-01-01 00:00:00", updated_at TEXT DEFAULT "2026-01-01 00:00:00")');
   db.exec('CREATE TABLE po_lines (id INTEGER PRIMARY KEY AUTOINCREMENT, po_id INTEGER NOT NULL, material_id INTEGER NOT NULL, quantity REAL NOT NULL, unit TEXT, unit_price REAL NOT NULL, line_amount REAL NOT NULL, expected_date TEXT, received_qty REAL DEFAULT 0, lot_no_at_receipt TEXT, notes TEXT, line_no INTEGER NOT NULL, created_at TEXT DEFAULT "2026-01-01 00:00:00")');
   return db;
@@ -72,6 +73,8 @@ test.beforeEach(() => {
   _db.prepare('INSERT INTO materials (id, material_code, material_name) VALUES (?, ?, ?)').run(101, 'M-T-1', '测试物料A');
   _db.prepare('INSERT INTO materials (id, material_code, material_name) VALUES (?, ?, ?)').run(102, 'M-T-2', '测试物料B');
   _db.prepare('INSERT INTO key_components (id, material_id, component_type) VALUES (?, ?, ?)').run(1, 101, 'main_bearing');
+  _db.prepare('INSERT INTO users (id, username, full_name, role) VALUES (?, ?, ?, ?)').run(1, 'creator', '创建人', 'planner');
+  _db.prepare('INSERT INTO users (id, username, full_name, role) VALUES (?, ?, ?, ?)').run(2, 'approver', '审批人', 'admin');
   routes = makeApp(_db);
 });
 
@@ -117,10 +120,13 @@ test('P1-4-3 PATCH /api/purchase_orders/:id/status 状态机 + 错误 status 拒
   let r = call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'submitted', __id_0: po.json.id });
   assert.equal(r.status, 200);
   // submitted -> confirmed OK
-  r = call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'confirmed' });
+  r = call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'confirmed', approved_by: 2 });
   assert.equal(r.status, 200);
   // 非法状态应 400
   r = call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'weird_state' });
+  assert.equal(r.status, 400);
+  // 非法跳转（confirmed -> draft）应 400
+  r = call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'draft' });
   assert.equal(r.status, 400);
 });
 
@@ -129,7 +135,8 @@ test('P1-4-4 POST /api/purchase_orders/:id/receive 部分收货 -> partially_rec
   const supId = supR.json.id;
   const po = call(routes, 'POST', '/api/purchase_orders', { supplier_id: supId, lines: [{ material_id: 101, quantity: 10, unit_price: 380 }] });
   // 先 confirmed
-  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'confirmed' });
+  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'submitted' });
+  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'confirmed', approved_by: 2 });
   // 部分收 6
   const lines = _db.prepare('SELECT id FROM po_lines WHERE po_id = ?').all(po.json.id);
   const r = call(routes, 'POST', '/api/purchase_orders/:id/receive', {
@@ -156,7 +163,8 @@ test('P1-4-5 POST /api/purchase_orders/:id/receive 全收 -> received', () => {
   const supR = call(routes, 'POST', '/api/suppliers', { supplier_code: 'SUP-005', supplier_name: 'S5' });
   const supId = supR.json.id;
   const po = call(routes, 'POST', '/api/purchase_orders', { supplier_id: supId, lines: [{ material_id: 101, quantity: 5, unit_price: 380 }] });
-  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'confirmed' });
+  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'submitted' });
+  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'confirmed', approved_by: 2 });
   const lines = _db.prepare('SELECT id FROM po_lines WHERE po_id = ?').all(po.json.id);
   const r = call(routes, 'POST', '/api/purchase_orders/:id/receive', {
     lines: [{ line_id: lines[0].id, received_qty: 5, lot_no: 'LOT-PO-2' }],
@@ -169,7 +177,8 @@ test('P1-4-6 POST /api/purchase_orders/:id/receive 超量应 400 + 事务回滚'
   const supR = call(routes, 'POST', '/api/suppliers', { supplier_code: 'SUP-006', supplier_name: 'S6' });
   const supId = supR.json.id;
   const po = call(routes, 'POST', '/api/purchase_orders', { supplier_id: supId, lines: [{ material_id: 101, quantity: 5, unit_price: 380 }] });
-  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'confirmed' });
+  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'submitted' });
+  call(routes, 'PATCH', '/api/purchase_orders/:id/status', { status: 'confirmed', approved_by: 2 });
   const lines = _db.prepare('SELECT id FROM po_lines WHERE po_id = ?').all(po.json.id);
   const r = call(routes, 'POST', '/api/purchase_orders/:id/receive', {
     lines: [{ line_id: lines[0].id, received_qty: 10, lot_no: 'LOT-PO-3' }],  // 超量
