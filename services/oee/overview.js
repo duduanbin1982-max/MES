@@ -32,6 +32,15 @@ function registerOverviewRoutes(app, store) {
     return { days: d, since, shifts, lossEvents };
   }
 
+  function shiftDataRange() {
+    try {
+      const row = all("SELECT MIN(shift_date) AS min_date, MAX(shift_date) AS max_date FROM oee_shift_log")[0] || {};
+      return { first_shift_date: row.min_date || null, latest_shift_date: row.max_date || null };
+    } catch (_error) {
+      return { first_shift_date: null, latest_shift_date: null };
+    }
+  }
+
   app.get("/api/oee/overview", wrap((req, res) => {
     const { instance_id, days } = req.query;
     const { days: d, since, shifts, lossEvents } = loadShiftsAndLosses(instance_id, days);
@@ -45,8 +54,11 @@ function registerOverviewRoutes(app, store) {
       const totalLossMin = lossSummary.byKey.reduce((s, x) => s + (x.counts_as_loss ? x.minutes : 0), 0);
       const completed = shifts.filter((shift) => shift.good_output > 0).length;
 
+      const range = shiftDataRange();
       res.json({
         period: { days: d, since },
+        window: { mode: "past", days: d, since },
+        data_range: range,
         equipment: eqLabel ? { id: Number(instance_id), ...eqLabel } : { all: true },
         data: {
           shifts: shifts.length,
@@ -104,8 +116,14 @@ function registerOverviewRoutes(app, store) {
 
       const input = buildInput(wos, ops, qcs);
       const result = calculate(input);
+      const range = shiftDataRange();
       res.json({
         period: { days: d, since },
+        window: { mode: "past", days: d, since },
+        data_range: range,
+        hint: range.latest_shift_date
+          ? "当前窗口没有班次记录；最近班次在 " + range.latest_shift_date + "，可加大统计周期或补录班次后回看"
+          : "还没有班次记录（oee_shift_log）：ISA-95 口径需要班次数据，当前指标退化为工单估算",
         equipment: eqLabel ? { id: Number(instance_id), ...eqLabel } : { all: true },
         data: {
           work_orders: wos.length,

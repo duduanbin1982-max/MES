@@ -14,7 +14,20 @@
           <el-select v-model="days" class="days-select" @change="onDaysChange">
             <el-option v-for="d in [7,14,30,60,90,180,365]" :key="d" :label="d+' 天'" :value="d" />
           </el-select>
+          <span class="toolbar-label">起始日</span>
+          <el-date-picker
+            v-model="oeeStartDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="不填=近 N 天"
+            clearable
+            style="width: 160px"
+            @change="onDaysChange"
+          />
           <el-button :icon="Refresh" type="primary" :loading="loading || isa95Loading" @click="onDaysChange">刷新</el-button>
+          <el-tag v-if="oeeWindow" size="small" type="info">
+            窗口：{{ oeeStartDate ? '历史' : '近 ' + days + ' 天' }}{{ summary.fleet_available_hours ? ` · 可用 ${summary.fleet_available_hours}h（班次×人数）` : '' }}
+          </el-tag>
         </div>
       </template>
     </PageToolbar>
@@ -44,6 +57,16 @@
           @retry="load"
         />
         <template v-else>
+        <el-alert
+          v-if="!loading && summary.fleet_busy_hours === 0 && oeeDataRange"
+          type="info"
+          :closable="false"
+          show-icon
+          class="mt-sm"
+          :title="oeeDataRange.latest_node_end
+            ? `当前窗口没有任务工时；系统内任务计划范围 ${oeeDataRange.earliest_node_start || '—'} ~ ${oeeDataRange.latest_node_end}，可调整起始日/天数回看`
+            : '当前窗口没有任务工时：请先维护工序计划时间'"
+        />
         <el-row :gutter="12" class="metric-row" v-loading="loading">
           <el-col :span="6"><div class="stat-card"><div class="stat-label">车队利用率</div><div class="stat-value" :class="utilToneClass(summary.fleet_utilization_pct)">{{ summary.fleet_utilization_pct || 0 }}%</div><div class="stat-label stat-caption">{{ summary.fleet_busy_hours }}h / {{ summary.fleet_available_hours }}h</div></div></el-col>
           <el-col :span="6"><div class="stat-card"><div class="stat-label">工位</div><div class="stat-value">{{ summary.workstation_count || 0 }}</div><div class="stat-label stat-caption">总工位</div></div></el-col>
@@ -147,6 +170,13 @@
                   <el-alert v-if="isa95.data_quality?.legacy_shifts" type="info" :closable="false" class="mt-md"
                     :title="isa95.data_quality.legacy_shifts + ' 个班次无法校验口径'"
                     description="原因：缺三层基线字段，或同一设备同日多班次导致损失事件无法归属。补录班次时长/显式损失分钟数后即可纳入校验。" />
+                  <el-alert
+                    v-else-if="!isa95.basis"
+                    type="warning"
+                    :closable="false"
+                    class="mt-md"
+                    :title="isa95.hint || '当前窗口没有班次记录（oee_shift_log）：ISA-95 口径需要班次数据，当前指标退化为工单估算'"
+                  />
                 </el-card>
               </el-col>
               <el-col :span="12">
@@ -273,6 +303,9 @@ const {
   days,
   loading,
   summary,
+  oeeWindow,
+  oeeDataRange,
+  oeeStartDate,
   workstations,
   oeeNote,
   loadError,

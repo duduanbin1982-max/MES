@@ -10,6 +10,9 @@ export function useOeePage() {
   const days = ref(30)
   const loading = ref(false)
   const summary = ref<any>({})
+  const oeeWindow = ref<any>(null)
+  const oeeDataRange = ref<any>(null)
+  const oeeStartDate = ref<string | null>(null)
   const workstations = ref<any[]>([])
   const oeeNote = ref<string>('')
   const loadError = ref('')
@@ -46,14 +49,18 @@ export function useOeePage() {
     loading.value = true
     loadError.value = ''
     try {
-      const data = await Api.oee({ days: days.value })
+      const params: any = { days: days.value }
+      if (oeeStartDate.value) params.start_date = oeeStartDate.value
+      const data = await Api.oee(params)
       summary.value = data.summary || {}
+      oeeWindow.value = data.window || null
+      oeeDataRange.value = data.data_range || null
       workstations.value = data.workstations || []
       oeeNote.value = data.note || ''
     } catch (error: any) {
       summary.value = {}
       workstations.value = []
-      loadError.value = error?.message || 'OEE 接口暂时不可用，请稍后重试。'
+      loadError.value = error?.response?.data?.message || error?.message || 'OEE 接口暂时不可用，请稍后重试。'
     } finally { loading.value = false }
   }
 
@@ -321,6 +328,9 @@ export function useOeePage() {
     days,
     loading,
     summary,
+    oeeWindow,
+    oeeDataRange,
+    oeeStartDate,
     workstations,
     oeeNote,
     loadError,

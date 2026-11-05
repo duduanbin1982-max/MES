@@ -12,7 +12,7 @@
         <el-tag v-if="overview?.freeze?.archive_status === 'archived'" type="danger">已归档</el-tag>
         <el-tag v-else-if="overview?.freeze?.frozen_at" type="warning">已冻结</el-tag>
         <el-button size="small" type="primary" :disabled="isFrozen" @click="openEdit">编辑项目信息</el-button>
-        <el-button size="small" @click="recalcProgress">重算进度</el-button>
+        <el-button size="small" :disabled="!canEdit" :title="canEdit ? '' : '需要 equipment:write 权限'" @click="recalcProgress">重算进度</el-button>
         <el-button size="small" @click="load">刷新</el-button>
       </div>
     </div>
@@ -37,8 +37,8 @@
             </el-select>
             <el-input aria-label="流转原因" v-model="transitionReason" size="small" placeholder="流转原因" style="width: 220px" />
             <el-button size="small" type="primary" :disabled="isFrozen" @click="changeLifecycle">确认流转</el-button>
-            <el-button size="small" type="warning" :disabled="isFrozen" @click="freezeInstance">冻结基线</el-button>
-            <el-button size="small" type="danger" :disabled="overview?.freeze?.archive_status === 'archived'" @click="archiveInstance">归档</el-button>
+            <el-button size="small" type="warning" :disabled="!canEdit || isFrozen" :title="canEdit ? '' : '需要 equipment:write 权限'" @click="freezeInstance">冻结基线</el-button>
+            <el-button size="small" type="danger" :disabled="!canEdit || overview?.freeze?.archive_status === 'archived'" :title="canEdit ? '' : '需要 equipment:write 权限'" @click="archiveInstance">归档</el-button>
           </div>
         </div>
       </el-card>
@@ -224,6 +224,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { useAuthStore } from '../stores/auth'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Api } from '../api'
@@ -248,6 +249,8 @@ const nextStage = ref('')
 const transitionReason = ref('')
 
 const lifecycleOptions = ref<any[]>([...EQUIPMENT_LIFECYCLE_OPTIONS])
+const auth = useAuthStore()
+const canEdit = computed(() => auth.hasPerm('equipment:write'))
 
 // 2026-10-21：编辑项目信息（进度/客户/合同等）
 const editVisible = ref(false)

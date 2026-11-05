@@ -79,6 +79,15 @@
       </el-tab-pane>
     </el-tabs>
 
+    <el-alert
+      type="info"
+      :closable="false"
+      show-icon
+      class="quality-scope-note"
+      title="口径说明：概览指标（通过率/缺陷 TOP/NCR 概览）为近 30 天；检验记录与 NCR/CAPA 列表为历史累计（可用筛选缩小范围）。"
+    />
+
+
     <QualityDialogs
       v-model:show-create="showCreate"
       v-model:show-ncr-create="showNcrCreate"
