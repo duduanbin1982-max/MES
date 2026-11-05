@@ -21,6 +21,12 @@ function dbRun(db, sql, params = []) {
   return db.prepare(sql).run(Array.isArray(params) ? params : [params]);
 }
 
+const SUPERVISOR_ROLES = new Set(["admin", "foreman", "planner"]);
+
+function isSupervisor(user) {
+  return Boolean(user && SUPERVISOR_ROLES.has(String(user.role || "")));
+}
+
 function workOrderMultiplier(workOrder) {
   return Math.max(Number(workOrder.quantity_planned || workOrder.quantity || 1), 1);
 }
@@ -38,6 +44,7 @@ module.exports = {
   dbAll,
   dbGet,
   dbRun,
+  isSupervisor,
   workOrderMultiplier,
   loadWorkOrder,
 };

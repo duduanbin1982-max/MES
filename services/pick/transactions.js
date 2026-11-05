@@ -5,8 +5,10 @@ const { allocateLots, remainingForMaterial } = require("./demand");
 const {
   DEFAULT_LOCATION,
   EPSILON,
+  dbAll,
   dbGet,
   dbRun,
+  isSupervisor,
   loadWorkOrder,
   roundQty,
 } = require("./shared");
@@ -32,6 +34,8 @@ function pickAllocation(db, workOrder, allocation, materialId, operatorId, fallb
 
   const lot = dbGet(db, "SELECT * FROM material_lots WHERE id = ? AND material_id = ?", [lotId, materialId]);
   if (!lot) throw new Error("批次不存在或物料不匹配");
+  // 2026-11-05（物料链路深挖）：来料检验不合格的批次禁止领用（即使库存被人为改成 available）
+  if (String(lot.quality_status || "") === "failed") throw new Error("批次 " + lot.lot_no + " 来料检验不合格，禁止领用");
 
   const inventory = dbGet(
     db,
@@ -39,7 +43,11 @@ function pickAllocation(db, workOrder, allocation, materialId, operatorId, fallb
     [lot.id, location],
   );
   if (!inventory || Number(inventory.quantity || 0) + EPSILON < quantity) {
-    throw new Error("库存不足: 现有 " + (inventory ? roundQty(inventory.quantity) : 0) + ", 要领 " + roundQty(quantity));
+    const otherLocations = dbAll(db, "SELECT location, quantity FROM inventory WHERE material_lot_id = ? AND status = 'available' AND location <> ? AND quantity > 0", [lot.id, location])
+      .map((row) => row.location + " " + roundQty(row.quantity))
+      .join("、");
+    const hint = otherLocations ? "（该批次在其它库位有库存: " + otherLocations + "，请指定 location）" : "";
+    throw new Error("库存不足: 库位 " + location + " 现有 " + (inventory ? roundQty(inventory.quantity) : 0) + ", 要领 " + roundQty(quantity) + hint);
   }
 
   dbRun(db, "UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [quantity, inventory.id]);
@@ -62,7 +70,9 @@ function pickAllocation(db, workOrder, allocation, materialId, operatorId, fallb
 
 function executePick(db, workOrderId, body, user) {
   const workOrder = loadWorkOrder(db, workOrderId);
-  const { items, operator_id, location, allow_over_pick } = body || {};
+  const { items, operator_id, location } = body || {};
+  // 超领只允许主管显式开启（原来任何调用方传 allow_over_pick=true 都能绕过剩余需求校验）
+  const allowOverPick = body?.allow_over_pick === true && isSupervisor(user);
   if (!Array.isArray(items) || !items.length) {
     throw ApiError.validation("items 数组必填, 格式: [{material_id, quantity, lot_id?}]");
   }
@@ -80,7 +90,7 @@ function executePick(db, workOrderId, body, user) {
           continue;
         }
         const remaining = remainingForMaterial(db, workOrder.id, normalized.materialId);
-        if (!allow_over_pick && normalized.requestedQty > remaining + EPSILON) {
+        if (!allowOverPick && normalized.requestedQty > remaining + EPSILON) {
           errors.push({
             material_id: normalized.materialId,
             error: "领料数量超过工单剩余需求: 剩余 " + roundQty(remaining) + ", 要领 " + roundQty(normalized.requestedQty),
@@ -121,7 +131,9 @@ function returnableQtyByLot(db, workOrderId, lotId) {
 
 function executeReturn(db, workOrderId, body, user) {
   const workOrder = loadWorkOrder(db, workOrderId);
-  const { items, operator_id, location, reason, allow_over_return } = body || {};
+  const { items, operator_id, location, reason } = body || {};
+  // 超退只允许主管显式开启
+  const allowOverReturn = body?.allow_over_return === true && isSupervisor(user);
   if (!Array.isArray(items) || !items.length) {
     throw ApiError.validation("items 数组必填, 格式: [{lot_id, quantity, reason}]");
   }
@@ -140,7 +152,7 @@ function executeReturn(db, workOrderId, body, user) {
           continue;
         }
         const returnableQty = returnableQtyByLot(db, workOrder.id, lotId);
-        if (!allow_over_return && quantity > returnableQty + EPSILON) {
+        if (!allowOverReturn && quantity > returnableQty + EPSILON) {
           errors.push({ lot_id: lotId, error: "退料数量超过可退数量: 可退 " + roundQty(returnableQty) + ", 要退 " + roundQty(quantity) });
           continue;
         }
@@ -152,13 +164,15 @@ function executeReturn(db, workOrderId, body, user) {
         }
 
         const existing = dbGet(db, "SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?", [lotId, defaultLocation]);
+        // 2026-11-05（物料链路深挖）：退料不能把不合格/待检批次"洗白"成 available
+        const targetStatus = String(lot.quality_status || "") === "passed" ? "available" : "quarantined";
         if (existing) {
-          dbRun(db, "UPDATE inventory SET quantity = quantity + ?, status = 'available', last_updated = datetime('now') WHERE id = ?", [quantity, existing.id]);
+          dbRun(db, "UPDATE inventory SET quantity = quantity + ?, status = ?, last_updated = datetime('now') WHERE id = ?", [quantity, targetStatus, existing.id]);
         } else {
           dbRun(
             db,
-            "INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')",
-            [lotId, defaultLocation, quantity, lot.unit || "件"],
+            "INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, ?)",
+            [lotId, defaultLocation, quantity, lot.unit || "件", targetStatus],
           );
         }
 
