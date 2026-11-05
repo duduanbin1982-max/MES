@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "audit": "npm audit --omit=dev --audit-level=high",
+  "audit:modules": "node scripts/audit-modules-sweep.js",
     "backfill": "node scripts/data-backfill.js",
     "backfill:report": "node scripts/data-backfill.js --report",
     "backfill:template": "node scripts/gen-backfill-templates.js",

@@ -50,7 +50,7 @@ const MODULE_PERMISSION: Record<string, string | string[]> = {
   oee: 'equipment:read',
   schedule: 'work_order:read',
   bom: 'equipment:read',
-  documents: 'document:read',
+  documents: ['document:read', 'process:read'],
   eco: 'settings:read',
   'spc-design': 'quality:read',
   shopfloor: 'shopfloor:read',

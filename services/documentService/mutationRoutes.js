@@ -33,9 +33,9 @@ function registerUploadRoute(app, db) {
       if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) return next(ApiError.validation("请求体为空, 没收到文件数据"));
 
       const fileHash = sha256(buffer);
-      const storage = buildStoragePath(fileName);
-      fs.writeFileSync(storage.abs, buffer);
 
+      // 2026-11-05（批量审计）：先做重复/BOM/ECO 校验，再落盘 —— 原来先写文件后校验，
+      // 重复上传或 bom_node/eco 不存在时会留下孤儿文件（磁盘泄漏）。
       const duplicate = db.prepare("SELECT id, version FROM documents WHERE equipment_instance_id = ? AND file_hash = ? AND version = ?")
         .get(meta.equipment_instance_id, fileHash, meta.version || "A0");
       if (duplicate) return next(ApiError.conflict(`文件已存在 (id=${duplicate.id} version=${duplicate.version}), hash 相同`));
@@ -46,6 +46,9 @@ function registerUploadRoute(app, db) {
       if (meta.eco_id && !db.prepare("SELECT id FROM instance_eco WHERE id = ?").get(meta.eco_id)) {
         return next(ApiError.validation(`eco_id 不存在: ${meta.eco_id}`));
       }
+
+      const storage = buildStoragePath(fileName);
+      fs.writeFileSync(storage.abs, buffer);
 
       const userId = req.user?.uid || null;
       const result = db.prepare(`INSERT INTO documents (
