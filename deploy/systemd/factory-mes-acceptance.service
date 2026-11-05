@@ -1,0 +1,14 @@
+[Unit]
+Description=Daily end-to-end health check for factory-mes (TBM-DEMO-001)
+# 需要用户 linger 才能在后天登录失效时照常运行：loginctl enable-linger dubin（本机已开启）
+After=factory-mes.service
+
+[Service]
+Type=oneshot
+Environment="PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+WorkingDirectory=/home/dubin/factory-mes
+# --health：自动清理演练数据、不改里程碑状态、报告保留最近 30 份
+ExecStart=/home/dubin/.nvm/versions/node/v22.22.3/bin/node /home/dubin/factory-mes/scripts/acceptance-e2e.js --health
+TimeoutStartSec=300
+StandardOutput=append:/home/dubin/factory-mes/logs/acceptance/health.log
+StandardError=append:/home/dubin/factory-mes/logs/acceptance/health.log

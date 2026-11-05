@@ -13,6 +13,7 @@
 //   node scripts/acceptance-e2e.js                # 跑一遍并清理
 //   node scripts/acceptance-e2e.js --reset        # 先清演练数据再跑
 //   node scripts/acceptance-e2e.js --keep         # 保留本次创建的数据（演示用）
+//   node scripts/acceptance-e2e.js --health       # 每日健康检查：自动清理、不改里程碑状态、保留最近 30 份报告
 //   node scripts/acceptance-e2e.js --instance-code=TBM-DEMO-001 --base-url=http://127.0.0.1:3890
 require("dotenv").config({ quiet: true });
 const fs = require("node:fs");
@@ -31,6 +32,9 @@ const BASE_URL = opt("base-url", "http://127.0.0.1:3890");
 const INSTANCE_CODE = opt("instance-code", "TBM-DEMO-001");
 const KEEP = flag("keep");
 const RESET = flag("reset");
+const HEALTH = flag("health");
+const MODE = HEALTH ? "health" : "acceptance";
+const REPORT_KEEP = 30;
 const TS = new Date().toISOString().replace(/[:.]/g, "-");
 
 const results = [];
@@ -119,6 +123,17 @@ function resetDemoData(instanceId) {
   }
 }
 
+/** 只保留最近 N 份报告（e2e-*.json/.md 成对清理） */
+function pruneReports(reportDir, keep) {
+  try {
+    const files = fs.readdirSync(reportDir).filter((name) => /^e2e-.*\.(json|md)$/.test(name)).sort().reverse();
+    const limit = keep * 2;
+    for (const name of files.slice(limit)) {
+      fs.unlinkSync(path.join(reportDir, name));
+    }
+  } catch (_error) { /* 清理失败不影响验收结果 */ }
+}
+
 /** 结束后清理本次创建的数据 */
 function cleanupCreated(instanceId) {
   const Database = require("better-sqlite3");
@@ -156,7 +171,7 @@ async function main() {
   instance = (Array.isArray(instances) ? instances : instances.items || []).find((row) => row.instance_code === INSTANCE_CODE);
   assert(instance, `找不到演练项目 ${INSTANCE_CODE}（可先创建项目或改 --instance-code）`);
 
-  if (RESET) resetDemoData(instance.id);
+  if (RESET || HEALTH) resetDemoData(instance.id);
 
   // ---------------------------------------------------------------- 1. 项目
   await step("1. 项目（TBM-DEMO-001）", async (check) => {
@@ -184,12 +199,17 @@ async function main() {
       if (String(sorted[i].planned_start) < String(sorted[i - 1].planned_start)) monotonic = false;
     }
     check("里程碑计划日期按阶段递增", monotonic);
-    const current = sorted.find((row) => row.status === "active") || sorted.find((row) => row.status === "pending");
-    check("存在可推进的里程碑", Boolean(current), current && current.phase_code);
-    if (current) {
-      const target = current.status === "active" ? "completed" : "active";
-      const updated = await request("PUT", `/api/milestones/${current.id}`, { status: target });
-      check(`里程碑推进 ${current.phase_code} → ${target}`, updated.milestone && updated.milestone.status === target, updated.milestone && updated.milestone.status);
+    if (HEALTH) {
+      // 每日健康检查不改里程碑状态（否则连跑几天会把所有里程碑都推成已完成并导致断言失败）
+      check("里程碑状态字段可读", sorted.every((row) => Boolean(row.status)), sorted.length);
+    } else {
+      const current = sorted.find((row) => row.status === "active") || sorted.find((row) => row.status === "pending");
+      check("存在可推进的里程碑", Boolean(current), current && current.phase_code);
+      if (current) {
+        const target = current.status === "active" ? "completed" : "active";
+        const updated = await request("PUT", `/api/milestones/${current.id}`, { status: target });
+        check(`里程碑推进 ${current.phase_code} → ${target}`, updated.milestone && updated.milestone.status === target, updated.milestone && updated.milestone.status);
+      }
     }
   });
 
@@ -383,6 +403,7 @@ async function main() {
   fs.mkdirSync(reportDir, { recursive: true });
   const report = {
     generated_at: new Date().toISOString(),
+    mode: MODE,
     instance: { id: instance.id, code: instance.instance_code, name: instance.instance_name },
     base_url: BASE_URL,
     keep: KEEP,
@@ -409,7 +430,18 @@ async function main() {
   }
   const mdPath = path.join(reportDir, `e2e-${TS}.md`);
   fs.writeFileSync(mdPath, mdLines.join("\n"));
+
+  // 固定入口：latest.json / latest.md / latest.status（供每日健康检查与看板读取）
+  fs.writeFileSync(path.join(reportDir, "latest.json"), JSON.stringify(report, null, 2));
+  fs.writeFileSync(path.join(reportDir, "latest.md"), mdLines.join("\n"));
+  fs.writeFileSync(
+    path.join(reportDir, "latest.status"),
+    `${failed.length === 0 ? "ok" : "fail"} ${report.generated_at} steps=${results.length - failed.length}/${results.length} checks=${passedChecks}/${totalChecks}\n`,
+  );
+  pruneReports(reportDir, REPORT_KEEP);
+
   console.log(`报告：${jsonPath}\n      ${mdPath}`);
+  console.log(`最新：${path.join(reportDir, "latest.md")}（${failed.length === 0 ? "ok" : "fail"}）`);
 
   process.exitCode = failed.length === 0 ? 0 : 1;
 }
