@@ -74,6 +74,12 @@ function createDatabase() {
       notes TEXT,
       work_order_id INTEGER
     );
+    CREATE TABLE workstations (
+      id INTEGER PRIMARY KEY,
+      name TEXT,
+      is_active INTEGER DEFAULT 1
+    );
+    INSERT INTO workstations (id, name) VALUES (10, '工位10');
     CREATE TABLE weld_records (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       work_order_id INTEGER,

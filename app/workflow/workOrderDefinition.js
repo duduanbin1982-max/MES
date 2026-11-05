@@ -83,8 +83,8 @@ const TRANSITIONS = {
 /** 计划一次工单流转；不合法时抛 VALIDATION_ERROR（与旧实现逐字一致） */
 function plan(wo, event, payload = {}) {
   const t = TRANSITIONS[event];
-  if (!t) throw ApiError.validation(`Unknown work order event: ${event}`);
-  if (!t.from.includes(wo.status)) throw ApiError.validation(`Cannot '${event}' from status '${wo.status}'`);
+  if (!t) throw ApiError.validation(`未知的工单动作：${event}`);
+  if (!t.from.includes(wo.status)) throw ApiError.validation(`工单当前状态为「${wo.status}」，不能执行「${LABELS[event] || event}」`);
   if (typeof t.compute === 'function') {
     const computed = t.compute(payload, wo);
     return { to: computed.to, setters: computed.setters };
