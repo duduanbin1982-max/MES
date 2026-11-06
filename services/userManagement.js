@@ -95,12 +95,13 @@ function listRoleGroups() {
   return db.prepare(`
     SELECT rg.*,
            r.role_name AS default_role_name,
-           COUNT(u.id) AS user_count
+           COUNT(u.id) AS user_count,
+           COALESCE(SUM(CASE WHEN u.is_active = 1 THEN 1 ELSE 0 END), 0) AS active_user_count
     FROM role_groups rg
     LEFT JOIN roles r ON r.role_code = rg.default_role_code
     LEFT JOIN users u ON u.role_group_id = rg.id
     GROUP BY rg.id
-    ORDER BY rg.id
+    ORDER BY rg.is_active DESC, rg.id
   `).all().map(row => ({ ...row, scope_config: parseJson(row.scope_config, {}) }));
 }
 
@@ -112,6 +113,37 @@ const GROUP_CODE_RE = /^[a-z][a-z0-9_]{1,31}$/;
 const HOME_RE = /^\/[a-zA-Z0-9_?=&/.:-]*$/;
 
 // 2026-11-06（角色与权限审计）：角色组入参校验（创建/局部更新共用）
+const SCOPE_CONFIG_KEYS = new Set(['project_ids', 'instance_ids', 'workstation_ids', 'subsystem_ids', 'locations']);
+
+// 2026-11-06（角色组审计）：scope_config 结构校验，避免"配了但被静默丢弃"导致数据范围意外收紧
+function validateScopeConfig(raw) {
+  if (raw === null || raw === undefined) return {};
+  let config = raw;
+  if (typeof raw === 'string') {
+    if (!raw.trim()) return {};
+    try { config = JSON.parse(raw); } catch (_error) { throw ApiError.validation('scope_config 不是合法 JSON'); }
+  }
+  if (typeof config !== 'object' || Array.isArray(config)) throw ApiError.validation('scope_config 必须是对象');
+  const errors = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (!SCOPE_CONFIG_KEYS.has(key)) {
+      errors.push('scope_config 不支持的键: ' + key + '（支持: ' + [...SCOPE_CONFIG_KEYS].join('/') + '）');
+      continue;
+    }
+    if (!Array.isArray(value)) {
+      errors.push('scope_config.' + key + ' 必须是数组');
+      continue;
+    }
+    if (key === 'locations') {
+      if (!value.every((item) => typeof item === 'string' && item.trim())) errors.push('scope_config.locations 必须是非空字符串数组');
+    } else if (!value.every((item) => Number.isInteger(Number(item)) && Number(item) > 0)) {
+      errors.push('scope_config.' + key + ' 必须是正整数数组');
+    }
+  }
+  if (errors.length) throw ApiError.validation(errors.join('; '), { errors });
+  return config;
+}
+
 function validateRoleGroupInput(body, { partial = false } = {}) {
   const errors = [];
   const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
@@ -134,8 +166,11 @@ function validateRoleGroupInput(body, { partial = false } = {}) {
     const home = String(body.default_home).trim();
     if (!HOME_RE.test(home) || home.length > 200) errors.push('default_home 必须是以 / 开头的站内路径');
   }
-  if (has('scope_config') && typeof body.scope_config === 'string' && body.scope_config.trim()) {
-    try { JSON.parse(body.scope_config); } catch (_error) { errors.push('scope_config 不是合法 JSON'); }
+  if (has('scope_config')) {
+    try { validateScopeConfig(body.scope_config); } catch (error) {
+      if (error && error.message) errors.push(error.message);
+      else throw error;
+    }
   }
   if (errors.length) throw ApiError.validation(errors.join('; '), { errors });
   return true;
@@ -279,8 +314,9 @@ function createUser({ username, password, full_name, role_code, role_group_id, p
   const role = getRoleByCode(role_code);
   if (!role) return { ok: false, error: 'role_code 不存在: ' + role_code };
   if (role_group_id) {
-    const group = db.prepare('SELECT id FROM role_groups WHERE id = ?').get(role_group_id);
+    const group = db.prepare('SELECT id, is_active FROM role_groups WHERE id = ?').get(role_group_id);
     if (!group) return { ok: false, error: 'role_group_id 不存在: ' + role_group_id };
+    if (!group.is_active) return { ok: false, error: '角色组已停用，不能分配用户: ' + role_group_id };
   }
   const hash = bcrypt.hashSync(password, 10);
   const scope = data_scope ? String(data_scope) : null;
@@ -314,8 +350,9 @@ function updateUser(id, { password, full_name, role_code, role_group_id, phone, 
   }
   if (role_group_id !== undefined) {
     if (role_group_id) {
-      const group = db.prepare('SELECT id FROM role_groups WHERE id = ?').get(role_group_id);
+      const group = db.prepare('SELECT id, is_active FROM role_groups WHERE id = ?').get(role_group_id);
       if (!group) return { ok: false, error: 'role_group_id 不存在: ' + role_group_id };
+      if (!group.is_active) return { ok: false, error: '角色组已停用，不能分配用户: ' + role_group_id };
     }
     fields.push('role_group_id = ?'); params.push(role_group_id || null);
   }
@@ -396,6 +433,8 @@ function register(app, _db) {
     const body = req.body || {};
     validateRoleGroupInput(body);
     if (!body.group_code || !body.group_name) throw ApiError.validation('group_code / group_name 必填');
+    const duplicate = db.prepare('SELECT id FROM role_groups WHERE group_code = ?').get(String(body.group_code).trim());
+    if (duplicate) throw ApiError.conflict('group_code 已存在: ' + String(body.group_code).trim());
     const r = db.prepare(`
       INSERT INTO role_groups (group_code, group_name, default_role_code, data_scope, scope_config, default_home, description, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -419,7 +458,13 @@ function register(app, _db) {
     const exists = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
     validateRoleGroupInput(req.body || {}, { partial: true });
     if (!exists) throw ApiError.notFound('role group not found');
-    const { sets, params } = normalizeRoleGroupPatch(req.body || {});
+    const patch = req.body || {};
+    // 停用前必须无用户归属，避免"停用组仍挂用户"的脏状态
+    if (patch.is_active === false || patch.is_active === 0) {
+      const userCount = db.prepare('SELECT COUNT(*) AS c FROM users WHERE role_group_id = ?').get(exists.id).c;
+      if (userCount > 0) throw ApiError.conflict(`角色组仍有 ${userCount} 个用户，不能停用；请先调整用户归属`);
+    }
+    const { sets, params } = normalizeRoleGroupPatch(patch);
     if (!sets.length) throw ApiError.validation('无可更新字段');
     sets.push("updated_at = datetime('now')");
     params.push(req.params.id);
@@ -434,6 +479,41 @@ function register(app, _db) {
       diff_summary: `更新角色组 ${after.group_code}`,
     });
     res.json({ ok: true });
+  }));
+
+  // 2026-11-06（角色组审计）：批量归属用户（角色组"批量归属"能力的后端实现）
+  app.post('/api/role-groups/:id/assign-users', wrap((req, res) => {
+    const group = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
+    if (!group) throw ApiError.notFound('role group not found');
+    if (!group.is_active) throw ApiError.validation('角色组已停用，不能分配用户');
+    const rawUsers = (req.body || {}).user_ids;
+    if (!Array.isArray(rawUsers) || !rawUsers.length) throw ApiError.validation('user_ids 必填且为非空数组');
+    const userIds = [...new Set(rawUsers.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value > 0))];
+    if (!userIds.length) throw ApiError.validation('user_ids 必须是正整数数组');
+    if (userIds.length > 200) throw ApiError.validation('单次最多分配 200 个用户');
+    const placeholders = userIds.map(() => '?').join(',');
+    const users = db.prepare(`SELECT id, username, full_name, role_code FROM users WHERE id IN (${placeholders})`).all(...userIds);
+    if (users.length !== userIds.length) {
+      const found = new Set(users.map((user) => user.id));
+      const missing = userIds.filter((id) => !found.has(id));
+      throw ApiError.validation('部分用户不存在: ' + missing.join(','));
+    }
+    const update = db.prepare('UPDATE users SET role_group_id = ? WHERE id = ?');
+    const tx = db.transaction(() => {
+      for (const user of users) update.run(group.id, user.id);
+    });
+    tx();
+    audit.record(db, req, {
+      action: 'role_group.assign_users',
+      resource_type: 'role_group',
+      resource_id: group.id,
+      after: { user_ids: users.map((user) => user.id) },
+      diff_summary: `角色组 ${group.group_code} 批量归属 ${users.length} 名用户`,
+    });
+    const roleMismatch = group.default_role_code
+      ? users.filter((user) => user.role_code !== group.default_role_code).map((user) => ({ id: user.id, username: user.username, role_code: user.role_code }))
+      : [];
+    res.json({ ok: true, group_id: group.id, assigned: users.length, role_mismatch: roleMismatch });
   }));
 
   app.delete('/api/role-groups/:id', wrap((req, res) => {

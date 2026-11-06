@@ -274,3 +274,83 @@ test('R-7 权限矩阵变更双人复核：申请→另一管理员通过/驳回
   assert.deepEqual(unchanged, ['work_order:read', 'work_report:read'], '驳回后权限不变');
   assert.ok(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role.permission.reject'").get().c >= 1);
 });
+
+// ---------------- 角色组模块（RG-*） ----------------
+
+test('RG-1 重复 group_code 返回 409（原 500）', async () => {
+  const r = await request('POST', '/api/role-groups', { group_code: 'production', group_name: '重复生产部' });
+  assert.equal(r.status, 409);
+  assert.match(r.body.message, /group_code 已存在/);
+});
+
+test('RG-2 scope_config 结构校验：未知键/字符串 ID 拒绝，合法配置通过', async () => {
+  let r = await request('POST', '/api/role-groups', { group_code: 'scope_bad1', group_name: '坏配置1', scope_config: { foo: [1] } });
+  assert.equal(r.status, 400);
+  assert.match(r.body.message, /不支持的键/);
+  r = await request('POST', '/api/role-groups', { group_code: 'scope_bad2', group_name: '坏配置2', scope_config: { project_ids: ['x'] } });
+  assert.equal(r.status, 400);
+  assert.match(r.body.message, /正整数数组/);
+  r = await request('POST', '/api/role-groups', { group_code: 'scope_ok', group_name: '好配置', data_scope: 'instance', scope_config: { project_ids: [1], locations: ['主仓库-A'] } });
+  assert.equal(r.status, 200);
+  const groupId = r.body.id;
+  assert.equal(db.prepare('SELECT data_scope FROM role_groups WHERE id=?').get(groupId).data_scope, 'instance');
+  await request('DELETE', '/api/role-groups/' + groupId);
+});
+
+test('RG-3/4 停用组约束 + 批量归属用户 + 审计', async () => {
+  const r = await request('POST', '/api/role-groups', { group_code: 'batch_group', group_name: '批量组', default_role_code: 'worker', data_scope: 'all' });
+  assert.equal(r.status, 200);
+  const groupId = r.body.id;
+  db.prepare("INSERT INTO users (username, full_name, role_id, role_code, is_active) VALUES ('u_batch1','批量一',3,'worker',1)").run();
+  db.prepare("INSERT INTO users (username, full_name, role_id, role_code, is_active) VALUES ('u_batch2','批量二',3,'worker',1)").run();
+  const ids = db.prepare("SELECT id FROM users WHERE username IN ('u_batch1','u_batch2') ORDER BY id").all().map((row) => row.id);
+
+  let res = await request('POST', '/api/role-groups/' + groupId + '/assign-users', { user_ids: ids });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.assigned, 2);
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM users WHERE role_group_id=?").get(groupId).c, 2);
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role_group.assign_users'").get().c >= 1);
+
+  const groups = (await request('GET', '/api/role-groups')).body.items;
+  const target = groups.find((group) => group.id === groupId);
+  assert.equal(target.user_count, 2);
+  assert.equal(target.active_user_count, 2);
+
+  // 有用户时不能停用
+  res = await request('PATCH', '/api/role-groups/' + groupId, { is_active: false });
+  assert.equal(res.status, 409);
+  assert.match(res.body.message, /不能停用/);
+
+  // 停用组不能分配
+  db.prepare('UPDATE users SET role_group_id = NULL WHERE role_group_id = ?').run(groupId);
+  res = await request('PATCH', '/api/role-groups/' + groupId, { is_active: false });
+  assert.equal(res.status, 200);
+  res = await request('POST', '/api/role-groups/' + groupId + '/assign-users', { user_ids: ids });
+  assert.equal(res.status, 400);
+  assert.match(res.body.message, /已停用，不能分配用户/);
+
+  // 用户不能挂到停用组
+  res = await request('POST', '/api/users', { username: 'u_batch3', password: 'BatchPass123!', full_name: '批量三', role_code: 'worker', role_group_id: groupId });
+  assert.equal(res.status, 400);
+  assert.match(res.body.message, /已停用，不能分配用户/);
+
+  // 清理
+  db.prepare("DELETE FROM users WHERE username IN ('u_batch1','u_batch2','u_batch3')").run();
+  await request('DELETE', '/api/role-groups/' + groupId);
+});
+
+test('RG-5 停用角色组不参与数据范围继承（loadScope 兜底）', async () => {
+  const { loadScope } = require('../app/dataScope');
+  const r = await request('POST', '/api/role-groups', { group_code: 'scope_legacy', group_name: '遗留组', data_scope: 'workshop', scope_config: { subsystem_ids: [1] } });
+  const groupId = r.body.id;
+  db.prepare("INSERT INTO users (username, full_name, role_id, role_code, is_active) VALUES ('u_scope','范围用户',3,'worker',1)").run();
+  const userId = db.prepare("SELECT id FROM users WHERE username='u_scope'").get().id;
+  db.prepare('UPDATE users SET role_group_id = ? WHERE id = ?').run(groupId, userId);
+  // 模拟历史脏数据：组已停用但仍挂用户（绕过 PATCH 的停用保护）
+  db.prepare('UPDATE role_groups SET is_active = 0 WHERE id = ?').run(groupId);
+  const ctx = loadScope(db, userId);
+  assert.equal(ctx.scope, 'all', '停用组不授予范围（回退默认）');
+  assert.equal(ctx.source, 'default');
+  db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  await request('DELETE', '/api/role-groups/' + groupId);
+});

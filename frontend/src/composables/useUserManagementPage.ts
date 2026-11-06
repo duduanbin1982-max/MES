@@ -1,4 +1,4 @@
-import { reactive, ref, onMounted, watch } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { formatJsonForInput, parseJsonInput } from '../domain/jsonField'
 import { useRoute, useRouter } from 'vue-router'
 import { Api } from '../api'
@@ -32,6 +32,32 @@ export function useUserManagementPage() {
 
   const dlg = reactive<any>({ visible: false, isEdit: false, saving: false, form: {} })
   const groupDlg = reactive<any>({ visible: false, isEdit: false, saving: false, form: {} })
+  const activeRoleGroups = computed(() => roleGroups.value.filter((group) => group.is_active))
+
+  const openAssignUsers = (row: any) => {
+    groupAssign.group = row
+    groupAssign.userIds = users.value.filter((user) => user.role_group_id === row.id).map((user) => user.id)
+    groupAssign.visible = true
+  }
+
+  const submitAssignUsers = async () => {
+    if (!groupAssign.group) return
+    if (!groupAssign.userIds.length) return ElMessage.warning('请选择要归属的用户')
+    groupAssign.saving = true
+    try {
+      const result: any = await Api.post('/role-groups/' + groupAssign.group.id + '/assign-users', { user_ids: groupAssign.userIds })
+      if (result.role_mismatch && result.role_mismatch.length) {
+        ElMessage.warning(`已归属 ${result.assigned} 人；其中 ${result.role_mismatch.length} 人角色与组默认角色不一致，请确认`)
+      } else {
+        ElMessage.success(`已归属 ${result.assigned} 名用户`)
+      }
+      groupAssign.visible = false
+      await Promise.all([loadRoleGroups(), loadUsers()])
+    } catch (e: any) { ElMessage.error(e?.response?.data?.message || e?.message || '归属失败') }
+    finally { groupAssign.saving = false }
+  }
+
+  const groupAssign = reactive<any>({ visible: false, saving: false, group: null, userIds: [] })
   const roleDlg = reactive<any>({ visible: false, isEdit: false, saving: false, form: {} })
   const permDlg = reactive<any>({ visible: false, saving: false, role: null, superAdmin: false })
   const permMap = reactive<Record<string, boolean>>({})
@@ -370,6 +396,10 @@ export function useUserManagementPage() {
     resetUserFilter,
     roles,
     roleGroups,
+    activeRoleGroups,
+    groupAssign,
+    openAssignUsers,
+    submitAssignUsers,
     permissionCatalog,
     permissionRequests,
     loadPermissionRequests,

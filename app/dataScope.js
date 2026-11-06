@@ -239,7 +239,14 @@ function loadScope(db, userId) {
   let group = null;
   if (user.role_group_id) {
     try {
-      group = db.prepare("SELECT data_scope, scope_config FROM role_groups WHERE id = ?").get(user.role_group_id);
+      try {
+        group = db.prepare("SELECT data_scope, scope_config, is_active FROM role_groups WHERE id = ?").get(user.role_group_id);
+        // 2026-11-06（角色组审计）：停用组不再参与数据范围继承（应为无用户状态，防御处理）
+        if (group && group.is_active !== undefined && Number(group.is_active) === 0) group = null;
+      } catch (_error) {
+        // 旧库/测试库没有 is_active 列时退回原查询
+        group = db.prepare("SELECT data_scope, scope_config FROM role_groups WHERE id = ?").get(user.role_group_id);
+      }
     } catch (_error) {
       group = null;
     }

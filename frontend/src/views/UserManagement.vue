@@ -85,9 +85,10 @@
             <el-table-column prop="user_count" label="用户数" width="80" />
             <el-table-column prop="description" label="说明" min-width="220" />
             <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag></template></el-table-column>
-            <el-table-column label="操作" width="150" fixed="right">
+            <el-table-column label="操作" width="230" fixed="right">
               <template #default="{ row }">
                 <el-button size="small" @click="openGroupDialog(row)">编辑</el-button>
+                <el-button size="small" type="primary" plain @click="openAssignUsers(row)">分配用户</el-button>
                 <el-button size="small" type="danger" @click="deleteRoleGroup(row)">删除</el-button>
               </template>
             </el-table-column>
@@ -173,7 +174,7 @@
         <el-form-item label="姓名" required><el-input v-model="dlg.form.full_name" /></el-form-item>
         <el-form-item label="角色组">
           <el-select v-model="dlg.form.role_group_id" clearable style="width: 100%" @change="applyGroupDefault">
-            <el-option v-for="g in roleGroups" :key="g.id" :label="g.group_name + ' / ' + g.group_code" :value="g.id" />
+            <el-option v-for="g in activeRoleGroups" :key="g.id" :label="g.group_name + ' / ' + g.group_code" :value="g.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="角色" required>
@@ -200,6 +201,20 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="groupAssign.visible" title="批量归属用户" width="520px">
+      <div v-if="groupAssign.group" style="margin-bottom: 10px">
+        角色组：<strong>{{ groupAssign.group.group_name }}（{{ groupAssign.group.group_code }}）</strong>
+      </div>
+      <el-select v-model="groupAssign.userIds" multiple filterable placeholder="选择用户" style="width: 100%">
+        <el-option v-for="user in users" :key="user.id" :label="`${user.full_name || user.username}（${user.username} / ${user.role_name || user.role_code}）`" :value="user.id" />
+      </el-select>
+      <div style="font-size:12px;color:var(--el-color-info);margin-top:8px">归属后用户的数据范围将继承该角色组（用户级覆盖优先）；停用角色组不可分配。</div>
+      <template #footer>
+        <el-button @click="groupAssign.visible = false">取消</el-button>
+        <el-button type="primary" :loading="groupAssign.saving" @click="submitAssignUsers">确定归属</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="groupDlg.visible" :title="groupDlg.isEdit ? '编辑角色组' : '新建角色组'" width="560px">
       <el-form :model="groupDlg.form" label-width="100px">
         <el-form-item label="组编码" required><el-input v-model="groupDlg.form.group_code" :disabled="groupDlg.isEdit" placeholder="小写字母开头，如 production / warehouse" /><div style="font-size:12px;color:var(--el-color-info);margin-top:4px">只能包含小写字母/数字/下划线，2-32 位；默认角色必须存在</div></el-form-item>
@@ -221,6 +236,7 @@
         <el-form-item v-if="scopeNeedsConfig(groupDlg.form.data_scope)" label="范围配置">
           <el-input v-model="groupDlg.form.scope_config" type="textarea" :rows="2"
             placeholder='JSON，如 {"project_ids":[1]} / {"subsystem_ids":[2]} / {"workstation_ids":[3]}' />
+          <div style="font-size:12px;color:var(--el-color-info);margin-top:4px">支持键：project_ids / instance_ids / subsystem_ids / workstation_ids / locations；ID 必须为正整数</div>
         </el-form-item>
         <el-form-item label="默认首页"><el-input v-model="groupDlg.form.default_home" placeholder="/delivery 或 /shopfloor?tab=pick" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="groupDlg.form.description" type="textarea" :rows="3" /></el-form-item>
@@ -292,6 +308,10 @@ const {
   loadUsers,
   roles,
   roleGroups,
+  activeRoleGroups,
+  groupAssign,
+  openAssignUsers,
+  submitAssignUsers,
   permissionCatalog,
   permissionRequests,
   approvePermissionRequest,
