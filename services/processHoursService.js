@@ -119,6 +119,35 @@ function getLaborRate(db) {
   return Number.isFinite(envRate) && envRate > 0 ? envRate : 200;
 }
 
+// 2026-11-06（费率差异化）：按工种取生效费率卡；无卡时回退 system_settings / env / 200
+function resolveLaborRate(db, workType, dateStr) {
+  const day = String(dateStr || todaySqlDate()).slice(0, 10);
+  if (hasTable(db, "labor_rate_cards")) {
+    try {
+      const card = db.prepare(`SELECT * FROM labor_rate_cards
+        WHERE work_type = ? AND effective_from <= ?
+        ORDER BY effective_from DESC, id DESC LIMIT 1`).get(String(workType || "assembly"), day);
+      if (card && Number(card.hourly_rate) > 0) {
+        return {
+          rate: Number(card.hourly_rate),
+          source: "rate_card",
+          card_id: card.id,
+          work_type: card.work_type,
+          skill_level: card.skill_level,
+          effective_from: card.effective_from,
+        };
+      }
+    } catch (_error) { /* 表结构异常时回退 */ }
+  }
+  const fallback = getLaborRate(db);
+  let source = "default";
+  try {
+    if (db.prepare("SELECT value FROM system_settings WHERE key = 'labor_rate_per_hour'").get()) source = "system_settings";
+  } catch (_error) { /* ignore */ }
+  if (source === "default" && Number(process.env.LABOR_RATE_PER_HOUR) > 0) source = "env";
+  return { rate: fallback, source, work_type: workType, skill_level: null };
+}
+
 function getMonthLock(db, dateStr) {
   if (!hasTable(db, "work_month_locks")) return null;
   const month = monthOf(dateStr);
@@ -146,16 +175,18 @@ function syncLaborCost(db, report, workOrder, options) {
   db.prepare("DELETE FROM project_cost_entries WHERE source_ref=?").run(sourceRef);
   if (options && options.remove) return { removed: true, source_ref: sourceRef };
   if (!workOrder || !workOrder.equipment_instance_id) return { skipped: "no_instance" };
-  const rate = getLaborRate(db);
-  const amount = round2(Number(report.hours_spent) * rate);
   const occurredOn = String(report.approved_at || report.reported_at || todaySqlDate()).slice(0, 10);
+  // 2026-11-06（费率差异化）：按报工工种取生效费率卡，无卡回退统一费率
+  const rateInfo = resolveLaborRate(db, report.work_type, occurredOn);
+  const rate = rateInfo.rate;
+  const amount = round2(Number(report.hours_spent) * rate);
   const result = db.prepare(`INSERT INTO project_cost_entries
     (equipment_instance_id, work_order_id, cost_type, source_type, source_ref, description, amount, currency, occurred_on, status, notes, created_by)
     VALUES (?, ?, 'labor', 'work_report', ?, ?, ?, 'CNY', ?, 'posted', ?, ?)`)
     .run(workOrder.equipment_instance_id, workOrder.id, sourceRef,
       `报工人工成本 ${workOrder.wo_code}`, amount, occurredOn,
-      `自动入账：${report.hours_spent}h × ${rate} 元/h`, report.worker_id || null);
-  return { id: Number(result.lastInsertRowid), amount, rate, source_ref: sourceRef };
+      `自动入账：${report.hours_spent}h × ${rate} 元/h（工种 ${report.work_type || "assembly"}，费率来源 ${rateInfo.source}）`, report.worker_id || null);
+  return { id: Number(result.lastInsertRowid), amount, rate, rate_source: rateInfo.source, rate_card_id: rateInfo.card_id || null, source_ref: sourceRef };
 }
 
 // === 工时定额管理 ===
@@ -434,7 +465,7 @@ function registerWorkReport(app, db, auth) {
 
 // === 月结锁定 / 工时日历 ===
 function registerGovernance(app, db) {
-  const { all, run } = makeHelpers(db);
+  const { all, get, run } = makeHelpers(db);
 
   app.get("/api/work-report-locks", wrap((req, res) => {
     if (!hasTable(db, "work_month_locks")) return res.json({ items: [] });
@@ -492,6 +523,47 @@ function registerGovernance(app, db) {
     run("DELETE FROM work_calendar WHERE date=?", [req.params.date]);
     res.json({ ok: true, date: req.params.date });
   }));
+
+  // 2026-11-06（费率差异化）：人工费率卡
+  app.get("/api/labor-rates", wrap((req, res) => {
+    const workType = req.query.work_type ? String(req.query.work_type) : null;
+    let items = [];
+    if (hasTable(db, "labor_rate_cards")) {
+      items = workType
+        ? all("SELECT * FROM labor_rate_cards WHERE work_type=? ORDER BY effective_from DESC, id DESC", [workType])
+        : all("SELECT * FROM labor_rate_cards ORDER BY work_type, effective_from DESC, id DESC");
+    }
+    const resolved = {};
+    const resolvedWorkTypes = workType ? [workType] : WORK_TYPES;
+    for (const type of resolvedWorkTypes) resolved[type] = resolveLaborRate(db, type, todaySqlDate());
+    res.json({ items, resolved, default_rate: getLaborRate(db), work_types: WORK_TYPES });
+  }));
+
+  app.post("/api/labor-rates", wrap((req, res) => {
+    if (!hasTable(db, "labor_rate_cards")) throw ApiError.validation("费率卡表未创建，请执行迁移脚本");
+    const body = req.body || {};
+    const workType = String(body.work_type || "").trim();
+    if (!WORK_TYPES.includes(workType)) throw ApiError.validation("work_type 必须是: " + WORK_TYPES.join("/"));
+    const rate = finiteNumber(body.hourly_rate);
+    if (rate === null || rate <= 0 || rate > 100000) throw ApiError.validation("hourly_rate 必须 > 0 且 <= 100000");
+    const skillLevel = String(body.skill_level || "default").trim() || "default";
+    const effectiveFrom = String(body.effective_from || todaySqlDate()).slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) throw ApiError.validation("effective_from 格式必须是 YYYY-MM-DD");
+    run(`INSERT INTO labor_rate_cards (work_type, skill_level, hourly_rate, currency, effective_from, note, updated_at)
+         VALUES (?,?,?,?,?,?,datetime('now'))
+         ON CONFLICT(work_type, skill_level, effective_from) DO UPDATE SET
+           hourly_rate=excluded.hourly_rate, currency=excluded.currency, note=excluded.note, updated_at=datetime('now')`,
+      [workType, skillLevel, rate, body.currency || "CNY", effectiveFrom, body.note || null]);
+    const card = get("SELECT * FROM labor_rate_cards WHERE work_type=? AND skill_level=? AND effective_from=?", [workType, skillLevel, effectiveFrom]);
+    res.json({ ok: true, item: card, resolved: resolveLaborRate(db, workType, todaySqlDate()) });
+  }));
+
+  app.delete("/api/labor-rates/:id", wrap((req, res) => {
+    if (!hasTable(db, "labor_rate_cards")) throw ApiError.validation("费率卡表未创建");
+    const result = run("DELETE FROM labor_rate_cards WHERE id=?", [req.params.id]);
+    if (!result.changes) throw ApiError.notFound("费率卡不存在: " + req.params.id);
+    res.json({ ok: true, deleted: Number(req.params.id) });
+  }));
 }
 
 function register(app, db, auth) {
@@ -512,5 +584,6 @@ module.exports = {
   recomputeActualHours,
   syncLaborCost,
   getLaborRate,
+  resolveLaborRate,
   ensureMonthUnlocked,
 };

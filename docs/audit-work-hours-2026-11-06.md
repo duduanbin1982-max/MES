@@ -171,13 +171,33 @@
 
 ### 5.7 当前边界（仍未做）
 
-1. 成本入账使用统一人工费率（单值），未按工种/技能等级差异化；
-2. 月结锁定记录 `locked_by`，但没有审批流/双人复核；
+1. 月结锁定记录 `locked_by`，但没有审批流/双人复核；
 3. 日历只有单日配置，无批量导入/法定节假日模板；
 4. 报工审批无通知（站内/IM）；
 5. 报工只联动人工成本，材料/外协/折旧仍由其他台账维护。
 
-## 6. 第二轮改动文件
+## 6. 剩余边界 #1：人工费率差异化（2026-11-06 已完成）
+
+针对"统一人工费率"问题，新增**工种费率卡**：
+
+- 表 `labor_rate_cards(work_type, skill_level, hourly_rate, currency, effective_from, note)`，唯一键 `(work_type, skill_level, effective_from)`；
+- 审批入账时按 `报工工种 + 报工日期` 解析**最新生效档**费率；无匹配卡时回退 `system_settings.labor_rate_per_hour` → 环境变量 → 默认 200；
+- API：`GET/POST/DELETE /api/labor-rates`（读 `work_report:read`，写 `work_report:approve`）；`GET` 同时返回各工种当前解析结果；
+- 前端 `/process-hours` 新增「人工费率」页签：选择工种、费率、生效日期保存；列表可删除；仅审批权限可写；
+- 迁移脚本 `scripts/migrate-labor-rates.js --apply`：建表 + 按当前统一费率为 6 个工种各插一条初始卡（生产已执行：6 条 × 200 元/h）；
+- 成本条目备注写入费率来源（`rate_card / system_settings / env / default`），便于对账。
+
+**实测（生产）**：
+
+```
+GET  /api/labor-rates → 6 条费率卡，assembly 当前 200（rate_card）
+foreman 将 assembly 费率改为 260（2026-01-01 生效）→ 200
+worker 写费率 → 403（需要 work_report:approve）
+2h assembly 报工审批 → 成本 520 元（2h × 260），cost_entry.rate_source=rate_card
+删除 260 费率卡 → 解析回退 200（default）
+```
+
+## 7. 第二轮改动文件
 
 | 文件 | 说明 |
 |---|---|
@@ -190,4 +210,5 @@
 | `scripts/migrate-work-hours-governance.js` | 审批字段 + 月结/日历表 + worker_id 回填（幂等） |
 | `scripts/migrate-work-report-permissions.js` | 存量角色补 `work_report:approve` |
 | `frontend/.../useProcessHoursPage.ts`、`views/ProcessHours.vue` | 审批/驳回、月结锁定、状态列 |
-| `tests/processHoursGovernance.test.js` | 11 个回归用例 |
+| `scripts/migrate-labor-rates.js` | 费率卡建表 + 初始费率（幂等） |
+| `tests/processHoursGovernance.test.js` | **14 个回归用例**（含 3 个费率差异化用例） |

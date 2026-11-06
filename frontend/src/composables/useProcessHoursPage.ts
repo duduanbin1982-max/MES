@@ -27,6 +27,41 @@ export function useProcessHoursPage() {
   const hoursSaving = ref(false)
   const hoursForm = reactive({ node_id: 0, operation_name: '', work_type: 'assembly', standard_hours: 8, worker_count: 2, description: '' })
 
+  // Tab 1b: 人工费率卡
+  const laborRates = ref<any[]>([])
+  const rateResolved = ref<any>({})
+  const rateLoading = ref(false)
+  const rateForm = reactive({ work_type: 'assembly', skill_level: 'default', hourly_rate: 200, effective_from: localToday(), note: '' })
+  const loadLaborRates = async () => {
+    rateLoading.value = true
+    try {
+      const result: any = await Api.get('/labor-rates')
+      laborRates.value = result.items || []
+      rateResolved.value = result.resolved || {}
+    } catch (_error) { laborRates.value = [] }
+    finally { rateLoading.value = false }
+  }
+  const saveLaborRate = async () => {
+    if (!(Number(rateForm.hourly_rate) > 0)) return ElMessage.warning('费率必须 > 0')
+    try {
+      await Api.post('/labor-rates', { ...rateForm })
+      ElMessage.success('费率已保存')
+      rateForm.note = ''
+      await loadLaborRates()
+    } catch (error: any) { ElMessage.error(error?.response?.data?.message || '保存费率失败') }
+  }
+  const deleteLaborRate = async (row: any) => {
+    try {
+      await ElMessageBox.confirm(`删除 ${workTypeLabel(row.work_type)} ${row.effective_from} 起的费率 ${row.hourly_rate} 元/h?`, '删除费率卡', { type: 'warning' })
+      await Api.del('/labor-rates/' + row.id)
+      ElMessage.success('已删除')
+      await loadLaborRates()
+    } catch (error: any) {
+      if (error === 'cancel' || error === 'close') return
+      ElMessage.error(error?.response?.data?.message || '删除失败')
+    }
+  }
+
   // Tab 2: 工序报工
   const reports = ref<ApiRecord[]>([])
   const reportsLoading = ref(false)
@@ -278,6 +313,7 @@ export function useProcessHoursPage() {
     if (tab === 'daily') loadDailySummary()
     if (tab === 'worker-perf' && workerPerfData.value.length === 0) loadWorkerPerformance()
     if (tab === 'overtime' && overtimeData.value.length === 0) loadOvertime()
+    if (tab === 'rates' && laborRates.value.length === 0) loadLaborRates()
   }
 
   onMounted(() => {
@@ -340,6 +376,13 @@ export function useProcessHoursPage() {
     otLoading,
     otSummary,
     loadOvertime,
+    laborRates,
+    rateResolved,
+    rateLoading,
+    rateForm,
+    loadLaborRates,
+    saveLaborRate,
+    deleteLaborRate,
     onTabChange,
   }
 }

@@ -141,6 +141,8 @@ const RULES = [
   match(/^\/work-report-locks(?:\/.*)?$/, WRITE, ["work_report:approve"]),
   match(/^\/work-calendar(?:\/.*)?$/, READ, ["work_report:read"]),
   match(/^\/work-calendar(?:\/.*)?$/, WRITE, ["work_report:approve"]),
+  match(/^\/labor-rates(?:\/.*)?$/, READ, ["work_report:read"]),
+  match(/^\/labor-rates(?:\/.*)?$/, WRITE, ["work_report:approve"]),
   match(/^\/process\/nodes\/\d+\/progress$/, READ, ["work_report:read", "work_order:read", "process:read"]),
   match(/^\/process\/nodes\/\d+\/hours(?:\/.*)?$/, READ, ["process:read", "work_report:read"]),
   match(/^\/process\/nodes\/\d+\/hours(?:\/.*)?$/, WRITE, ["process:write"]),

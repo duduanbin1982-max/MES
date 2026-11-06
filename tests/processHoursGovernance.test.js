@@ -24,6 +24,7 @@ function freshDb() {
   db.exec(`CREATE TABLE system_settings (key TEXT PRIMARY KEY, value TEXT)`);
   db.exec(`CREATE TABLE project_cost_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, equipment_instance_id INTEGER NOT NULL, bom_node_id INTEGER, work_order_id INTEGER, cost_type TEXT NOT NULL, source_type TEXT, source_ref TEXT, description TEXT NOT NULL, vendor TEXT, amount REAL NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'CNY', occurred_on TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'posted', notes TEXT, created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT)`);
   db.exec(`CREATE TABLE work_month_locks (month TEXT PRIMARY KEY, locked_at TEXT DEFAULT CURRENT_TIMESTAMP, locked_by INTEGER, note TEXT)`);
+  db.exec(`CREATE TABLE labor_rate_cards (id INTEGER PRIMARY KEY AUTOINCREMENT, work_type TEXT NOT NULL, skill_level TEXT NOT NULL DEFAULT 'default', hourly_rate REAL NOT NULL, currency TEXT DEFAULT 'CNY', effective_from TEXT NOT NULL, note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT, UNIQUE(work_type, skill_level, effective_from))`);
   db.exec(`CREATE TABLE work_calendar (date TEXT PRIMARY KEY, day_type TEXT NOT NULL DEFAULT 'workday', daily_hours REAL NOT NULL DEFAULT 8, note TEXT, updated_at TEXT)`);
   db.exec(`CREATE TABLE process_standard_hours (id INTEGER PRIMARY KEY AUTOINCREMENT, process_node_id INTEGER NOT NULL, work_type TEXT NOT NULL DEFAULT 'assembly', standard_hours REAL NOT NULL DEFAULT 0, worker_count INTEGER NOT NULL DEFAULT 1, unit TEXT DEFAULT 'h', description TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(process_node_id, work_type))`);
   db.exec(`CREATE TABLE work_report_details (
@@ -87,6 +88,7 @@ test.beforeEach(() => {
   db.prepare(`INSERT INTO work_orders (id, wo_code, title, equipment_instance_id, assigned_to, actual_hours) VALUES (1, 'WO-1', '测试工单', 1, 7, 0)`).run();
   db.prepare(`INSERT INTO work_order_operations (id, work_order_id, action) VALUES (5, 1, 'start')`).run();
   db.prepare(`INSERT INTO system_settings (key, value) VALUES ('labor_rate_per_hour', '200')`).run();
+  db.prepare(`INSERT INTO labor_rate_cards (work_type, skill_level, hourly_rate, effective_from, note) VALUES ('assembly', 'default', 200, '2020-01-01', '初始费率')`).run();
   routes = makeRoutes(db);
 });
 
@@ -267,4 +269,50 @@ test('P3-4 工时口径统一：项目进度优先取已审批报工，无报工
   progress = runProgress();
   assert.equal(progress.hours.actual_basis, 'work_reports', '有已审批报工后取报工');
   assert.equal(progress.hours.actual, 3);
+});
+
+// ---------------- 费率差异化 ----------------
+
+test('P4-1 工种费率卡：qc 费率 300 → 报工审批成本按卡计算', () => {
+  db.prepare(`INSERT INTO labor_rate_cards (work_type, skill_level, hourly_rate, effective_from, note) VALUES ('qc', 'default', 300, '2020-01-01', '质检费率')`).run();
+  const report = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 2, work_type: 'qc' });
+  assert.equal(report.status, 200, JSON.stringify(report.json));
+  const result = approve(report.json.id);
+  assert.equal(result.status, 200);
+  assert.equal(result.json.cost_entry.rate, 300);
+  assert.equal(result.json.cost_entry.amount, 600);
+  assert.equal(result.json.cost_entry.rate_source, 'rate_card');
+  const card = db.prepare("SELECT hourly_rate FROM labor_rate_cards WHERE work_type='qc'").get();
+  assert.equal(card.hourly_rate, 300);
+});
+
+test('P4-2 费率卡按生效日期取最新档；未来档不回溯', () => {
+  db.prepare(`INSERT INTO labor_rate_cards (work_type, skill_level, hourly_rate, effective_from, note) VALUES ('assembly', 'default', 260, '2026-01-01', '新费率')`).run();
+  db.prepare(`INSERT INTO labor_rate_cards (work_type, skill_level, hourly_rate, effective_from, note) VALUES ('welding', 'default', 400, '2030-01-01', '未来档')`).run();
+  const { resolveLaborRate } = require('../services/processHoursService');
+  assert.equal(resolveLaborRate(db, 'assembly', '2026-11-06').rate, 260, '取最新生效档');
+  assert.equal(resolveLaborRate(db, 'assembly', '2024-06-01').rate, 200, '历史日期取旧档');
+  assert.equal(resolveLaborRate(db, 'welding', '2026-11-06').rate, 200, '未来档不生效，回退统一费率');
+  assert.equal(resolveLaborRate(db, 'welding', '2026-11-06').source, 'system_settings');
+  const report = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 1, work_type: 'assembly' });
+  const result = approve(report.json.id);
+  assert.equal(result.json.cost_entry.rate, 260);
+  assert.equal(result.json.cost_entry.amount, 260);
+});
+
+test('P4-3 费率卡 API：列表/新增/删除并返回当前解析结果', () => {
+  let list = call(routes, 'GET', '/api/labor-rates', {});
+  assert.equal(list.status, 200);
+  assert.equal(list.json.resolved.assembly.rate, 200);
+  assert.equal(list.json.items.length, 1);
+  const created = call(routes, 'POST', '/api/labor-rates', { work_type: 'assembly', hourly_rate: 250, effective_from: '2026-01-01', note: '调价' });
+  assert.equal(created.status, 200, JSON.stringify(created.json));
+  assert.equal(created.json.resolved.rate, 250);
+  list = call(routes, 'GET', '/api/labor-rates', {});
+  assert.equal(list.json.resolved.assembly.rate, 250);
+  const removed = call(routes, 'DELETE', '/api/labor-rates/:id', { __id: created.json.item.id });
+  assert.equal(removed.status, 200);
+  list = call(routes, 'GET', '/api/labor-rates', {});
+  assert.equal(list.json.resolved.assembly.rate, 200);
+  assert.equal(call(routes, 'POST', '/api/labor-rates', { work_type: 'assembly', hourly_rate: 0 }).status, 400);
 });

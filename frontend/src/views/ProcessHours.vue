@@ -34,6 +34,37 @@
       </el-tab-pane>
 
       <!-- Tab 2: 工序报工 -->
+      <el-tab-pane label="人工费率" name="rates">
+        <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px"
+          title="报工审批通过后，人工成本按「工种 × 生效费率卡」自动入账；无匹配费率卡时回退统一费率。费率卡可按生效日期维护多档。" />
+        <div class="tab-toolbar">
+          <el-select v-model="rateForm.work_type" style="width:120px">
+            <el-option v-for="type in ['assembly','welding','machining','testing','qc','other']" :key="type" :label="workTypeLabel(type)" :value="type" />
+          </el-select>
+          <el-input-number v-model="rateForm.hourly_rate" :min="1" :precision="2" placeholder="元/小时" style="width:140px" />
+          <el-date-picker v-model="rateForm.effective_from" type="date" value-format="YYYY-MM-DD" placeholder="生效日期" style="width:150px" />
+          <el-input v-model="rateForm.note" placeholder="备注（可选）" style="width:180px" />
+          <el-button v-if="canApprove" type="primary" @click="saveLaborRate">保存费率</el-button>
+          <el-tag v-if="rateResolved" type="info" size="small">当前 assembly 费率：{{ rateResolved.assembly?.rate }} 元/h（{{ rateResolved.assembly?.source }}）</el-tag>
+        </div>
+        <el-table :data="laborRates" v-loading="rateLoading" border stripe size="small" max-height="420" empty-text="暂无费率卡（审批时回退统一费率）">
+          <el-table-column label="工种" width="110">
+            <template #default="{ row }">{{ workTypeLabel(row.work_type) }}</template>
+          </el-table-column>
+          <el-table-column prop="skill_level" label="技能等级" width="100" />
+          <el-table-column label="费率(元/h)" width="120" align="right">
+            <template #default="{ row }">{{ row.hourly_rate }}</template>
+          </el-table-column>
+          <el-table-column prop="effective_from" label="生效日期" width="120" />
+          <el-table-column prop="note" label="备注" min-width="180" show-overflow-tooltip />
+          <el-table-column label="操作" width="90">
+            <template #default="{ row }">
+              <el-button v-if="canApprove" size="small" link type="danger" @click="deleteLaborRate(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
       <el-tab-pane label="工序报工" name="reports">
         <div class="tab-toolbar">
           <el-select v-model="reportFilter.work_order_id" placeholder="筛选工单" clearable style="width: 200px" @change="loadReports">
@@ -270,6 +301,12 @@ const {
   reportFilter,
   canVoid,
   voidReport,
+  laborRates,
+  rateResolved,
+  rateLoading,
+  rateForm,
+  saveLaborRate,
+  deleteLaborRate,
   canApprove,
   monthLock,
   lockCurrentMonth,
