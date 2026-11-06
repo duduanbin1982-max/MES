@@ -15,7 +15,7 @@
 - 页面宣称"角色组负责批量归属"，但**没有批量归属接口**（404）；
 - 用户弹窗可选择停用的角色组，后端也允许把用户挂到停用组。
 
-**整改后：A-（1 个 P1 + 4 个 P2 已修，另补 2 项 P3）**
+**整改后：A（1 个 P1 + 4 个 P2 + 3 项 P3 全部已修）**
 
 | 编号 | 级别 | 问题（整改前实测） | 状态 |
 |---|---|---|---|
@@ -24,8 +24,8 @@
 | RG-3 | P2 | `scope_config` 无结构校验：`{"foo":[1]}`、`{"project_ids":["x"]}` 均 200 入库，被 `normalizeConfig` 丢弃后触发"缺配置→拒绝"，数据范围意外收紧 | 已修 |
 | RG-4 | P2 | 无批量归属接口（页面副标题写着"批量归属"但 `assign-users` 404） | 已修 |
 | RG-5 | P2 | 用户弹窗可选择停用组；后端 `createUser/updateUser` 也接受停用组 | 已修 |
-| RG-6 | P3 | 列表无启用/停用人数区分、无排序；历史组 `planner/administrator` 停用状态不可见 | 已修（增加 active_user_count、启用优先排序） |
-| RG-7 | P3 | 默认首页只校验"以 / 开头"，不校验路由是否存在；无组级成员查询接口 | 记录 |
+| RG-6 | P3 | 列表无启用/停用人数区分、无排序；历史组 `planner/administrator` 停用状态不可见 | 已修（active_user_count、启用优先排序） |
+| RG-7 | P3 | 默认首页不校验路由存在；无组级成员接口；无软删除/恢复；默认角色变更不调整已归属用户 | **已全部修复**（路由校验 / 成员接口 / 软删除恢复 / 批量调整角色） |
 
 ## 1. 模块现状
 
@@ -135,6 +135,70 @@ scope_config {foo:[1]} → 400；合法 {project_ids:[1], locations:['主仓库-
 | `scripts/migrate-role-group-integrity.js` | 恢复"停用但仍挂用户"的组、报告角色/组默认角色不一致（幂等） |
 | `tests/roleGovernance.test.js` | 新增 RG-1~RG-5 用例 |
 | `docs/audit-role-groups-2026-11-07.md` | 本报告 |
+
+## 6. P3 遗留全修（2026-11-07）
+
+### 6.1 default_home 真实路由校验
+
+- 新增 `scripts/write-ui-routes.js`：解析 `frontend/src/router/index.ts` 生成 `config/uiRoutes.json`（当前 58 条路由）；
+- `validateRoleGroupInput` 校验 `default_home`：去掉 `?query/#hash` 后必须匹配真实路由模板（支持 `/instances/:id` 这类动态段）；
+- 路由清单缺失时宽松放行（不阻断），清单存在时非法路径 → 400；
+- 实测：`/not-a-real-page` → 400「default_home 不是有效页面路由」；`/delivery`、`/shopfloor?tab=pick` → 200。
+
+### 6.2 组级成员查询接口
+
+- 新增 `GET /api/role-groups/:id/members`：返回 `group_id/total/items`（用户名、姓名、角色、启停、最后登录）；
+- 前端角色组列表新增「成员」按钮（只读成员表），「分配用户」对话框改为从 members 接口预选，不再依赖全量用户列表；
+- 实测：归属 2 人后 members 返回 2 条。
+
+### 6.3 角色组软删除 / 恢复 / 彻底删除
+
+- `role_groups` 新增 `deleted_at`、`deleted_by`（迁移脚本 `migrate-role-group-soft-delete.js --apply`）；
+- `DELETE /api/role-groups/:id` 改为**软删除**（记录删除人/时间、置 `is_active=0`）；有用户归属仍返回 409；
+- `GET /api/role-groups` 默认排除已删除；`?include_deleted=1` 可查看；
+- `POST /api/role-groups/:id/restore` 恢复（恢复为启用状态）；
+- `DELETE ...?hard=1` 彻底删除（要求已软删除且无用户，物理删除并写 `role_group.delete_hard` 审计）；
+- 已软删除组不可编辑/分配/被用户挂靠（400/404）；
+- 前端：角色组页签新增「显示已删除」开关；已删除行显示「恢复 / 彻底删除」。
+
+### 6.4 默认角色变更批量调整已归属用户
+
+- `PATCH /api/role-groups/:id` 支持 `apply_default_role_to_users: true`：
+  - 要求组有合法默认角色；事务内把该组全部用户的 `role_id/role_code` 改为默认角色；
+  - 每名用户 `token_version+1`（强制重新登录，权限立即按新角色生效）；
+  - 写审计 `role_group.apply_default_role`，返回 `applied_users`；
+- 前端编辑弹窗新增「保存后把该组已归属用户的角色调整为默认角色」复选项（默认不勾选，避免误改权限）。
+
+## 7. 验证补充
+
+| 项目 | 结果 |
+|---|---|
+| `tests/roleGovernance.test.js` | **15/15**（新增 RG-6 成员 / RG-7 路由 / RG-8 软删除恢复 / RG-9 批量角色） |
+| `tests/dataScope.test.js` | 10/10 |
+| 全量部署闸门 | **824/0** ✅ |
+| 前端 eslint / vue-tsc / build | 0 / 0 / 通过 |
+| 生产迁移 | role_groups 软删除列已就绪；uiRoutes.json 58 条路由 |
+
+生产演练（真实 API）：
+
+```
+default_home=/not-a-real-page → 400「不是有效页面路由」
+合法组 default_home=/delivery → 200
+批量归属 2 人 → 成员接口返回 2 条
+PATCH default_role_code=foreman + apply_default_role_to_users → 200 {applied_users:2}
+  两名用户 role_code 变 foreman、token_version=1（强制重新登录）
+软删除 → 200 soft；默认列表不含；include_deleted=1 可见 deleted_at
+恢复 → 200；再次软删后 hard=1 → 200，数据库记录删除
+演练用户/角色组已清理
+```
+
+## 8. 剩余边界（P3 记录）
+
+1. `config/uiRoutes.json` 需要随前端路由变更重新生成（建议接入 CI：`node scripts/write-ui-routes.js && git diff --exit-code config/uiRoutes.json`）；
+2. 软删除的 `group_code` 仍占用唯一键（彻底删除后释放）；恢复前不能重建同名组；
+3. 批量调整已归属用户角色不可一键撤销（靠审计 + 再次调整）；
+4. 组级成员接口当前全量返回（组内 >200 人时建议分页）；
+5. 角色组默认首页仅校验路由存在，不校验该用户是否有权访问（权限在进入页面后由前端/接口守卫）。
 
 ## 5. 复验方式
 

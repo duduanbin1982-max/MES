@@ -218,7 +218,8 @@ test('R-6 角色组删除：无引用可删，有用户归属拒绝（409）', a
 
   r = await request('DELETE', '/api/role-groups/' + groupId);
   assert.equal(r.status, 200);
-  assert.equal(db.prepare('SELECT COUNT(*) c FROM role_groups WHERE id=?').get(groupId).c, 0);
+  const softDeleted = db.prepare('SELECT deleted_at FROM role_groups WHERE id=?').get(groupId);
+  assert.ok(softDeleted && softDeleted.deleted_at, '软删除应记录 deleted_at');
   assert.equal(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role_group.delete'").get().c, 1);
   r = await request('DELETE', '/api/role-groups/' + groupId);
   assert.equal(r.status, 404);
@@ -352,5 +353,77 @@ test('RG-5 停用角色组不参与数据范围继承（loadScope 兜底）', as
   assert.equal(ctx.scope, 'all', '停用组不授予范围（回退默认）');
   assert.equal(ctx.source, 'default');
   db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  await request('DELETE', '/api/role-groups/' + groupId);
+});
+
+// ---------------- 角色组 P3（RG-7）----------------
+
+test('RG-6 组级成员查询接口', async () => {
+  const r = await request('POST', '/api/role-groups', { group_code: 'member_group', group_name: '成员组', default_role_code: 'worker', data_scope: 'all' });
+  assert.equal(r.status, 200);
+  const groupId = r.body.id;
+  db.prepare("INSERT INTO users (username, full_name, role_id, role_code, is_active) VALUES ('m_u1','成员一',3,'worker',1)").run();
+  db.prepare("INSERT INTO users (username, full_name, role_id, role_code, is_active) VALUES ('m_u2','成员二',3,'worker',1)").run();
+  const ids = db.prepare("SELECT id FROM users WHERE username IN ('m_u1','m_u2') ORDER BY id").all().map((row) => row.id);
+  let res = await request('POST', '/api/role-groups/' + groupId + '/assign-users', { user_ids: ids });
+  assert.equal(res.status, 200);
+  res = await request('GET', '/api/role-groups/' + groupId + '/members');
+  assert.equal(res.status, 200);
+  assert.equal(res.body.total, 2);
+  assert.deepEqual(res.body.items.map((user) => user.username).sort(), ['m_u1', 'm_u2']);
+  assert.equal(res.body.items[0].role_name, '工人');
+  db.prepare("DELETE FROM users WHERE username IN ('m_u1','m_u2')").run();
+  await request('DELETE', '/api/role-groups/' + groupId);
+});
+
+test('RG-7 default_home 必须是真实页面路由', async () => {
+  let r = await request('POST', '/api/role-groups', { group_code: 'bad_home', group_name: '坏首页', default_home: '/not-a-real-page' });
+  assert.equal(r.status, 400);
+  assert.match(r.body.message, /default_home 不是有效页面路由/);
+  r = await request('POST', '/api/role-groups', { group_code: 'good_home', group_name: '好首页', default_home: '/delivery' });
+  assert.equal(r.status, 200);
+  assert.equal(db.prepare('SELECT default_home FROM role_groups WHERE id=?').get(r.body.id).default_home, '/delivery');
+  r = await request('POST', '/api/role-groups', { group_code: 'good_home2', group_name: '好首页2', default_home: '/shopfloor?tab=pick' });
+  assert.equal(r.status, 200);
+  await request('DELETE', '/api/role-groups/' + r.body.id);
+});
+
+test('RG-8 软删除/恢复/彻底删除', async () => {
+  const r = await request('POST', '/api/role-groups', { group_code: 'soft_group', group_name: '软删组', data_scope: 'all' });
+  const groupId = r.body.id;
+  let res = await request('DELETE', '/api/role-groups/' + groupId);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.soft, true);
+  let list = (await request('GET', '/api/role-groups')).body.items;
+  assert.ok(!list.some((group) => group.id === groupId), '默认列表不显示已删除');
+  list = (await request('GET', '/api/role-groups?include_deleted=1')).body.items;
+  assert.ok(list.some((group) => group.id === groupId && group.deleted_at), 'include_deleted 可看到已删除');
+  res = await request('POST', '/api/role-groups/' + groupId + '/restore');
+  assert.equal(res.status, 200);
+  list = (await request('GET', '/api/role-groups')).body.items;
+  assert.ok(list.some((group) => group.id === groupId && !group.deleted_at), '恢复后重新出现在列表');
+  // 再次软删后彻底删除
+  await request('DELETE', '/api/role-groups/' + groupId);
+  res = await request('DELETE', '/api/role-groups/' + groupId + '?hard=1');
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM role_groups WHERE id=?').get(groupId).c, 0);
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role_group.delete_hard'").get().c >= 1);
+});
+
+test('RG-9 默认角色变更可批量调整已归属用户角色', async () => {
+  const r = await request('POST', '/api/role-groups', { group_code: 'role_apply', group_name: '角色调整组', default_role_code: 'worker', data_scope: 'all' });
+  const groupId = r.body.id;
+  db.prepare("INSERT INTO users (username, full_name, role_id, role_code, is_active) VALUES ('ra_u1','调整一',3,'worker',1)").run();
+  db.prepare("INSERT INTO users (username, full_name, role_id, role_code, is_active) VALUES ('ra_u2','调整二',3,'worker',1)").run();
+  const ids = db.prepare("SELECT id FROM users WHERE username IN ('ra_u1','ra_u2') ORDER BY id").all().map((row) => row.id);
+  await request('POST', '/api/role-groups/' + groupId + '/assign-users', { user_ids: ids });
+  const res = await request('PATCH', '/api/role-groups/' + groupId, { default_role_code: 'foreman', apply_default_role_to_users: true });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.applied_users, 2);
+  const users = db.prepare("SELECT role_code, token_version FROM users WHERE username IN ('ra_u1','ra_u2')").all();
+  assert.deepEqual(users.map((user) => user.role_code), ['foreman', 'foreman']);
+  assert.ok(users.every((user) => user.token_version >= 1), '批量调整角色应强制用户重新登录');
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role_group.apply_default_role'").get().c >= 1);
+  db.prepare("DELETE FROM users WHERE username IN ('ra_u1','ra_u2')").run();
   await request('DELETE', '/api/role-groups/' + groupId);
 });

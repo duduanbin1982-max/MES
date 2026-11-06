@@ -34,10 +34,43 @@ export function useUserManagementPage() {
   const groupDlg = reactive<any>({ visible: false, isEdit: false, saving: false, form: {} })
   const activeRoleGroups = computed(() => roleGroups.value.filter((group) => group.is_active))
 
-  const openAssignUsers = (row: any) => {
+  const openAssignUsers = async (row: any) => {
     groupAssign.group = row
     groupAssign.userIds = users.value.filter((user) => user.role_group_id === row.id).map((user) => user.id)
     groupAssign.visible = true
+    try {
+      const result: any = await Api.get('/role-groups/' + row.id + '/members')
+      groupAssign.userIds = (result.items || []).map((user: any) => user.id)
+    } catch (_error) { /* 保持本地预选 */ }
+  }
+
+  const openGroupMembers = async (row: any) => {
+    groupMembers.group = row
+    groupMembers.visible = true
+    groupMembers.loading = true
+    try {
+      const result: any = await Api.get('/role-groups/' + row.id + '/members')
+      groupMembers.items = result.items || []
+    } catch (e: any) { groupMembers.items = []; ElMessage.error(e?.response?.data?.message || '加载成员失败') }
+    finally { groupMembers.loading = false }
+  }
+
+  const restoreRoleGroup = async (row: any) => {
+    try {
+      await ElMessageBox.confirm(`确定恢复角色组 ${row.group_code}？`, '恢复角色组', { type: 'warning' })
+      await Api.post('/role-groups/' + row.id + '/restore')
+      ElMessage.success('角色组已恢复')
+      await loadRoleGroups()
+    } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || '恢复失败') }
+  }
+
+  const hardDeleteRoleGroup = async (row: any) => {
+    try {
+      await ElMessageBox.confirm(`彻底删除角色组 ${row.group_code}？此操作不可恢复（需无用户归属）。`, '彻底删除', { type: 'error' })
+      await Api.del('/role-groups/' + row.id + '?hard=1')
+      ElMessage.success('角色组已彻底删除')
+      await loadRoleGroups()
+    } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || '删除失败') }
   }
 
   const submitAssignUsers = async () => {
@@ -58,6 +91,8 @@ export function useUserManagementPage() {
   }
 
   const groupAssign = reactive<any>({ visible: false, saving: false, group: null, userIds: [] })
+  const groupMembers = reactive<any>({ visible: false, loading: false, group: null, items: [] })
+  const roleGroupIncludeDeleted = ref(false)
   const roleDlg = reactive<any>({ visible: false, isEdit: false, saving: false, form: {} })
   const permDlg = reactive<any>({ visible: false, saving: false, role: null, superAdmin: false })
   const permMap = reactive<Record<string, boolean>>({})
@@ -114,7 +149,7 @@ export function useUserManagementPage() {
   }
 
   const loadRoleGroups = async () => {
-    try { const r = await Api.get('/role-groups'); roleGroups.value = r.items || [] }
+    try { const r = await Api.get('/role-groups', { params: { include_deleted: roleGroupIncludeDeleted.value ? '1' : undefined } }); roleGroups.value = r.items || [] }
     catch (_) { roleGroups.value = []; ElMessage.error('加载角色组失败') }
   }
 
@@ -220,6 +255,7 @@ export function useUserManagementPage() {
       // P1-1：角色组的 scope_config（按装备/车间/工位/仓库筛选范围）
       const payload: any = { ...groupDlg.form }
       payload.scope_config = parseJsonField(groupDlg.form.scope_config, '范围配置') ?? {}
+      if (groupDlg.isEdit && groupDlg.form.apply_default_role_to_users) payload.apply_default_role_to_users = true
       if (groupDlg.isEdit) await Api.patch('/role-groups/' + groupDlg.form.id, payload)
       else await Api.post('/role-groups', payload)
       ElMessage.success('角色组已保存')
@@ -398,6 +434,11 @@ export function useUserManagementPage() {
     roleGroups,
     activeRoleGroups,
     groupAssign,
+    groupMembers,
+    roleGroupIncludeDeleted,
+    openGroupMembers,
+    restoreRoleGroup,
+    hardDeleteRoleGroup,
     openAssignUsers,
     submitAssignUsers,
     permissionCatalog,

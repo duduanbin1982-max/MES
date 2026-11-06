@@ -45,6 +45,9 @@ function ensureSchema() {
   if (!cols.includes("data_scope_config")) db.exec("ALTER TABLE users ADD COLUMN data_scope_config TEXT");
   // 2026-11-06（用户管理审计）：token 版本号，禁用/改角色/改密码/权限变更后 +1 使旧 token 失效
   if (!cols.includes("token_version")) db.exec("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0");
+  const groupCols = db.prepare("PRAGMA table_info(role_groups)").all().map((column) => column.name);
+  if (!groupCols.includes("deleted_at")) db.exec("ALTER TABLE role_groups ADD COLUMN deleted_at TEXT");
+  if (!groupCols.includes("deleted_by")) db.exec("ALTER TABLE role_groups ADD COLUMN deleted_by INTEGER");
   const seed = [
     ['production', '生产部', 'foreman', 'workshop', '{}', '/delivery', '生产计划、排程、派工与现场执行'],
     ['warehouse', '仓储部', 'warehouse', 'warehouse', '{}', '/shopfloor?tab=pick', '库存、齐套、领料、退料'],
@@ -91,7 +94,9 @@ function hasPermission(roleCode, permCode) {
   return r.permissions.some(p => p === '*' || p === permCode || (p.endsWith(':*') && permCode.startsWith(p.slice(0, -1))));
 }
 
-function listRoleGroups() {
+function listRoleGroups(options = {}) {
+  const includeDeleted = options.include_deleted === true || options.include_deleted === '1' || options.include_deleted === 'true';
+  const where = includeDeleted ? '' : 'WHERE rg.deleted_at IS NULL';
   return db.prepare(`
     SELECT rg.*,
            r.role_name AS default_role_name,
@@ -100,6 +105,7 @@ function listRoleGroups() {
     FROM role_groups rg
     LEFT JOIN roles r ON r.role_code = rg.default_role_code
     LEFT JOIN users u ON u.role_group_id = rg.id
+    ${where}
     GROUP BY rg.id
     ORDER BY rg.is_active DESC, rg.id
   `).all().map(row => ({ ...row, scope_config: parseJson(row.scope_config, {}) }));
@@ -114,6 +120,31 @@ const HOME_RE = /^\/[a-zA-Z0-9_?=&/.:-]*$/;
 
 // 2026-11-06（角色与权限审计）：角色组入参校验（创建/局部更新共用）
 const SCOPE_CONFIG_KEYS = new Set(['project_ids', 'instance_ids', 'workstation_ids', 'subsystem_ids', 'locations']);
+
+let UI_ROUTES_CACHE = null;
+function loadUiRoutes() {
+  if (UI_ROUTES_CACHE) return UI_ROUTES_CACHE;
+  try {
+    const config = require('../config/uiRoutes.json');
+    UI_ROUTES_CACHE = Array.isArray(config.routes) ? config.routes : [];
+  } catch (_error) { UI_ROUTES_CACHE = []; }
+  return UI_ROUTES_CACHE;
+}
+
+function isKnownUiRoute(home) {
+  const routes = loadUiRoutes();
+  if (!routes.length) return true;
+  const pathOnly = String(home).split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+  return routes.some((route) => {
+    const template = String(route).replace(/\/+$/, '') || '/';
+    if (template === pathOnly) return true;
+    const pattern = template
+      .split('/')
+      .map((segment) => (segment.startsWith(':') ? '[^/]+' : segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+      .join('/');
+    return new RegExp('^' + pattern + '$').test(pathOnly);
+  });
+}
 
 // 2026-11-06（角色组审计）：scope_config 结构校验，避免"配了但被静默丢弃"导致数据范围意外收紧
 function validateScopeConfig(raw) {
@@ -165,6 +196,7 @@ function validateRoleGroupInput(body, { partial = false } = {}) {
   if (has('default_home') && body.default_home) {
     const home = String(body.default_home).trim();
     if (!HOME_RE.test(home) || home.length > 200) errors.push('default_home 必须是以 / 开头的站内路径');
+    else if (!isKnownUiRoute(home)) errors.push('default_home 不是有效页面路由: ' + home);
   }
   if (has('scope_config')) {
     try { validateScopeConfig(body.scope_config); } catch (error) {
@@ -314,8 +346,9 @@ function createUser({ username, password, full_name, role_code, role_group_id, p
   const role = getRoleByCode(role_code);
   if (!role) return { ok: false, error: 'role_code 不存在: ' + role_code };
   if (role_group_id) {
-    const group = db.prepare('SELECT id, is_active FROM role_groups WHERE id = ?').get(role_group_id);
+    const group = db.prepare('SELECT id, is_active, deleted_at FROM role_groups WHERE id = ?').get(role_group_id);
     if (!group) return { ok: false, error: 'role_group_id 不存在: ' + role_group_id };
+    if (group.deleted_at) return { ok: false, error: '角色组已删除，不能分配用户: ' + role_group_id };
     if (!group.is_active) return { ok: false, error: '角色组已停用，不能分配用户: ' + role_group_id };
   }
   const hash = bcrypt.hashSync(password, 10);
@@ -350,8 +383,9 @@ function updateUser(id, { password, full_name, role_code, role_group_id, phone, 
   }
   if (role_group_id !== undefined) {
     if (role_group_id) {
-      const group = db.prepare('SELECT id, is_active FROM role_groups WHERE id = ?').get(role_group_id);
+      const group = db.prepare('SELECT id, is_active, deleted_at FROM role_groups WHERE id = ?').get(role_group_id);
       if (!group) return { ok: false, error: 'role_group_id 不存在: ' + role_group_id };
+      if (group.deleted_at) return { ok: false, error: '角色组已删除，不能分配用户: ' + role_group_id };
       if (!group.is_active) return { ok: false, error: '角色组已停用，不能分配用户: ' + role_group_id };
     }
     fields.push('role_group_id = ?'); params.push(role_group_id || null);
@@ -426,7 +460,7 @@ function register(app, _db) {
   }));
 
   app.get('/api/role-groups', wrap((req, res) => {
-    res.json({ items: listRoleGroups() });
+    res.json({ items: listRoleGroups({ include_deleted: req.query.include_deleted }) });
   }));
 
   app.post('/api/role-groups', wrap((req, res) => {
@@ -458,6 +492,7 @@ function register(app, _db) {
     const exists = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
     validateRoleGroupInput(req.body || {}, { partial: true });
     if (!exists) throw ApiError.notFound('role group not found');
+    if (exists.deleted_at) throw ApiError.validation('角色组已删除，请先恢复后再编辑');
     const patch = req.body || {};
     // 停用前必须无用户归属，避免"停用组仍挂用户"的脏状态
     if (patch.is_active === false || patch.is_active === 0) {
@@ -470,6 +505,26 @@ function register(app, _db) {
     params.push(req.params.id);
     db.prepare('UPDATE role_groups SET ' + sets.join(', ') + ' WHERE id = ?').run(...params);
     const after = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
+    let appliedUsers = 0;
+    if (patch.apply_default_role_to_users === true || patch.apply_default_role_to_users === 1) {
+      if (!after.default_role_code) throw ApiError.validation('角色组没有默认角色，无法批量调整用户角色');
+      const role = db.prepare('SELECT id, role_code FROM roles WHERE role_code = ?').get(after.default_role_code);
+      if (!role) throw ApiError.validation('默认角色不存在: ' + after.default_role_code);
+      const members = db.prepare('SELECT id FROM users WHERE role_group_id = ?').all(after.id);
+      const updateRole = db.prepare('UPDATE users SET role_id = ?, role_code = ?, token_version = COALESCE(token_version, 0) + 1 WHERE id = ?');
+      const tx = db.transaction(() => {
+        for (const member of members) updateRole.run(role.id, role.role_code, member.id);
+      });
+      tx();
+      appliedUsers = members.length;
+      audit.record(db, req, {
+        action: 'role_group.apply_default_role',
+        resource_type: 'role_group',
+        resource_id: after.id,
+        after: { default_role_code: after.default_role_code, user_ids: members.map((member) => member.id) },
+        diff_summary: `角色组 ${after.group_code} 默认角色变更为 ${after.default_role_code}，同步调整 ${appliedUsers} 名用户`,
+      });
+    }
     audit.record(db, req, {
       action: 'role_group.update',
       resource_type: 'role_group',
@@ -478,13 +533,26 @@ function register(app, _db) {
       after,
       diff_summary: `更新角色组 ${after.group_code}`,
     });
-    res.json({ ok: true });
+    res.json({ ok: true, applied_users: appliedUsers });
+  }));
+
+  app.get('/api/role-groups/:id/members', wrap((req, res) => {
+    const group = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
+    if (!group || group.deleted_at) throw ApiError.notFound('role group not found');
+    const members = db.prepare(`
+      SELECT u.id, u.username, u.full_name, u.role_code, u.is_active, u.last_login, r.role_name
+      FROM users u LEFT JOIN roles r ON r.role_code = u.role_code
+      WHERE u.role_group_id = ?
+      ORDER BY u.id
+    `).all(group.id);
+    res.json({ group_id: group.id, total: members.length, items: members });
   }));
 
   // 2026-11-06（角色组审计）：批量归属用户（角色组"批量归属"能力的后端实现）
   app.post('/api/role-groups/:id/assign-users', wrap((req, res) => {
     const group = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
     if (!group) throw ApiError.notFound('role group not found');
+    if (group.deleted_at) throw ApiError.validation('角色组已删除，不能分配用户');
     if (!group.is_active) throw ApiError.validation('角色组已停用，不能分配用户');
     const rawUsers = (req.body || {}).user_ids;
     if (!Array.isArray(rawUsers) || !rawUsers.length) throw ApiError.validation('user_ids 必填且为非空数组');
@@ -520,17 +588,47 @@ function register(app, _db) {
     const group = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
     if (!group) throw ApiError.notFound('role group not found');
     const userCount = db.prepare('SELECT COUNT(*) AS c FROM users WHERE role_group_id = ?').get(group.id).c;
-    if (userCount > 0) throw ApiError.conflict(`角色组正在被 ${userCount} 个用户使用，不能删除；请先调整用户归属或停用角色组`);
-    const changes = db.prepare('DELETE FROM role_groups WHERE id = ?').run(group.id).changes;
-    if (!changes) throw ApiError.notFound('role group not found');
+    const hard = req.query && (req.query.hard === '1' || req.query.hard === 'true');
+    if (hard) {
+      if (!group.deleted_at) throw ApiError.validation('请先软删除角色组，再执行彻底删除');
+      if (userCount > 0) throw ApiError.conflict(`角色组仍有 ${userCount} 个用户，不能彻底删除`);
+      db.prepare('DELETE FROM role_groups WHERE id = ?').run(group.id);
+      audit.record(db, req, {
+        action: 'role_group.delete_hard',
+        resource_type: 'role_group',
+        resource_id: group.id,
+        before: group,
+        diff_summary: `彻底删除角色组 ${group.group_code}`,
+      });
+      return res.json({ ok: true, deleted: group.id, hard: true });
+    }
+    if (group.deleted_at) throw ApiError.notFound('role group not found');
+    if (userCount > 0) throw ApiError.conflict(`角色组正在被 ${userCount} 个用户使用，不能删除；请先调整用户归属`);
+    const deletedBy = req.user?.uid || req.user?.sub || null;
+    db.prepare("UPDATE role_groups SET deleted_at = datetime('now'), deleted_by = ?, is_active = 0 WHERE id = ?").run(deletedBy, group.id);
     audit.record(db, req, {
       action: 'role_group.delete',
       resource_type: 'role_group',
       resource_id: group.id,
       before: group,
-      diff_summary: `删除角色组 ${group.group_code}`,
+      diff_summary: `删除角色组 ${group.group_code}（软删除，可恢复）`,
     });
-    res.json({ ok: true, deleted: group.id });
+    res.json({ ok: true, deleted: group.id, soft: true });
+  }));
+
+  app.post('/api/role-groups/:id/restore', wrap((req, res) => {
+    const group = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
+    if (!group) throw ApiError.notFound('role group not found');
+    if (!group.deleted_at) throw ApiError.validation('角色组未被删除，无需恢复');
+    db.prepare("UPDATE role_groups SET deleted_at = NULL, deleted_by = NULL, is_active = 1, updated_at = datetime('now') WHERE id = ?").run(group.id);
+    audit.record(db, req, {
+      action: 'role_group.restore',
+      resource_type: 'role_group',
+      resource_id: group.id,
+      after: { group_code: group.group_code },
+      diff_summary: `恢复角色组 ${group.group_code}`,
+    });
+    res.json({ ok: true, restored: group.id });
   }));
 
   // Role list/detail/permission routes are owned by routes/roles.js (audit + cache sync).

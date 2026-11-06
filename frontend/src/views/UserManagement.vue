@@ -67,7 +67,10 @@
           <template #header>
             <div class="card-head">
               <span><el-icon><PriceTag /></el-icon> 角色组/部门</span>
+              <div style="display:flex;gap:8px;align-items:center">
+              <el-checkbox v-model="roleGroupIncludeDeleted" @change="loadRoleGroups">显示已删除</el-checkbox>
               <el-button type="primary" size="small" @click="openGroupDialog()">+ 新建角色组</el-button>
+            </div>
             </div>
           </template>
           <el-table :data="roleGroups" stripe size="small">
@@ -84,12 +87,19 @@
             <el-table-column prop="default_home" label="默认首页" width="180" />
             <el-table-column prop="user_count" label="用户数" width="80" />
             <el-table-column prop="description" label="说明" min-width="220" />
-            <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag></template></el-table-column>
-            <el-table-column label="操作" width="230" fixed="right">
+            <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.deleted_at ? 'danger' : row.is_active ? 'success' : 'info'" size="small">{{ row.deleted_at ? '已删除' : row.is_active ? '启用' : '停用' }}</el-tag></template></el-table-column>
+            <el-table-column label="操作" width="300" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" @click="openGroupDialog(row)">编辑</el-button>
-                <el-button size="small" type="primary" plain @click="openAssignUsers(row)">分配用户</el-button>
-                <el-button size="small" type="danger" @click="deleteRoleGroup(row)">删除</el-button>
+                <template v-if="row.deleted_at">
+                  <el-button size="small" type="success" @click="restoreRoleGroup(row)">恢复</el-button>
+                  <el-button size="small" type="danger" @click="hardDeleteRoleGroup(row)">彻底删除</el-button>
+                </template>
+                <template v-else>
+                  <el-button size="small" @click="openGroupDialog(row)">编辑</el-button>
+                  <el-button size="small" @click="openGroupMembers(row)">成员</el-button>
+                  <el-button size="small" type="primary" plain @click="openAssignUsers(row)">分配用户</el-button>
+                  <el-button size="small" type="danger" @click="deleteRoleGroup(row)">删除</el-button>
+                </template>
               </template>
             </el-table-column>
           </el-table>
@@ -201,6 +211,20 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="groupMembers.visible" title="角色组成员" width="620px">
+      <div v-if="groupMembers.group" style="margin-bottom: 10px">
+        角色组：<strong>{{ groupMembers.group.group_name }}（{{ groupMembers.group.group_code }}）</strong>
+      </div>
+      <el-table :data="groupMembers.items" v-loading="groupMembers.loading" size="small" border max-height="420">
+        <el-table-column prop="username" label="用户名" width="130" />
+        <el-table-column prop="full_name" label="姓名" width="120" />
+        <el-table-column prop="role_name" label="角色" width="120" />
+        <el-table-column label="状态" width="80"><template #default="{ row }">{{ row.is_active ? '启用' : '禁用' }}</template></el-table-column>
+        <el-table-column prop="last_login" label="最后登录" width="160" />
+      </el-table>
+      <template #footer><el-button @click="groupMembers.visible = false">关闭</el-button></template>
+    </el-dialog>
+
     <el-dialog v-model="groupAssign.visible" title="批量归属用户" width="520px">
       <div v-if="groupAssign.group" style="margin-bottom: 10px">
         角色组：<strong>{{ groupAssign.group.group_name }}（{{ groupAssign.group.group_code }}）</strong>
@@ -241,6 +265,9 @@
         <el-form-item label="默认首页"><el-input v-model="groupDlg.form.default_home" placeholder="/delivery 或 /shopfloor?tab=pick" /></el-form-item>
         <el-form-item label="说明"><el-input v-model="groupDlg.form.description" type="textarea" :rows="3" /></el-form-item>
         <el-form-item label="状态"><el-switch v-model="groupDlg.form.is_active" active-text="启用" inactive-text="停用" /></el-form-item>
+        <el-form-item v-if="groupDlg.isEdit" label="批量调整">
+          <el-checkbox v-model="groupDlg.form.apply_default_role_to_users">保存后把该组已归属用户的角色调整为默认角色（会强制用户重新登录）</el-checkbox>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="groupDlg.visible = false">取消</el-button>
@@ -308,8 +335,14 @@ const {
   loadUsers,
   roles,
   roleGroups,
+  loadRoleGroups,
   activeRoleGroups,
   groupAssign,
+  groupMembers,
+  roleGroupIncludeDeleted,
+  openGroupMembers,
+  restoreRoleGroup,
+  hardDeleteRoleGroup,
   openAssignUsers,
   submitAssignUsers,
   permissionCatalog,
