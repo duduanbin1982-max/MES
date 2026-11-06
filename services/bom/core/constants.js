@@ -37,6 +37,8 @@ const BOM_FIELDS = {
   alternative_priority: { type: "int", label: "替代优先级", required: false, default: 1, min: 1 },
   weight: { type: "real", label: "单重kg", required: false, min: 0 },
   unit_price: { type: "real", label: "估价", required: false, min: 0 },
+  labor_cost: { type: "real", label: "人工费", required: false, min: 0 },
+  manufacturing_cost: { type: "real", label: "制造费用", required: false, min: 0 },
   version: { type: "text", label: "版本", required: false, default: "A0", max: 10 },
   eco_id: { type: "int", label: "ECO ID", required: false },
   effective_from: { type: "text", label: "生效起始", required: false },

@@ -83,6 +83,37 @@ function validateNode(node, ctx = {}) {
   if (weight !== null && weight < 0) errors.push("weight 不能为负数");
   const alternativePriority = normalizeInt(node.alternative_priority, null);
   if (alternativePriority !== null && alternativePriority < 1) errors.push("alternative_priority 必须是 >= 1 的整数");
+  const laborCost = normalizeFloat(node.labor_cost, null);
+  if (laborCost !== null && laborCost < 0) errors.push("labor_cost 不能为负数");
+  const manufacturingCost = normalizeFloat(node.manufacturing_cost, null);
+  if (manufacturingCost !== null && manufacturingCost < 0) errors.push("manufacturing_cost 不能为负数");
+
+  // 2026-11-07（BOM 审计 B-8）：生效期格式校验（YYYY-MM-DD）
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  if (node.effective_from && !DATE_RE.test(String(node.effective_from))) errors.push("effective_from 格式必须是 YYYY-MM-DD");
+  if (node.effective_to && !DATE_RE.test(String(node.effective_to))) errors.push("effective_to 格式必须是 YYYY-MM-DD");
+
+  // 替代组一致性：同组必须同一父节点、单位一致、优先级唯一、物料不重复
+  if (isAlternative && alternativeGroup) {
+    const group = alternativeGroup;
+    const parentKey = (parentId || 0) + "|" + group;
+    const siblings = (ctx.alternativeGroups && ctx.alternativeGroups.get(parentKey)) || [];
+    const parents = ctx.alternativeGroupParents && ctx.alternativeGroupParents.get(group);
+    const currentParent = parentId || 0;
+    if (parents && parents.size && !parents.has(currentParent)) errors.push(`替代组「${group}」的物料必须在同一父节点下`);
+    if (siblings.some((row) => Number(row.alternative_priority) === Number(alternativePriority))) {
+      errors.push(`替代组「${group}」内优先级重复: ${alternativePriority}`);
+    }
+    if (unit && siblings.some((row) => row.unit && String(row.unit) !== unit)) {
+      errors.push(`替代组「${group}」内单位必须一致`);
+    }
+    if (materialId && siblings.some((row) => Number(row.material_id) === materialId)) {
+      errors.push(`替代组「${group}」内物料重复: material_id=${materialId}`);
+    }
+    if (!materialId && partNumber && siblings.some((row) => row.part_number === partNumber)) {
+      errors.push(`替代组「${group}」内图号重复: ${partNumber}`);
+    }
+  }
 
   if (ctx.materialIds && materialId && !ctx.materialIds.has(materialId)) {
     errors.push(`物料不存在: material_id=${materialId}`);

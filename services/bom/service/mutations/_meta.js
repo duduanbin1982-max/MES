@@ -6,15 +6,29 @@ const { inferNodeType } = require("./_tree");
 
 function buildValidationContext(db, instanceId, excludeId = null) {
   const rows = db.prepare(`
-    SELECT id, parent_id, tier
+    SELECT id, parent_id, tier, material_id, part_number, unit, category, is_alternative, alternative_group, alternative_priority
     FROM instance_bom
     WHERE equipment_instance_id = ?
       ${excludeId ? "AND id <> ?" : ""}
   `).all(...(excludeId ? [instanceId, excludeId] : [instanceId]));
   const materialIds = new Set((db.prepare("SELECT id FROM materials").all() || []).map((material) => Number(material.id)));
+  // 2026-11-07（BOM 审计 B-8）：替代组一致性上下文
+  const alternativeGroups = new Map();
+  const alternativeGroupParents = new Map();
+  for (const row of rows) {
+    if (!row.is_alternative || !row.alternative_group) continue;
+    const group = String(row.alternative_group).trim();
+    const key = (row.parent_id ? Number(row.parent_id) : 0) + "|" + group;
+    if (!alternativeGroups.has(key)) alternativeGroups.set(key, []);
+    alternativeGroups.get(key).push(row);
+    if (!alternativeGroupParents.has(group)) alternativeGroupParents.set(group, new Set());
+    alternativeGroupParents.get(group).add(row.parent_id ? Number(row.parent_id) : 0);
+  }
   return {
     parentById: new Map(rows.map((row) => [Number(row.id), row])),
     materialIds,
+    alternativeGroups,
+    alternativeGroupParents,
   };
 }
 
@@ -80,6 +94,8 @@ function rowToSafeNode(node, instanceId, userId = null) {
     storage_location: cleanText(node.storage_location),
     weight: normalizeFloat(node.weight, null),
     unit_price: normalizeFloat(node.unit_price, null),
+    labor_cost: normalizeFloat(node.labor_cost, 0) || 0,
+    manufacturing_cost: normalizeFloat(node.manufacturing_cost, 0) || 0,
     notes: cleanText(node.notes),
     created_by: userId,
   };

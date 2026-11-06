@@ -58,13 +58,13 @@ function insertBomNode(db, instanceId, body, userId = null) {
       material_id, part_number, quantity, unit, scrap_factor, category, material_grade,
       surface_treatment, brand_recommend, brand_grade, is_alternative, alternative_group,
       alternative_priority, operation_id, is_phantom, is_key_component, is_wear_part,
-      storage_location, weight, unit_price, notes, created_by
+      storage_location, weight, unit_price, labor_cost, manufacturing_cost, notes, created_by
     ) VALUES (
       @equipment_instance_id, @parent_id, @tier, @node_type, @level_code, @sort_order, @view_flags, @version, @eco_id, @effective_from, @effective_to,
       @material_id, @part_number, @quantity, @unit, @scrap_factor, @category, @material_grade,
       @surface_treatment, @brand_recommend, @brand_grade, @is_alternative, @alternative_group,
       @alternative_priority, @operation_id, @is_phantom, @is_key_component, @is_wear_part,
-      @storage_location, @weight, @unit_price, @notes, @created_by
+      @storage_location, @weight, @unit_price, @labor_cost, @manufacturing_cost, @notes, @created_by
     )
   `);
   const result = stmt.run(safeNode);

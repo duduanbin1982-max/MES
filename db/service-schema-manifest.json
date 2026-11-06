@@ -17,9 +17,9 @@
       "ddlStatements": 3
     },
     "bomService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "a438e4158c68d1270233ae0713fc09bf43491ec2a81a71584177c9b044ffef8a",
-      "ddlStatements": 4
+      "schemaVersion": 2,
+      "ddlFingerprint": "a4cc7202f5f2eec174c8c455c66f5500585f2cc862cb25abe41a2a8f3bdcfc35",
+      "ddlStatements": 6
     },
     "cost": {
       "schemaVersion": 6,

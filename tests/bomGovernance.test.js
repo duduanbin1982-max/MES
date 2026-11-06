@@ -19,7 +19,7 @@ function freshDb() {
   const db = new Database(':memory:');
   db.exec(`
     CREATE TABLE equipment_instances (id INTEGER PRIMARY KEY, instance_code TEXT, instance_name TEXT, name TEXT);
-    CREATE TABLE materials (id INTEGER PRIMARY KEY, material_code TEXT, material_name TEXT);
+    CREATE TABLE materials (id INTEGER PRIMARY KEY, material_code TEXT, material_name TEXT, material_type TEXT, spec TEXT, unit TEXT, is_self_made INTEGER DEFAULT 0, estimated_unit_price REAL DEFAULT 0, actual_unit_price REAL DEFAULT 0, safety_stock REAL DEFAULT 0, reorder_point REAL DEFAULT 0);
     CREATE TABLE process_nodes (id INTEGER PRIMARY KEY AUTOINCREMENT, equipment_instance_id INTEGER, bom_node_id INTEGER, operation_name TEXT);
     CREATE TABLE instance_bom (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +29,7 @@ function freshDb() {
       brand_recommend TEXT, brand_grade TEXT, is_alternative INTEGER, alternative_group TEXT,
       alternative_priority INTEGER, operation_id INTEGER, is_phantom INTEGER, is_key_component INTEGER,
       is_wear_part INTEGER, storage_location TEXT, unit_price REAL, weight REAL, notes TEXT,
+      labor_cost REAL, manufacturing_cost REAL,
       created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT,
       node_type TEXT, level_code TEXT, sort_order INTEGER, view_flags TEXT,
       material_lot_id INTEGER, serial_id INTEGER
@@ -126,4 +127,87 @@ test('B-7 迁移：多根 + 悬空父节点修复为单根树', () => {
   assert.equal(roots[0].id, root);
   assert.equal(db.prepare('SELECT parent_id FROM instance_bom WHERE id=?').get(extraRoot).parent_id, root);
   assert.equal(db.prepare('SELECT parent_id FROM instance_bom WHERE id=?').get(dangling).parent_id, root);
+});
+
+// ---------------- B-8 全修 ----------------
+
+test('B-8a 成本包含人工费与制造费用', () => {
+  const leaf = insertRow(db, { equipment_instance_id: 1, parent_id: null, tier: 0, quantity: 2, category: '外购成品', unit: '件', scrap_factor: 1, unit_price: 10, labor_cost: 2, manufacturing_cost: 1 });
+  const { calcCost } = require('../services/bomService');
+  const items = calcCost(db, 1);
+  const node = items.find((item) => item.id === leaf);
+  assert.equal(node.cost, 26, '(10 + 2 + 1) × 2 = 26');
+});
+
+test('B-8b 替代组校验：同父节点、优先级唯一、单位一致、物料不重复', () => {
+  const { validateNode } = require('../services/bomService');
+  const root = insertRow(db, { equipment_instance_id: 1, parent_id: null, tier: 0, quantity: 1, category: '成品', unit: '台' });
+  insertRow(db, { equipment_instance_id: 1, parent_id: root, tier: 1, quantity: 1, category: '外购成品', unit: '件', material_id: 1, is_alternative: 1, alternative_group: 'G1', alternative_priority: 1 });
+  // 同父节点、重复优先级
+  let result = validateNode({ tier: 1, quantity: 1, unit: '件', category: '外购成品', material_id: 2, parent_id: root, is_alternative: 1, alternative_group: 'G1', alternative_priority: 1 }, buildCtx(1));
+  assert.ok(result.errors.some((error) => error.includes('优先级重复')), JSON.stringify(result.errors));
+  // 不同父节点使用同组
+  const root2 = insertRow(db, { equipment_instance_id: 1, parent_id: null, tier: 0, quantity: 1, category: '成品', unit: '台' });
+  result = validateNode({ tier: 1, quantity: 1, unit: '件', category: '外购成品', material_id: 3, parent_id: root2, is_alternative: 1, alternative_group: 'G1', alternative_priority: 2 }, buildCtx(1));
+  assert.ok(result.errors.some((error) => error.includes('同一父节点')));
+});
+
+function buildCtx(instanceId) {
+  const { buildValidationContext } = require('../services/bom/service/mutations');
+  return buildValidationContext(db, instanceId);
+}
+
+test('B-8c CSV 导入自动创建缺失物料', () => {
+  const { importBomCsv } = require('../services/bom/service/importer');
+  const csv = 'tier,quantity,unit,category,part_number,material_code,material_name,node_ref\n0,1,台,成品,ROOT-NEW,NEW-MAT,新物料,R1\n';
+  let result;
+  try { result = importBomCsv(db, 1, csv); } catch (error) { assert.fail('导入失败: ' + JSON.stringify(error.details || error.message)); }
+  assert.equal(result.inserted, 1);
+  assert.equal(result.materials_created, 1);
+  const material = db.prepare("SELECT id, material_code, material_name FROM materials WHERE material_code='NEW-MAT'").get();
+  assert.ok(material, '应自动创建物料主数据');
+  const node = db.prepare("SELECT material_id FROM instance_bom WHERE part_number='ROOT-NEW'").get();
+  assert.equal(node.material_id, material.id);
+});
+
+test('B-8d ECO 对比：结构移动不再误报新增/删除', () => {
+  const rootA = insertRow(db, { equipment_instance_id: 1, parent_id: null, tier: 0, quantity: 1, category: '成品', unit: '台' });
+  const rootB = insertRow(db, { equipment_instance_id: 1, parent_id: null, tier: 0, quantity: 1, category: '成品', unit: '台' });
+  insertRow(db, { equipment_instance_id: 1, parent_id: rootA, tier: 1, quantity: 1, category: '外购成品', unit: '件', material_id: 1, version: 'A0' });
+  insertRow(db, { equipment_instance_id: 1, parent_id: rootB, tier: 1, quantity: 1, category: '外购成品', unit: '件', material_id: 1, version: 'A1' });
+  const { compareVersions } = require('../services/bomService');
+  const diff = compareVersions(db, 1, 'A0', 'A1');
+  assert.equal(diff.added.length, 0);
+  assert.equal(diff.removed.length, 0);
+  assert.equal(diff.changed.length, 0, '仅移动父节点不应显示变更');
+});
+
+test('B-8e 版本发布/作废 + 树校验', () => {
+  const root = insertRow(db, { equipment_instance_id: 1, parent_id: null, tier: 0, quantity: 1, category: '成品', unit: '台', part_number: 'ROOT' });
+  const child = insertRow(db, { equipment_instance_id: 1, parent_id: root, tier: 1, quantity: 1, category: '自制部件', unit: '套', part_number: 'SUB', material_grade: 'Q235B', surface_treatment: '无' });
+  insertRow(db, { equipment_instance_id: 1, parent_id: child, tier: 2, quantity: 1, category: '外购成品', unit: '件', part_number: 'LEAF', material_id: 1 });
+  const versions = require('../services/bom/service/versions');
+  const release = versions.createRelease(db, 1, { version: 'A1', effective_from: '2026-01-01', notes: '首版' }, 1);
+  assert.equal(release.version, 'A1');
+  assert.equal(release.status, 'released');
+  assert.equal(release.row_count, 3);
+  assert.ok(release.snapshot.length === 3);
+  assert.throws(() => versions.createRelease(db, 1, { version: 'A1' }, 1), (error) => error.status === 409);
+  const obsolete = versions.obsoleteRelease(db, 1, release.id, 1);
+  assert.equal(obsolete.status, 'obsolete');
+});
+
+test('B-8f 数据质量迁移：补齐缺失字段并可被校验', () => {
+  const { plan, apply } = require('../scripts/migrate-bom-data-quality');
+  const root = insertRow(db, { equipment_instance_id: 1, parent_id: null, tier: 0, quantity: 1, unit: '台' });
+  db.prepare("UPDATE instance_bom SET material_id=1 WHERE id=?").run(root);
+  const planData = plan(db);
+  assert.ok(planData.actions.length >= 1);
+  apply(db, planData);
+  const row = db.prepare('SELECT category, node_type, unit_price, labor_cost, manufacturing_cost, notes FROM instance_bom WHERE id=?').get(root);
+  assert.equal(row.category, '成品');
+  assert.equal(row.node_type, 'equipment');
+  assert.equal(row.unit_price, 0);
+  assert.equal(row.labor_cost, 0);
+  assert.match(row.notes, /数据补齐/);
 });

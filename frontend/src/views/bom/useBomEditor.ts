@@ -147,11 +147,31 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
     }
   }
 
+  async function releaseVersion() {
+    if (!instanceId.value) return
+    try {
+      const { value } = await ElMessageBox.prompt('版本号（如 A1/B0），可附 ECO 编号', '发布 BOM 版本', {
+        inputValue: 'A1',
+        inputPattern: /^[A-Z][0-9]+$/,
+        inputErrorMessage: '版本号格式形如 A0/A1/B0',
+      })
+      if (!value) return
+      const result: any = await api.post(`/equipment_instances/${instanceId.value}/bom/versions/release`, { version: String(value).trim() })
+      ElMessage.success(`已发布版本 ${result.version}（${result.row_count} 行，ECO ${result.eco_id || '-'}）`)
+    } catch (error: any) {
+      if (error !== 'cancel' && error !== 'close') {
+        const details = error.response?.data?.details
+        ElMessage.error('发布失败: ' + (error.response?.data?.message || error.message) + (details?.errors ? '（' + details.errors.slice(0, 3).join('；') + '）' : ''))
+      }
+    }
+  }
+
   async function doImport() {
     importing.value = true
     try {
       const result: any = await api.post(`/equipment_instances/${instanceId.value}/bom/import`, { csv: csvText.value })
-      ElMessage.success(`导入完成: ${result.inserted} 成功, ${result.errors} 失败`)
+      const created = result.materials_created ? `，自动新建物料 ${result.materials_created} 个` : ''
+      ElMessage.success(`导入完成: ${result.inserted} 成功, ${result.errors} 失败${created}`)
       if (result.errors && result.error_list?.length) {
         ElMessage.warning(`前 ${Math.min(result.error_list.length, 30)} 条错误已保留在返回结果中`)
       }
@@ -255,6 +275,7 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
     canEdit,
     doDelete,
     doImport,
+    releaseVersion,
     initMinimumBom,
     doValidate,
     doCompare,

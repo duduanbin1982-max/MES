@@ -47,6 +47,8 @@
         <el-col :span="12"><el-form-item label="品牌/等级"><el-input v-model="addForm.brand_recommend" v-if="addForm.brand_grade === '不可替代'" placeholder="不可替代" disabled /><el-input aria-label="品牌推荐" v-model="addForm.brand_recommend" v-else placeholder="品牌推荐" /><el-select v-model="addForm.brand_grade" size="small" style="width: 90px; margin-left: 4px"><el-option label="A" value="A" /><el-option label="B" value="B" /><el-option label="不可" value="不可替代" /></el-select></el-form-item></el-col>
         <el-col :span="8"><el-form-item label="损耗"><el-input-number v-model="addForm.scrap_factor" :min="1.0" :max="2.0" :step="0.05" :precision="2" /></el-form-item></el-col>
         <el-col :span="8"><el-form-item label="单价"><el-input-number v-model="addForm.unit_price" :min="0" :precision="2" /></el-form-item></el-col>
+        <el-col :span="8"><el-form-item label="人工费"><el-input-number v-model="addForm.labor_cost" :min="0" :precision="2" /></el-form-item></el-col>
+        <el-col :span="8"><el-form-item label="制造费用"><el-input-number v-model="addForm.manufacturing_cost" :min="0" :precision="2" /></el-form-item></el-col>
         <el-col :span="8"><el-form-item label="存放"><el-input v-model="addForm.storage_location" /></el-form-item></el-col>
         <el-col :span="24"><el-form-item label="标识"><el-checkbox v-model="addForm.is_phantom">虚项</el-checkbox><el-checkbox v-model="addForm.is_key_component">关键</el-checkbox><el-checkbox v-model="addForm.is_wear_part">易损</el-checkbox></el-form-item></el-col>
         <el-col :span="24"><el-form-item label="备注"><el-input v-model="addForm.notes" type="textarea" :rows="2" /></el-form-item></el-col>

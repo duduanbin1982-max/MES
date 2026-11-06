@@ -20,6 +20,7 @@ const {
 const { ensureBomStructureColumns } = require("./schema");
 const { importBomCsv } = require("./importer");
 const audit = require("../../../app/audit");
+const versions = require("./versions");
 const {
   getActiveUsers,
   updateRiskOwner,
@@ -197,6 +198,43 @@ function registerBomRoutes(app, db) {
     } catch (error) {
       next(error);
     }
+  });
+
+  // 2026-11-07（BOM 审计 B-8）：版本发布 / ECO 流程
+  app.get("/api/equipment_instances/:id/bom/versions", (req, res, next) => {
+    try { res.json({ items: versions.listReleases(db, req.params.id) }); } catch (error) { next(error); }
+  });
+
+  app.get("/api/equipment_instances/:id/bom/versions/:releaseId", (req, res, next) => {
+    try { res.json(versions.getRelease(db, req.params.id, req.params.releaseId)); } catch (error) { next(error); }
+  });
+
+  app.post("/api/equipment_instances/:id/bom/versions/release", (req, res, next) => {
+    try {
+      const release = versions.createRelease(db, req.params.id, req.body || {}, req.user?.uid || null);
+      audit.record(db, req, {
+        action: "bom.version.release",
+        resource_type: "bom",
+        resource_id: req.params.id,
+        after: { version: release.version, eco_id: release.eco_id, row_count: release.row_count },
+        diff_summary: `发布 BOM 版本 ${release.version}（${release.row_count} 行${release.eco_id ? `，ECO #${release.eco_id}` : ""}）`,
+      });
+      res.status(201).json(release);
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/equipment_instances/:id/bom/versions/:releaseId/obsolete", (req, res, next) => {
+    try {
+      const result = versions.obsoleteRelease(db, req.params.id, req.params.releaseId, req.user?.uid || null);
+      audit.record(db, req, {
+        action: "bom.version.obsolete",
+        resource_type: "bom",
+        resource_id: req.params.id,
+        after: { release_id: Number(req.params.releaseId) },
+        diff_summary: `作废 BOM 版本 #${req.params.releaseId}`,
+      });
+      res.json(result);
+    } catch (error) { next(error); }
   });
 
   app.get("/api/equipment_instances/:id/bom/compare", (req, res) => {

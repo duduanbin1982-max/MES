@@ -56,6 +56,7 @@
           <el-button v-if="canEdit" size="small" type="primary" plain :disabled="!selected" @click="openAddChild(selected)">+ 新增子部件</el-button>
           <el-button v-if="canEdit" size="small" type="success" :disabled="summary.total > 0" @click="initMinimumBom"><el-icon><Histogram /></el-icon> 生成最低三级骨架</el-button>
           <el-button v-if="canEdit" size="small" @click="dlgImport = true"><el-icon><Download /></el-icon> CSV 导入</el-button>
+          <el-button v-if="canEdit" size="small" type="success" plain @click="releaseVersion"><el-icon><Upload /></el-icon> 发布版本</el-button>
           <el-button size="small" @click="loadTemplate"><el-icon><Document /></el-icon> 工业模板</el-button>
           <el-button size="small" type="warning" @click="doValidate"><el-icon><Search /></el-icon> 校验</el-button>
           <el-button size="small" type="success" @click="dlgCompare = true"><el-icon><Refresh /></el-icon> ECO 对比</el-button>
@@ -175,6 +176,7 @@
                 <el-descriptions-item label="品牌">{{ selected.brand_recommend || '-' }} ({{ selected.brand_grade || '-' }})</el-descriptions-item>
                 <el-descriptions-item label="损耗">{{ selected.scrap_factor || 1.0 }}</el-descriptions-item>
                 <el-descriptions-item label="单价/单重">{{ selected.unit_price || '-' }} 元 / {{ selected.weight || '-' }} kg</el-descriptions-item>
+                <el-descriptions-item label="人工/制造费用">{{ selected.labor_cost || 0 }} / {{ selected.manufacturing_cost || 0 }} 元</el-descriptions-item>
                 <el-descriptions-item label="版本">{{ selected.version || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="关键/易损/虚项">
                   {{ selected.is_key_component ? '关键 ' : '' }}{{ selected.is_wear_part ? '易损 ' : '' }}{{ selected.is_phantom ? '虚项' : '' }}
@@ -327,6 +329,7 @@ const {
   dlgCompare,
   saving,
   canEdit,
+  releaseVersion,
   importing,
   comparing,
   editingNode,

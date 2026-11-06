@@ -37,7 +37,7 @@ function updateBomNode(db, bomId, body) {
         material_grade=@material_grade, surface_treatment=@surface_treatment, brand_recommend=@brand_recommend, brand_grade=@brand_grade,
         is_alternative=@is_alternative, alternative_group=@alternative_group, alternative_priority=@alternative_priority, operation_id=@operation_id,
         is_phantom=@is_phantom, is_key_component=@is_key_component, is_wear_part=@is_wear_part, storage_location=@storage_location,
-        weight=@weight, unit_price=@unit_price, notes=@notes, updated_at=datetime('now')
+        weight=@weight, unit_price=@unit_price, labor_cost=@labor_cost, manufacturing_cost=@manufacturing_cost, notes=@notes, updated_at=datetime('now')
     WHERE id=@id
   `).run({ ...safeNode, id: current.id });
   recomputeStructureMetadata(db, current.equipment_instance_id);

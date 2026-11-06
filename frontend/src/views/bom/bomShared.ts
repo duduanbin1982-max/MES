@@ -58,6 +58,8 @@ export function defaultBomForm() {
     brand_grade: '',
     scrap_factor: 1.0,
     unit_price: null,
+    labor_cost: 0,
+    manufacturing_cost: 0,
     storage_location: '',
     is_phantom: false,
     is_key_component: false,
