@@ -2,7 +2,8 @@
 
 const fs = require("fs");
 const { ApiError } = require("../../app/errors");
-const { ISSUE_TARGETS, validateMeta } = require("./meta");
+const { ISSUE_TARGETS, validateMeta, sanitizeFileName, validateDocumentFile } = require("./meta");
+const audit = require("../../app/audit");
 const { recordDocumentEvent } = require("./history");
 const { buildStoragePath, hasStoredFile, sha256 } = require("./storage");
 
@@ -28,9 +29,15 @@ function registerUploadRoute(app, db) {
 
       let fileName = req.headers["x-file-name"] || `${meta.title}.bin`;
       try { fileName = decodeURIComponent(String(fileName)); } catch (_error) { fileName = String(fileName); }
+      fileName = sanitizeFileName(fileName, `${meta.title}.bin`);
       const mimeType = req.headers["x-file-mime"] || "application/octet-stream";
       const buffer = req.body;
       if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) return next(ApiError.validation("请求体为空, 没收到文件数据"));
+      const fileValidation = validateDocumentFile(fileName, mimeType, buffer.length);
+      if (!fileValidation.ok) return next(ApiError.validation("文件校验失败", fileValidation.errors));
+      if (!db.prepare("SELECT id FROM equipment_instances WHERE id = ?").get(meta.equipment_instance_id)) {
+        return next(ApiError.validation(`equipment_instance_id 不存在: ${meta.equipment_instance_id}`));
+      }
 
       const fileHash = sha256(buffer);
 
@@ -40,11 +47,22 @@ function registerUploadRoute(app, db) {
         .get(meta.equipment_instance_id, fileHash, meta.version || "A0");
       if (duplicate) return next(ApiError.conflict(`文件已存在 (id=${duplicate.id} version=${duplicate.version}), hash 相同`));
 
-      if (meta.bom_node_id && !db.prepare("SELECT id FROM instance_bom WHERE id = ?").get(meta.bom_node_id)) {
-        return next(ApiError.validation(`bom_node_id 不存在: ${meta.bom_node_id}`));
+      if (meta.bom_node_id) {
+        const bomNode = db.prepare("SELECT id, equipment_instance_id FROM instance_bom WHERE id = ?").get(meta.bom_node_id);
+        if (!bomNode) return next(ApiError.validation(`bom_node_id 不存在: ${meta.bom_node_id}`));
+        if (Number(bomNode.equipment_instance_id) !== Number(meta.equipment_instance_id)) {
+          return next(ApiError.validation("bom_node_id 不属于该装备实例"));
+        }
       }
-      if (meta.eco_id && !db.prepare("SELECT id FROM instance_eco WHERE id = ?").get(meta.eco_id)) {
-        return next(ApiError.validation(`eco_id 不存在: ${meta.eco_id}`));
+      if (meta.eco_id) {
+        try {
+          if (!db.prepare("SELECT id FROM instance_eco WHERE id = ?").get(meta.eco_id)) return next(ApiError.validation(`eco_id 不存在: ${meta.eco_id}`));
+        } catch (_error) { return next(ApiError.validation("ECO 表不可用，不能关联 eco_id")); }
+      }
+      if (meta.doc_code) {
+        const sameVersion = db.prepare("SELECT id FROM documents WHERE equipment_instance_id = ? AND doc_code = ? AND version = ?")
+          .get(meta.equipment_instance_id, meta.doc_code, meta.version || "A0");
+        if (sameVersion) return next(ApiError.conflict(`同一文档编号与版本已存在 (id=${sameVersion.id})`));
       }
 
       const storage = buildStoragePath(fileName);
@@ -96,6 +114,13 @@ function registerUploadRoute(app, db) {
         issued_to: created.issued_to,
         operator_id: userId,
       });
+      audit.record(db, req, {
+        action: "document.upload",
+        resource_type: "document",
+        resource_id: created.id,
+        after: { title: created.title, doc_type: created.doc_type, file_name: created.file_name, size: created.file_size, version: created.version },
+        diff_summary: `上传文档 ${created.title}（${created.file_name}）`,
+      });
       res.json(created);
     } catch (error) {
       next(error);
@@ -119,6 +144,13 @@ function registerLifecycleRoutes(app, db) {
         doc_id: Number(req.params.id), action: "issue", from_status: current.status, to_status: "issued",
         version: current.version, issued_to, operator_id: req.user?.uid || null,
       });
+      audit.record(db, req, {
+        action: "document.issue",
+        resource_type: "document",
+        resource_id: req.params.id,
+        after: { status: "issued", issued_to },
+        diff_summary: `签发文档 ${current.version || ""} → ${issued_to}`,
+      });
       res.json(db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id));
     } catch (error) { next(error); }
   });
@@ -138,6 +170,13 @@ function registerLifecycleRoutes(app, db) {
         doc_id: Number(req.params.id), action: "revoke", from_status: current.status, to_status: "revoked",
         version: current.version, issued_to: current.issued_to, reason, operator_id: req.user?.uid || null,
       });
+      audit.record(db, req, {
+        action: "document.revoke",
+        resource_type: "document",
+        resource_id: req.params.id,
+        after: { status: "revoked", reason },
+        diff_summary: `收回文档：${reason}`,
+      });
       res.json(db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id));
     } catch (error) { next(error); }
   });
@@ -150,6 +189,13 @@ function registerLifecycleRoutes(app, db) {
       recordDocumentEvent(db, {
         doc_id: Number(req.params.id), action: "archive", from_status: current.status, to_status: "archived",
         version: current.version, issued_to: current.issued_to, operator_id: req.user?.uid || null,
+      });
+      audit.record(db, req, {
+        action: "document.archive",
+        resource_type: "document",
+        resource_id: req.params.id,
+        after: { status: "archived" },
+        diff_summary: "归档文档",
       });
       res.json({ id: req.params.id, status: "archived" });
     } catch (error) { next(error); }

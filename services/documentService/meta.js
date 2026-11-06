@@ -1,8 +1,45 @@
 "use strict";
 
+const path = require("path");
+
 const DOC_TYPES = ["drawing", "sop", "process", "qc_std", "contract", "report", "other"];
 const DOC_STATUS = ["draft", "issued", "revoked", "archived"];
 const ISSUE_TARGETS = ["assembly", "welding", "qc", "warehouse", "field", "design", "procurement", "management"];
+
+// 2026-11-07（文档审计）：允许的文档类型 + 50MB 上限；拒绝可执行/脚本/HTML/SVG 等
+const ALLOWED_EXTENSIONS = new Set([
+  "pdf", "dwg", "dxf", "step", "stp", "iges", "igs", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
+  "txt", "md", "csv", "png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "zip", "rar", "7z",
+]);
+const BLOCKED_EXTENSIONS = new Set(["exe", "js", "mjs", "html", "htm", "svg", "sh", "bat", "cmd", "ps1", "vbs", "jar", "msi"]);
+const MAX_DOCUMENT_BYTES = Math.min(50 * 1024 * 1024, Number(process.env.DOCUMENT_MAX_BYTES) || 50 * 1024 * 1024);
+
+function sanitizeFileName(name, fallback = "document.bin") {
+  const base = path.basename(String(name || "").replace(/\\/g, "/"));
+  // eslint-disable-next-line no-control-regex
+  const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, "_").replace(/[<>:"|?*]/g, "_").trim().slice(0, 200);
+  return cleaned || fallback;
+}
+
+function validateDocumentFile(fileName, mimeType, size) {
+  const errors = [];
+  const ext = String(fileName || "").split(".").pop().toLowerCase();
+  if (!fileName) errors.push("文件名必填");
+  else if (BLOCKED_EXTENSIONS.has(ext)) errors.push("不允许上传该类型文件: ." + ext);
+  else if (!ALLOWED_EXTENSIONS.has(ext)) errors.push("不支持的文件类型: ." + ext + "（支持 pdf/dwg/dxf/office/图片/压缩包等）");
+  const bytes = Number(size) || 0;
+  if (bytes <= 0) errors.push("文件内容为空");
+  else if (bytes > MAX_DOCUMENT_BYTES) errors.push(`文件超过大小上限 ${Math.round(MAX_DOCUMENT_BYTES / 1024 / 1024)}MB`);
+  const mime = String(mimeType || "").toLowerCase();
+  if (mime && mime !== "application/octet-stream") {
+    const allowed = mime.startsWith("image/") || mime.startsWith("text/") ||
+      mime.includes("pdf") || mime.includes("word") || mime.includes("excel") ||
+      mime.includes("spreadsheet") || mime.includes("presentation") || mime.includes("zip") ||
+      mime.includes("dwg") || mime.includes("dxf") || mime.includes("acad") || mime.includes("octet-stream");
+    if (!allowed) errors.push("不支持的文件 MIME 类型: " + mimeType);
+  }
+  return errors.length ? { ok: false, errors } : { ok: true };
+}
 
 function validateMeta(meta) {
   const errors = [];
@@ -23,4 +60,7 @@ function validateMeta(meta) {
   return errors.length ? { ok: false, errors } : { ok: true };
 }
 
-module.exports = { DOC_TYPES, DOC_STATUS, ISSUE_TARGETS, validateMeta };
+module.exports = {
+  DOC_TYPES, DOC_STATUS, ISSUE_TARGETS, validateMeta,
+  ALLOWED_EXTENSIONS, BLOCKED_EXTENSIONS, MAX_DOCUMENT_BYTES, sanitizeFileName, validateDocumentFile,
+};
