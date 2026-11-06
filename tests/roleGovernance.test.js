@@ -69,6 +69,18 @@ function freshDb() {
       status TEXT DEFAULT 'success', error TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE permission_change_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      role_code TEXT NOT NULL,
+      before_json TEXT NOT NULL,
+      after_json TEXT NOT NULL,
+      requested_by INTEGER,
+      requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+      status TEXT NOT NULL DEFAULT 'pending',
+      reviewed_by INTEGER,
+      reviewed_at TEXT,
+      review_note TEXT
+    );
   `);
   database.prepare('INSERT INTO roles (role_code, role_name, permissions) VALUES (?,?,?)').run('admin', '管理员', JSON.stringify(['*']));
   database.prepare('INSERT INTO roles (role_code, role_name, permissions) VALUES (?,?,?)').run('foreman', '车间主任', JSON.stringify(['work_order:read']));
@@ -77,12 +89,12 @@ function freshDb() {
   return database;
 }
 
-function request(method, path, body) {
+function request(method, path, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null;
     const req = http.request({
       hostname: '127.0.0.1', port, path, method,
-      headers: { 'Content-Type': 'application/json', ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}) },
+      headers: { 'Content-Type': 'application/json', ...headers, ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}) },
     }, (res) => {
       let raw = '';
       res.on('data', (chunk) => { raw += chunk; });
@@ -101,7 +113,7 @@ test.before(async () => {
   app.use(express.json());
   // 测试用鉴权：注入 admin 用户（roles 路由内部 requirePermission 读 req.user.permissions）
   app.use((req, _res, next) => {
-    req.user = { uid: 1, role: 'admin', permissions: ['*'], username: 'admin' };
+    req.user = { uid: Number(req.headers['x-test-uid'] || 1), role: 'admin', permissions: ['*'], username: 'admin' };
     next();
   });
   require('../services/userManagement').register(app, db);
@@ -187,11 +199,78 @@ test('R-4 角色组：编码/默认角色/数据范围/home 校验', async () =>
   assert.ok(db.prepare("SELECT action FROM audit_logs WHERE action='role_group.update' AND resource_id=?").get(String(groupId)), '更新角色组应写审计');
 });
 
-test('R-5 权限目录包含新权限且以目录为准', async () => {
+test('R-5 权限目录包含新权限且以目录为准，分组使用中文标签', async () => {
   const r = await request('GET', '/api/permissions/catalog');
   assert.equal(r.status, 200);
   const codes = (r.body.items || []).flatMap((group) => group.permissions.map((permission) => permission.code));
   assert.ok(codes.includes('shopfloor:qc'));
   assert.ok(codes.includes('user:admin'));
   assert.ok(codes.includes('*'));
+  const workOrderGroup = (r.body.items || []).find((group) => group.resource === 'work_order');
+  assert.equal(workOrderGroup.label, '工单管理', '权限目录分组应为中文标签');
+});
+
+test('R-6 角色组删除：无引用可删，有用户归属拒绝（409）', async () => {
+  let r = await request('POST', '/api/role-groups', { group_code: 'temp_group', group_name: '临时组', data_scope: 'all' });
+  assert.equal(r.status, 200);
+  const groupId = r.body.id;
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role_group.create'").get().c >= 1, true);
+
+  r = await request('DELETE', '/api/role-groups/' + groupId);
+  assert.equal(r.status, 200);
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM role_groups WHERE id=?').get(groupId).c, 0);
+  assert.equal(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role_group.delete'").get().c, 1);
+  r = await request('DELETE', '/api/role-groups/' + groupId);
+  assert.equal(r.status, 404);
+
+  // 有用户归属的角色组不能删除
+  const production = db.prepare("SELECT id FROM role_groups WHERE group_code='production'").get();
+  db.prepare('UPDATE users SET role_group_id = ? WHERE id = 1').run(production.id);
+  r = await request('DELETE', '/api/role-groups/' + production.id);
+  assert.equal(r.status, 409);
+  assert.match(r.body.message, /不能删除/);
+});
+
+test('R-7 权限矩阵变更双人复核：申请→另一管理员通过/驳回，申请人不能自审', async () => {
+  // 增加第二个启用管理员
+  db.prepare("INSERT INTO users (username, full_name, role_id, role_code, is_active) VALUES ('admin2', '管理员二', 1, 'admin', 1)").run();
+  const admin2 = db.prepare("SELECT id FROM users WHERE username='admin2'").get().id;
+  const beforePerms = db.prepare("SELECT permissions FROM roles WHERE role_code='worker'").get().permissions;
+
+  // 1) 申请（uid=1）
+  let r = await request('PUT', '/api/roles/worker/permissions', { permissions: ['work_order:read', 'work_report:read'] }, { 'x-test-uid': '1' });
+  assert.equal(r.status, 202);
+  assert.equal(r.body.pending, true);
+  const requestId = r.body.request_id;
+  assert.deepEqual(JSON.parse(db.prepare("SELECT permissions FROM roles WHERE role_code='worker'").get().permissions), JSON.parse(beforePerms), '审批前权限不应变化');
+
+  // 2) 待审批列表（uid=2）
+  r = await request('GET', '/api/permission-change-requests?status=pending', undefined, { 'x-test-uid': String(admin2) });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.items.length, 1);
+  assert.equal(r.body.items[0].role_code, 'worker');
+
+  // 3) 申请人自审拒绝
+  r = await request('POST', '/api/permission-change-requests/' + requestId + '/approve', {}, { 'x-test-uid': '1' });
+  assert.equal(r.status, 400);
+  assert.match(r.body.message, /不能审批自己/);
+
+  // 4) 另一管理员通过 → 生效
+  r = await request('POST', '/api/permission-change-requests/' + requestId + '/approve', {}, { 'x-test-uid': String(admin2) });
+  assert.equal(r.status, 200);
+  const after = JSON.parse(db.prepare("SELECT permissions FROM roles WHERE role_code='worker'").get().permissions);
+  assert.deepEqual(after, ['work_order:read', 'work_report:read']);
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role.permission.approve'").get().c >= 1);
+
+  // 5) 驳回流程：再申请→另一管理员驳回→权限不变
+  r = await request('PUT', '/api/roles/worker/permissions', { permissions: ['quality:read'] }, { 'x-test-uid': '1' });
+  assert.equal(r.status, 202);
+  const requestId2 = r.body.request_id;
+  r = await request('POST', '/api/permission-change-requests/' + requestId2 + '/reject', {}, { 'x-test-uid': String(admin2) });
+  assert.equal(r.status, 400, '驳回必须填 note');
+  r = await request('POST', '/api/permission-change-requests/' + requestId2 + '/reject', { note: '权限过大' }, { 'x-test-uid': String(admin2) });
+  assert.equal(r.status, 200);
+  const unchanged = JSON.parse(db.prepare("SELECT permissions FROM roles WHERE role_code='worker'").get().permissions);
+  assert.deepEqual(unchanged, ['work_order:read', 'work_report:read'], '驳回后权限不变');
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='role.permission.reject'").get().c >= 1);
 });

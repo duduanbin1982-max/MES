@@ -85,12 +85,37 @@
             <el-table-column prop="user_count" label="用户数" width="80" />
             <el-table-column prop="description" label="说明" min-width="220" />
             <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag></template></el-table-column>
-            <el-table-column label="操作" width="100" fixed="right"><template #default="{ row }"><el-button size="small" @click="openGroupDialog(row)">编辑</el-button></template></el-table-column>
+            <el-table-column label="操作" width="150" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" @click="openGroupDialog(row)">编辑</el-button>
+                <el-button size="small" type="danger" @click="deleteRoleGroup(row)">删除</el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-tab-pane>
 
       <el-tab-pane label="权限矩阵" name="matrix">
+        <el-alert v-if="permissionRequests.length" type="warning" :closable="false" show-icon style="margin-bottom: 12px">
+          <template #title>有 {{ permissionRequests.length }} 条权限变更待另一名管理员审批（双人复核）</template>
+          <el-table :data="permissionRequests" size="small" border style="margin-top: 8px">
+            <el-table-column prop="role_code" label="角色" width="140" />
+            <el-table-column prop="role_name" label="角色名" width="120" />
+            <el-table-column prop="requested_by_name" label="申请人" width="110" />
+            <el-table-column prop="requested_at" label="申请时间" width="170" />
+            <el-table-column label="变更" min-width="180">
+              <template #default="{ row }">
+                {{ (JSON.parse(row.before_json || '[]')).length }} → {{ (JSON.parse(row.after_json || '[]')).length }} 项
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="150" align="center">
+              <template #default="{ row }">
+                <el-button size="small" type="success" link @click="approvePermissionRequest(row)">通过</el-button>
+                <el-button size="small" type="danger" link @click="rejectPermissionRequest(row)">驳回</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-alert>
         <el-card style="margin-bottom: 16px">
           <template #header>
             <div class="card-head">
@@ -268,6 +293,10 @@ const {
   roles,
   roleGroups,
   permissionCatalog,
+  permissionRequests,
+  approvePermissionRequest,
+  rejectPermissionRequest,
+  deleteRoleGroup,
   loading,
   dlg,
   groupDlg,

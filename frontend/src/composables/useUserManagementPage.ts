@@ -25,6 +25,7 @@ export function useUserManagementPage() {
   const roles = ref<any[]>([])
   const roleGroups = ref<any[]>([])
   const permissionCatalog = ref<any[]>([])
+  const permissionRequests = ref<any[]>([])
   const loading = ref(false)
   const total = ref(0)
   const userFilter = reactive({ q: '', role_code: '', is_active: '' })
@@ -301,17 +302,59 @@ export function useUserManagementPage() {
         return ElMessage.error('只有内置 admin 角色可以拥有 * 超级权限')
       }
       const permissions = permDlg.superAdmin ? ['*'] : Object.entries(permMap).filter(([code, checked]) => checked && code !== '*').map(([code]) => code)
-      await Api.put('/roles/' + permDlg.role.code + '/permissions', { permissions })
-      ElMessage.success('权限矩阵已更新，用户重新登录后生效')
+      const result: any = await Api.put('/roles/' + permDlg.role.code + '/permissions', { permissions })
+      if (result?.pending) ElMessage.warning(result.message || '已提交权限变更，等待另一名管理员审批')
+      else ElMessage.success('权限矩阵已更新，用户重新登录后生效')
       permDlg.visible = false
-      await loadRoles()
+      await Promise.all([loadRoles(), loadPermissionRequests()])
     } catch (e: any) { ElMessage.error(e?.response?.data?.message || e?.message || '保存失败') }
     finally { permDlg.saving = false }
   }
 
+  const loadPermissionRequests = async () => {
+    try {
+      const result: any = await Api.get('/permission-change-requests', { params: { status: 'pending' } })
+      permissionRequests.value = result.items || []
+    } catch (_error) { permissionRequests.value = [] }
+  }
+
+  const approvePermissionRequest = async (row: any) => {
+    try {
+      await ElMessageBox.confirm(`确认通过「${row.role_code}」的权限变更？通过后立即生效并强踢该角色用户。`, '审批权限变更', { type: 'warning' })
+      await Api.post('/permission-change-requests/' + row.id + '/approve')
+      ElMessage.success('已审批通过，权限已生效')
+      await Promise.all([loadRoles(), loadPermissionRequests()])
+    } catch (e: any) {
+      if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || e?.message || '审批失败')
+    }
+  }
+
+  const rejectPermissionRequest = async (row: any) => {
+    try {
+      const { value } = await ElMessageBox.prompt('请填写驳回原因', '驳回权限变更', { inputPlaceholder: '例如：权限过大，需拆分' })
+      if (!value || !String(value).trim()) return ElMessage.warning('驳回原因必填')
+      await Api.post('/permission-change-requests/' + row.id + '/reject', { note: String(value).trim() })
+      ElMessage.success('已驳回')
+      await loadPermissionRequests()
+    } catch (e: any) {
+      if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || e?.message || '驳回失败')
+    }
+  }
+
+  const deleteRoleGroup = async (row: any) => {
+    try {
+      await ElMessageBox.confirm(`确定删除角色组 ${row.group_code}（${row.group_name}）？有用户归属时不能删除。`, '删除角色组', { type: 'warning' })
+      await Api.del('/role-groups/' + row.id)
+      ElMessage.success('角色组已删除')
+      await Promise.all([loadRoleGroups(), loadUsers()])
+    } catch (e: any) {
+      if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || e?.message || '删除失败')
+    }
+  }
+
   onMounted(async () => {
     loadMyScope()
-    await Promise.all([loadRoles(), loadRoleGroups(), loadPermissionCatalog()])
+    await Promise.all([loadRoles(), loadRoleGroups(), loadPermissionCatalog(), loadPermissionRequests()])
     await loadUsers()
   })
 
@@ -328,6 +371,11 @@ export function useUserManagementPage() {
     roles,
     roleGroups,
     permissionCatalog,
+    permissionRequests,
+    loadPermissionRequests,
+    approvePermissionRequest,
+    rejectPermissionRequest,
+    deleteRoleGroup,
     loading,
     dlg,
     groupDlg,

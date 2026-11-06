@@ -12,7 +12,7 @@
 - **权限矩阵可清空 admin 的 `*`** → 下次登录后全系统没人有 `user:admin`，**永久锁死**；
 - **非 admin 角色可以拿到 `*`**（超级权限可被复制/伪造），且**权限码不做目录校验**（未知码静默入库）。
 
-**整改后：A-（2 个 P1 + 3 个 P2 已修）**
+**整改后：A（2 个 P1 + 3 个 P2 + 3 个 P3 全部已修）**
 
 | 编号 | 级别 | 问题（整改前实测） | 状态 |
 |---|---|---|---|
@@ -21,7 +21,7 @@
 | R-3 | P2 | 内置角色可删除（未被引用时，如 `sales`），破坏内置角色语义 | 已修 |
 | R-4 | P2 | 角色组创建无校验：`group_code='Bad Code'`、`default_role_code='nope'`、`data_scope='galaxy'` 全部 200 入库 | 已修（含存量脏数据迁移） |
 | R-5 | P2 | 角色组创建/修改**不写审计**（角色侧已写，组侧缺失） | 已修 |
-| R-6 | P3 | 角色组无删除接口（只能停用）；权限目录分组标签为英文资源名；无权限变更审批流 | 记录 |
+| R-6 | P3 | 角色组无删除接口；权限目录分组标签英文；无权限变更审批流；历史角色组 planner/administrator 冗余 | **已全部修复**（删除接口 / 中文标签 / 双人复核 / 历史组停用） |
 
 ## 1. 模块现状（走读）
 
@@ -133,6 +133,59 @@ PUT /api/roles/audit_role/permissions {"permissions":["*"]}
 审计：role_group.create=1、role_group.update=1
 ```
 
+## 6. P3 遗留全修（2026-11-07）
+
+### 6.1 角色组删除接口
+
+- 新增 `DELETE /api/role-groups/:id`：`user_count > 0` 返回 409「角色组正在被 N 个用户使用，不能删除」；无引用可彻底删除；
+- 写审计 `role_group.delete`（before 快照）；
+- 前端角色组列表操作列新增「删除」按钮（确认弹窗）；
+- 历史冗余组 `planner` / `administrator`：由 `scripts/migrate-role-group-cleanup.js --apply` **停用**（`is_active=0`，可逆、不破坏历史引用），确认无用后可用新接口彻底删除。
+
+### 6.2 权限目录中文标签
+
+- `RESOURCE_LABELS` 映射 17 个资源：`work_order → 工单管理`、`work_report → 工时报工`、`shopfloor → 车间工作台`、`user → 用户与权限` 等；
+- 权限矩阵/权限目录页「模块」列直接显示中文（实测 `work_order=工单管理`）。
+
+### 6.3 权限矩阵变更双人复核
+
+- 新表 `permission_change_requests`（role_code / before_json / after_json / requested_by / status / reviewed_by / review_note）；
+- `PUT /api/roles/:code/permissions` 行为：
+  - 存在**另一名启用 admin** → 返回 202 `{pending:true, request_id}`，权限不立即生效；
+  - 系统只有一名管理员 → 直接生效，审计标注「唯一管理员，直接生效」；
+  - `PERMISSION_CHANGE_REQUIRE_APPROVAL=false` 可整体关闭（默认开启）；
+- 审批 API：`GET /api/permission-change-requests?status=pending`、`POST .../:id/approve`、`POST .../:id/reject`（驳回必须填原因）；
+- 申请人不能审批自己的变更（400）；审批通过后重新校验权限目录/admin `*` 保护，生效并强踢该角色用户；
+- 审计：`role.permission.request` / `role.permission.approve` / `role.permission.reject`；
+- 前端权限矩阵页：顶部显示「N 条权限变更待另一名管理员审批」+ 通过/驳回；保存时提示「已提交审批」或「已更新」。
+
+**生产演练**（临时角色 + 临时第二管理员，已清理）：
+
+```
+提交变更（双管理员在线）→ 202 {pending:true, request_id:1}
+申请人自审 → 400「不能审批自己提交的变更」
+第二管理员通过 → 200，tmp_role 权限更新为 ['work_order:read','work_report:read']
+再次申请 → 第二管理员驳回 → 200，权限保持不变
+删除临时角色/临时管理员 → 200；历史组 planner/administrator active=0
+```
+
+## 7. P3 验证
+
+| 项目 | 结果 |
+|---|---|
+| `tests/roleGovernance.test.js` | **7/7**（新增：角色组删除/审批双人复核/中文标签） |
+| `tests/roles.test.js` | 10/10 |
+| 全量部署闸门 | **816/0** ✅ |
+| 前端 eslint / vue-tsc / build | 0 / 0 / 通过 |
+| 生产迁移 | permission_change_requests 表已创建；planner/administrator 已停用（用户数 0） |
+
+### 7.1 剩余边界（记录）
+
+1. 权限变更审批流为**两级**（申请人 → 另一管理员），无多级/超时自动通过；
+2. 权限申请无站内/IM 通知（需管理员主动打开页面查看）；
+3. 历史角色组选择「停用」而非删除（保留可逆性），彻底清理需管理员在页面确认删除；
+4. 权限目录仅分组标签中文化，动作（read/write/admin）仍为代码英文。
+
 ## 4. 改动文件
 
 | 文件 | 说明 |
@@ -144,6 +197,7 @@ PUT /api/roles/audit_role/permissions {"permissions":["*"]}
 | `scripts/migrate-role-governance.js` | admin `*` 修复 + 角色组编码规范化 + 未知权限码报告（幂等） |
 | `tests/roleGovernance.test.js` | 5 个回归用例 |
 | `tests/roles.test.js` | 测试夹具权限码改为目录内合法码 |
+| `scripts/migrate-role-group-cleanup.js` | 审批表创建 + 历史角色组停用（幂等） |
 | `docs/audit-roles-permissions-2026-11-06.md` | 本报告 |
 
 ## 5. 复验方式

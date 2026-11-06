@@ -12,6 +12,18 @@ function setDb(d) { db = d; }
 
 function ensureSchema() {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS permission_change_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      role_code TEXT NOT NULL,
+      before_json TEXT NOT NULL,
+      after_json TEXT NOT NULL,
+      requested_by INTEGER,
+      requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+      status TEXT NOT NULL DEFAULT 'pending',
+      reviewed_by INTEGER,
+      reviewed_at TEXT,
+      review_note TEXT
+    );
     CREATE TABLE IF NOT EXISTS role_groups (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       group_code TEXT UNIQUE NOT NULL,
@@ -348,11 +360,19 @@ function setRolePermissions(roleId, permissions) {
   return { ok: true, count: arr.length };
 }
 
+const RESOURCE_LABELS = {
+  audit: '审计日志', delivery: '交付管理', document: '文档管理', equipment: '设备管理',
+  help: '帮助中心', inventory: '库存管理', material: '物料管理', pick: '齐套领料',
+  process: '工艺过程', purchase: '采购管理', quality: '质量管理', report: '报表分析',
+  settings: '系统设置', shopfloor: '车间工作台', user: '用户与权限', work_order: '工单管理',
+  work_report: '工时报工',
+};
+
 function permissionCatalog() {
   const modules = {};
   for (const [code, description] of Object.entries(PERMISSIONS)) {
     const [resource, action = 'custom'] = code.split(':');
-    if (!modules[resource]) modules[resource] = { resource, label: resource, permissions: [] };
+    if (!modules[resource]) modules[resource] = { resource, label: RESOURCE_LABELS[resource] || resource, permissions: [] };
     modules[resource].permissions.push({ code, action, description });
   }
   modules.admin = modules.admin || { resource: 'admin', label: '超级权限', permissions: [] };
@@ -414,6 +434,23 @@ function register(app, _db) {
       diff_summary: `更新角色组 ${after.group_code}`,
     });
     res.json({ ok: true });
+  }));
+
+  app.delete('/api/role-groups/:id', wrap((req, res) => {
+    const group = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
+    if (!group) throw ApiError.notFound('role group not found');
+    const userCount = db.prepare('SELECT COUNT(*) AS c FROM users WHERE role_group_id = ?').get(group.id).c;
+    if (userCount > 0) throw ApiError.conflict(`角色组正在被 ${userCount} 个用户使用，不能删除；请先调整用户归属或停用角色组`);
+    const changes = db.prepare('DELETE FROM role_groups WHERE id = ?').run(group.id).changes;
+    if (!changes) throw ApiError.notFound('role group not found');
+    audit.record(db, req, {
+      action: 'role_group.delete',
+      resource_type: 'role_group',
+      resource_id: group.id,
+      before: group,
+      diff_summary: `删除角色组 ${group.group_code}`,
+    });
+    res.json({ ok: true, deleted: group.id });
   }));
 
   // Role list/detail/permission routes are owned by routes/roles.js (audit + cache sync).
