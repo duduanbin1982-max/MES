@@ -28,7 +28,7 @@ const { loadRolePermissions, getRolePermissions } = require('../app/rolePermissi
 
 // P0-2: 用新 jwt 模块 (旧函数名保留, 业务层零改动)
 function makeToken(uid, role, extra = {}) {
-  const r = jwt.signAccess({ sub: uid, role, permissions: extra.permissions, full_name: extra.username });
+  const r = jwt.signAccess({ sub: uid, role, permissions: extra.permissions, full_name: extra.username, tv: extra.token_version });
   return r.token;
 }
 function verifyToken(token) {
@@ -39,6 +39,8 @@ function verifyToken(token) {
 }
 
 function authMiddleware(req, res, next) {
+  // authMiddleware 必须保持 3 参数：Express 会把 4 参数函数当成 error handler
+  const db = (req.app && req.app.locals && req.app.locals.db) || arguments[3] || null;
   // P0-2 brooks-lint: default-deny 原则
   //   之前: publicPaths = ['/auth/login', '/auth/refresh', '/health', '/workflow/definitions', '/debug/db-stats']
   //   现在: 显式列白名单, 其它 /api/* 全部走 token + requirePermission
@@ -59,6 +61,20 @@ function authMiddleware(req, res, next) {
   // P0-1: 从 token 取 permissions; 旧 token 没塞, 兜底用 DEFAULT_ROLE_PERMISSIONS
   if (!Array.isArray(payload.permissions)) {
     payload.permissions = getRolePermissions(payload.role);
+  }
+  // 2026-11-06（用户管理审计）：用户在会话期间被禁用/删除/改角色/改密码后，
+  // 旧 token 不应继续可用：比对 users.token_version。
+  if (db) {
+    try {
+      const row = db.prepare("SELECT id, is_active, token_version, role_code FROM users WHERE id = ?").get(payload.sub || payload.uid);
+      if (!row) return res.status(401).json({ error: "用户不存在或已被删除，请重新登录" });
+      if (!row.is_active) return res.status(401).json({ error: "账号已禁用，请联系管理员" });
+      const tokenVersion = payload.tv == null ? 0 : Number(payload.tv);
+      if (Number(row.token_version || 0) !== tokenVersion) {
+        return res.status(401).json({ error: "登录状态已失效（账号/角色/密码变更），请重新登录" });
+      }
+      payload.role = row.role_code || payload.role;
+    } catch (_error) { /* users.token_version 未迁移时保持兼容 */ }
   }
   req.user = payload;
   next();
@@ -102,7 +118,7 @@ const loginLimiter = rateLimit({
 
 
 // P0: Access token refresh - 验证旧 access token（允许过期但有效签名）签发新 access token
-function handleRefresh(req, res, next) {
+function handleRefresh(req, res, next, db) {
   try {
     const { access_token } = req.body || {};
     if (!access_token) return res.status(400).json({ error: 'access_token 必填' });
@@ -114,9 +130,23 @@ function handleRefresh(req, res, next) {
     // Allow expired tokens as long as signature is valid (jwt.verify returns payload with expired flag)
     const uid = payload.sub || payload.uid;
     if (!uid) return res.status(401).json({ error: 'token 缺少用户标识' });
+    // 2026-11-06（用户管理审计）：刷新前必须确认用户仍存在/启用，且 token_version 一致，
+    // 否则被禁用/删除用户的旧 token 可以无限续签。
+    let role = payload.role;
+    let tokenVersion = payload.tv == null ? 0 : Number(payload.tv);
+    if (db) {
+      const row = db.prepare("SELECT id, is_active, token_version, role_code FROM users WHERE id = ?").get(uid);
+      if (!row) return res.status(401).json({ error: '用户不存在或已被删除，请重新登录' });
+      if (!row.is_active) return res.status(401).json({ error: '账号已禁用，请联系管理员' });
+      if (Number(row.token_version || 0) !== tokenVersion) {
+        return res.status(401).json({ error: '登录状态已失效（账号/角色/密码变更），请重新登录' });
+      }
+      role = row.role_code || role;
+      tokenVersion = Number(row.token_version || 0);
+    }
     // Re-fetch role permissions from cache (may have changed since token was issued)
-    const permissions = getRolePermissions(payload.role);
-    const access = jwt.signAccess({ sub: uid, role: payload.role, permissions, full_name: payload.full_name });
+    const permissions = getRolePermissions(role);
+    const access = jwt.signAccess({ sub: uid, role, permissions, full_name: payload.full_name, tv: tokenVersion });
     res.json({
       access_token: access.token,
       token_type: 'Bearer',

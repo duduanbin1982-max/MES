@@ -14,6 +14,19 @@
     <el-tabs v-model="tab">
       <el-tab-pane label="用户列表" name="users">
         <el-card>
+          <div class="user-toolbar">
+            <el-input v-model="userFilter.q" placeholder="搜索用户名/姓名/手机" clearable style="width:220px" @keyup.enter="loadUsers" />
+            <el-select v-model="userFilter.role_code" placeholder="全部角色" clearable style="width:150px">
+              <el-option v-for="r in roles" :key="r.code" :label="r.name" :value="r.code" />
+            </el-select>
+            <el-select v-model="userFilter.is_active" placeholder="全部状态" clearable style="width:120px">
+              <el-option label="启用" value="true" />
+              <el-option label="禁用" value="false" />
+            </el-select>
+            <el-button type="primary" @click="loadUsers">查询</el-button>
+            <el-button @click="resetUserFilter">重置</el-button>
+            <span class="muted">共 {{ total }} 人</span>
+          </div>
           <el-table :data="users" stripe v-loading="loading" size="small">
             <el-table-column prop="id" label="ID" width="60" />
             <el-table-column prop="username" label="用户名" width="120" />
@@ -131,7 +144,7 @@
     <el-dialog v-model="dlg.visible" :title="dlg.isEdit ? '编辑用户' : '新建用户'" width="520px">
       <el-form :model="dlg.form" label-width="100px">
         <el-form-item label="用户名" required><el-input v-model="dlg.form.username" :disabled="dlg.isEdit" /></el-form-item>
-        <el-form-item label="密码"><el-input v-model="dlg.form.password" type="password" :placeholder="dlg.isEdit ? '留空不修改' : '必填'" /></el-form-item>
+        <el-form-item label="密码"><el-input v-model="dlg.form.password" type="password" show-password :placeholder="dlg.isEdit ? '留空不修改' : '必填，至少 8 位'" /><div style="font-size:12px;color:var(--el-color-info);margin-top:4px">密码至少 8 位；禁用/改角色/改密码后该用户会被强制重新登录</div></el-form-item>
         <el-form-item label="姓名" required><el-input v-model="dlg.form.full_name" /></el-form-item>
         <el-form-item label="角色组">
           <el-select v-model="dlg.form.role_group_id" clearable style="width: 100%" @change="applyGroupDefault">
@@ -248,6 +261,10 @@ import { useUserManagementPage } from '../composables/useUserManagementPage'
 const {
   tab,
   users,
+  total,
+  userFilter,
+  resetUserFilter,
+  loadUsers,
   roles,
   roleGroups,
   permissionCatalog,

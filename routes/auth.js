@@ -43,7 +43,7 @@ function register(app, db) {
       run("UPDATE users SET last_login = datetime('now') WHERE id = ?", user.id);
       const permissions = getRolePermissions(user.role_code);
       // P0-2: access + refresh 双 token
-      const access  = jwt.signAccess({ sub: user.id, role: user.role_code, permissions, full_name: user.full_name });
+      const access  = jwt.signAccess({ sub: user.id, role: user.role_code, permissions, full_name: user.full_name, tv: user.token_version || 0 });
       const refresh = jwt.signRefresh(user.id);
       res.json({
         access_token: access.token,
@@ -84,7 +84,7 @@ function register(app, db) {
       }
 
       // Fallback: 用 access_token 刷新 (允许过期但有效签名)
-      if (access_token) return handleRefresh(req, res, next);
+      if (access_token) return handleRefresh(req, res, next, db);
 
       return next(ApiError.validation('refresh_token 或 access_token 必填'));
     } catch (e) { next(e); }

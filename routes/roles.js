@@ -244,6 +244,11 @@ function register(app, db) {
 
       run('UPDATE roles SET permissions = ? WHERE id = ?', [JSON.stringify(normalized), before.id]);
       loadRolePermissions(db);
+      // 2026-11-06（用户管理审计）：权限矩阵变化后强制该角色用户重新登录
+      let bumped = null;
+      try {
+        bumped = run('UPDATE users SET token_version = COALESCE(token_version, 0) + 1 WHERE role_code = ?', [req.params.code]);
+      } catch (_error) { /* 测试库/旧库没有 users.token_version 时跳过 */ }
 
       // P1-4 写审计
       const added = normalized.filter(p => !beforePerms.includes(p));
@@ -257,7 +262,7 @@ function register(app, db) {
         resource_id: req.params.code,
         before: { permissions: beforePerms },
         after: { permissions: normalized },
-        diff_summary: diff,
+        diff_summary: diff + (bumped && bumped.changes ? `（强制 ${bumped.changes} 名用户重新登录）` : ''),
       });
 
       res.json({ role_code: req.params.code, code: req.params.code, permissions: normalized, updated: true });

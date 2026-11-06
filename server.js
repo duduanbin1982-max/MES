@@ -37,6 +37,7 @@ loadRolePermissions(db);
 require('./routes/root').register(app);
 
 // auth 白名单: /api/health 和 /api/auth/login
+app.locals.db = db;
 app.use('/api', authMiddleware);
 app.use('/api', apiPermissionMiddleware);
 // P1-1（2026-10-18）：数据范围（行级权限）——懒加载，只有需要的接口才查库

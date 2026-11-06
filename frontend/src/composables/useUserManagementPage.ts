@@ -26,6 +26,8 @@ export function useUserManagementPage() {
   const roleGroups = ref<any[]>([])
   const permissionCatalog = ref<any[]>([])
   const loading = ref(false)
+  const total = ref(0)
+  const userFilter = reactive({ q: '', role_code: '', is_active: '' })
 
   const dlg = reactive<any>({ visible: false, isEdit: false, saving: false, form: {} })
   const groupDlg = reactive<any>({ visible: false, isEdit: false, saving: false, form: {} })
@@ -54,9 +56,21 @@ export function useUserManagementPage() {
 
   const loadUsers = async () => {
     loading.value = true
-    try { const r = await Api.get('/users'); users.value = r.items || [] }
-    catch (_) { users.value = []; ElMessage.error('加载用户失败') }
+    try {
+      const params: any = { page: 1, page_size: 200 }
+      if (userFilter.q) params.q = userFilter.q
+      if (userFilter.role_code) params.role_code = userFilter.role_code
+      if (userFilter.is_active !== '') params.is_active = userFilter.is_active
+      const r = await Api.get('/users', { params })
+      users.value = r.items || []
+      total.value = r.total || users.value.length
+    } catch (_) { users.value = []; ElMessage.error('加载用户失败') }
     finally { loading.value = false }
+  }
+
+  const resetUserFilter = () => {
+    Object.assign(userFilter, { q: '', role_code: '', is_active: '' })
+    loadUsers()
   }
 
   const loadRoles = async () => {
@@ -132,7 +146,7 @@ export function useUserManagementPage() {
       ElMessage.success('已删除')
       loadUsers()
     } catch (e: any) {
-      if (e !== 'cancel' && e !== 'close') ElMessage.error('操作失败')
+      if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || e?.message || '删除失败')
     }
   }
 
@@ -288,6 +302,9 @@ export function useUserManagementPage() {
     routeTab,
     tab,
     users,
+    total,
+    userFilter,
+    resetUserFilter,
     roles,
     roleGroups,
     permissionCatalog,

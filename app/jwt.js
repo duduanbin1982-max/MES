@@ -65,6 +65,7 @@ function signAccess(claims) {
     sub: claims.sub,
     role: claims.role,
     permissions: claims.permissions || [],
+    tv: claims.tv == null ? 0 : Number(claims.tv),
     full_name: claims.full_name,
     iat: now,
     exp,

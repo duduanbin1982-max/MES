@@ -237,9 +237,9 @@
       "ddlStatements": 12
     },
     "userManagement": {
-      "schemaVersion": 3,
-      "ddlFingerprint": "e8184a563ce2bfa735a6904d39079449bc4e91bd1627cf21d114b937807f6e20",
-      "ddlStatements": 4
+      "schemaVersion": 4,
+      "ddlFingerprint": "92cbc87cc1aaa7ce7e553a8953cc65a1315fbd9dfb38582902a35b3122e93619",
+      "ddlStatements": 5
     },
     "workflowService": {
       "schemaVersion": 1,
