@@ -9,6 +9,7 @@
 //   PUT    /api/roles/:code/permissions
 
 const { requirePermission, getRolePermissions, loadRolePermissions } = require('../middleware/auth');
+const { PERMISSIONS } = require('../app/permissions');
 const { ApiError } = require('../app/errors');
 const audit = require('../app/audit');
 
@@ -52,6 +53,38 @@ function parsePermissions(text) {
 function normalizePermissions(permissions) {
   if (!Array.isArray(permissions)) return [];
   return [...new Set(permissions.map(String).filter(Boolean))].sort();
+}
+
+// 2026-11-06（角色与权限审计）：
+//   · 权限码必须来自 PERMISSIONS 目录（支持 resource:* 通配），未知码拒绝
+//   · 只有内置 admin 角色可以拥有 '*'（超级权限）
+//   · admin 角色必须保留 '*'，防止权限矩阵把系统锁死
+function validateRolePermissions(permissions, roleCode) {
+  if (!Array.isArray(permissions)) throw ApiError.validation('permissions 必须是数组');
+  if (!permissions.every((item) => typeof item === 'string')) throw ApiError.validation('permissions 项必须为字符串');
+  const normalized = normalizePermissions(permissions);
+  if (normalized.length > 500) throw ApiError.validation('permissions 不能超过 500 项');
+  const known = new Set(Object.keys(PERMISSIONS));
+  const resources = new Set([...known].map((code) => code.split(':')[0]));
+  for (const code of normalized) {
+    if (code === '*') {
+      if (roleCode && roleCode !== 'admin') throw ApiError.validation('只有内置 admin 角色可以拥有 * 超级权限');
+      continue;
+    }
+    if (code.endsWith(':*')) {
+      const resource = code.slice(0, -2);
+      if (!resources.has(resource)) throw ApiError.validation('未知权限资源: ' + resource);
+      continue;
+    }
+    if (!known.has(code)) throw ApiError.validation('未知权限码: ' + code);
+  }
+  return normalized;
+}
+
+function assertAdminKeepsSuper(roleCode, permissions) {
+  if (roleCode === 'admin' && !permissions.includes('*')) {
+    throw ApiError.validation('内置 admin 角色必须保留 * 超级权限，不能移除');
+  }
 }
 
 
@@ -159,6 +192,7 @@ function register(app, db) {
         if (!source) return next(ApiError.validation('copy_from 角色不存在: ' + body.copy_from));
         permissions = normalizePermissions(parsePermissions(source.permissions));
       }
+      permissions = validateRolePermissions(permissions, roleCode);
 
       const result = run(
         'INSERT INTO roles (role_code, role_name, permissions, description) VALUES (?, ?, ?, ?)',
@@ -218,6 +252,7 @@ function register(app, db) {
       if (userCount > 0) return next(ApiError.conflict(`角色正在被 ${userCount} 个用户使用，不能删除`));
       const groupCount = get('SELECT COUNT(*) AS c FROM role_groups WHERE default_role_code = ?', role.role_code).c;
       if (groupCount > 0) return next(ApiError.conflict(`角色正在被 ${groupCount} 个角色组作为默认角色，不能删除`));
+      if (BUILTIN_ROLES.has(role.role_code)) return next(ApiError.validation('内置角色不能删除（可调整其权限或改用自定义角色）: ' + role.role_code));
       run('DELETE FROM roles WHERE role_code = ?', role.role_code);
       loadRolePermissions(db);
       audit.record(db, req, {
@@ -240,7 +275,8 @@ function register(app, db) {
       const before = get('SELECT id, role_code, role_name, permissions, description FROM roles WHERE role_code = ?', req.params.code);
       if (!before) return next(ApiError.notFound('角色不存在: ' + req.params.code));
       const beforePerms = parsePermissions(before.permissions);
-      const normalized = normalizePermissions(permissions);
+      const normalized = validateRolePermissions(permissions, before.role_code);
+      assertAdminKeepsSuper(before.role_code, normalized);
 
       run('UPDATE roles SET permissions = ? WHERE id = ?', [JSON.stringify(normalized), before.id]);
       loadRolePermissions(db);
@@ -270,4 +306,4 @@ function register(app, db) {
   });
 }
 
-module.exports = { register };
+module.exports = { register, validateRolePermissions, assertAdminKeepsSuper, BUILTIN_ROLES, suggestCode };

@@ -274,12 +274,32 @@ export function useUserManagementPage() {
   }
 
   const toggleSuperAdmin = () => {
+    const roleCode = permDlg.role?.code || permDlg.role?.role_code
+    if (permDlg.superAdmin && roleCode !== 'admin') {
+      permDlg.superAdmin = false
+      ElMessage.warning('只有内置 admin 角色可以拥有 * 超级权限')
+      return
+    }
+    if (!permDlg.superAdmin && roleCode === 'admin') {
+      permDlg.superAdmin = true
+      ElMessage.warning('admin 角色必须保留 * 超级权限（防止系统被锁死）')
+      return
+    }
     permMap['*'] = permDlg.superAdmin
   }
 
   const savePerms = async () => {
     permDlg.saving = true
     try {
+      const roleCode = permDlg.role?.code || permDlg.role?.role_code
+      if (roleCode === 'admin' && !permDlg.superAdmin) {
+        permDlg.saving = false
+        return ElMessage.error('admin 角色必须保留 * 超级权限')
+      }
+      if (roleCode !== 'admin' && permDlg.superAdmin) {
+        permDlg.saving = false
+        return ElMessage.error('只有内置 admin 角色可以拥有 * 超级权限')
+      }
       const permissions = permDlg.superAdmin ? ['*'] : Object.entries(permMap).filter(([code, checked]) => checked && code !== '*').map(([code]) => code)
       await Api.put('/roles/' + permDlg.role.code + '/permissions', { permissions })
       ElMessage.success('权限矩阵已更新，用户重新登录后生效')

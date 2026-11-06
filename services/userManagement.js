@@ -96,6 +96,39 @@ function listRoleGroups() {
 //   坑：el-switch 传的是布尔 true/false，better-sqlite3 只接受 number/string/bigint/buffer/null，
 //   直接把 boolean 绑进 SQL 会抛 TypeError → 前端只看到"服务内部错误"。
 //   同时把 scope_config 统一成 JSON 字符串（对象/字符串都接受）。
+const GROUP_CODE_RE = /^[a-z][a-z0-9_]{1,31}$/;
+const HOME_RE = /^\/[a-zA-Z0-9_?=&/.:-]*$/;
+
+// 2026-11-06（角色与权限审计）：角色组入参校验（创建/局部更新共用）
+function validateRoleGroupInput(body, { partial = false } = {}) {
+  const errors = [];
+  const has = (key) => Object.prototype.hasOwnProperty.call(body, key);
+  if (!partial || has('group_code')) {
+    const code = String(body.group_code == null ? '' : body.group_code).trim();
+    if (!GROUP_CODE_RE.test(code)) errors.push('group_code 必须是小写字母开头、2-32 位小写字母/数字/下划线');
+  }
+  if (!partial || has('group_name')) {
+    const name = String(body.group_name == null ? '' : body.group_name).trim();
+    if (!name || name.length > 50) errors.push('group_name 必填且不超过 50 字');
+  }
+  if (has('default_role_code') && body.default_role_code) {
+    const role = db.prepare('SELECT id FROM roles WHERE role_code = ?').get(String(body.default_role_code));
+    if (!role) errors.push('default_role_code 不存在: ' + body.default_role_code);
+  }
+  if (has('data_scope') && body.data_scope) {
+    if (!require('../app/dataScope').SCOPES.includes(String(body.data_scope))) errors.push('data_scope 非法: ' + body.data_scope);
+  }
+  if (has('default_home') && body.default_home) {
+    const home = String(body.default_home).trim();
+    if (!HOME_RE.test(home) || home.length > 200) errors.push('default_home 必须是以 / 开头的站内路径');
+  }
+  if (has('scope_config') && typeof body.scope_config === 'string' && body.scope_config.trim()) {
+    try { JSON.parse(body.scope_config); } catch (_error) { errors.push('scope_config 不是合法 JSON'); }
+  }
+  if (errors.length) throw ApiError.validation(errors.join('; '), { errors });
+  return true;
+}
+
 function normalizeRoleGroupPatch(body) {
   const allowed = ["group_name", "default_role_code", "data_scope", "default_home", "description", "is_active"];
   const sets = [];
@@ -341,26 +374,45 @@ function register(app, _db) {
 
   app.post('/api/role-groups', wrap((req, res) => {
     const body = req.body || {};
+    validateRoleGroupInput(body);
     if (!body.group_code || !body.group_name) throw ApiError.validation('group_code / group_name 必填');
     const r = db.prepare(`
       INSERT INTO role_groups (group_code, group_name, default_role_code, data_scope, scope_config, default_home, description, is_active)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      body.group_code, body.group_name, body.default_role_code || null, body.data_scope || 'all',
+      String(body.group_code).trim(), String(body.group_name).trim(), body.default_role_code || null, body.data_scope || 'all',
       JSON.stringify(body.scope_config || {}), body.default_home || null, body.description || null,
       body.is_active == null ? 1 : (body.is_active ? 1 : 0),
     );
+    const created = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(r.lastInsertRowid);
+    audit.record(db, req, {
+      action: 'role_group.create',
+      resource_type: 'role_group',
+      resource_id: r.lastInsertRowid,
+      after: created,
+      diff_summary: `创建角色组 ${created.group_code}（默认角色 ${created.default_role_code || '-'}）`,
+    });
     res.json({ id: r.lastInsertRowid });
   }));
 
   app.patch('/api/role-groups/:id', wrap((req, res) => {
-    const exists = db.prepare('SELECT id FROM role_groups WHERE id = ?').get(req.params.id);
+    const exists = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
+    validateRoleGroupInput(req.body || {}, { partial: true });
     if (!exists) throw ApiError.notFound('role group not found');
     const { sets, params } = normalizeRoleGroupPatch(req.body || {});
     if (!sets.length) throw ApiError.validation('无可更新字段');
     sets.push("updated_at = datetime('now')");
     params.push(req.params.id);
     db.prepare('UPDATE role_groups SET ' + sets.join(', ') + ' WHERE id = ?').run(...params);
+    const after = db.prepare('SELECT * FROM role_groups WHERE id = ?').get(req.params.id);
+    audit.record(db, req, {
+      action: 'role_group.update',
+      resource_type: 'role_group',
+      resource_id: req.params.id,
+      before: exists,
+      after,
+      diff_summary: `更新角色组 ${after.group_code}`,
+    });
     res.json({ ok: true });
   }));
 

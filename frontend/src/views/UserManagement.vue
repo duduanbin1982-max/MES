@@ -177,7 +177,7 @@
 
     <el-dialog v-model="groupDlg.visible" :title="groupDlg.isEdit ? '编辑角色组' : '新建角色组'" width="560px">
       <el-form :model="groupDlg.form" label-width="100px">
-        <el-form-item label="组编码" required><el-input v-model="groupDlg.form.group_code" :disabled="groupDlg.isEdit" placeholder="production / warehouse" /></el-form-item>
+        <el-form-item label="组编码" required><el-input v-model="groupDlg.form.group_code" :disabled="groupDlg.isEdit" placeholder="小写字母开头，如 production / warehouse" /><div style="font-size:12px;color:var(--el-color-info);margin-top:4px">只能包含小写字母/数字/下划线，2-32 位；默认角色必须存在</div></el-form-item>
         <el-form-item label="组名称" required><el-input v-model="groupDlg.form.group_name" placeholder="生产部 / 仓储部" /></el-form-item>
         <el-form-item label="默认角色">
           <el-select v-model="groupDlg.form.default_role_code" clearable style="width: 100%">
