@@ -33,6 +33,10 @@ function createMinimumBomSkeleton(db, instanceId) {
 
 function insertBomNode(db, instanceId, body, userId = null) {
   ensureBomStructureColumns(db);
+  const numericInstanceId = normalizeInt(instanceId, null);
+  if (!numericInstanceId) throw ApiError.notFound("项目装备不存在: " + instanceId);
+  const instance = db.prepare("SELECT id FROM equipment_instances WHERE id = ?").get(numericInstanceId);
+  if (!instance) throw ApiError.notFound("项目装备不存在: " + instanceId);
   const parentId = normalizeInt((body || {}).parent_id, null);
   if (parentId && !getParent(db, instanceId, parentId)) throw ApiError.validation(`父节点不存在: ${parentId}`);
   if (!parentId) {

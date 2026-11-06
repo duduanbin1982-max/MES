@@ -76,7 +76,7 @@ function moveBomNode(db, bomId, body = {}) {
   return db.prepare("SELECT * FROM instance_bom WHERE id = ?").get(current.id);
 }
 
-function deleteBomNodeCascade(db, bomId) {
+function deleteBomNodeCascade(db, bomId, options = {}) {
   ensureBomStructureColumns(db);
   const id = Number(bomId);
   const exists = db.prepare("SELECT id, equipment_instance_id FROM instance_bom WHERE id = ?").get(id);
@@ -93,10 +93,35 @@ function deleteBomNodeCascade(db, bomId) {
       }
     }
   }
+  // 2026-11-07（BOM 审计）：被工艺树（process_nodes.bom_node_id）引用的节点不允许直接删除
+  const ids = [...toDelete];
+  const placeholders = ids.map(() => "?").join(",");
+  let referencing = [];
+  try {
+    referencing = db.prepare(`SELECT id, operation_name FROM process_nodes WHERE bom_node_id IN (${placeholders})`).all(...ids);
+  } catch (_error) {
+    referencing = [];
+  }
+  if (referencing.length && !options.force) {
+    throw ApiError.conflict(`BOM 节点被 ${referencing.length} 个工序节点引用，删除会破坏工艺树；请先调整工艺树，或使用 force=true 解除引用后删除`, {
+      process_node_ids: referencing.map((row) => row.id).slice(0, 20),
+    });
+  }
   const del = db.prepare("DELETE FROM instance_bom WHERE id = ?");
-  for (const nodeId of toDelete) del.run(nodeId);
+  const tx = db.transaction(() => {
+    if (referencing.length) {
+      db.prepare(`UPDATE process_nodes SET bom_node_id = NULL WHERE bom_node_id IN (${placeholders})`).run(...ids);
+    }
+    for (const nodeId of toDelete) del.run(nodeId);
+  });
+  tx();
   recomputeStructureMetadata(db, exists.equipment_instance_id);
-  return { deleted: [...toDelete], count: toDelete.size };
+  return {
+    deleted: ids,
+    count: ids.length,
+    cleared_process_nodes: referencing.length,
+    forced: Boolean(options.force && referencing.length),
+  };
 }
 
 module.exports = { deleteBomNodeCascade, moveBomNode, updateBomNode };

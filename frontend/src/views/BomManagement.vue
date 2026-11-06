@@ -52,10 +52,10 @@
           <span class="tab-label"><el-icon><Share /></el-icon>项目结构树</span>
         </template>
         <div style="display: flex; gap: 12px; margin-bottom: 8px">
-          <el-button size="small" type="primary" @click="prefillTier(0); dlgAdd = true; editingNode = null">+ 新增整机根节点</el-button>
-          <el-button size="small" type="primary" plain :disabled="!selected" @click="openAddChild(selected)">+ 新增子部件</el-button>
-          <el-button size="small" type="success" :disabled="summary.total > 0" @click="initMinimumBom"><el-icon><Histogram /></el-icon> 生成最低三级骨架</el-button>
-          <el-button size="small" @click="dlgImport = true"><el-icon><Download /></el-icon> CSV 导入</el-button>
+          <el-button v-if="canEdit" size="small" type="primary" @click="prefillTier(0); dlgAdd = true; editingNode = null">+ 新增整机根节点</el-button>
+          <el-button v-if="canEdit" size="small" type="primary" plain :disabled="!selected" @click="openAddChild(selected)">+ 新增子部件</el-button>
+          <el-button v-if="canEdit" size="small" type="success" :disabled="summary.total > 0" @click="initMinimumBom"><el-icon><Histogram /></el-icon> 生成最低三级骨架</el-button>
+          <el-button v-if="canEdit" size="small" @click="dlgImport = true"><el-icon><Download /></el-icon> CSV 导入</el-button>
           <el-button size="small" @click="loadTemplate"><el-icon><Document /></el-icon> 工业模板</el-button>
           <el-button size="small" type="warning" @click="doValidate"><el-icon><Search /></el-icon> 校验</el-button>
           <el-button size="small" type="success" @click="dlgCompare = true"><el-icon><Refresh /></el-icon> ECO 对比</el-button>
@@ -158,8 +158,8 @@
                 <div style="display: flex; align-items: center; justify-content: space-between">
                   <span><el-icon><Search /></el-icon> 节点详情 #{{ selected.id }} ({{ tierLabel(selected.tier) }})</span>
                   <div>
-                    <el-button size="small" @click="openEdit">编辑</el-button>
-                    <el-button size="small" type="danger" @click="doDelete(selected)">删除</el-button>
+                    <el-button v-if="canEdit" size="small" @click="openEdit">编辑</el-button>
+                    <el-button v-if="canEdit" size="small" type="danger" @click="doDelete(selected)">删除</el-button>
                   </div>
                 </div>
               </template>
@@ -195,12 +195,12 @@
 
       <!-- Tab 2: 0 总装 (1 个根) -->
       <el-tab-pane :label="`总装 (${summary[0] || 0})`" name="l0">
-        <LevelTable :rows="rowsOfLevel(0)" :tier="0" @select="onRowSelect" @add="dlgAdd = true; editingNode = null; prefillTier(0)" @delete="doDelete" />
+        <LevelTable :rows="rowsOfLevel(0)" :tier="0" :editable="canEdit" @select="onRowSelect" @add="dlgAdd = true; editingNode = null; prefillTier(0)" @delete="doDelete" />
       </el-tab-pane>
 
       <!-- Tab 3: 1 部件 (装配班组) -->
       <el-tab-pane :label="`部件 (${summary[1] || 0})`" name="l1">
-        <LevelTable :rows="rowsOfLevel(1)" :tier="1" @select="onRowSelect" @add="prefillTier(1); dlgAdd = true" @delete="doDelete" @drill="drillPart" />
+        <LevelTable :rows="rowsOfLevel(1)" :tier="1" :editable="canEdit" @select="onRowSelect" @add="prefillTier(1); dlgAdd = true" @delete="doDelete" @drill="drillPart" />
         <el-card v-if="drillNode" style="margin-top: 12px">
           <template #header>
             <div style="display: flex; align-items: center; justify-content: space-between">
@@ -214,12 +214,12 @@
 
       <!-- Tab 4: 2 零件 (采购/加工) -->
       <el-tab-pane :label="`零件 (${summary[2] || 0})`" name="l2">
-        <LevelTable :rows="rowsOfLevel(2)" :tier="2" @select="onRowSelect" @delete="doDelete" />
+        <LevelTable :rows="rowsOfLevel(2)" :tier="2" :editable="canEdit" @select="onRowSelect" @delete="doDelete" />
       </el-tab-pane>
 
       <!-- Tab 5: 3 毛坯 (生产下料) -->
       <el-tab-pane :label="`毛坯 (${summary[3] || 0})`" name="l3">
-        <LevelTable :rows="rowsOfLevel(3)" :tier="3" @select="onRowSelect" @delete="doDelete" />
+        <LevelTable :rows="rowsOfLevel(3)" :tier="3" :editable="canEdit" @select="onRowSelect" @delete="doDelete" />
       </el-tab-pane>
 
       <BomBusinessTabs
@@ -326,6 +326,7 @@ const {
   dlgValidate,
   dlgCompare,
   saving,
+  canEdit,
   importing,
   comparing,
   editingNode,

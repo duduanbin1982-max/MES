@@ -24,9 +24,11 @@ function createInsertStatement(db) {
   `);
 }
 
-function importBomCsv(db, instanceId, csv, userId = null) {
+function importBomCsv(db, instanceId, csv, userId = null, options = {}) {
   ensureBomStructureColumns(db);
   if (!csv) throw ApiError.validation("csv 必填");
+  const instance = db.prepare("SELECT id FROM equipment_instances WHERE id = ?").get(instanceId);
+  if (!instance) throw ApiError.notFound("项目装备不存在: " + instanceId);
   const { headers, rows } = parseCsv(csv);
   const required = ["tier", "quantity", "unit", "category"];
   for (const field of required) {
@@ -38,7 +40,11 @@ function importBomCsv(db, instanceId, csv, userId = null) {
   const errorList = [];
   let inserted = 0;
   const insertStmt = createInsertStatement(db);
+  const allowPartial = options.allow_partial === true || options.allow_partial === "true" || options.allow_partial === 1;
 
+  // 2026-11-07（BOM 审计）：默认原子导入——任一行校验失败则整批回滚，
+  // 避免"一半 BOM 已入库"的脏结构；allow_partial=true 时保留逐行导入行为。
+  const tx = db.transaction(() => {
   for (const row of rows) {
     const parentRef = cleanText(row.parent_ref);
     const nodeRef = cleanText(row.node_ref);
@@ -67,6 +73,16 @@ function importBomCsv(db, instanceId, csv, userId = null) {
       errorList.push({ line: row.__line, ref: nodeRef, errors: [error.message] });
     }
   }
+  if (errorList.length && !allowPartial) {
+    const validationError = ApiError.validation(`导入校验失败（${errorList.length}/${rows.length} 行），已全部回滚`, {
+      total: rows.length,
+      error_list: errorList.slice(0, 30),
+    });
+    validationError.aborted = true;
+    throw validationError;
+  }
+  });
+  tx();
   recomputeStructureMetadata(db, instanceId);
 
   return {

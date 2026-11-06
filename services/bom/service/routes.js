@@ -19,6 +19,7 @@ const {
 } = require("./mutations");
 const { ensureBomStructureColumns } = require("./schema");
 const { importBomCsv } = require("./importer");
+const audit = require("../../../app/audit");
 const {
   getActiveUsers,
   updateRiskOwner,
@@ -38,6 +39,13 @@ function registerBomRoutes(app, db) {
   app.post("/api/equipment_instances/:id/bom/init-minimum", (req, res, next) => {
     try {
       const created = createMinimumBomSkeleton(db, req.params.id);
+      audit.record(db, req, {
+        action: "bom.init_minimum",
+        resource_type: "bom",
+        resource_id: req.params.id,
+        after: created,
+        diff_summary: `生成最低三级 BOM 骨架（实例 ${req.params.id}）`,
+      });
       res.json({ ok: true, message: "已生成最低三级 BOM 骨架", created });
     } catch (error) {
       next(error);
@@ -108,7 +116,15 @@ function registerBomRoutes(app, db) {
 
   app.post("/api/equipment_instances/:id/bom", (req, res, next) => {
     try {
-      res.json(insertBomNode(db, req.params.id, req.body || {}, req.user?.uid || null));
+      const created = insertBomNode(db, req.params.id, req.body || {}, req.user?.uid || null);
+      audit.record(db, req, {
+        action: "bom.create",
+        resource_type: "bom",
+        resource_id: created.id,
+        after: { id: created.id, part_number: created.part_number, quantity: created.quantity, tier: created.tier },
+        diff_summary: `新增 BOM 节点 #${created.id}（${created.part_number || created.material_id || "-"}）`,
+      });
+      res.json(created);
     } catch (error) {
       next(error);
     }
@@ -116,7 +132,17 @@ function registerBomRoutes(app, db) {
 
   app.put("/api/bom/:id", (req, res, next) => {
     try {
-      res.json(updateBomNode(db, req.params.id, req.body || {}));
+      const before = db.prepare("SELECT * FROM instance_bom WHERE id = ?").get(req.params.id);
+      const updated = updateBomNode(db, req.params.id, req.body || {});
+      audit.record(db, req, {
+        action: "bom.update",
+        resource_type: "bom",
+        resource_id: updated.id,
+        before: before ? { part_number: before.part_number, quantity: before.quantity, unit_price: before.unit_price, parent_id: before.parent_id } : null,
+        after: { part_number: updated.part_number, quantity: updated.quantity, unit_price: updated.unit_price, parent_id: updated.parent_id },
+        diff_summary: `更新 BOM 节点 #${updated.id}`,
+      });
+      res.json(updated);
     } catch (error) {
       next(error);
     }
@@ -124,7 +150,17 @@ function registerBomRoutes(app, db) {
 
   app.post("/api/bom/:id/move", (req, res, next) => {
     try {
-      res.json(moveBomNode(db, req.params.id, req.body || {}));
+      const before = db.prepare("SELECT id, parent_id, tier FROM instance_bom WHERE id = ?").get(req.params.id);
+      const moved = moveBomNode(db, req.params.id, req.body || {});
+      audit.record(db, req, {
+        action: "bom.move",
+        resource_type: "bom",
+        resource_id: moved.id,
+        before: before || null,
+        after: { id: moved.id, parent_id: moved.parent_id, tier: moved.tier },
+        diff_summary: `移动 BOM 节点 #${moved.id}`,
+      });
+      res.json(moved);
     } catch (error) {
       next(error);
     }
@@ -132,7 +168,16 @@ function registerBomRoutes(app, db) {
 
   app.delete("/api/bom/:id", (req, res, next) => {
     try {
-      res.json(deleteBomNodeCascade(db, req.params.id));
+      const force = req.query && (req.query.force === "1" || req.query.force === "true");
+      const result = deleteBomNodeCascade(db, req.params.id, { force });
+      audit.record(db, req, {
+        action: "bom.delete",
+        resource_type: "bom",
+        resource_id: req.params.id,
+        after: { deleted: result.deleted, count: result.count, cleared_process_nodes: result.cleared_process_nodes },
+        diff_summary: `删除 BOM 节点 #${req.params.id}（级联 ${result.count} 个${result.force ? `，解除 ${result.cleared_process_nodes} 个工序引用` : ""}）`,
+      });
+      res.json(result);
     } catch (error) {
       next(error);
     }
@@ -140,7 +185,15 @@ function registerBomRoutes(app, db) {
 
   app.post("/api/equipment_instances/:id/bom/import", (req, res, next) => {
     try {
-      res.json(importBomCsv(db, req.params.id, req.body?.csv, req.user?.uid || null));
+      const result = importBomCsv(db, req.params.id, req.body?.csv, req.user?.uid || null, { allow_partial: req.body?.allow_partial });
+      audit.record(db, req, {
+        action: "bom.import",
+        resource_type: "bom",
+        resource_id: req.params.id,
+        after: { inserted: result.inserted, errors: result.errors, total: result.total },
+        diff_summary: `CSV 导入 BOM（实例 ${req.params.id}）：成功 ${result.inserted}/${result.total}，失败 ${result.errors}`,
+      });
+      res.json(result);
     } catch (error) {
       next(error);
     }

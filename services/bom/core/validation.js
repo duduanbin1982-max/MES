@@ -76,6 +76,14 @@ function validateNode(node, ctx = {}) {
     errors.push("替代料必须填写 alternative_group");
   }
 
+  // 2026-11-07（BOM 审计）：金额/重量/替代优先级不允许负数或非法值
+  const unitPrice = normalizeFloat(node.unit_price, null);
+  if (unitPrice !== null && unitPrice < 0) errors.push("unit_price 不能为负数");
+  const weight = normalizeFloat(node.weight, null);
+  if (weight !== null && weight < 0) errors.push("weight 不能为负数");
+  const alternativePriority = normalizeInt(node.alternative_priority, null);
+  if (alternativePriority !== null && alternativePriority < 1) errors.push("alternative_priority 必须是 >= 1 的整数");
+
   if (ctx.materialIds && materialId && !ctx.materialIds.has(materialId)) {
     errors.push(`物料不存在: material_id=${materialId}`);
   }

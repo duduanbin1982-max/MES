@@ -4,7 +4,7 @@
       <div style="display: flex; align-items: center; justify-content: space-between">
         <span>{{ tierLabel(tier) }} 清单 ({{ rows.length }} 项)</span>
         <div>
-          <el-button v-if="tier >= 1 && tier <= 2" size="small" type="primary" @click="$emit('add')">+ 新增</el-button>
+          <el-button v-if="editable && tier >= 1 && tier <= 2" size="small" type="primary" @click="$emit('add')">+ 新增</el-button>
         </div>
       </div>
     </template>
@@ -51,7 +51,7 @@
       <el-table-column v-if="showActions !== false" label="操作" width="100" fixed="right">
         <template #default="{ row }">
           <el-button v-if="tier === 1" size="small" link type="primary" @click.stop="$emit('drill', row)">下钻</el-button>
-          <el-button size="small" link type="danger" @click.stop="$emit('delete', row)">删</el-button>
+          <el-button v-if="editable" size="small" link type="danger" @click.stop="$emit('delete', row)">删</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -61,7 +61,7 @@
 <script setup lang="ts">
 import { nodeTypeLabel, tierLabel } from './bomShared'
 
-defineProps<{ rows: any[]; tier: number; showActions?: boolean }>()
+withDefaults(defineProps<{ rows: any[]; tier: number; showActions?: boolean; editable?: boolean }>(), { editable: true })
 const emit = defineEmits(['select', 'add', 'delete', 'drill'])
 function onRow(row: any) { emit('select', row) }
 </script>

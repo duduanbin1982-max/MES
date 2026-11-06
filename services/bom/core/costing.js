@@ -36,15 +36,20 @@ function calcCost(db, instanceId) {
       memo.set(id, value);
       return value;
     }
-    let total = 0;
+    // 2026-11-07（BOM 审计）：子节点数量是"每个父件"的用量，父节点自身数量>1 时
+    // 子树成本必须按父数量放大（原实现漏乘，导致多件装配成本被低估）。
+    let unitChildrenCost = 0;
     let leaf = 0;
     for (const child of children) {
       const sub = dfs(Number(child.id));
-      total += sub.cost;
+      unitChildrenCost += sub.cost;
       leaf += sub.leaf;
     }
-    const self = normalizeBool(node.is_phantom) ? 0 : round4((node.unit_price || 0) * (node.quantity || 0) * (node.scrap_factor || 1));
-    const value = { cost: round4(total + self), self, leaf: round4(leaf), ph: normalizeBool(node.is_phantom) ? 1 : 0 };
+    const quantity = Math.max(0, Number(node.quantity) || 0);
+    const scrap = Number(node.scrap_factor) || 1;
+    const self = normalizeBool(node.is_phantom) ? 0 : round4((node.unit_price || 0) * quantity * scrap);
+    const total = round4(unitChildrenCost * quantity + self);
+    const value = { cost: total, self, leaf: round4(leaf), ph: normalizeBool(node.is_phantom) ? 1 : 0 };
     memo.set(id, value);
     return value;
   }

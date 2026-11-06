@@ -1,7 +1,8 @@
-import { ref, type Ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 import { defaultBomForm, templateDesc, tierPreset, nodeTypePreset } from './bomShared'
+import { useAuthStore } from '../../stores/auth'
 
 type BomEditorDeps = {
   instanceId: Ref<number | null>
@@ -14,6 +15,9 @@ type BomEditorDeps = {
 }
 
 export function useBomEditor({ instanceId, selected, drillNode, health, templateMeta, allNodes, loadAll }: BomEditorDeps) {
+  const auth = useAuthStore()
+  // 2026-11-07（BOM 审计）：读 BOM 用 equipment/process/material read；写用对应 write
+  const canEdit = computed(() => Boolean(auth.hasPerm && (auth.hasPerm('equipment:write') || auth.hasPerm('process:write') || auth.hasPerm('material:write'))))
   const dlgAdd = ref(false)
   const dlgImport = ref(false)
   const dlgValidate = ref(false)
@@ -123,13 +127,23 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
   async function doDelete(node: any) {
     try {
       await ElMessageBox.confirm(`确认删除节点 #${node.id} "${node.material_name || ''}" 及其所有子节点?`, '危险操作', { type: 'warning' })
-      await api.delete(`/bom/${node.id}`)
+      try {
+        await api.delete(`/bom/${node.id}`)
+      } catch (error: any) {
+        const details = error.response?.data?.details
+        if (error.response?.status === 409 && details?.process_node_ids?.length) {
+          await ElMessageBox.confirm(`该 BOM 节点被 ${details.process_node_ids.length} 个工序节点引用，强制删除会解除这些引用。继续？`, '被工艺树引用', { type: 'warning' })
+          await api.delete(`/bom/${node.id}?force=1`)
+        } else {
+          throw error
+        }
+      }
       ElMessage.success('已删除')
       if (selected.value?.id === node.id) selected.value = null
       if (drillNode.value?.id === node.id) drillNode.value = null
       await loadAll()
     } catch (error: any) {
-      if (error !== 'cancel' && error !== 'close') ElMessage.error('删除失败: ' + (error.message || error))
+      if (error !== 'cancel' && error !== 'close') ElMessage.error('删除失败: ' + (error.response?.data?.message || error.message || error))
     }
   }
 
@@ -145,7 +159,9 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
       csvText.value = ''
       await loadAll()
     } catch (error: any) {
-      ElMessage.error('导入失败: ' + (error.response?.data?.message || error.message))
+      const payload = error.response?.data
+      const firstError = payload?.details?.error_list?.[0]
+      ElMessage.error('导入失败: ' + (payload?.message || error.message) + (firstError ? `（第 ${firstError.line} 行: ${firstError.errors.join('；')}）` : ''))
     } finally {
       importing.value = false
     }
@@ -236,6 +252,7 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
     openEdit,
     moveNode,
     doSave,
+    canEdit,
     doDelete,
     doImport,
     initMinimumBom,
