@@ -3,13 +3,16 @@
 "use strict";
 const { makeDbHelpers } = require("../app/dbHelpers");
 const { wrap } = require("../middleware/asyncHandler");
+const { requirePermission } = require("../middleware/auth");
 
 const logger = require("../app/logger").createLogger("supplierDashboard");
 
 function register(app, db) {
   const { all } = makeDbHelpers(db);
 
-  app.get("/api/supplier/dashboard", wrap((req, res) => {
+  // 2026-11-07 审计：该接口原未命中 apiPermissions 规则（默认放行任意登录角色），
+  // 会向无采购/质量权限的角色泄露全部供应商、采购单、外协与来料检验数据。
+  app.get("/api/supplier/dashboard", requirePermission("purchase:read", "quality:write"), wrap((req, res) => {
     // 供应商列表 + 最新评分
     const suppliers = all(`
       SELECT s.*, 

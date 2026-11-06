@@ -13,7 +13,7 @@ const { patchNodeSubsystem } = require('../../services/process/nodeSubsystem');
 function register(app, db) {
   const { wrap } = require('../_helpers')(db);
 
-  app.post('/api/equipment_instances/:id/process_tree/generate', requirePermission('equipment:write'), (req, res) => generateProcessTree(req, res, db));
+  app.post('/api/equipment_instances/:id/process_tree/generate', requirePermission('equipment:write', 'process:write'), (req, res) => generateProcessTree(req, res, db));
   app.get('/api/equipment_instances/:id/critical_path', requirePermission('equipment:read'), (req, res) => getCriticalPath(req, res, db));
   app.get('/api/equipment_instances/:id/subsystems', requirePermission('equipment:read'), (req, res) => getSubsystems(req, res, db));
 
@@ -31,7 +31,7 @@ function register(app, db) {
     res.json({ part_id: partId, breadcrumb: getBreadcrumb(db, id, partId) });
   }));
 
-  app.patch('/api/process_nodes/:id/subsystem', requirePermission('equipment:write'), (req, res) => patchNodeSubsystem(req, res, db));
+  app.patch('/api/process_nodes/:id/subsystem', requirePermission('equipment:write', 'process:write'), (req, res) => patchNodeSubsystem(req, res, db));
 }
 
 module.exports = { register };

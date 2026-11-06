@@ -8,6 +8,7 @@ require("path");
 require("crypto");
 
 const logger = require("../app/logger").createLogger("plmService");
+const audit = require("../app/audit");
 
 function runMigration(db) {
   db.exec(`
@@ -175,29 +176,88 @@ function registerEco(app, db) {
     res.json(all(sql, p));
   }));
 
+  // 2026-11-07（ECO 审计）：补输入校验、状态机 guard 与审计（原实现任意状态都能重复 approve/implement）。
   app.post("/api/plm/ecos", wrap((req, res) => {
-    const { title, change_type, reason, requested_by, drawing_id, bom_node_id, equipment_instance_id, old_revision, new_revision } = req.body;
-    if (!title) throw ApiError.validation("title required")
+    const body = req.body || {};
+    const title = String(body.title || "").trim();
+    if (!title) throw ApiError.validation("title required");
+    if (title.length > 200) throw ApiError.validation("title 长度不能超过 200");
+    const changeType = String(body.change_type || "design").trim();
+    if (!["design", "process", "material", "other"].includes(changeType)) {
+      throw ApiError.validation("change_type 必须是 design / process / material / other");
+    }
+    const revisionRe = /^[A-Za-z]\d{1,3}$/;
+    for (const [field, value] of [["old_revision", body.old_revision], ["new_revision", body.new_revision]]) {
+      if (value && !revisionRe.test(String(value))) throw ApiError.validation(`${field} 需形如 A0/A1`);
+    }
+    if (body.drawing_id) {
+      const drawing = get("SELECT id FROM plm_drawings WHERE id=?", [Number(body.drawing_id)]);
+      if (!drawing) throw ApiError.validation("drawing_id 不存在");
+    }
+    if (body.equipment_instance_id) {
+      const instance = get("SELECT id FROM equipment_instances WHERE id=?", [Number(body.equipment_instance_id)]);
+      if (!instance) throw ApiError.validation("equipment_instance_id 不存在");
+    }
+    if (body.bom_node_id) {
+      const bom = get("SELECT id, equipment_instance_id FROM instance_bom WHERE id=?", [Number(body.bom_node_id)]);
+      if (!bom) throw ApiError.validation("bom_node_id 不存在");
+      if (body.equipment_instance_id && Number(bom.equipment_instance_id) !== Number(body.equipment_instance_id)) {
+        throw ApiError.validation("bom_node_id 不属于该装备实例");
+      }
+    }
     const ecoNo = nextEcoNo(db);
-    const r = run("INSERT INTO plm_eco_changes (eco_no,title,change_type,reason,requested_by,drawing_id,bom_node_id,equipment_instance_id,old_revision,new_revision,status) VALUES (?,?,?,?,?,?,?,?,?,?,'draft')",
-      [ecoNo, title, change_type||"design", reason||null, requested_by||null, drawing_id||null, bom_node_id||null, equipment_instance_id||null, old_revision||null, new_revision||null]);
+    let r;
+    try {
+      r = run("INSERT INTO plm_eco_changes (eco_no,title,change_type,reason,requested_by,drawing_id,bom_node_id,equipment_instance_id,old_revision,new_revision,status) VALUES (?,?,?,?,?,?,?,?,?,?,'draft')",
+        [ecoNo, title, changeType, body.reason || null, body.requested_by || null, body.drawing_id || null, body.bom_node_id || null, body.equipment_instance_id || null, body.old_revision || null, body.new_revision || null]);
+    } catch (error) {
+      if (/UNIQUE/i.test(String(error.message))) throw ApiError.conflict("ECO 编号冲突，请重试");
+      throw error;
+    }
+    audit.record(db, req, {
+      action: "plm_eco.create",
+      resource_type: "plm_eco_changes",
+      resource_id: r.lastInsertRowid,
+      after: { eco_no: ecoNo, title, change_type: changeType, drawing_id: body.drawing_id || null },
+      diff_summary: `创建 PLM ECO ${ecoNo}`,
+    });
     res.json({ id: r.lastInsertRowid, eco_no: ecoNo });
   }));
 
   app.put("/api/plm/ecos/:id/approve", wrap((req, res) => {
     const eco = get("SELECT * FROM plm_eco_changes WHERE id=?", [req.params.id]);
-    if (!eco) throw ApiError.notFound("ECO not found")
+    if (!eco) throw ApiError.notFound("ECO not found");
+    if (eco.status !== "draft") throw ApiError.conflict(`ECO 当前状态 ${eco.status}，只有 draft 可批准`);
     run("UPDATE plm_eco_changes SET status='approved', approved_by=?, approved_at=datetime('now') WHERE id=?",
       [req.body.approved_by||null, req.params.id]);
     if (eco.drawing_id && eco.new_revision) {
       run("UPDATE plm_drawings SET revision=?, updated_at=datetime('now') WHERE id=? AND status='issued'",
         [eco.new_revision, eco.drawing_id]);
     }
+    audit.record(db, req, {
+      action: "plm_eco.approve",
+      resource_type: "plm_eco_changes",
+      resource_id: eco.id,
+      before: { status: eco.status },
+      after: { status: "approved", approved_by: req.body.approved_by || null },
+      diff_summary: `批准 PLM ECO ${eco.eco_no}`,
+    });
     res.json({ success: true });
   }));
 
   app.put("/api/plm/ecos/:id/implement", wrap((req, res) => {
+    const eco = get("SELECT * FROM plm_eco_changes WHERE id=?", [req.params.id]);
+    if (!eco) throw ApiError.notFound("ECO not found");
+    if (eco.status !== "approved") throw ApiError.conflict(`ECO 当前状态 ${eco.status}，只有 approved 可实施`);
     run("UPDATE plm_eco_changes SET status='implemented', implemented_at=datetime('now') WHERE id=?", [req.params.id]);
+    audit.record(db, req, {
+      action: "plm_eco.implement",
+      resource_type: "plm_eco_changes",
+      resource_id: eco.id,
+      before: { status: eco.status },
+      after: { status: "implemented" },
+      diff_summary: `实施 PLM ECO ${eco.eco_no}`,
+    });
     res.json({ success: true });
   }));
 }

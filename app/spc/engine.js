@@ -19,6 +19,7 @@ const D3 = [0, 0, 0, 0, 0, 0, 0, 0.076, 0.136, 0.184, 0.223];
 const D4 = [0, 0, 3.267, 2.574, 2.282, 2.114, 2.004, 1.924, 1.864, 1.816, 1.777];
 
 function clamp(n, max) { return Math.min(max, Math.max(0, Math.floor(n))); }
+function r3(v) { return Math.round(v * 1000) / 1000; }
 
 /**
  * 将原始测量值按时间分组成子组
@@ -27,7 +28,10 @@ function clamp(n, max) { return Math.min(max, Math.max(0, Math.floor(n))); }
  * @returns {Array<{values: number[], mean: number, range: number}>}
  */
 function buildSubgroups(values, subgroupSize) {
-  subgroupSize = clamp(subgroupSize || 5, 10);
+  // 2026-11-07 审计修复: 子组大小必须是 2..10; 非法值(0/1/小数/字符串)回退 5,
+  // 否则 chunk.length < 2 会把所有子组丢掉, 前端只看到"数据不足"。
+  const requested = Number(subgroupSize);
+  subgroupSize = Number.isInteger(requested) && requested >= 2 ? clamp(requested, 10) : 5;
   const groups = [];
   for (let i = 0; i < values.length; i += subgroupSize) {
     const chunk = values.slice(i, i + subgroupSize);
@@ -83,14 +87,36 @@ function xbarR(values, subgroupSize, usl, lsl) {
  * Ppk 使用整体标准差 (所有值)
  */
 function capability(values, usl, lsl) {
-  if (!values.length) return { error: "无数据" };
+  if (!Array.isArray(values) || !values.length) return { error: "无数据" };
   if (!usl && !lsl) return { error: "至少需要 USL 或 LSL" };
+  if (values.length < 2) return { error: "样本数不足(需>=2)" };
 
   const n = values.length;
   const mean = values.reduce((s, v) => s + v, 0) / n;
   const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / (n - 1);
   const sigma = Math.sqrt(variance);
   const sigmaOverall = Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / n);
+
+  // 2026-11-07 审计修复: 所有测量值相同时 sigma=0, 原实现算出 Infinity/NaN,
+  // JSON 序列化成 null, 但 spcMonitor 写库会存 Inf。这里显式返回 cpk=null + note。
+  if (!Number.isFinite(sigma) || sigma <= 0 || !Number.isFinite(sigmaOverall) || sigmaOverall <= 0) {
+    return {
+      n,
+      mean: r3(mean),
+      sigma_within: 0,
+      sigma_overall: 0,
+      usl: usl || null,
+      lsl: lsl || null,
+      cp: null,
+      cpk: null,
+      pp: null,
+      ppk: null,
+      grade: "N/A (零方差)",
+      min: r3(Math.min(...values)),
+      max: r3(Math.max(...values)),
+      note: "测量值无波动(sigma=0)，过程能力不可计算",
+    };
+  }
 
   const cpu = usl ? (usl - mean) / (3 * sigma) : null;
   const cpl = lsl ? (mean - lsl) / (3 * sigma) : null;
@@ -112,9 +138,9 @@ function capability(values, usl, lsl) {
     usl: usl || null,
     lsl: lsl || null,
     cp: usl && lsl ? Math.round(((usl - lsl) / (6 * sigma)) * 100) / 100 : null,
-    cpk: Math.round((cpk || 0) * 100) / 100,
+    cpk: cpk == null ? null : Math.round(cpk * 100) / 100,
     pp: usl && lsl ? Math.round(((usl - lsl) / (6 * sigmaOverall)) * 100) / 100 : null,
-    ppk: Math.round((ppk || 0) * 100) / 100,
+    ppk: ppk == null ? null : Math.round(ppk * 100) / 100,
     grade: cpkGrade(cpk),
     min: Math.round(Math.min(...values) * 1000) / 1000,
     max: Math.round(Math.max(...values) * 1000) / 1000,
@@ -135,9 +161,13 @@ function cpkGrade(cpk) {
  * 返回违反规则的点索引列表
  */
 function wecoRules(groups) {
+  if (!Array.isArray(groups) || groups.length < 2) return [];
   const means = groups.map((g) => g.mean);
   const grandMean = means.reduce((s, m) => s + m, 0) / means.length;
   const sigma = Math.sqrt(means.reduce((s, m) => s + (m - grandMean) ** 2, 0) / (means.length - 1));
+  // 2026-11-07 审计修复: 零方差时 |x-CL| <= 1σ 恒成立, 规则7(连续15点在±1σ内)
+  // 会对一条完全平直的数据误报"分层"。无波动即无异常规则可判, 直接返回空。
+  if (!Number.isFinite(sigma) || sigma <= 0) return [];
   const alerts = [];
 
   // Rule 1: 任意点超出 ±3σ

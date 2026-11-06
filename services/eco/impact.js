@@ -16,14 +16,16 @@ function createImpactAnalyzer(db) {
     const instanceId = Number(eco.equipment_instance_id);
     const scope = String(eco.affected_scope || "");
     const scopeLike = scope ? `%${scope}%` : null;
+    // 2026-11-07（ECO 审计）：BOM 关联条件增加 eco_id，让已挂到本 ECO 的 BOM 变更行
+    // 即使不匹配 affected_scope 关键字也会进入影响分析。
     const bom = safeAll(`
       SELECT id, part_number, material_id, quantity, version, category, is_key_component, unit_price
       FROM instance_bom
       WHERE equipment_instance_id = ?
-        AND (? IS NULL OR part_number LIKE ? OR category LIKE ? OR notes LIKE ?)
+        AND (eco_id = ? OR ? IS NULL OR part_number LIKE ? OR category LIKE ? OR notes LIKE ?)
       ORDER BY is_key_component DESC, id DESC
       LIMIT 80
-    `, [instanceId, scopeLike, scopeLike, scopeLike, scopeLike]);
+    `, [instanceId, eco.id, scopeLike, scopeLike, scopeLike, scopeLike]);
     const documents = safeAll(`
       SELECT id, doc_code, doc_no, title, doc_name, version, status, bom_node_id
       FROM documents
@@ -33,16 +35,14 @@ function createImpactAnalyzer(db) {
       LIMIT 80
     `, [instanceId, eco.id, scopeLike, scopeLike, scopeLike, scopeLike, scopeLike]);
     const bomIds = bom.map((item) => item.id);
-    if (!bomIds.length) return { impact: [], score: 0, summary: "无关联 BOM 节点" };
-    const placeholders = bomIds.map(() => "?").join(",");
-    const purchaseItems = safeAll(`
+    const purchaseItems = bomIds.length ? safeAll(`
       SELECT poi.id, po.po_no, po.status, po.expected_date, poi.bom_node_id, poi.material_id, poi.quantity, poi.received_qty
       FROM purchase_order_items poi
       JOIN purchase_orders po ON po.id = poi.po_id
-      WHERE po.equipment_instance_id = ? AND poi.bom_node_id IN (${placeholders})
+      WHERE po.equipment_instance_id = ? AND poi.bom_node_id IN (${bomIds.map(() => "?").join(",")})
       ORDER BY po.expected_date ASC
       LIMIT 100
-    `, [instanceId, ...bomIds]);
+    `, [instanceId, ...bomIds]) : [];
     const purchaseOrders = safeAll(`
       SELECT po.id, po.po_no, po.status, po.expected_date, po.total_amount, po.supplier_id
       FROM purchase_orders po
@@ -94,6 +94,7 @@ function createImpactAnalyzer(db) {
     if (activeWorkOrders.length) risks.push({ type: "work_order", severity: "high", message: `${activeWorkOrders.length} 个未完工工单可能受影响` });
     if (keyComponents.length) risks.push({ type: "key_component", severity: "critical", message: `${keyComponents.length} 个关键件 BOM 节点受影响` });
     if (quality.length) risks.push({ type: "quality", severity: "warning", message: `${quality.length} 条未通过/待处理质量记录需复核` });
+    if (!bom.length) risks.push({ type: "bom", severity: "info", message: `未找到匹配 affected_scope 的 BOM 节点（scope: ${scope || "全部"}）` });
     const score = issuedDocuments.length * 2 + openPurchaseOrders.length * 2 + activeWorkOrders.length * 2 + keyComponents.length * 4 + quality.length;
 
     return {
@@ -114,6 +115,7 @@ function createImpactAnalyzer(db) {
         openPurchaseOrders.length ? "通知采购评估未关闭采购单，必要时暂停到货或发起供应商变更" : null,
         activeWorkOrders.length ? "暂停或复核受影响工单，避免按旧图施工" : null,
         keyComponents.length ? "关键件变更需补充监造、质检和追溯要求" : null,
+        !bom.length ? "受影响范围未命中 BOM：请缩小/核对 affected_scope（图号、分类或备注关键字）" : null,
         "审批前复核成本影响，并在成本归集里标记 ECO 来源",
       ].filter(Boolean),
     };

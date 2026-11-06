@@ -4,7 +4,18 @@
 module.exports = function registerRoutes2(app, db, ctx) {
 const { ApiError } = require('../../app/errors');
 const { wrap } = require('../../middleware/asyncHandler');
+const { DEFAULT_ROLE_PERMISSIONS, hasPermission } = require('../../app/permissions');
 const { all, get, run } = ctx;
+
+  // 2026-11-07 审计修复: /material-planner/* 不在 apiPermissions 规则表内,
+  // 写接口此前对任意登录用户开放; 交期直接影响预警下单截止日, 必须校验 material:write。
+  const requireMaterialWrite = (req) => {
+    if (!req.user) throw ApiError.unauthorized();
+    const perms = Array.isArray(req.user.permissions) && req.user.permissions.length
+      ? req.user.permissions
+      : (DEFAULT_ROLE_PERMISSIONS[req.user.role] || []);
+    if (!hasPermission(perms, 'material:write')) throw ApiError.forbidden('权限不足, 需要: material:write');
+  };
 
   app.post("/api/material-planner/mrp", wrap((req, res) => {
     const { instance_id, demand_date } = req.body;
@@ -75,17 +86,22 @@ const { all, get, run } = ctx;
   }));
 
   app.post("/api/material-planner/lead-times", wrap((req, res) => {
+    requireMaterialWrite(req);
     const { material_id, supplier, lead_time_days, notes } = req.body;
-    if (!material_id || !lead_time_days) throw ApiError.validation("material_id/lead_time_days 必填");
-    const existing = get("SELECT id FROM material_lead_times WHERE material_id = ?", material_id);
+    const materialId = Number(material_id);
+    if (!Number.isInteger(materialId) || materialId <= 0) throw ApiError.validation("material_id 必须是正整数");
+    const days = Number(lead_time_days);
+    if (!Number.isInteger(days) || days < 1 || days > 3650) throw ApiError.validation("lead_time_days 必须是 1..3650 的整数");
+    if (!get("SELECT id FROM materials WHERE id = ?", materialId)) throw ApiError.notFound("物料不存在");
+    const existing = get("SELECT id FROM material_lead_times WHERE material_id = ?", materialId);
     if (existing) {
       run("UPDATE material_lead_times SET supplier = ?, lead_time_days = ?, notes = ?, updated_at = datetime('now') WHERE material_id = ?",
-        [supplier || null, lead_time_days, notes || null, material_id]);
+        [supplier || null, days, notes || null, materialId]);
     } else {
       run("INSERT INTO material_lead_times (material_id, supplier, lead_time_days, notes) VALUES (?, ?, ?, ?)",
-        [material_id, supplier || null, lead_time_days, notes || null]);
+        [materialId, supplier || null, days, notes || null]);
     }
-    res.json(get("SELECT mlt.*, m.material_code, m.material_name FROM material_lead_times mlt JOIN materials m ON mlt.material_id = m.id WHERE mlt.material_id = ?", material_id));
+    res.json(get("SELECT mlt.*, m.material_code, m.material_name FROM material_lead_times mlt JOIN materials m ON mlt.material_id = m.id WHERE mlt.material_id = ?", materialId));
   }));
 
   app.get("/api/material-planner/shortage-forecast", wrap((req, res) => {

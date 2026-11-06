@@ -4,6 +4,7 @@
 module.exports = function registerRoutes1(app, db, ctx) {
 const { wrap } = require('../../../middleware/asyncHandler');
 const { ApiError } = require("../../../app/errors");
+const audit = require('../../../app/audit');
 const { _applyMovement, all, get, requireLogin, requirePermission } = ctx;
 
   app.get('/api/material_movements', wrap((req, res) => {
@@ -31,6 +32,21 @@ const { _applyMovement, all, get, requireLogin, requirePermission } = ctx;
     if (requirePermission('material:write')(req, res)) return;
     try {
       const result = db.transaction(() => _applyMovement(req.body))();
+      // 2026-11-07: 库存流水是资产变更, 必须留审计
+      audit.record(db, req, {
+        action: 'inventory.movement.create',
+        resource_type: 'material_movement',
+        resource_id: result.id,
+        after: {
+          material_lot_id: req.body.material_lot_id,
+          movement_type: req.body.movement_type,
+          quantity: req.body.quantity,
+          unit: req.body.unit || null,
+          from_location: req.body.from_location || null,
+          to_location: req.body.to_location || null,
+        },
+        diff_summary: req.body.movement_type + ' ' + req.body.quantity + ' (lot ' + req.body.material_lot_id + ')',
+      });
       res.json(result);
     } catch (e) {
       next(e);
@@ -46,6 +62,13 @@ const { _applyMovement, all, get, requireLogin, requirePermission } = ctx;
       const ids = [];
       try {
         db.transaction(() => { for (let i = 0; i < movements.length; i++) ids.push(_applyMovement(movements[i]).id); })();
+        audit.record(db, req, {
+          action: 'inventory.movement.batch',
+          resource_type: 'material_movement',
+          resource_id: null,
+          after: { count: ids.length, ids, atomic: true },
+          diff_summary: '批量库存流水 ' + ids.length + ' 条(原子)',
+        });
         res.json({ success: true, atomic: true, count: ids.length, ids });
       } catch (e) {
         res.status(e.status || 500).json({ success: false, atomic: true, error: e.message, failed_index: -1 });

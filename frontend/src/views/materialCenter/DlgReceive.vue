@@ -33,6 +33,13 @@ const form = reactive({ material_id: undefined as any, lot_no: '', supplier: '',
 const busy = ref(false)
 const reset = () => { Object.assign(form, { material_id: undefined, lot_no: '', supplier: '', heat_no: '', quantity: 1, unit: '件', location: '主仓库-A-01', certificate_no: '' }) }
 
+// 2026-11-07: 单位默认值必须跟随物料基准单位, 否则入库批次单位与物料主数据不一致
+// (后端已按"基准单位或已登记换算单位"校验, 固定 '件' 会导致非件物料无法入库)
+watch(() => form.material_id, (id) => {
+  const material = props.materials.find((item: any) => item.id === id)
+  if (material?.unit) form.unit = material.unit
+})
+
 const submit = async () => {
   if (!form.material_id || !form.lot_no || !form.quantity) { ElMessage.warning('请填完整'); return }
   busy.value = true

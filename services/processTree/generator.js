@@ -15,7 +15,6 @@ require('../../middleware/asyncHandler');
 
 const all = (db, sql, params = []) => db.prepare(sql).all(params);
 const get = (db, sql, params = []) => db.prepare(sql).get(params);
-(db, sql, params = []) => db.prepare(sql).run(params);
 
 
 // ─── 辅助：纯函数（无 DB，便于单测）───

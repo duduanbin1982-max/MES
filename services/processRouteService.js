@@ -2,6 +2,7 @@
 const { ApiError } = require("../app/errors");
 const { assessProcessRoute, summarizeProcessRoutes } = require("../app/domain/processRoute");
 const { wrap } = require("../middleware/asyncHandler");
+const audit = require("../app/audit");
 
 function register(app, db) {
   const all = (sql, params = []) => db.prepare(sql).all(params);
@@ -118,6 +119,8 @@ function register(app, db) {
 
   app.post("/api/process-route/instances/:id/auto-bind", wrap((req, res) => {
     const instanceId = Number(req.params.id);
+    const inst = get("SELECT id FROM equipment_instances WHERE id = ?", [instanceId]);
+    if (!inst) throw ApiError.notFound("装备实例不存在");
     const nodes = all("SELECT id, operation_name, required_workstation_id, required_skill FROM process_nodes WHERE equipment_instance_id = ?", [instanceId]);
     let changed = 0;
     const update = db.prepare("UPDATE process_nodes SET required_workstation_id = COALESCE(required_workstation_id, ?), required_skill = COALESCE(NULLIF(required_skill, ''), ?), updated_at = datetime('now') WHERE id = ?");
@@ -129,11 +132,22 @@ function register(app, db) {
         changed += 1;
       }
     }
+    if (changed > 0) {
+      audit.record(db, req, {
+        action: "process_route.auto_bind",
+        resource_type: "equipment_instance",
+        resource_id: instanceId,
+        after: { changed },
+        diff_summary: `自动补齐 ${changed} 个工艺节点的工位/技能`,
+      });
+    }
     res.json({ ok: true, changed });
   }));
 
   app.post("/api/process-route/instances/:id/generate-missing", wrap((req, res) => {
     const instanceId = Number(req.params.id);
+    const inst = get("SELECT id FROM equipment_instances WHERE id = ?", [instanceId]);
+    if (!inst) throw ApiError.notFound("装备实例不存在");
     const bomRows = all("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, parent_id, id", [instanceId]);
     const components = bomRows.filter(row => Number(row.tier) === 1);
     const existing = all("SELECT DISTINCT bom_node_id FROM process_nodes WHERE equipment_instance_id = ? AND bom_node_id IS NOT NULL", [instanceId]).map(row => Number(row.bom_node_id));
@@ -169,6 +183,15 @@ function register(app, db) {
       }
     });
     tx();
+    if (created > 0) {
+      audit.record(db, req, {
+        action: "process_route.generate_missing",
+        resource_type: "equipment_instance",
+        resource_id: instanceId,
+        after: { created },
+        diff_summary: `按 BOM 部件生成 ${created} 条缺失工序`,
+      });
+    }
     res.json({ ok: true, created });
   }));
 

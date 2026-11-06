@@ -28,11 +28,14 @@
         <el-table-column prop="effective_date" label="生效日期" width="120">
           <template #default="{ row }">{{ shortDate(row.effective_date) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="210" fixed="right">
+        <el-table-column label="操作" width="290" fixed="right">
           <template #default="{ row }">
             <el-button link size="small" @click="openImpact(row)">影响分析</el-button>
-            <el-button link size="small" @click="transit(row, 'approve')">审批</el-button>
-            <el-button link size="small" @click="transit(row, 'close')">关闭</el-button>
+            <el-button v-if="row.status === 'open'" link size="small" @click="transit(row, 'submit')">提交评审</el-button>
+            <el-button v-if="row.status === 'review'" link size="small" type="success" @click="transit(row, 'approve')">批准</el-button>
+            <el-button v-if="row.status === 'approved'" link size="small" type="success" @click="transit(row, 'implement')">实施完成</el-button>
+            <el-button v-if="row.status === 'implemented'" link size="small" @click="transit(row, 'close')">关闭</el-button>
+            <el-button v-if="['open', 'review', 'approved'].includes(row.status)" link size="small" type="danger" @click="transit(row, 'reject')">驳回</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -172,7 +175,7 @@ async function transit(row: any, action: string) {
     ElMessage.success('状态已更新')
     await loadAll()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.error || e?.message || '状态更新失败')
+    ElMessage.error(e?.response?.data?.message || e?.response?.data?.error || e?.message || '状态更新失败')
   }
 }
 

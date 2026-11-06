@@ -7,7 +7,8 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
   const { all, get } = helpers;
 
   app.get("/api/inventory", wrap((_req, res) => {
-    res.json(all("SELECT i.*, ml.lot_no, m.material_name FROM inventory i JOIN material_lots ml ON i.material_lot_id = ml.id JOIN materials m ON ml.material_id = m.id ORDER BY m.material_code"));
+    // 2026-11-07: 前端库存清单有"编码"列, 但原 SQL 没查 material_code (列一直空白)
+    res.json(all("SELECT i.*, ml.lot_no, m.id AS material_id, m.material_code, m.material_name FROM inventory i JOIN material_lots ml ON i.material_lot_id = ml.id JOIN materials m ON ml.material_id = m.id ORDER BY m.material_code, i.location, ml.lot_no"));
   }));
 
   app.get("/api/inventory/alerts", wrap((_req, res) => {

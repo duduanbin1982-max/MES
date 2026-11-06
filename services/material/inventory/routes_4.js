@@ -3,10 +3,17 @@
 
 module.exports = function registerRoutes4(app, db, ctx) {
 const { wrap } = require('../../../middleware/asyncHandler');
+const { ApiError } = require('../../../app/errors');
 const { all } = ctx;
 
   app.get('/api/inventory/stagnant', wrap((req, res) => {
-    const days = parseInt(req.query.days) || 90;
+    // 2026-11-07: days 限幅, 原实现 days=-5 会返回全量数据
+    const rawDays = req.query.days;
+    let days = 90;
+    if (rawDays !== undefined && rawDays !== '') {
+      days = Number(rawDays);
+      if (!Number.isInteger(days) || days < 1 || days > 3650) throw ApiError.validation('days 必须是 1..3650 的整数');
+    }
     const rows = all(`SELECT ml.id as lot_id, ml.lot_no, m.material_code, m.material_name, m.spec,
                              ml.supplier, ml.received_date,
                              i.quantity, i.unit, i.location, i.status, i.last_updated,

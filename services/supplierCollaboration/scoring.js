@@ -6,6 +6,12 @@
 const { ApiError } = require("../../app/errors");
 const { get, run } = require("./_helpers");
 
+function clampScore(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.min(100, Math.max(0, Math.round(num)));
+}
+
 function scoreSupplier(db, supplierId, period = new Date().toISOString().slice(0, 7)) {
   const supplier = get(db, "SELECT * FROM suppliers WHERE id = ?", [supplierId]);
   if (!supplier) throw ApiError.notFound("supplier not found");
@@ -46,13 +52,13 @@ function scoreSupplier(db, supplierId, period = new Date().toISOString().slice(0
 
   const deliveryBase = Number(po.received_po || 0) + Number(tracking.delivered_tracking || 0);
   const deliveryGood = Number(po.on_time_po || 0) + Math.max(0, Number(tracking.delivered_tracking || 0) - Number(tracking.delayed_tracking || 0));
-  const deliveryScore = deliveryBase > 0 ? Math.round((deliveryGood / deliveryBase) * 100) : 80;
+  const deliveryScore = deliveryBase > 0 ? clampScore((deliveryGood / deliveryBase) * 100) : 80;
   const qualityBase = Number(incoming.total_inspections || 0) + Number(outsource.total_outsource || 0);
   const qualityBad = Number(incoming.fail_count || 0) + Number(outsource.outsource_quality_fail || 0);
-  const qualityScore = qualityBase > 0 ? Math.round(((qualityBase - qualityBad) / qualityBase) * 100) : 80;
+  const qualityScore = qualityBase > 0 ? clampScore(((qualityBase - qualityBad) / qualityBase) * 100) : 80;
   const servicePenalty = Math.min(30, Number(po.overdue_po || 0) * 10 + Math.max(0, Number(outsource.total_outsource || 0) - Number(outsource.completed_outsource || 0)) * 3);
-  const serviceScore = Math.max(60, 90 - servicePenalty);
-  const totalScore = Math.round(deliveryScore * 0.4 + qualityScore * 0.4 + serviceScore * 0.2);
+  const serviceScore = clampScore(Math.max(60, 90 - servicePenalty));
+  const totalScore = clampScore(deliveryScore * 0.4 + qualityScore * 0.4 + serviceScore * 0.2);
   const grade = totalScore >= 90 ? "A" : totalScore >= 80 ? "B" : totalScore >= 70 ? "C" : "D";
   const metrics = { po, incoming, tracking, outsource };
 

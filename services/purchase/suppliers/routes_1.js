@@ -3,6 +3,7 @@
 
 module.exports = function registerRoutes1(app, db, ctx) {
 const { wrap } = require('../../../middleware/asyncHandler');
+const audit = require('../../../app/audit');
 const { BOOTSTRAP_TEMPLATES, REQUIRED_SUPPLIER_CATEGORIES, SUPPLIER_CATEGORIES, all, buildSetupSummary, categoryLabel, decorate, nextSupplierCode, run, safeJson } = ctx;
 
 app.get('/api/suppliers/categories', wrap((_req, res) => {
@@ -66,6 +67,12 @@ app.post('/api/suppliers/bootstrap-defaults', wrap((req, res) => {
       created.push({ id: result.lastInsertRowid, supplier_code, supplier_name: template.supplier_name, supplier_category: template.category })
     }
     const summary = buildSetupSummary(all('SELECT * FROM suppliers ORDER BY supplier_code').map(decorate))
+    audit.record(db, req, {
+      action: 'supplier.bootstrap',
+      resource_type: 'supplier',
+      after: { created_codes: created.map((row) => row.supplier_code) },
+      diff_summary: '按模板创建供应商 ' + created.length + ' 个',
+    })
     res.json({ created, summary })
   }))
 };

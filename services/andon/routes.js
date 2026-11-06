@@ -157,11 +157,13 @@ function register(app, db) {
       if (rule.rule_type === "inventory_low" && condition.below_safety) {
         const rows = queryLowStock(db);
         for (const r of rows) {
-          const title = "库存低于安全库存: " + r.material_code;
-          const msg = r.material_name + " 现存量 " + r.available_qty + " < 安全库存 " + r.safety_stock;
-          const id = triggerAlert("inventory_low", "material", r.id, title, msg, "danger", { material_code: r.material_code, available: r.available_qty, safety: r.safety_stock }, rule.cooldown_minutes);
+          // 2026-11-07: 触发线可能是再订货点 (reorder_point > safety_stock), 文案与数据统一用 threshold
+          const threshold = Number.isFinite(Number(r.threshold)) ? Number(r.threshold) : Number(r.safety_stock) || 0;
+          const title = "库存低于补货线: " + r.material_code;
+          const msg = r.material_name + " 现存量 " + r.available_qty + " < 补货线 " + threshold;
+          const id = triggerAlert("inventory_low", "material", r.id, title, msg, "danger", { material_code: r.material_code, available: r.available_qty, safety: r.safety_stock, threshold, shortage: r.shortage_qty }, rule.cooldown_minutes);
           if (id) { triggered.push({ rule: rule.name, alert_id: id, source_id: r.id }); notifyChannels("inventory_low", "danger", title, msg); }
-          emit(Events.INVENTORY_LOW, { material_id: r.id, material_code: r.material_code, material_name: r.material_name, available: r.available_qty, safety: r.safety_stock, shortage: r.safety_stock - r.available_qty });
+          emit(Events.INVENTORY_LOW, { material_id: r.id, material_code: r.material_code, material_name: r.material_name, available: r.available_qty, safety: r.safety_stock, threshold, shortage: threshold - r.available_qty });
         }
       }
       if (rule.rule_type === "wo_overdue" && condition.days_overdue_gt) {

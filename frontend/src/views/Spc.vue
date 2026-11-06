@@ -148,6 +148,8 @@ const analyze = async () => {
   analysisError.value = ''
   try {
     data.value = await Api.get('/spc/analyze', { params: { process_node_id: sel.node, param: sel.param, subgroup_size: sel.ss } })
+    // 2026-11-07: 接口在样本不足时返回 200 + {error}, 这里必须显式提示, 否则页面只剩空图
+    if (data.value?.error) { analysisError.value = String(data.value.error); data.value = null; return }
     await nextTick(); renderChart()
   } catch (error: any) {
     data.value = null

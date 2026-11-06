@@ -53,7 +53,7 @@ function call(routes, method, path, body) {
   const match = path.match(/:([a-zA-Z_]+)/g) || [];
   const params = {};
   if (match.length === 1) params[match[0].slice(1)] = body && body.__id ? body.__id : 1;
-  const req = { body: body || {}, query: {}, params };
+  const req = { body: body || {}, query: {}, params, user: { uid: 1, role: 'admin', permissions: ['*'] } };
   let status = 200;
   let json = null;
   const res = {

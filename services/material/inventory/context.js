@@ -57,22 +57,31 @@ function requirePermission(...permCodes) {
 
   const _issueMovement = ({ material_lot_id, from_location, absQty }) => {
     const location = from_location || _defaultLocation;
-    const inventory = get('SELECT id, quantity FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, location]);
+    const inventory = get('SELECT id, quantity, status FROM inventory WHERE material_lot_id = ? AND location = ?', [material_lot_id, location]);
     if (!inventory) throw ApiError.validation('lot ' + material_lot_id + ' @ ' + location + ' 无库存, 不能出库');
+    // 2026-11-07 审计修复: 只有 available 可出库, 隔离/预留库存必须走质量处置或释放
+    if (inventory.status && inventory.status !== 'available') {
+      throw ApiError.validation('库位 ' + location + ' 批次状态为 ' + inventory.status + ', 不能出库(仅 available 可出)');
+    }
     if (inventory.quantity < absQty) throw ApiError.validation('库存不足: 现有 ' + inventory.quantity + ', 要出 ' + absQty);
 
     run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [absQty, inventory.id]);
-    const material = get('SELECT m.material_code, m.material_name, m.safety_stock FROM materials m JOIN material_lots ml ON ml.material_id = m.id WHERE ml.id = ?', [material_lot_id]);
-    if (!material || material.safety_stock <= 0) return;
+    const material = get('SELECT m.material_code, m.material_name, m.safety_stock, m.reorder_point FROM materials m JOIN material_lots ml ON ml.material_id = m.id WHERE ml.id = ?', [material_lot_id]);
+    if (!material) return;
+    // 2026-11-07: 补货线 = max(safety_stock, reorder_point), 与 queryLowStock 保持一致
+    const threshold = Math.max(Number(material.safety_stock) || 0, Number(material.reorder_point) || 0);
+    if (threshold <= 0) return;
 
-    const totalQty = (get('SELECT SUM(quantity) AS qty FROM inventory WHERE material_lot_id = ?', [material_lot_id]) || {}).qty || 0;
-    if (totalQty >= material.safety_stock) return;
+    const totalQty = (get('SELECT SUM(quantity) AS qty FROM inventory WHERE material_lot_id = ? AND status = ?', [material_lot_id, 'available']) || {}).qty || 0;
+    if (totalQty >= threshold) return;
     emit(Events.INVENTORY_LOW, {
       material_lot_id,
       material_code: material.material_code,
       material_name: material.material_name,
       available_qty: totalQty,
       safety_stock: material.safety_stock,
+      threshold,
+      shortage_qty: Math.round((threshold - totalQty) * 1000) / 1000,
     });
   };
 
@@ -103,13 +112,24 @@ function requirePermission(...permCodes) {
     adjust: _adjustMovement,
   };
 
+  const MAX_MOVEMENT_QTY = 1e9;
+  // 2026-11-07 审计修复: 数量必须是有限正数。原实现 Math.abs(Number(q)) 会把 -5 静默
+  // 变成 5(负库存被当出库), 'abc' 变成 NaN 写库触发 NOT NULL 约束 500。
+  const _parseMovementQty = (value) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) throw ApiError.validation('quantity 必须是数字');
+    if (n <= 0) throw ApiError.validation('quantity 必须 > 0');
+    if (n > MAX_MOVEMENT_QTY) throw ApiError.validation('quantity 超出上限 ' + MAX_MOVEMENT_QTY);
+    return Math.round(n * 1e6) / 1e6;
+  };
+
   const _applyMovement = (m) => {
     const { material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes } = m;
-    if (!material_lot_id || !movement_type || quantity === undefined) throw ApiError.validation('material_lot_id/movement_type/quantity 必填');
+    if (!material_lot_id || !movement_type || quantity === undefined || quantity === null || quantity === '') throw ApiError.validation('material_lot_id/movement_type/quantity 必填');
     if (!_movementHandlers[movement_type]) throw ApiError.validation('movement_type 非法');
     const lot = get('SELECT id, material_id FROM material_lots WHERE id = ?', material_lot_id);
     if (!lot) throw ApiError.notFound('lot 不存在');
-    const absQty = Math.abs(Number(quantity));
+    const absQty = _parseMovementQty(quantity);
     const r = run(
       "INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, to_location, work_order_id, project_id, operator_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [material_lot_id, movement_type, absQty, unit || null, from_location || null, to_location || null, work_order_id || null, project_id || null, operator_id || null, notes || null]

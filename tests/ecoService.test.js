@@ -68,7 +68,10 @@ test("eco service keeps CRUD and impact routes registered after split", async ()
   const list = await invoke(find("GET", "/api/equipment_instances/:id/eco"), { params: { id: 1 } });
   assert.equal(list.length, 1);
   const impact = await invoke(find("GET", "/api/instance_eco/:id/impact"), { params: { id: created.id } });
-  assert.equal(impact.score, 0);
-  assert.equal(impact.summary, "无关联 BOM 节点");
+  // 2026-11-07 审计：无 BOM 命中时也返回完整 summary 结构与风险，不再提前 return 字符串。
+  assert.equal(impact.summary.bom, 0);
+  assert.equal(impact.summary.impact_score, 0);
+  assert.ok(Array.isArray(impact.risks));
+  assert.equal(impact.risks.some((item) => item.type === "bom"), true);
   db.close();
 });

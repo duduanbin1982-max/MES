@@ -33,22 +33,21 @@ function analyzeNode(db, node) {
     const values = rows.map((row) => Number(row.value)).filter((value) => Number.isFinite(value));
     if (values.length < 15) continue;
 
-    // Get spec limits
+    // Get spec limits (2026-11-07: 与 spcService.getSpecLimits 一致, 回看最近 50 条,
+    // 只读最新 1 条会漏掉"最近一条 custom_json 不含该参数"的情况, 导致能力指标静默缺失)
     let usl = null, lsl = null;
-    const specRow = db.prepare(
-      "SELECT custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY id DESC LIMIT 1"
-    ).get(node.id);
-    if (specRow) {
+    const specRows = db.prepare(
+      "SELECT custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY recorded_at DESC, id DESC LIMIT 50"
+    ).all(node.id);
+    for (const specRow of specRows) {
       try {
         const j = JSON.parse(specRow.custom_json);
-        if (j.spc && j.spc[param]) {
+        if (j && j.spc && j.spc[param]) {
           usl = j.spc[param].usl;
           lsl = j.spc[param].lsl;
+          break;
         }
-      } catch (_error) {
-        usl = null;
-        lsl = null;
-      }
+      } catch (_error) { /* 跳过坏 JSON */ }
     }
 
     const xr = xbarR(values, 5, usl, lsl);
@@ -62,15 +61,20 @@ function analyzeNode(db, node) {
       const alertDesc = alerts.map(a => a.desc).join("; ");
       logger.info("[spcMonitor] ALERT:", node.operation_name, param, alertDesc);
       
-      // 检查这个组合在最近 5 分钟内是否已经报过
+      // 2026-11-07 审计修复: 去重键补上 rule_desc (原实现同参数不同规则互相压制);
+      // 未确认的同一告警一直抑制(避免每 5 分钟重复入库), 确认后 30 分钟冷却。
       const recentAlert = db.prepare(
-        "SELECT id FROM spc_alerts WHERE process_node_id = ? AND param = ? AND created_at > datetime('now', '-5 minutes')"
-      ).get(node.id, param);
+        `SELECT id FROM spc_alerts
+          WHERE process_node_id = ? AND param = ? AND rule_desc = ?
+            AND (acknowledged = 0 OR created_at > datetime('now', '-30 minutes'))
+          LIMIT 1`
+      ).get(node.id, param, alertDesc);
       
       if (!recentAlert) {
+        const cpkValue = Number.isFinite(cap.cpk) ? cap.cpk : null;
         db.prepare(
           "INSERT INTO spc_alerts (process_node_id, param, rule_desc, cpk, node_name) VALUES (?, ?, ?, ?, ?)"
-        ).run(node.id, param, alertDesc, cap.cpk || null, node.operation_name || "未知工序");
+        ).run(node.id, param, alertDesc, cpkValue, node.operation_name || "未知工序");
         
         emit(Events.SPC_ALERT, {
           process_node_id: node.id,
@@ -78,7 +82,7 @@ function analyzeNode(db, node) {
           param: param,
           param_label: PARAM_LABELS[param] || param,
           rule_desc: alertDesc,
-          cpk: cap.cpk,
+          cpk: cpkValue,
           instance_id: node.equipment_instance_id,
         });
       }
@@ -103,10 +107,12 @@ function analyzeNode(db, node) {
 function runMonitor(db) {
   // 获取最近 2 小时内有数据更新的 process_nodes
   const nodes = db.prepare(
-    `SELECT DISTINCT pn.id, pn.operation_name, pn.equipment_instance_id
+    `SELECT pn.id, pn.operation_name, pn.equipment_instance_id, MAX(pp.recorded_at) AS latest
      FROM process_nodes pn
      JOIN process_params pp ON pp.process_node_id = pn.id
      WHERE pp.recorded_at > datetime('now', '-2 hours')
+     GROUP BY pn.id, pn.operation_name, pn.equipment_instance_id
+     ORDER BY latest DESC
      LIMIT 50`
   ).all();
 
@@ -154,4 +160,4 @@ function stop() {
   }
 }
 
-module.exports = { start, stop, runMonitor };
+module.exports = { start, stop, runMonitor, analyzeNode };

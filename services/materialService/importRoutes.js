@@ -1,6 +1,7 @@
 "use strict";
 
 const { wrap } = require("../../middleware/asyncHandler");
+const audit = require("../../app/audit");
 
 const CODE_PREFIX_BY_TYPE = {
   machining: "JJ",
@@ -91,6 +92,8 @@ function parseMaterialRows(payload) {
 
 function normalizeMaterial(row) {
   return {
+    // 2026-11-07: 保留原始行, 用于区分"未填"和"非法数字"
+    _raw: row || {},
     material_code: String(row.material_code || "").trim(),
     material_name: String(row.material_name || "").trim(),
     material_type: String(row.material_type || "purchased").trim(),
@@ -99,10 +102,12 @@ function normalizeMaterial(row) {
     is_key_component: parseBool(row.is_key_component),
     is_self_made: parseBool(row.is_self_made),
     default_supplier: String(row.default_supplier || "").trim() || null,
-    safety_stock: parseNumber(row.safety_stock),
-    reorder_point: parseNumber(row.reorder_point),
-    estimated_unit_price: parseNumber(row.estimated_unit_price),
-    actual_unit_price: parseNumber(row.actual_unit_price),
+    // 2026-11-07 审计修复: 这 4 列是 NOT NULL DEFAULT 0, 传 null 会触发约束 500;
+    // 未填时落 0, 非法数字由 validateMaterial 用 _raw 单独报错。
+    safety_stock: parseNumber(row.safety_stock) ?? 0,
+    reorder_point: parseNumber(row.reorder_point) ?? 0,
+    estimated_unit_price: parseNumber(row.estimated_unit_price) ?? 0,
+    actual_unit_price: parseNumber(row.actual_unit_price) ?? 0,
     notes: String(row.notes || "").trim() || null,
   };
 }
@@ -117,6 +122,26 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
     if (!material.material_code) errors.push("物料编码必填");
     if (!material.material_name) errors.push("物料名称必填");
     if (!material.unit) errors.push("单位必填");
+    if (material.material_code.length > 64) errors.push("物料编码过长(<=64)");
+    if (material.material_name.length > 120) errors.push("物料名称过长(<=120)");
+    if (material.unit.length > 32) errors.push("单位过长(<=32)");
+    // 2026-11-07 审计修复: 负库存/负价/非法数字此前会被 parseNumber 静默写成 null
+    const numericRules = [
+      ["safety_stock", "安全库存"],
+      ["reorder_point", "再订货点"],
+      ["estimated_unit_price", "预估单价"],
+      ["actual_unit_price", "实际单价"],
+    ];
+    const rawRow = material._raw || {};
+    for (const rule of numericRules) {
+      const key = rule[0];
+      const label = rule[1];
+      const rawText = String(rawRow[key] == null ? "" : rawRow[key]).replace(/,/g, "").trim();
+      if (!rawText) continue;
+      if (material[key] === null) { errors.push(label + " 不是合法数字: " + rawText); continue; }
+      if (material[key] < 0) errors.push(label + " 不能为负数");
+      if (material[key] > 1e9) errors.push(label + " 超出上限 1e9");
+    }
     if (!/^[A-Z]{2,4}-[A-Z0-9][A-Z0-9-]{1,40}$/i.test(material.material_code)) {
       errors.push("物料编码格式建议为 前缀-流水号，如 JJ-0001 / BZ-M8-020");
     }
@@ -183,6 +208,13 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
       return created;
     });
     const created = transaction();
+    audit.record(db, req, {
+      action: "material.import.commit",
+      resource_type: "material",
+      resource_id: null,
+      after: { created: created.length, material_ids: created.map((item) => item.id) },
+      diff_summary: "批量导入物料 " + created.length + " 条",
+    });
     res.json({ created: created.length, items: created });
   }));
 
