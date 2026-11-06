@@ -8,10 +8,23 @@
       <el-button :icon="Refresh" circle :loading="loading" @click="loadAll" />
     </div>
 
+    <el-alert
+      v-if="!online || pendingOffline"
+      :type="online ? 'warning' : 'error'"
+      :closable="false"
+      show-icon
+      style="margin-bottom:10px"
+    >
+      <template #title>
+        {{ online ? `有 ${pendingOffline} 条离线操作待补报` : '当前离线：操作会进入待补报队列，恢复网络后自动提交' }}
+      </template>
+      <el-button v-if="online && pendingOffline" size="small" type="primary" @click="flushOfflineQueue">立即补报</el-button>
+    </el-alert>
+
     <el-row :gutter="10" class="kpi-row">
       <el-col :span="8"><el-card shadow="never" class="kpi"><div>工单</div><strong>{{ summary.active_work_orders || 0 }}</strong></el-card></el-col>
       <el-col :span="8"><el-card shadow="never" class="kpi"><div>待签图纸</div><strong>{{ summary.pending_docs || 0 }}</strong></el-card></el-col>
-      <el-col :span="8"><el-card shadow="never" class="kpi danger"><div>异常</div><strong>{{ summary.open_exceptions || 0 }}</strong></el-card></el-col>
+      <el-col :span="8"><el-card shadow="never" class="kpi danger"><div>异常/安灯</div><strong>{{ (summary.open_exceptions || 0) + (summary.open_andon_alerts || 0) }}</strong></el-card></el-col>
     </el-row>
 
     <el-card shadow="never" class="panel role-panel">
@@ -28,9 +41,25 @@
           </el-input>
           <div v-if="scanResult" class="scan-result">
             <el-alert :title="scanResult.type === 'work_order' ? `工单：${scanResult.data.wo_code}` : `工序节点：${scanResult.data.operation_name || scanResult.data.id}`" type="success" :closable="false" />
+            <div class="scan-inputs">
+              <span class="muted">数量</span>
+              <el-input-number v-model="scanForm.quantity_completed" :min="0" controls-position="right" style="width:110px" />
+              <span class="muted">工时(h)</span>
+              <el-input-number v-model="scanForm.hours_worked" :min="0.1" :max="24" :step="0.5" controls-position="right" style="width:110px" />
+              <span class="muted">不良数</span>
+              <el-input-number v-model="scanForm.defect_quantity" :min="0" controls-position="right" style="width:100px" />
+              <template v-if="scanResult.type === 'process_node'">
+                <span class="muted">质检</span>
+                <el-select v-model="scanForm.result" style="width:100px">
+                  <el-option label="合格" value="pass" />
+                  <el-option label="不合格" value="fail" />
+                </el-select>
+              </template>
+            </div>
             <div class="action-grid">
               <el-button type="primary" @click="executeScan('start')">开始</el-button>
               <el-button type="success" @click="executeScan('complete')">完成</el-button>
+              <el-button v-if="scanResult.type === 'process_node'" type="info" @click="executeScan('qc')">质检</el-button>
               <el-button type="warning" @click="executeScan('pause')">暂停</el-button>
               <el-button type="danger" @click="executeScan('block')">卡滞</el-button>
             </div>
@@ -83,6 +112,14 @@
               <el-button type="danger" style="width:100%" :loading="saving" @click="raiseException">一键上报异常</el-button>
             </el-form-item>
           </el-form>
+          <el-divider content-position="left">安灯告警（最近 10 条）</el-divider>
+          <el-empty v-if="!andonAlerts.length" description="暂无未关闭安灯告警" :image-size="44" />
+          <el-table v-else :data="andonAlerts" size="small" border stripe max-height="240">
+            <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="severity" label="级别" width="80" />
+            <el-table-column prop="status" label="状态" width="100" />
+            <el-table-column prop="created_at" label="时间" width="150" />
+          </el-table>
         </el-tab-pane>
       </el-tabs>
     </el-card>
@@ -242,6 +279,11 @@ const {
   roleLabel,
   canQc,
   canPick,
+  scanForm,
+  andonAlerts,
+  online,
+  pendingOffline,
+  flushOfflineQueue,
   go,
   loadAll,
   lookupScan,
@@ -286,4 +328,5 @@ const {
   .action-grid { grid-template-columns: repeat(2, 1fr); }
   .wo-actions .el-button { flex: 1; }
 }
+.scan-inputs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
 </style>

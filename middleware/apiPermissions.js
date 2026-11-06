@@ -151,7 +151,7 @@ const RULES = [
   match(/^\/qc(?:\/.*)?$/, READ, ["quality:read"]),
   match(/^\/qc(?:\/.*)?$/, WRITE, ["quality:write"]),
   match(/^\/qc_inspections(?:\/.*)?$/, READ, ["quality:read"]),
-  match(/^\/qc_inspections(?:\/.*)?$/, WRITE, ["quality:write"]),
+  match(/^\/qc_inspections(?:\/.*)?$/, WRITE, ["quality:write", "shopfloor:qc"]),
   match(/^\/spc(?:\/.*)?$/, READ, ["quality:read"]),
   match(/^\/spc(?:\/.*)?$/, WRITE, ["quality:write"]),
 
@@ -172,6 +172,7 @@ const RULES = [
   match(/^\/mdm(?:\/.*)?$/, WRITE, ["settings:write"]),
 
   match(/^\/andon(?:\/.*)?$/, READ, ["work_order:read"]),
+  exact("/andon/trigger", ["POST"], ["shopfloor:write", "work_order:write"]),
   match(/^\/andon(?:\/.*)?$/, WRITE, ["work_order:write"]),
   match(/^\/iot(?:\/.*)?$/, READ, ["equipment:read"]),
   match(/^\/iot(?:\/.*)?$/, WRITE, ["equipment:write"]),

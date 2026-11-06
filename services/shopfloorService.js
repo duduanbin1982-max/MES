@@ -62,6 +62,15 @@ function register(app, db) {
       LIMIT 10
     `) : [];
 
+    const andonAlerts = tableExists("andon_alerts") ? all(`
+      SELECT a.*, ei.instance_code
+      FROM andon_alerts a
+      LEFT JOIN equipment_instances ei ON ei.id = a.source_id AND a.source_type = 'equipment'
+      WHERE COALESCE(a.status, 'open') IN ('open', 'acknowledged')
+      ORDER BY a.created_at DESC, a.id DESC
+      LIMIT 10
+    `) : [];
+
     const qcRecent = tableExists("qc_inspections") ? all(`
       SELECT q.*, ei.instance_code, u.full_name AS inspector_name
       FROM qc_inspections q
@@ -85,6 +94,7 @@ function register(app, db) {
         active_work_orders: workOrders.length,
         pending_docs: pendingDocs.length,
         open_exceptions: exceptions.length,
+        open_andon_alerts: andonAlerts.length,
         today_reports: todayReports?.c || 0,
         today_hours: Math.round((todayReports?.hours || 0) * 10) / 10,
         today_qc_fail: todayQcFail?.c || 0,
@@ -93,6 +103,7 @@ function register(app, db) {
       work_orders: workOrders,
       pending_documents: pendingDocs,
       exceptions,
+      andon_alerts: andonAlerts,
       recent_reports: recentReports,
       qc_recent: qcRecent,
     });

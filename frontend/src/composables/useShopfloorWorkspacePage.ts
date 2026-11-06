@@ -1,7 +1,12 @@
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Api } from '../api'
+import {
+  createAction, dequeue, enqueue, incrementRetry, nextBatch,
+  parseStoredQueue, pendingCount, serializeQueue, shouldQueueRequest,
+} from '../domain/offlineQueue'
+import type { OfflineAction, OfflineActionType } from '../domain/offlineQueue'
 import { useAuthStore } from '../stores/auth'
 
 export function useShopfloorWorkspacePage() {
@@ -32,7 +37,62 @@ export function useShopfloorWorkspacePage() {
   const andonForm = reactive({ title: '', message: '' })
 
   const currentUserId = computed(() => auth.user?.id ?? null)
-  const canQc = computed(() => Boolean(auth.hasPerm && auth.hasPerm('quality:write')))
+  const canQc = computed(() => Boolean(auth.hasPerm && (auth.hasPerm('quality:write') || auth.hasPerm('shopfloor:qc'))))
+  const scanForm = reactive({ quantity_completed: 1, hours_worked: 1, defect_quantity: 0, result: 'pass' })
+  const andonAlerts = ref<any[]>([])
+  const OFFLINE_KEY = 'tbm_shopfloor_offline_queue'
+  const offlineQueue = ref<OfflineAction[]>(parseStoredQueue(typeof localStorage === 'undefined' ? null : localStorage.getItem(OFFLINE_KEY)))
+  const online = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
+  const pendingOffline = computed(() => pendingCount(offlineQueue.value))
+  function persistQueue(next: OfflineAction[]) {
+    offlineQueue.value = next
+    try { localStorage.setItem(OFFLINE_KEY, serializeQueue(next)) } catch (_error) { /* 隐私模式忽略 */ }
+  }
+  function isNetworkFailure(error: any) {
+    return shouldQueueRequest(error?.response?.status, !error?.response)
+  }
+  function queueAction(type: OfflineActionType, payload: Record<string, unknown>) {
+    persistQueue(enqueue(offlineQueue.value, createAction(type, payload)))
+  }
+  async function sendOrQueue(type: OfflineActionType, payload: Record<string, unknown>, sender: (body: any) => Promise<any>) {
+    try {
+      const data = await sender(payload)
+      return { ok: true, data }
+    } catch (error: any) {
+      if (isNetworkFailure(error)) {
+        queueAction(type, payload)
+        ElMessage.warning(`网络异常，已加入待补报队列（${pendingOffline.value} 条）`)
+        return { ok: false, queued: true }
+      }
+      throw error
+    }
+  }
+  async function flushOfflineQueue() {
+    if (!online.value) { ElMessage.warning('当前离线，无法补报'); return }
+    if (!offlineQueue.value.length) { ElMessage.info('没有待补报记录'); return }
+    let ok = 0
+    let fail = 0
+    for (const action of nextBatch(offlineQueue.value, 5)) {
+      try {
+        if (action.type === 'scan') await Api.post('/scan/execute', action.payload)
+        else if (action.type === 'work_report') await Api.post('/work-reports', action.payload)
+        else await Api.post('/andon/trigger', action.payload)
+        persistQueue(dequeue(offlineQueue.value, action.id))
+        ok += 1
+      } catch (_error) {
+        persistQueue(incrementRetry(offlineQueue.value, action.id))
+        fail += 1
+      }
+    }
+    if (fail) ElMessage.warning(`补报完成 ${ok} 条，失败 ${fail} 条（将重试）`)
+    else ElMessage.success(`补报完成 ${ok} 条`)
+    if (ok) await loadAll()
+  }
+  function handleOnline() {
+    online.value = navigator.onLine
+    if (online.value && offlineQueue.value.length) flushOfflineQueue()
+  }
+  function handleOffline() { online.value = false }
   const canPick = computed(() => Boolean(auth.hasPerm && auth.hasPerm('pick:write')))
   const currentUser = computed(() => {
     try { return JSON.parse(localStorage.getItem('tbm_user') || '{}') } catch { return {} }
@@ -73,6 +133,7 @@ export function useShopfloorWorkspacePage() {
       Object.assign(summary, data.summary || {})
       workOrders.value = data.work_orders || []
       pendingDocs.value = data.pending_documents || []
+      andonAlerts.value = data.andon_alerts || []
     } finally { loading.value = false }
   }
 
@@ -85,9 +146,19 @@ export function useShopfloorWorkspacePage() {
     if (!scanCode.value) return
     saving.value = true
     try {
-      await Api.post('/scan/execute', { code: scanCode.value, action, quantity_completed: 1, hours_worked: 1 })
-      ElMessage.success('已记录')
-      await loadAll()
+      const payload: Record<string, unknown> = {
+        code: scanCode.value,
+        action,
+        quantity_completed: scanForm.quantity_completed,
+        hours_worked: scanForm.hours_worked,
+        defect_quantity: scanForm.defect_quantity,
+      }
+      if (action === 'qc') payload.result = scanForm.result
+      const result: any = await sendOrQueue('scan', payload, (body) => Api.post('/scan/execute', body))
+      if (result.ok) {
+        ElMessage.success('已记录')
+        await loadAll()
+      }
     } finally { saving.value = false }
   }
 
@@ -191,10 +262,12 @@ export function useShopfloorWorkspacePage() {
     if (!currentWo.value) return
     saving.value = true
     try {
-      await Api.post('/work-reports', { work_order_id: currentWo.value.id, worker_id: currentUserId.value, ...reportForm })
-      ElMessage.success('报工已提交，待审批（审批通过后计入工时与成本）')
+      const payload = { work_order_id: currentWo.value.id, worker_id: currentUserId.value, ...reportForm }
+      const result: any = await sendOrQueue('work_report', payload, (body) => Api.post('/work-reports', body))
+      if (result.ok) ElMessage.success('报工已提交，待审批（审批通过后计入工时与成本）')
+      else ElMessage.success('报工已进入待补报队列，恢复网络后自动补报')
       reportVisible.value = false
-      await loadAll()
+      if (result.ok) await loadAll()
     } finally { saving.value = false }
   }
 
@@ -238,14 +311,37 @@ export function useShopfloorWorkspacePage() {
     if (!andonForm.title) { ElMessage.warning('请填写异常标题'); return }
     saving.value = true
     try {
-      await Api.post('/exceptions/shopfloor_manual/action', { action: 'comment', status: 'open', note: `${andonForm.title}：${andonForm.message || ''}` })
-      ElMessage.success('异常已上报到异常中心')
+      const payload = {
+        alert_type: 'shopfloor_manual',
+        source_type: 'shopfloor',
+        source_id: currentWo.value?.id ?? null,
+        title: andonForm.title,
+        message: andonForm.message || andonForm.title,
+        severity: 'warning',
+        data: { wo_code: currentWo.value?.wo_code || null, workstation: currentWo.value?.workstation_name || null },
+      }
+      const result: any = await sendOrQueue('andon', payload, (body) => Api.post('/andon/trigger', body))
+      if (result.ok) ElMessage.success('异常已上报到安灯看板')
+      else ElMessage.success('异常已进入待补报队列，恢复网络后自动补报')
       Object.assign(andonForm, { title: '', message: '' })
-      await loadAll()
+      if (result.ok) await loadAll()
     } finally { saving.value = false }
   }
 
-  onMounted(async () => { applyDefaultTab(); await loadAll() })
+  onMounted(async () => {
+    applyDefaultTab()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', handleOnline)
+      window.addEventListener('offline', handleOffline)
+    }
+    await loadAll()
+  })
+  onUnmounted(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  })
 
   return {
     route,
@@ -277,6 +373,12 @@ export function useShopfloorWorkspacePage() {
     currentUserId,
     canQc,
     canPick,
+    scanForm,
+    andonAlerts,
+    online,
+    pendingOffline,
+    offlineQueue,
+    flushOfflineQueue,
     defaultTabByRole,
     applyDefaultTab,
     go,

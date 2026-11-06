@@ -17,12 +17,12 @@ function createAlertEngine({ get, run, emit, Events }) {
   /**
    * 触发告警
    */
-  function triggerAlert(alertType, sourceType, sourceId, title, message, severity, data, cooldownMin) {
+  function triggerAlert(alertType, sourceType, sourceId, title, message, severity, data, cooldownMin, triggeredBy) {
     if (isDuplicate(alertType, sourceType, sourceId || 0, cooldownMin)) return null;
     const r = run(
       `INSERT INTO andon_alerts (alert_type, source_type, source_id, title, message, severity, triggered_by, data_json)
-       VALUES (?, ?, ?, ?, ?, ?, 'system', ?)`,
-      [alertType, sourceType, sourceId || null, title, message || title, severity || "warning", data ? JSON.stringify(data) : null]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [alertType, sourceType, sourceId || null, title, message || title, severity || "warning", triggeredBy ? String(triggeredBy) : "system", data ? JSON.stringify(data) : null]
     );
     const id = Number(r.lastInsertRowid);
     emit(Events.ANDON_TRIGGERED, { alert_id: id, alert_type: alertType, severity, title, source_type: sourceType, source_id: sourceId });

@@ -19,7 +19,7 @@
 | SH-4 | P2 | 工作台无数据范围：任何工人能看到全厂工单、异常与他人报工 | 已修（worker/welder 只看自己） |
 | SH-5 | P2 | 今日报工/今日质检用 UTC 日期（`date('now')`），早 8 点前会算到前一天 | 已修（本地日期） |
 | SH-6 | P2 | 前端报工写死 `worker_id: 1`，报工人永远是管理员 | 已修（取当前登录用户） |
-| SH-7 | P3 | 扫码固定上报 1h/1 件；异常走 `exceptions/shopfloor_manual` 手工入口；现场质检按角色权限屏蔽（worker 无 quality:write） | 记录（部分按设计） |
+| SH-7 | P3 | 扫码固定 1h/1 件；异常走上古手工入口；worker 无法现场自检；无断网补报 | **已全部修复**（扫码输入/安灯统一/shopfloor:qc/离线队列） |
 
 ## 1. 模块现状（走读）
 
@@ -87,18 +87,36 @@
 前端 `submitReport` 固定 `worker_id: 1`。整改：取当前登录用户 id，提示文案改为"报工已提交，待审批（审批通过后计入工时与成本）"。
 实测：worker 报工落库 `worker_id=4, status=pending`。
 
-### SH-7（P3，记录）
+### SH-7（P3）四项全部整改（2026-11-06 第二轮）
 
-1. 扫码固定上报 `quantity_completed: 1, hours_worked: 1`——校验已保证不会出现脏值，但现场按实际数量/工时填报仍需在扫码结果区加输入框；
-2. 异常上报走 `exceptions/shopfloor_manual/action`（异常中心的 comment 通道），非独立 andon 表，语义可后续统一；
-3. worker 无 `quality:write` 是权限设计（质检由质检员/焊工执行），前端已隐藏入口；
-4. 工作台无离线缓存/断网补报。
+**1. 扫码按实际数量/工时填报**
+
+扫码结果区新增「数量 / 工时(h) / 不良数 / 质检结果」输入（质检结果仅在工序节点场景显示），并新增「质检」动作按钮；提交时携带实际值，后端 `scanner.js` 校验 `0<h≤24`、数量为整数且完成不超计划。
+实测：扫码 start 传 `hours_worked=0.5, quantity_completed=1` → 落库一致。
+
+**2. 异常上报统一到安灯（andon）**
+
+前端 `raiseException` 由 `exceptions/shopfloor_manual/action` 改为 `POST /api/andon/trigger`（`alert_type=shopfloor_manual`、`source_type=shopfloor`、附带工单号/工位），后端记录 `triggered_by=登录用户`；工作台 overview 新增最近 10 条未关闭安灯（`summary.open_andon_alerts` + `andon_alerts`），异常页签直接展示安灯列表。
+权限：新增 `exact("/andon/trigger", ["POST"], ["shopfloor:write","work_order:write"])`，且该规则置于通用 `/andon` 规则之前（实测修复前 worker 403，修复后 201）。
+实测：worker 上报 → `201 {alert_id:12, triggered_by:4}`，落库 `triggered_by='4'`。
+
+**3. 现场自检（shopfloor:qc）**
+
+新增权限 `shopfloor:qc`（不授予质检管理权限），授予 worker / welder；`/qc_inspections` 写权限改为 `quality:write OR shopfloor:qc`；前端 `canQc` 按任一权限显示入口。
+实测：worker 现场自检 → `200 {id:12}`（此前 403）。
+
+**4. 断网离线补报**
+
+新增 `frontend/src/domain/offlineQueue.ts`（纯函数）：队列上限 200 条、最大重试 5 次、`408/425/429/5xx` 与网络错误才入队（4xx 业务/权限错误不入队），localStorage 持久化、容错解析。
+工作台接入：扫码 / 报工 / 安灯提交失败自动入队并提示；顶部离线横幅展示待补报数量与「立即补报」；`online` 事件自动重放（每批 5 条），补报成功后刷新工单/安灯。
+前端 domain 用例 6/6 覆盖入队/出队/上限/重试/批次/判定/脏数据容错。
 
 ## 3. 验证
 
 | 项目 | 结果 |
 |---|---|
-| `tests/shopfloorGovernance.test.js`（新） | **6/6**（动作白名单/状态机/操作人/数量校验/扫码闭环/数据范围） |
+| `tests/shopfloorGovernance.test.js` | **6/6**（动作白名单/状态机/操作人/数量校验/扫码闭环/数据范围） |
+| `frontend/tests/domain/offlineQueue.test.ts`（新） | **6/6**（入队/出队/上限/重试/批次/判定/容错） |
 | 前端 eslint / vue-tsc / build | 0 / 0 / 通过 |
 | 全量部署闸门 | **801/0** |
 | 生产权限迁移 | 4 个角色补齐 `shopfloor:write / pick:write`（续跑幂等） |
@@ -114,6 +132,11 @@ worker 扫码 start → 200（operator_id=4，status_after=in_progress）
 worker 领料 → 通过权限（空 items 业务 400）；worker 质检 → 403（入口已隐藏）
 worker 报工 → 200，worker_id=4，status=pending
 演练数据已清理（工单状态/数量/执行记录恢复）
+
+P3 演练（第二轮）：
+worker 上报安灯 → 201（triggered_by=4，落库正确）；worker 现场自检 → 200；
+扫码上报 0.5h/1 件 → 执行记录一致；工作台返回 scope=self 与 10 条安灯；
+离线队列 domain 用例 6/6（浏览器断网场景需现场用手机飞行模式复核）
 ```
 
 ## 4. 改动文件
@@ -128,12 +151,14 @@ worker 报工 → 200，worker_id=4，status=pending
 | `frontend/src/composables/useShopfloorWorkspacePage.ts` | 当前用户报工、canQc/canPick |
 | `frontend/src/views/ShopfloorWorkspace.vue` | 质检/领料按钮按权限显示 |
 | `tests/shopfloorGovernance.test.js` | 6 个回归用例 |
+| `frontend/src/domain/offlineQueue.ts` + `frontend/tests/domain/offlineQueue.test.ts` | 离线待补报队列（纯函数）+ 6 个单测 |
 
 ## 5. 复验方式
 
 ```bash
 node --test tests/shopfloorGovernance.test.js
-node scripts/migrate-shopfloor-permissions.js --apply   # 幂等
+node --test frontend/tests/domain/offlineQueue.test.ts
+node scripts/migrate-shopfloor-permissions.js --apply   # 幂等（含 shopfloor:qc）
 ```
 
 前端：`/shopfloor` → 用工号账号（worker）：扫码开始/完成、领料、报工；看不到「质检」按钮；管理员/主任：可见全部工单与质检入口。

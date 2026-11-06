@@ -9,6 +9,7 @@ const PERMISSIONS = {
   // 现场/仓库
   'shopfloor:read': '查看车间工作台',
   'shopfloor:write': '车间工作台操作（扫码/领料/质检）',
+  'shopfloor:qc': '现场自检录入（不授予质检管理权限）',
   'inventory:read': '查看库存与库存流水',
   'inventory:write': '库存收发料/调拨/领退料',
   'pick:read': '查看齐套/领退料清单',
@@ -102,13 +103,13 @@ const DEFAULT_ROLE_PERMISSIONS = {
     'shopfloor:read', 'work_order:read', 'quality:read',
     'document:read', 'pick:read', 'delivery:read',
     'work_report:read', 'work_report:write',
-    'shopfloor:write', 'pick:write',
+    'shopfloor:write', 'pick:write', 'shopfloor:qc',
   ],
   welder: [
     'work_order:read', 'quality:read', 'quality:write',
     'shopfloor:read', 'delivery:read',
     'work_report:read', 'work_report:write',
-    'shopfloor:write', 'pick:write',
+    'shopfloor:write', 'pick:write', 'shopfloor:qc',
   ],
   sales: [
     'equipment:read', 'document:read', 'report:read',

@@ -13,8 +13,8 @@ const FLAG_DB = process.argv.indexOf("--db");
 const DB_PATH = FLAG_DB > -1 && process.argv[FLAG_DB + 1] ? path.resolve(process.argv[FLAG_DB + 1]) : path.resolve(__dirname, "..", "data", "mes.db");
 
 const ROLE_ADDITIONS = {
-  worker: ["shopfloor:write", "pick:write"],
-  welder: ["shopfloor:write", "pick:write"],
+  worker: ["shopfloor:write", "pick:write", "shopfloor:qc"],
+  welder: ["shopfloor:write", "pick:write", "shopfloor:qc"],
   foreman: ["shopfloor:write"],
   qc: ["shopfloor:write"],
 };

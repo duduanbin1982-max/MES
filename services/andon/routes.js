@@ -105,8 +105,12 @@ function register(app, db) {
   app.post("/api/andon/trigger", wrap((req, res) => {
     const { alert_type, source_type, source_id, title, message, severity, data } = req.body;
     if (!alert_type || !title) return res.status(400).json({ error: "alert_type/title 必填" });
-    const id = triggerAlert(alert_type, source_type || "manual", source_id || null, title, message, severity || "warning", data, 0);
-    res.status(201).json({ ok: true, alert_id: id });
+    if (String(title).length > 200) return res.status(400).json({ error: "title 不能超过 200 字" });
+    if (message && String(message).length > 2000) return res.status(400).json({ error: "message 不能超过 2000 字" });
+    const severityValue = ["info", "warning", "danger"].includes(String(severity)) ? String(severity) : "warning";
+    const triggeredBy = req.user?.uid || req.user?.sub || req.user?.id || 0;
+    const id = triggerAlert(alert_type, source_type || "manual", source_id || null, title, message, severityValue, data, 0, triggeredBy);
+    res.status(201).json({ ok: true, alert_id: id, triggered_by: triggeredBy });
   }));
 
   // ====== 规则管理 ======
