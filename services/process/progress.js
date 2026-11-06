@@ -26,12 +26,22 @@ function getProcessProgress(req, res, db, explicitInstanceId) {
   const progressPct = total ? Math.round(completed * 100 / total) : 0;
 
   // 估时 vs 实际
-  const hours = get(db, 
+  // 2026-11-06（WH-9 口径统一）：实际工时优先取"已审批报工"，没有报工数据时回退工序执行工时
+  const reportStatusAware = (() => {
+    try { return db.prepare("PRAGMA table_info(work_report_details)").all().some((column) => column.name === "status"); }
+    catch (_error) { return false; }
+  })();
+  const approvedSql = reportStatusAware ? " AND wr.status='approved'" : "";
+  const hours = get(db,
     "SELECT COALESCE(SUM(estimated_hours), 0) est, " +
-    "(SELECT COALESCE(SUM(hours_worked), 0) FROM process_executions pe JOIN process_nodes pn ON pe.process_node_id = pn.id WHERE pn.equipment_instance_id = ?) act " +
+    "(SELECT SUM(wr.hours_spent) FROM work_report_details wr JOIN process_nodes pn ON wr.process_node_id = pn.id WHERE pn.equipment_instance_id = ?" + approvedSql + ") report_act, " +
+    "(SELECT COALESCE(SUM(hours_worked), 0) FROM process_executions pe JOIN process_nodes pn ON pe.process_node_id = pn.id WHERE pn.equipment_instance_id = ?) exec_act " +
     "FROM process_nodes WHERE equipment_instance_id = ?",
-    [instanceId, instanceId]
+    [instanceId, instanceId, instanceId]
   );
+  const reportActual = hours && hours.report_act !== null && hours.report_act !== undefined ? Number(hours.report_act) : null;
+  const actualHours = reportActual !== null ? reportActual : Number((hours && hours.exec_act) || 0);
+  const actualBasis = reportActual !== null ? "work_reports" : "process_executions";
 
   // 按 phase (S1-S10)
   const byPhase = all(db, 
@@ -49,9 +59,10 @@ function getProcessProgress(req, res, db, explicitInstanceId) {
     by_phase: byPhase.map(p => ({ ...p, pct: p.total ? Math.round(p.completed * 100 / p.total) : 0 })),
     hours: {
       estimated: hours?.est || 0,
-      actual: hours?.act || 0,
-      efficiency: (hours.act > 0 && hours.est > 0) ? Math.round((hours.est / hours.act) * 100) : null,
-      efficiency_basis: hours.act > 0 ? 'computed' : 'no_actual_hours',
+      actual: actualHours,
+      actual_basis: actualBasis,
+      efficiency: (actualHours > 0 && hours.est > 0) ? Math.round((hours.est / actualHours) * 100) : null,
+      efficiency_basis: actualHours > 0 ? 'computed' : 'no_actual_hours',
     }
   });
 }

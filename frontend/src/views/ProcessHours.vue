@@ -42,11 +42,21 @@
           <el-date-picker v-model="reportFilter.dateRange" type="daterange" range-separator="→" start-placeholder="开始" end-placeholder="结束" value-format="YYYY-MM-DD" @change="loadReports" style="width: 260px" />
           <el-button type="primary" @click="loadReports">查询</el-button>
           <el-button @click="showReportDialog = true">+ 新增报工</el-button>
+          <el-tag v-if="monthLock?.locked" type="warning">本月已月结锁定 {{ monthLock.month }}</el-tag>
+          <el-button v-if="!monthLock?.locked && canApprove" size="small" type="warning" plain @click="lockCurrentMonth">锁定本月</el-button>
+          <el-button v-if="monthLock?.locked && canApprove" size="small" @click="unlockCurrentMonth">解锁</el-button>
         </div>
         <el-table :data="reports" v-loading="reportsLoading" empty-text="暂无报工记录" border stripe size="small" max-height="450">
           <el-table-column prop="wo_code" label="工单" width="100" />
           <el-table-column prop="operation_name" label="工序" min-width="120" />
           <el-table-column prop="worker_name" label="工人" width="80" />
+          <el-table-column label="状态" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning'">
+                {{ row.status === 'approved' ? '已通过' : row.status === 'rejected' ? '已驳回' : '待审批' }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="work_type" label="工种" width="80">
             <template #default="{ row }"><el-tag size="small">{{ workTypeLabel(row.work_type) }}</el-tag></template>
           </el-table-column>
@@ -59,10 +69,11 @@
           </el-table-column>
           <el-table-column prop="reported_at" label="报工时间" width="160" />
           <el-table-column prop="notes" label="备注" min-width="100" show-overflow-tooltip />
-          <el-table-column label="操作" width="80" fixed="right">
+          <el-table-column label="操作" width="200" fixed="right">
             <template #default="{ row }">
+              <el-button v-if="canApprove && row.status === 'pending'" size="small" link type="success" @click="approveReport(row)">通过</el-button>
+              <el-button v-if="canApprove && row.status === 'pending'" size="small" link type="warning" @click="rejectReport(row)">驳回</el-button>
               <el-button v-if="canVoid" size="small" link type="danger" @click="voidReport(row)">撤销</el-button>
-              <span v-else class="hint-text">—</span>
             </template>
           </el-table-column>
         </el-table>
@@ -259,6 +270,12 @@ const {
   reportFilter,
   canVoid,
   voidReport,
+  canApprove,
+  monthLock,
+  lockCurrentMonth,
+  unlockCurrentMonth,
+  approveReport,
+  rejectReport,
   showReportDialog,
   reportSaving,
   reportForm,

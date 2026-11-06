@@ -13,6 +13,7 @@ const FLAG_DB = process.argv.indexOf("--db");
 const DB_PATH = FLAG_DB > -1 && process.argv[FLAG_DB + 1] ? path.resolve(process.argv[FLAG_DB + 1]) : path.resolve(__dirname, "..", "data", "mes.db");
 
 const WRITE_ROLES = new Set(["planner", "foreman", "production_supervisor", "worker", "welder"]);
+const APPROVE_ROLES = new Set(["planner", "foreman", "production_supervisor"]);
 const READ_ROLES = new Set(["planner", "foreman", "production_supervisor", "worker", "welder", "qc", "engineer"]);
 
 function planPermissions(db) {
@@ -22,7 +23,8 @@ function planPermissions(db) {
     try { permissions = JSON.parse(row.permissions || "[]"); } catch (_error) { permissions = []; }
     if (!Array.isArray(permissions)) permissions = [];
     const additions = [];
-    if (WRITE_ROLES.has(row.role_code)) additions.push("work_report:read", "work_report:write");
+    if (APPROVE_ROLES.has(row.role_code)) additions.push("work_report:read", "work_report:write", "work_report:approve");
+    else if (WRITE_ROLES.has(row.role_code)) additions.push("work_report:read", "work_report:write");
     else if (READ_ROLES.has(row.role_code)) additions.push("work_report:read");
     const missing = additions.filter((permission) => !permissions.includes(permission) && !permissions.includes("*"));
     return { role_code: row.role_code, id: row.id, missing, next: [...permissions, ...missing] };
@@ -55,5 +57,5 @@ function main() {
   } finally { db.close(); }
 }
 
-module.exports = { planPermissions, applyPlan, READ_ROLES, WRITE_ROLES };
+module.exports = { planPermissions, applyPlan, READ_ROLES, WRITE_ROLES, APPROVE_ROLES };
 if (require.main === module) main();

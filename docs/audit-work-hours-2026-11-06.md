@@ -21,10 +21,10 @@
 | WH-6 | P2 | 日期口径 UTC：日汇总默认日期、绩效/加班默认区间、前端默认日期都按 UTC 取，早 8 点前会算到前一天 | 已修（本地日期） |
 | WH-7 | P2 | `hours-summary.nodes` 按行计数（一个节点多条定额被重复计数）；完工进度用"实际工时/标准人时"冒充完成率 | 已修 |
 | WH-8 | P2 | 数据完整性：2 条报工指向不存在的工单（WO#1），日汇总会把这些"幽灵工时"算进去 | 已清理 |
-| WH-9 | P3 | 工时双轨：`process_executions.hours_worked`（扫码/工序执行）与 `work_report_details.hours_spent`（工时报工）互不同步，项目进度只取前者 | 待统一 |
-| WH-10 | P3 | 加班阈值硬编码 8h，无班次/节假日日历 | 已改可配置（`OVERTIME_DAILY_HOURS`），日历未做 |
-| WH-11 | P3 | 报工无审批流/月结锁定，填报即生效 | 待做 |
-| WH-12 | P3 | 历史报工 `worker_id` 可能为空（当时按 `req.user.sub` 取，现统一 uid 兜底） | 已修取数，历史未回填 |
+| WH-9 | P3 | 工时双轨：`process_executions.hours_worked` 与 `work_report_details.hours_spent` 互不同步，项目进度只取前者 | **已修**（报工优先/执行兜底） |
+| WH-10 | P3 | 加班阈值硬编码 8h，无班次/节假日日历 | **已修**（work_calendar + 日历加班） |
+| WH-11 | P3 | 报工无审批流/月结锁定，填报即生效 | **已修**（pending→审批 + 月结锁定） |
+| WH-12 | P3 | 历史报工 `worker_id` 可能为空 | **已修**（迁移脚本回填） |
 
 ## 1. 模块现状（走读）
 
@@ -126,10 +126,68 @@
 | `scripts/migrate-clean-work-hours.js` | 孤儿定额/报工清理（幂等） |
 | `tests/processHoursGovernance.test.js` | 7 个回归用例 |
 
-## 5. 遗留与建议
+## 5. P3 遗留治理（第二轮，2026-11-06 已完成）
 
-1. **WH-9 工时双轨**（P3）：`process_executions`（扫码/工序执行）与 `work_report_details`（工时报工）两套工时并存，项目进度只取前者、本模块看板取后者。建议统一为"报工为准、执行记录为过程"或做定期对账；
-2. **WH-11 审批流**（P3）：报工即生效，无班长/工时审核与月结锁定；建议增加"报工审核 + 月度锁定"；
-3. **WH-10 加班日历**（P3）：阈值已可配（`OVERTIME_DAILY_HOURS`），但未接节假日/班次日历；
-4. **WH-12 历史数据**（P3）：历史 `worker_id` 为空的报工未回填（本次新增报工已统一用 uid 兜底）；
-5. 成本联动：报工工时 → `project_cost_entries` 的人工成本目前由独立回填脚本生成，建议报工后自动入账（跨域写需授权）。
+### 5.1 WH-9 工时双轨 → 报工优先、执行工时兜底
+
+- 项目进度 `GET /api/equipment_instances/:id/process_progress`：实际工时优先取**已审批报工**合计，无报工数据时回退 `process_executions`；响应新增 `hours.actual_basis`；
+- 工序效率 `GET /api/process_nodes/:id/efficiency` 同口径，新增 `actual_basis`；
+- 实测：节点无报工时 `actual_basis=process_executions`；审批 3h 报工后 `actual_basis=work_reports`、`actual=3`；
+- 保留 `process_executions` 作为扫码/工序动作的过程记录（不删除），口径文档化为"**报工是工时唯一真源，执行记录只做兜底与过程**"。
+
+### 5.2 WH-10 班次/节假日日历
+
+- 新增 `work_calendar(date, day_type, daily_hours)` 与 API：`GET/POST/DELETE /api/work-calendar`（写权限 `work_report:approve`）；
+- 加班统计按日历：工作日阈值 8h（`OVERTIME_DAILY_HOURS` 可配）、周末/节假日阈值 0（全部计加班）；返回 `day_type` 与当日 `standard_hours`；
+- 实测：工作日 2h → 加班 0；把当天设为节假日后 → 2h 全部计加班。
+
+### 5.3 WH-11 报工审批流 + 月结锁定
+
+- 新报工默认 `pending`；`PUT /api/work-reports/:id/approve`（`work_report:approve`）通过后才计入实际工时/绩效/日汇总；`PUT /api/work-reports/:id/reject` 必须填原因；
+- 新增 `work_month_locks` + API `/api/work-report-locks`：锁定月份禁止新增/审批/撤销报工；
+- 实测：锁定当月后新增报工 400、审批 400，提示"报工月份 2026-11 已月结锁定"；解锁后恢复；
+- 前端：报工列表新增状态列、通过/驳回按钮、本月锁定/解锁按钮。
+
+### 5.4 WH-12 历史 worker_id 回填
+
+`scripts/migrate-work-hours-governance.js --apply`：新增审批字段/月结表/日历表，并按 `reported_by → 工单 assigned_to → 工序执行人` 回填历史 `worker_id`；生产库当前 0 条待回填。
+
+### 5.5 报工工时 → 人工成本自动入账
+
+- 审批通过时写 `project_cost_entries`（`cost_type=labor`、`source_ref=work_report:<id>:labor`、金额 = 工时 × 人工费率），费率取 `system_settings.labor_rate_per_hour` → 环境变量 → 默认 200；
+- 驳回/撤销按 `source_ref` 冲销；重复审批幂等，不重复入账；
+- 实测：2h 报工审批 → 成本 **400 元**入账（200 元/h）；撤销后成本行 0、工单 `actual_hours` 2→0；
+- 模块边界白名单已登记 `processHoursService -> project_cost_entries`，边界检查通过。
+
+### 5.6 验证汇总
+
+| 项目 | 结果 |
+|---|---|
+| `tests/processHoursGovernance.test.js` | **11/11**（含审批/成本/月结/日历/口径/回填） |
+| 全量部署闸门 | **792/0** |
+| 模块边界检查 | 通过 |
+| 前端 eslint / vue-tsc / build | 0 / 0 / 通过 |
+| 生产演练 | pending→审批→成本 400→锁定拦截→日历加班→撤销冲销；演练数据已清理 |
+
+### 5.7 当前边界（仍未做）
+
+1. 成本入账使用统一人工费率（单值），未按工种/技能等级差异化；
+2. 月结锁定记录 `locked_by`，但没有审批流/双人复核；
+3. 日历只有单日配置，无批量导入/法定节假日模板；
+4. 报工审批无通知（站内/IM）；
+5. 报工只联动人工成本，材料/外协/折旧仍由其他台账维护。
+
+## 6. 第二轮改动文件
+
+| 文件 | 说明 |
+|---|---|
+| `services/processHoursService.js` | 审批/驳回、月结锁定、日历、成本入账、撤销冲销、approved 口径 |
+| `services/processHours/analyticsRoutes.js` | 只统计 approved、日历加班 |
+| `services/process/progress.js` | 实际工时：报工优先、执行兜底（actual_basis） |
+| `services/process/node/nodeActions.js` | 工序效率同口径 |
+| `app/permissions.js` / `middleware/apiPermissions.js` | 新增 `work_report:approve` 及审批/月结/日历规则 |
+| `config/moduleBoundaries.json` | 登记 `processHoursService -> project_cost_entries` |
+| `scripts/migrate-work-hours-governance.js` | 审批字段 + 月结/日历表 + worker_id 回填（幂等） |
+| `scripts/migrate-work-report-permissions.js` | 存量角色补 `work_report:approve` |
+| `frontend/.../useProcessHoursPage.ts`、`views/ProcessHours.vue` | 审批/驳回、月结锁定、状态列 |
+| `tests/processHoursGovernance.test.js` | 11 个回归用例 |

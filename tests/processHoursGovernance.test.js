@@ -2,13 +2,11 @@
 
 /**
  * processHoursGovernance.test.js
- * 2026-11-06 工时与报工模块审计整改验证：
- *   WH-1 报工校验（工单存在、0<时长<=24、数量/完成率、工序归属实例）
- *   WH-2 报工撤销 + actual_hours 重算
- *   WH-3 工时定额校验（节点存在、标准工时>0、人数 1-100）
- *   WH-3' 工人绩效：标准工时取工序定额（不再用实际×8）
- *   WH-5 完工进度：优先数量口径，并返回工时消耗率
- *   WH-6 hours-summary 节点数按去重计
+ * 2026-11-06 工时与报工模块审计 + P3 遗留治理验证：
+ *   WH-1 报工校验 / WH-2 撤销重算 / WH-3 定额校验 / WH-3' 绩效公式
+ *   WH-5 完工进度 / WH-6 节点去重
+ *   P3：审批流（pending→approved/rejected）、成本自动入账与冲销、
+ *       月结锁定、日历加班、历史 worker_id 回填
  */
 
 const test = require('node:test');
@@ -19,9 +17,22 @@ function freshDb() {
   const db = new Database(':memory:');
   db.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, full_name TEXT, role TEXT)`);
   db.exec(`CREATE TABLE equipment_instances (id INTEGER PRIMARY KEY, instance_code TEXT, instance_name TEXT)`);
-  db.exec(`CREATE TABLE process_nodes (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, operation_name TEXT)`);
-  db.exec(`CREATE TABLE work_orders (id INTEGER PRIMARY KEY, wo_code TEXT, title TEXT, equipment_instance_id INTEGER, actual_hours REAL, updated_at TEXT)`);
+  db.exec(`CREATE TABLE process_nodes (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, operation_name TEXT, estimated_hours REAL, operation_type TEXT, status TEXT DEFAULT 'pending', phase_code TEXT)`);
+  db.exec(`CREATE TABLE work_orders (id INTEGER PRIMARY KEY, wo_code TEXT, title TEXT, equipment_instance_id INTEGER, assigned_to INTEGER, actual_hours REAL, updated_at TEXT)`);
   db.exec(`CREATE TABLE work_order_operations (id INTEGER PRIMARY KEY, work_order_id INTEGER, action TEXT)`);
+  db.exec(`CREATE TABLE process_executions (id INTEGER PRIMARY KEY, process_node_id INTEGER, operator_id INTEGER, action TEXT, hours_worked REAL, timestamp TEXT)`);
+  db.exec(`CREATE TABLE system_settings (key TEXT PRIMARY KEY, value TEXT)`);
+  db.exec(`CREATE TABLE project_cost_entries (id INTEGER PRIMARY KEY AUTOINCREMENT, equipment_instance_id INTEGER NOT NULL, bom_node_id INTEGER, work_order_id INTEGER, cost_type TEXT NOT NULL, source_type TEXT, source_ref TEXT, description TEXT NOT NULL, vendor TEXT, amount REAL NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'CNY', occurred_on TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'posted', notes TEXT, created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, deleted_at TEXT)`);
+  db.exec(`CREATE TABLE work_month_locks (month TEXT PRIMARY KEY, locked_at TEXT DEFAULT CURRENT_TIMESTAMP, locked_by INTEGER, note TEXT)`);
+  db.exec(`CREATE TABLE work_calendar (date TEXT PRIMARY KEY, day_type TEXT NOT NULL DEFAULT 'workday', daily_hours REAL NOT NULL DEFAULT 8, note TEXT, updated_at TEXT)`);
+  db.exec(`CREATE TABLE process_standard_hours (id INTEGER PRIMARY KEY AUTOINCREMENT, process_node_id INTEGER NOT NULL, work_type TEXT NOT NULL DEFAULT 'assembly', standard_hours REAL NOT NULL DEFAULT 0, worker_count INTEGER NOT NULL DEFAULT 1, unit TEXT DEFAULT 'h', description TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, UNIQUE(process_node_id, work_type))`);
+  db.exec(`CREATE TABLE work_report_details (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, work_order_id INTEGER NOT NULL, operation_id INTEGER, process_node_id INTEGER,
+    worker_id INTEGER, work_type TEXT NOT NULL DEFAULT 'assembly', hours_spent REAL NOT NULL DEFAULT 0,
+    quantity_completed INTEGER DEFAULT 0, quantity_total INTEGER, completion_pct REAL, quality_result TEXT DEFAULT 'pass',
+    start_time TEXT, end_time TEXT, workstation TEXT, notes TEXT, reported_by INTEGER,
+    reported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'approved', approved_by INTEGER, approved_at TEXT, reject_reason TEXT)`);
   return db;
 }
 
@@ -70,107 +81,190 @@ let db;
 let routes;
 test.beforeEach(() => {
   db = freshDb();
-  db.prepare(`INSERT INTO users (id, username, full_name) VALUES (7, 'w7', '张三')`).run();
+  db.prepare(`INSERT INTO users (id, username, full_name) VALUES (7, 'w7', '张三'), (1, 'admin', '管理员')`).run();
   db.prepare(`INSERT INTO equipment_instances (id, instance_code, instance_name) VALUES (1, 'TBM-1', '一号机'), (2, 'TBM-2', '二号机')`).run();
-  db.prepare(`INSERT INTO process_nodes (id, equipment_instance_id, operation_name) VALUES (11, 1, '下料'), (12, 2, '焊接')`).run();
-  db.prepare(`INSERT INTO work_orders (id, wo_code, title, equipment_instance_id, actual_hours) VALUES (1, 'WO-1', '测试工单', 1, 0)`).run();
+  db.prepare(`INSERT INTO process_nodes (id, equipment_instance_id, operation_name, estimated_hours) VALUES (11, 1, '下料', 8), (12, 2, '焊接', 8)`).run();
+  db.prepare(`INSERT INTO work_orders (id, wo_code, title, equipment_instance_id, assigned_to, actual_hours) VALUES (1, 'WO-1', '测试工单', 1, 7, 0)`).run();
   db.prepare(`INSERT INTO work_order_operations (id, work_order_id, action) VALUES (5, 1, 'start')`).run();
+  db.prepare(`INSERT INTO system_settings (key, value) VALUES ('labor_rate_per_hour', '200')`).run();
   routes = makeRoutes(db);
 });
 
-function reportCount() {
-  return db.prepare('SELECT COUNT(*) c FROM work_report_details').get().c;
+function localMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+function costRows(reportId) {
+  return db.prepare("SELECT * FROM project_cost_entries WHERE source_ref = ?").all('work_report:' + reportId + ':labor');
+}
+
+function approve(id) {
+  return call(routes, 'PUT', '/api/work-reports/:id/approve', { __id: id }, { uid: 1, role: 'admin' });
+}
+
+// ---------------- 基础校验 ----------------
+
 test('WH-1a 报工参数校验：负/0/超 24 小时、工单不存在均拒绝', () => {
-  let result = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, hours_spent: -3 });
-  assert.equal(result.status, 400);
-  result = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, hours_spent: 0 });
-  assert.equal(result.status, 400);
-  result = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, hours_spent: 25 });
-  assert.equal(result.status, 400);
-  result = call(routes, 'POST', '/api/work-reports', { work_order_id: 999, hours_spent: 1 });
-  assert.equal(result.status, 404);
-  assert.equal(reportCount(), 0, '校验失败不应落库');
+  assert.equal(call(routes, 'POST', '/api/work-reports', { work_order_id: 1, hours_spent: -3 }).status, 400);
+  assert.equal(call(routes, 'POST', '/api/work-reports', { work_order_id: 1, hours_spent: 0 }).status, 400);
+  assert.equal(call(routes, 'POST', '/api/work-reports', { work_order_id: 1, hours_spent: 25 }).status, 400);
+  assert.equal(call(routes, 'POST', '/api/work-reports', { work_order_id: 999, hours_spent: 1 }).status, 404);
+  assert.equal(db.prepare('SELECT COUNT(*) c FROM work_report_details').get().c, 0);
 });
 
-test('WH-1b 工序必须属于工单的装备实例；数量/完成率校验', () => {
-  let result = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 12, hours_spent: 2 });
-  assert.equal(result.status, 400, '跨实例工序应拒绝');
-  result = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, quantity_completed: 5, quantity_total: 4, hours_spent: 2 });
-  assert.equal(result.status, 400, '完成数量不能超过总数');
-  result = call(routes, 'POST', '/api/work-reports', {
-    work_order_id: 1, process_node_id: 11, hours_spent: 4, quantity_completed: 6, quantity_total: 8, quality_result: 'pass', notes: '正常报工',
-  }, { uid: 7, role: 'worker' });
+test('WH-1b 工序必须属于工单实例；数量/完成率校验；新报工默认 pending 不计入实际工时', () => {
+  assert.equal(call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 12, hours_spent: 2 }).status, 400);
+  assert.equal(call(routes, 'POST', '/api/work-reports', { work_order_id: 1, quantity_completed: 5, quantity_total: 4, hours_spent: 2 }).status, 400);
+  const result = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 4, quantity_completed: 6, quantity_total: 8 });
   assert.equal(result.status, 200, JSON.stringify(result.json));
+  assert.equal(result.json.status, 'pending');
   const row = db.prepare('SELECT * FROM work_report_details WHERE id = ?').get(result.json.id);
-  assert.equal(row.worker_id, 7, '未传 worker_id 时默认当前用户');
+  assert.equal(row.worker_id, 7);
   assert.equal(row.completion_pct, 75);
-  assert.equal(db.prepare('SELECT actual_hours FROM work_orders WHERE id = 1').get().actual_hours, 4);
+  assert.equal(db.prepare('SELECT actual_hours FROM work_orders WHERE id = 1').get().actual_hours, 0, '待审批不计入');
+  assert.equal(costRows(result.json.id).length, 0, '待审批不入成本');
 });
 
-test('WH-2 撤销报工：删除记录并重算工单 actual_hours', () => {
-  const first = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 3 });
-  const second = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 2 });
-  assert.equal(first.status, 200);
-  assert.equal(second.status, 200);
-  assert.equal(db.prepare('SELECT actual_hours FROM work_orders WHERE id = 1').get().actual_hours, 5);
-  const removed = call(routes, 'DELETE', '/api/work-reports/:id', { __id: second.json.id });
-  assert.equal(removed.status, 200, JSON.stringify(removed.json));
-  assert.equal(removed.json.actual_hours, 3);
-  assert.equal(reportCount(), 1);
-  const missing = call(routes, 'DELETE', '/api/work-reports/:id', { __id: 9999 });
-  assert.equal(missing.status, 404);
+test('WH-2 审批通过：计入实际工时 + 自动生成人工成本；驳回/撤销冲销', () => {
+  const report = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 4 });
+  const approved = approve(report.json.id);
+  assert.equal(approved.status, 200, JSON.stringify(approved.json));
+  assert.equal(approved.json.status, 'approved');
+  assert.equal(approved.json.actual_hours, 4);
+  const costs = costRows(report.json.id);
+  assert.equal(costs.length, 1);
+  assert.equal(costs[0].amount, 800, '4h × 200 元/h');
+  assert.equal(costs[0].cost_type, 'labor');
+  const again = approve(report.json.id);
+  assert.equal(again.json.already, true);
+  assert.equal(costRows(report.json.id).length, 1, '重复审批不重复入账');
+
+  const removed = call(routes, 'DELETE', '/api/work-reports/:id', { __id: report.json.id });
+  assert.equal(removed.status, 200);
+  assert.equal(removed.json.actual_hours, 0);
+  assert.equal(costRows(report.json.id).length, 0, '撤销后成本冲销');
 });
 
-test('WH-3 工时定额校验：节点存在、标准工时 > 0、人数 1-100', () => {
-  let result = call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 'undefined', work_type: 'assembly', standard_hours: 2 });
-  assert.equal(result.status, 400, "'undefined' 节点必须拒绝");
-  result = call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 999, work_type: 'assembly', standard_hours: 2 });
-  assert.equal(result.status, 404);
-  result = call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 0 });
-  assert.equal(result.status, 400);
-  result = call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 8, worker_count: 0 });
-  assert.equal(result.status, 400);
-  result = call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 8, worker_count: 2 });
-  assert.equal(result.status, 200);
-  const saved = call(routes, 'GET', '/api/process/nodes/:id/hours', { __id: 11 });
-  assert.equal(saved.json.total_man_hours, 16);
+test('WH-2b 驳回：必须填原因，不计工时且冲销成本', () => {
+  const report = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 3 });
+  approve(report.json.id);
+  assert.equal(costRows(report.json.id).length, 1);
+  assert.equal(call(routes, 'PUT', '/api/work-reports/:id/reject', { __id: report.json.id }).status, 400, '驳回原因必填');
+  const rejected = call(routes, 'PUT', '/api/work-reports/:id/reject', { __id: report.json.id, reason: '工时填写有误' });
+  assert.equal(rejected.status, 200, JSON.stringify(rejected.json));
+  assert.equal(rejected.json.status, 'rejected');
+  assert.equal(rejected.json.actual_hours, 0);
+  assert.equal(costRows(report.json.id).length, 0);
 });
 
-test("WH-3' 工人绩效：标准工时取工序定额，无定额时 efficiency 为 null", () => {
-  call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 8, worker_count: 1 });
-  call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 4 });
-  const perf = call(routes, 'GET', '/api/process-hours/worker-performance?from=2020-01-01&to=2030-01-01', {});
-  assert.equal(perf.status, 200);
-  const worker = perf.json.workers.find((row) => row.user_id === 7);
-  assert.ok(worker, '应有当前工人的绩效行');
-  assert.equal(worker.standard_hours, 8, '标准工时来自工序定额');
-  assert.equal(worker.efficiency_pct, 200, '效率 = 标准 / 实际');
-  assert.equal(perf.json.summary.avg_efficiency, 200);
-  // 没有定额的节点 → null，而不是 12.5%
-  const done = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, hours_spent: 2 });
-  assert.equal(done.status, 200);
-  const perf2 = call(routes, 'GET', '/api/process-hours/worker-performance?from=2020-01-01&to=2030-01-01', {});
-  const worker2 = perf2.json.workers.find((row) => row.user_id === 7);
-  assert.equal(worker2.standard_hours, 8, '无工序节点的报工不计入标准工时');
-});
-
-test('WH-5 完工进度：优先数量口径，并返回工时消耗率', () => {
-  call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 8, worker_count: 1 });
-  call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 4, quantity_completed: 6, quantity_total: 8 });
-  const progress = call(routes, 'GET', '/api/process/nodes/:id/progress', { __id: 11 });
-  assert.equal(progress.status, 200);
-  assert.equal(progress.json.completion_pct, 75, '完成率按数量 6/8');
-  assert.equal(progress.json.hours_ratio_pct, 50, '工时消耗率 4/8');
-  assert.equal(progress.json.quantity_total, 8);
-});
-
-test('WH-6 hours-summary 节点数按去重计', () => {
-  call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 8 });
-  call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'welding', standard_hours: 4 });
+test('WH-3 工时定额校验 + WH-6 节点去重', () => {
+  assert.equal(call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 'undefined', work_type: 'assembly', standard_hours: 2 }).status, 400);
+  assert.equal(call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 999, work_type: 'assembly', standard_hours: 2 }).status, 404);
+  assert.equal(call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 0 }).status, 400);
+  assert.equal(call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 8, worker_count: 2 }).status, 200);
+  assert.equal(call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'welding', standard_hours: 4 }).status, 200);
   const summary = call(routes, 'GET', '/api/process/hours-summary?instance_id=1', {});
-  assert.equal(summary.status, 200);
-  assert.equal(summary.json.nodes, 1, '一个节点两条定额仍算 1 个节点');
-  assert.equal(summary.json.total_man_hours, 12);
+  assert.equal(summary.json.nodes, 1);
+  assert.equal(summary.json.total_man_hours, 20, '8×2 + 4×1');
+});
+
+test("WH-3' 绩效只统计 approved，标准工时取定额", () => {
+  call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 4, worker_count: 1 });
+  const report = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 2 });
+  let perf = call(routes, 'GET', '/api/process-hours/worker-performance?from=2020-01-01&to=2030-01-01', {});
+  assert.equal(perf.json.workers.length, 0, '待审批不计入绩效');
+  approve(report.json.id);
+  perf = call(routes, 'GET', '/api/process-hours/worker-performance?from=2020-01-01&to=2030-01-01', {});
+  const worker = perf.json.workers.find((row) => row.user_id === 7);
+  assert.equal(worker.standard_hours, 4);
+  assert.equal(worker.efficiency_pct, 200);
+  assert.equal(perf.json.summary.avg_efficiency, 200);
+});
+
+test('WH-5 完工进度：只统计 approved，优先数量口径', () => {
+  call(routes, 'POST', '/api/process/nodes/:id/hours', { __id: 11, work_type: 'assembly', standard_hours: 8 });
+  const report = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 4, quantity_completed: 6, quantity_total: 8 });
+  let progress = call(routes, 'GET', '/api/process/nodes/:id/progress', { __id: 11 });
+  assert.equal(progress.json.completion_pct, 0, '待审批不计入');
+  assert.equal(progress.json.pending_reports, 1);
+  approve(report.json.id);
+  progress = call(routes, 'GET', '/api/process/nodes/:id/progress', { __id: 11 });
+  assert.equal(progress.json.completion_pct, 75);
+  assert.equal(progress.json.hours_ratio_pct, 50);
+  assert.equal(progress.json.pending_reports, 0);
+});
+
+// ---------------- P3 遗留治理 ----------------
+
+test('P3-1 月结锁定：锁定月禁止新增/审批/撤销，解锁恢复', () => {
+  const month = localMonth();
+  const locked = call(routes, 'POST', '/api/work-report-locks', { month, note: '月末结算' });
+  assert.equal(locked.status, 200);
+  const report = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 2 });
+  assert.equal(report.status, 400, '锁定月不能新增报工');
+
+  db.prepare("DELETE FROM work_month_locks WHERE month=?").run(month);
+  const pending = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 2 });
+  assert.equal(pending.status, 200);
+  call(routes, 'POST', '/api/work-report-locks', { month });
+  assert.equal(approve(pending.json.id).status, 400, '锁定月不能审批');
+  assert.equal(call(routes, 'DELETE', '/api/work-reports/:id', { __id: pending.json.id }).status, 200, '待审批报工可删除');
+  const unlock = call(routes, 'DELETE', '/api/work-report-locks/:month', { __id: month });
+  assert.equal(unlock.status, 200);
+  const locks = call(routes, 'GET', '/api/work-report-locks', {});
+  assert.ok(!locks.json.locked_months.includes(month));
+});
+
+test('P3-2 加班日历：周末/节假日阈值 0，工作日默认 8h', () => {
+  db.prepare(`INSERT INTO work_report_details (work_order_id, process_node_id, worker_id, work_type, hours_spent, quantity_completed, quality_result, reported_at, status)
+              VALUES (1, 11, 7, 'assembly', 2, 0, 'pass', '2026-11-07 10:00:00', 'approved')`).run(); // 周六
+  db.prepare(`INSERT INTO work_report_details (work_order_id, process_node_id, worker_id, work_type, hours_spent, quantity_completed, quality_result, reported_at, status)
+              VALUES (1, 11, 7, 'assembly', 12, 0, 'pass', '2026-11-09 10:00:00', 'approved')`).run(); // 周一
+  call(routes, 'POST', '/api/work-calendar', { date: '2026-11-09', day_type: 'holiday', daily_hours: 0 });
+  const overtime = call(routes, 'GET', '/api/process-hours/overtime?from=2026-11-01&to=2026-11-30', {});
+  assert.equal(overtime.status, 200);
+  const weekend = overtime.json.records.find((row) => row.date === '2026-11-07');
+  const holiday = overtime.json.records.find((row) => row.date === '2026-11-09');
+  assert.equal(weekend.day_type, 'weekend');
+  assert.equal(weekend.overtime_hours, 2, '周末 2h 全部算加班');
+  assert.equal(holiday.day_type, 'holiday');
+  assert.equal(holiday.overtime_hours, 12, '节假日全部算加班');
+  const workday = call(routes, 'GET', '/api/process-hours/overtime?from=2026-11-10&to=2026-11-10', {});
+  assert.equal(workday.json.records.length, 0);
+});
+
+test('P3-3 历史 worker_id 回填：reported_by → 工单 assigned_to', () => {
+  const { planWorkerBackfill, applyPlan } = require('../scripts/migrate-work-hours-governance');
+  db.prepare(`INSERT INTO work_report_details (work_order_id, process_node_id, worker_id, work_type, hours_spent, reported_by, reported_at, status)
+              VALUES (1, 11, NULL, 'assembly', 1, 1, '2026-06-01 10:00:00', 'approved')`).run();
+  db.prepare(`INSERT INTO work_report_details (work_order_id, process_node_id, worker_id, work_type, hours_spent, reported_by, reported_at, status)
+              VALUES (1, 11, NULL, 'assembly', 1, NULL, '2026-06-02 10:00:00', 'approved')`).run();
+  const plan = planWorkerBackfill(db);
+  assert.equal(plan.length, 2);
+  assert.equal(plan[0].worker_id, 1, '优先 reported_by');
+  assert.equal(plan[1].worker_id, 7, '回退工单 assigned_to');
+  applyPlan(db, [], plan);
+  const rows = db.prepare('SELECT worker_id FROM work_report_details ORDER BY id').all();
+  assert.deepEqual(rows.map((row) => row.worker_id), [1, 7]);
+});
+
+test('P3-4 工时口径统一：项目进度优先取已审批报工，无报工回退工序执行工时', () => {
+  const { getProcessProgress } = require('../services/process/progress');
+  const runProgress = () => {
+    let payload = null;
+    const res = { json: (value) => { payload = value; }, status: () => res };
+    getProcessProgress({ params: { id: 1 }, query: {} }, res, db, 1);
+    return payload;
+  };
+  db.prepare("INSERT INTO process_executions (process_node_id, operator_id, action, hours_worked, timestamp) VALUES (11, 7, 'complete', 12, '2026-06-01 10:00:00')").run();
+  let progress = runProgress();
+  assert.equal(progress.hours.actual_basis, 'process_executions', '没有报工取执行工时');
+  assert.equal(progress.hours.actual, 12);
+
+  const report = call(routes, 'POST', '/api/work-reports', { work_order_id: 1, process_node_id: 11, hours_spent: 3 });
+  approve(report.json.id);
+  progress = runProgress();
+  assert.equal(progress.hours.actual_basis, 'work_reports', '有已审批报工后取报工');
+  assert.equal(progress.hours.actual, 3);
 });

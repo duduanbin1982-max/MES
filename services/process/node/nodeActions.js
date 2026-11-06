@@ -89,14 +89,23 @@ app.put('/api/process_nodes/:id/assign', wrap((req, res) => {
 app.get('/api/process_nodes/:id/efficiency', wrap((req, res) => {
   const node = get( db, 'SELECT id, operation_name, estimated_hours FROM process_nodes WHERE id = ?', req.params.id);
   if (!node) return res.status(404).json({ error: 'not found' });
-  const actual = get( db, "SELECT COALESCE(SUM(hours_worked), 0) h FROM process_executions WHERE process_node_id = ? AND action IN ('start', 'complete')", req.params.id);
+  // 2026-11-06（WH-9）：实际工时优先取已审批报工，没有报工数据时回退工序执行工时
+  const reportStatusAware = (() => {
+    try { return db.prepare("PRAGMA table_info(work_report_details)").all().some((column) => column.name === "status"); }
+    catch (_error) { return false; }
+  })();
+  const reportActual = get(db, "SELECT SUM(hours_spent) AS h FROM work_report_details WHERE process_node_id = ?" + (reportStatusAware ? " AND status='approved'" : ""), [req.params.id]);
+  const execActual = get(db, "SELECT COALESCE(SUM(hours_worked), 0) h FROM process_executions WHERE process_node_id = ? AND action IN ('start', 'complete')", [req.params.id]);
+  const actualHours = reportActual && reportActual.h !== null && reportActual.h !== undefined ? Number(reportActual.h) : Number(execActual && execActual.h || 0);
+  const actualBasis = reportActual && reportActual.h !== null && reportActual.h !== undefined ? "work_reports" : "process_executions";
   res.json({
     node_id: node.id,
     operation_name: node.operation_name,
     estimated_hours: node.estimated_hours || 0,
-    actual_hours: actual?.h || 0,
-    efficiency_pct: node.estimated_hours ? Math.round((node.estimated_hours / (actual?.h || 1)) * 100) : 0,
-    variance: (actual?.h || 0) - (node.estimated_hours || 0)
+    actual_hours: actualHours,
+    actual_basis: actualBasis,
+    efficiency_pct: node.estimated_hours ? Math.round((node.estimated_hours / (actualHours || 1)) * 100) : 0,
+    variance: actualHours - (node.estimated_hours || 0)
   });
 }));
 

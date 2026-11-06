@@ -1,9 +1,10 @@
 "use strict";
 // services/processHours/analyticsRoutes.js
-// 2026-11-06 审计整改（WH-3/WH-4/WH-8）：
-//   · 工人效率：标准工时改为取工序定额（原实现用实际工时×8，导致效率恒为 12.5%）
-//   · 默认日期区间用本地日期（原 toISOString 按 UTC）
-//   · 加班阈值可配置（默认 8h）
+// 2026-11-06 第二轮整改：
+//   · 统计只计入 status='approved' 的报工（审批流）
+//   · 标准工时取工序定额（原"实际×8"导致效率恒 12.5%）
+//   · 默认日期区间用本地日期
+//   · 加班按工时日历（work_calendar：工作日/周末/节假日 + 标准工时）计算
 const { wrap } = require("../../middleware/asyncHandler");
 const { todaySqlDate } = require("../../shared/datetime");
 
@@ -13,10 +14,44 @@ function shiftDate(dateStr, days) {
   return base.toISOString().slice(0, 10);
 }
 
+function hasColumn(db, table, column) {
+  try {
+    return db.prepare(`PRAGMA table_info(${table})`).all().some((item) => item.name === column);
+  } catch (_error) {
+    return false;
+  }
+}
+
+function approvedClause(db) {
+  return hasColumn(db, "work_report_details", "status") ? " AND wr.status = 'approved'" : "";
+}
+
+function calendarMap(db, dateFrom, dateTo) {
+  const map = new Map();
+  try {
+    const rows = db.prepare("SELECT date, day_type, daily_hours FROM work_calendar WHERE date >= ? AND date <= ?").all(dateFrom, dateTo);
+    for (const row of rows) map.set(row.date, row);
+  } catch (_error) { /* 老库没有日历表：按默认工作制处理 */ }
+  return map;
+}
+
+function dayTypeOf(dateStr, calendarEntry) {
+  if (calendarEntry) return calendarEntry.day_type;
+  const weekday = new Date(dateStr + "T00:00:00Z").getUTCDay();
+  return weekday === 0 || weekday === 6 ? "weekend" : "workday";
+}
+
+function standardHoursOf(dateStr, calendarEntry, workdayHours) {
+  if (calendarEntry) return Number(calendarEntry.daily_hours);
+  const type = dayTypeOf(dateStr, calendarEntry);
+  return type === "workday" ? workdayHours : 0;
+}
+
 function registerWorkerPerformance(app, db) {
   const all = (sql, params) => db.prepare(sql).all(...(params || []));
   const get = (sql, params) => db.prepare(sql).get(...(params || []));
-  const OVERTIME_THRESHOLD = Math.max(1, Number(process.env.OVERTIME_DAILY_HOURS) || 8);
+  const WORKDAY_HOURS = Math.max(1, Number(process.env.OVERTIME_DAILY_HOURS) || 8);
+  const filter = approvedClause(db);
 
   app.get("/api/process-hours/worker-performance", wrap((req, res) => {
     const { from, to } = req.query;
@@ -30,13 +65,13 @@ function registerWorkerPerformance(app, db) {
              COUNT(*) AS total_reports
       FROM work_report_details wr
       LEFT JOIN users u ON wr.worker_id = u.id
-      WHERE wr.reported_at >= ? AND wr.reported_at <= ? AND wr.worker_id IS NOT NULL
+      WHERE wr.reported_at >= ? AND wr.reported_at <= ? AND wr.worker_id IS NOT NULL${filter}
       GROUP BY wr.worker_id
       ORDER BY total_hours DESC
     `, [`${dateFrom} 00:00:00`, `${dateTo} 23:59:59`]);
 
     const workers = rows.map((row) => {
-      const nodeIds = all("SELECT DISTINCT process_node_id FROM work_report_details WHERE worker_id=? AND process_node_id IS NOT NULL AND reported_at >= ? AND reported_at <= ?",
+      const nodeIds = all(`SELECT DISTINCT process_node_id FROM work_report_details wr WHERE wr.worker_id=? AND wr.process_node_id IS NOT NULL AND wr.reported_at >= ? AND wr.reported_at <= ?${filter}`,
         [row.worker_id, `${dateFrom} 00:00:00`, `${dateTo} 23:59:59`]).map((item) => item.process_node_id);
       let standardManHours = 0;
       if (nodeIds.length) {
@@ -50,7 +85,6 @@ function registerWorkerPerformance(app, db) {
         full_name: row.full_name || `User #${row.worker_id}`,
         total_hours: Math.round(totalHours * 100) / 100,
         standard_hours: standardManHours > 0 ? Math.round(standardManHours * 100) / 100 : null,
-        // 效率 = 标准工时 / 实际工时 × 100（没有定额时为 null，而不是给一个假的百分比）
         efficiency_pct: standardManHours > 0 && totalHours > 0 ? Math.round((standardManHours / totalHours) * 10000) / 100 : null,
         tasks_completed: row.tasks_completed,
         avg_quality_score: row.total_reports > 0 ? Math.round((row.pass_count / row.total_reports) * 10000) / 100 : 0,
@@ -77,19 +111,30 @@ function registerWorkerPerformance(app, db) {
              SUM(wr.hours_spent) AS daily_hours
       FROM work_report_details wr
       LEFT JOIN users u ON wr.worker_id = u.id
-      WHERE wr.reported_at >= ? AND wr.reported_at <= ? AND wr.worker_id IS NOT NULL
+      WHERE wr.reported_at >= ? AND wr.reported_at <= ? AND wr.worker_id IS NOT NULL${filter}
       GROUP BY wr.worker_id, date(wr.reported_at)
-      HAVING daily_hours > ?
       ORDER BY work_date DESC, daily_hours DESC
-    `, [`${dateFrom} 00:00:00`, `${dateTo} 23:59:59`, OVERTIME_THRESHOLD]);
-    const records = rows.map((row) => ({
-      user_id: row.worker_id,
-      full_name: row.full_name || `User #${row.worker_id}`,
-      date: row.work_date,
-      daily_hours: Math.round(row.daily_hours * 100) / 100,
-      overtime_hours: Math.round((row.daily_hours - OVERTIME_THRESHOLD) * 100) / 100,
-      overtime_pct: Math.round(((row.daily_hours - OVERTIME_THRESHOLD) / OVERTIME_THRESHOLD) * 10000) / 100,
-    }));
+    `, [`${dateFrom} 00:00:00`, `${dateTo} 23:59:59`]);
+    const calendar = calendarMap(db, dateFrom, dateTo);
+    const records = [];
+    for (const row of rows) {
+      const entry = calendar.get(row.work_date);
+      const dayType = dayTypeOf(row.work_date, entry);
+      const threshold = standardHoursOf(row.work_date, entry, WORKDAY_HOURS);
+      const dailyHours = Number(row.daily_hours) || 0;
+      const overtimeHours = Math.max(0, Math.round((dailyHours - threshold) * 100) / 100);
+      if (overtimeHours <= 0) continue;
+      records.push({
+        user_id: row.worker_id,
+        full_name: row.full_name || `User #${row.worker_id}`,
+        date: row.work_date,
+        day_type: dayType,
+        standard_hours: threshold,
+        daily_hours: Math.round(dailyHours * 100) / 100,
+        overtime_hours: overtimeHours,
+        overtime_pct: threshold > 0 ? Math.round((overtimeHours / threshold) * 10000) / 100 : 100,
+      });
+    }
     let totalOvertimeHours = 0;
     const byWorker = {};
     for (const record of records) {
@@ -102,7 +147,7 @@ function registerWorkerPerformance(app, db) {
     }
     res.json({
       period: { from: dateFrom, to: dateTo },
-      daily_threshold_hours: OVERTIME_THRESHOLD,
+      workday_hours: WORKDAY_HOURS,
       overtime_days: records.length,
       total_overtime_hours: Math.round(totalOvertimeHours * 100) / 100,
       by_worker: Object.values(byWorker).sort((left, right) => right.overtime_hours - left.overtime_hours),
@@ -120,7 +165,7 @@ function registerWorkerPerformance(app, db) {
              COUNT(DISTINCT wr.work_order_id) AS wo_count
       FROM work_report_details wr
       LEFT JOIN users u ON wr.worker_id = u.id
-      WHERE date(wr.reported_at) = ?
+      WHERE date(wr.reported_at) = ?${filter}
       GROUP BY wr.worker_id
       ORDER BY total_hours DESC
     `, [date]);
@@ -130,7 +175,7 @@ function registerWorkerPerformance(app, db) {
       FROM work_report_details wr
       JOIN work_orders wo ON wr.work_order_id = wo.id
       LEFT JOIN equipment_instances ei ON wo.equipment_instance_id = ei.id
-      WHERE date(wr.reported_at) = ?
+      WHERE date(wr.reported_at) = ?${filter}
       ORDER BY wo.id
     `, [date]);
     const instanceIds = [...new Set(workOrders.map((item) => item.equipment_instance_id).filter(Boolean))];

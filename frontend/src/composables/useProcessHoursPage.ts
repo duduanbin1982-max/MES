@@ -36,6 +36,58 @@ export function useProcessHoursPage() {
   const reportForm = reactive<{ work_order_id: number | null; process_node_id: number | null; hours_spent: number; quantity_completed: number; quality_result: string; notes: string }>({ work_order_id: null, process_node_id: null, hours_spent: 0, quantity_completed: 0, quality_result: 'pass', notes: '' })
 
   const canVoid = computed(() => Boolean(auth.hasPerm && auth.hasPerm('work_report:write')))
+  const canApprove = computed(() => Boolean(auth.hasPerm && auth.hasPerm('work_report:approve')))
+  const monthLock = ref<{ locked: boolean; month: string } | null>(null)
+  const loadMonthLock = async () => {
+    try {
+      const result: any = await Api.get('/work-report-locks')
+      const month = localToday().slice(0, 7)
+      monthLock.value = { locked: (result.locked_months || []).includes(month), month }
+    } catch (_error) { monthLock.value = null }
+  }
+  const lockCurrentMonth = async () => {
+    const month = localToday().slice(0, 7)
+    try {
+      await Api.post('/work-report-locks', { month })
+      ElMessage.success('已锁定 ' + month + '，该月报工不可再新增/审批/撤销')
+      await loadMonthLock()
+    } catch (error: any) { ElMessage.error(error?.response?.data?.message || '锁定失败') }
+  }
+  const unlockCurrentMonth = async () => {
+    const month = localToday().slice(0, 7)
+    try {
+      await ElMessageBox.confirm('解锁 ' + month + ' 后允许继续改报工，确认?', '解锁月结', { type: 'warning' })
+      await Api.del('/work-report-locks/' + month)
+      ElMessage.success('已解锁 ' + month)
+      await loadMonthLock()
+    } catch (error: any) {
+      if (error === 'cancel' || error === 'close') return
+      ElMessage.error(error?.response?.data?.message || '解锁失败')
+    }
+  }
+  const approveReport = async (row: any) => {
+    try {
+      const result: any = await Api.put('/work-reports/' + row.id + '/approve')
+      const cost = result?.cost_entry
+      ElMessage.success('审批通过，工单实际工时 ' + (result?.actual_hours ?? 0) + 'h'
+        + (cost && cost.amount ? '，人工成本 +' + cost.amount + ' 元' : ''))
+      await loadReports()
+      await loadDailySummary()
+    } catch (error: any) { ElMessage.error(error?.response?.data?.message || '审批失败') }
+  }
+  const rejectReport = async (row: any) => {
+    try {
+      const { value } = await ElMessageBox.prompt('请填写驳回原因', '驳回报工', { inputPlaceholder: '例如：工时填写有误' })
+      if (!value || !String(value).trim()) return ElMessage.warning('驳回原因必填')
+      await Api.put('/work-reports/' + row.id + '/reject', { reason: String(value).trim() })
+      ElMessage.success('已驳回')
+      await loadReports()
+      await loadDailySummary()
+    } catch (error: any) {
+      if (error === 'cancel' || error === 'close') return
+      ElMessage.error(error?.response?.data?.message || '驳回失败')
+    }
+  }
   const voidReport = async (row: any) => {
     try {
       await ElMessageBox.confirm(`撤销报工 #${row.id}（${row.wo_code || ''} / ${row.hours_spent}h）? 撤销后工单实际工时会重算。`, '撤销报工', { type: 'warning' })
@@ -231,6 +283,7 @@ export function useProcessHoursPage() {
   onMounted(() => {
     loadCommonData()
     loadDailySummary()
+    loadMonthLock()
   })
 
   return {
@@ -249,6 +302,13 @@ export function useProcessHoursPage() {
     reportFilter,
     canVoid,
     voidReport,
+    canApprove,
+    monthLock,
+    loadMonthLock,
+    lockCurrentMonth,
+    unlockCurrentMonth,
+    approveReport,
+    rejectReport,
     showReportDialog,
     reportSaving,
     reportForm,

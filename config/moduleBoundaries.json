@@ -13,6 +13,12 @@
   ],
   "allowedWrites": [
     {
+      "from": "processHoursService",
+      "to": "cost",
+      "table": "project_cost_entries",
+      "reason": "报工审批通过后按工时×人工费率自动入账人工成本；驳回/撤销时按 source_ref 冲销（2026-11-06 工时审计 WH-11/成本联动）"
+    },
+    {
       "from": "criticalPartsService",
       "to": "tbmAdvanced",
       "table": "critical_part_certificates",
