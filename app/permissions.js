@@ -8,6 +8,7 @@
 const PERMISSIONS = {
   // 现场/仓库
   'shopfloor:read': '查看车间工作台',
+  'shopfloor:write': '车间工作台操作（扫码/领料/质检）',
   'inventory:read': '查看库存与库存流水',
   'inventory:write': '库存收发料/调拨/领退料',
   'pick:read': '查看齐套/领退料清单',
@@ -76,6 +77,7 @@ const DEFAULT_ROLE_PERMISSIONS = {
     'process:write', 'quality:read', 'quality:write',
     'material:read', 'report:read', 'delivery:read', 'delivery:write',
     'work_report:read', 'work_report:write', 'work_report:approve',
+    'shopfloor:write',
   ],
   production_supervisor: [
     'work_order:read', 'work_order:write', 'work_order:admin',
@@ -94,16 +96,19 @@ const DEFAULT_ROLE_PERMISSIONS = {
     'quality:read', 'quality:write', 'work_order:read',
     'material:read', 'document:read', 'report:read',
     'delivery:read', 'work_report:read',
+    'shopfloor:write',
   ],
   worker: [
     'shopfloor:read', 'work_order:read', 'quality:read',
     'document:read', 'pick:read', 'delivery:read',
     'work_report:read', 'work_report:write',
+    'shopfloor:write', 'pick:write',
   ],
   welder: [
     'work_order:read', 'quality:read', 'quality:write',
     'shopfloor:read', 'delivery:read',
     'work_report:read', 'work_report:write',
+    'shopfloor:write', 'pick:write',
   ],
   sales: [
     'equipment:read', 'document:read', 'report:read',

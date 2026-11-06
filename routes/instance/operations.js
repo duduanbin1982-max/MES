@@ -10,8 +10,9 @@ const { getProcessProgress } = require('../../services/process/progress');
 
 function register(app, db) {
   // dashboard/alerts 已迁移到 services/dashboardAlerts.js (标准 register 模式)
-  app.get('/api/scan/lookup', requirePermission('equipment:read'), wrap((req, res) => scanLookup(req, res, db)));
-  app.post('/api/scan/execute', requirePermission('equipment:write'), wrap((req, res) => scanExecute(req, res, db)));
+  // 2026-11-06（车间工作台审计）：扫码是现场工人的核心动作，不能只认 equipment:write
+  app.get('/api/scan/lookup', requirePermission('equipment:read', 'shopfloor:read', 'work_order:read'), wrap((req, res) => scanLookup(req, res, db)));
+  app.post('/api/scan/execute', requirePermission('equipment:write', 'shopfloor:write', 'work_order:write'), wrap((req, res) => scanExecute(req, res, db)));
 
   app.get('/api/process/progress/:instanceId', requirePermission('equipment:read'), wrap((req, res) => getProcessProgress(req, res, db, req.params.instanceId)));
   app.get('/api/equipment_instances/:id/process_progress', requirePermission('equipment:read'), wrap((req, res) => getProcessProgress(req, res, db, req.params.id)));

@@ -14,19 +14,24 @@ function register(app, db) {
 
   app.get("/api/shopfloor/overview", wrap((req, res) => {
     const uid = req.user?.sub || req.user?.uid || req.user?.id || null;
+    const role = String(req.user?.role || '').toLowerCase();
+    // 2026-11-06（车间工作台审计）：工人/焊工只看自己的任务，避免看到全厂工单与工时
+    const personal = ["worker", "welder"].includes(role);
+    const scopeWhere = personal ? " AND (wo.assigned_to = ? OR wo.assigned_to IS NULL)" : "";
+    const scopeParams = personal ? [uid || 0] : [];
     const workOrders = all(`
       SELECT wo.*, ei.instance_code, ws.name AS workstation_name
       FROM work_orders wo
       LEFT JOIN equipment_instances ei ON ei.id = wo.equipment_instance_id
       LEFT JOIN workstations ws ON ws.id = wo.workstation_id
-      WHERE COALESCE(wo.status, '') NOT IN ('completed', 'closed', 'cancelled')
+      WHERE COALESCE(wo.status, '') NOT IN ('completed', 'closed', 'cancelled')${scopeWhere}
       ORDER BY
         CASE wo.status WHEN 'in_progress' THEN 0 WHEN 'dispatched' THEN 1 ELSE 2 END,
         wo.planned_end IS NULL,
         wo.planned_end ASC,
         wo.id DESC
       LIMIT 20
-    `);
+    `, scopeParams);
     const activeWo = workOrders[0] || null;
 
     const pendingDocs = tableExists("documents") ? all(`
@@ -52,6 +57,7 @@ function register(app, db) {
       FROM work_report_details wr
       LEFT JOIN work_orders wo ON wo.id = wr.work_order_id
       LEFT JOIN users u ON u.id = wr.worker_id
+      ${personal ? "WHERE wr.worker_id = " + Number(uid || 0) : ""}
       ORDER BY wr.reported_at DESC
       LIMIT 10
     `) : [];
@@ -66,13 +72,15 @@ function register(app, db) {
     `) : [];
 
     const todayReports = tableExists("work_report_details")
-      ? get("SELECT COUNT(*) AS c, COALESCE(SUM(hours_spent),0) AS hours FROM work_report_details WHERE date(reported_at)=date('now')")
+      ? get("SELECT COUNT(*) AS c, COALESCE(SUM(hours_spent),0) AS hours FROM work_report_details WHERE date(reported_at)=date('now','localtime')" + (personal ? " AND worker_id = " + Number(uid || 0) : ""))
       : { c: 0, hours: 0 };
     const todayQcFail = tableExists("qc_inspections")
-      ? get("SELECT COUNT(*) AS c FROM qc_inspections WHERE date(inspection_date)=date('now') AND result='fail'")
+      ? get("SELECT COUNT(*) AS c FROM qc_inspections WHERE date(inspection_date)=date('now','localtime') AND result='fail'")
       : { c: 0 };
 
     res.json({
+      scope: personal ? "self" : "all",
+      user: { id: uid, role },
       summary: {
         active_work_orders: workOrders.length,
         pending_docs: pendingDocs.length,

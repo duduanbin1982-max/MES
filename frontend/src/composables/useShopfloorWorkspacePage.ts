@@ -2,8 +2,10 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Api } from '../api'
+import { useAuthStore } from '../stores/auth'
 
 export function useShopfloorWorkspacePage() {
+  const auth = useAuthStore()
 
   const route = useRoute()
   const router = useRouter()
@@ -29,6 +31,9 @@ export function useShopfloorWorkspacePage() {
   const qcForm = reactive({ inspection_type: 'in_process', result: 'pass', notes: '' })
   const andonForm = reactive({ title: '', message: '' })
 
+  const currentUserId = computed(() => auth.user?.id ?? null)
+  const canQc = computed(() => Boolean(auth.hasPerm && auth.hasPerm('quality:write')))
+  const canPick = computed(() => Boolean(auth.hasPerm && auth.hasPerm('pick:write')))
   const currentUser = computed(() => {
     try { return JSON.parse(localStorage.getItem('tbm_user') || '{}') } catch { return {} }
   })
@@ -186,8 +191,8 @@ export function useShopfloorWorkspacePage() {
     if (!currentWo.value) return
     saving.value = true
     try {
-      await Api.post('/work-reports', { work_order_id: currentWo.value.id, worker_id: 1, ...reportForm })
-      ElMessage.success('报工已提交')
+      await Api.post('/work-reports', { work_order_id: currentWo.value.id, worker_id: currentUserId.value, ...reportForm })
+      ElMessage.success('报工已提交，待审批（审批通过后计入工时与成本）')
       reportVisible.value = false
       await loadAll()
     } finally { saving.value = false }
@@ -269,6 +274,9 @@ export function useShopfloorWorkspacePage() {
     currentUser,
     roleCode,
     roleLabel,
+    currentUserId,
+    canQc,
+    canPick,
     defaultTabByRole,
     applyDefaultTab,
     go,

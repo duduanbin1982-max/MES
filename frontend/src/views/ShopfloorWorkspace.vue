@@ -43,7 +43,7 @@
             <div class="wo-main"><strong>{{ wo.wo_code }}</strong><el-tag size="small">{{ wo.status }}</el-tag></div>
             <div class="muted">{{ wo.instance_code || '-' }} · {{ wo.title }}</div>
             <div class="wo-actions">
-              <el-button size="small" type="primary" @click="openPick(wo)">查看领料单</el-button>
+              <el-button v-if="canPick" size="small" type="primary" @click="openPick(wo)">查看领料单</el-button>
               <el-button size="small" @click="go('/kit-closure')">缺料闭环</el-button>
             </div>
           </div>
@@ -55,7 +55,7 @@
             <div class="wo-main"><strong>{{ wo.wo_code }}</strong><el-tag size="small">{{ wo.status }}</el-tag></div>
             <div class="muted">{{ wo.instance_code || '-' }} · {{ wo.title }}</div>
             <div class="wo-actions">
-              <el-button size="small" type="success" @click="openQc(wo)">录入质检</el-button>
+              <el-button v-if="canQc" size="small" type="success" @click="openQc(wo)">录入质检</el-button>
               <el-button size="small" @click="go('/quality')">质检台账</el-button>
             </div>
           </div>
@@ -97,9 +97,9 @@
         </div>
         <div class="muted">{{ wo.instance_code || '-' }} · {{ wo.title }}</div>
         <div class="wo-actions">
-          <el-button size="small" @click="openPick(wo)">领料</el-button>
+          <el-button v-if="canPick" size="small" @click="openPick(wo)">领料</el-button>
           <el-button size="small" type="primary" @click="openReport(wo)">报工</el-button>
-          <el-button size="small" type="success" @click="openQc(wo)">质检</el-button>
+          <el-button v-if="canQc" size="small" type="success" @click="openQc(wo)">质检</el-button>
         </div>
       </div>
     </el-card>
@@ -240,6 +240,8 @@ const {
   qcForm,
   andonForm,
   roleLabel,
+  canQc,
+  canPick,
   go,
   loadAll,
   lookupScan,
