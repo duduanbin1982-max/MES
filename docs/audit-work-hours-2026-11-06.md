@@ -1,0 +1,135 @@
+# 工时与报工模块审计报告
+
+> 审计对象：`/process-hours`（工时与报工：工时定额 / 工序报工 / 日汇总 / 完工进度 / 工人绩效 / 加班统计）  
+> 审计日期：2026-11-06  
+> 审计方式：代码走读（`services/processHoursService.js` 185 行 + `processHours/analyticsRoutes.js` 147 行 + 前端 294 行 composable 260 行）+ 生产接口实测 + 多角色权限矩阵 + 报工闭环演练  
+> 生产数据：`work_report_details` 2 条（清理前）、`process_standard_hours` 3 条（含 2 条脏行）、`process_executions` 6 条
+
+## 0. 结论摘要
+
+**整改前评级：C+** —— 核心问题不是"功能少"，而是**填报链路对现场工人不可用 + 数据无校验 + 绩效指标算错**。
+
+**整改后：A-（4 个 P1 + 4 个 P2 已修）**
+
+| 编号 | 级别 | 问题（整改前实测） | 状态 |
+|---|---|---|---|
+| WH-1 | **P1** | 报工接口无校验：`hours_spent=-3`、`999`、`0`、不存在的工单（99999）全部返回 200 并写库 | 已修 |
+| WH-2 | **P1** | 权限错配：`POST /work-reports` 要求 `work_order:write`，**工人/焊工没有该权限 → 现场无法报工**；而工时定额写接口（`/process/nodes/:id/hours`）无任何规则 → 任意登录角色可改 | 已修 |
+| WH-3 | **P1** | 工人绩效公式错误：标准工时 = 实际工时 × 8，导致效率恒为 **12.5%** | 已修 |
+| WH-4 | **P1** | 工时定额无节点/数值校验，生产库存在 `process_node_id='undefined'` 脏行 | 已修 + 数据清理 |
+| WH-5 | P2 | 报工无法撤销；错误报工永久生效，`actual_hours` 被覆盖 | 已修（DELETE + 重算） |
+| WH-6 | P2 | 日期口径 UTC：日汇总默认日期、绩效/加班默认区间、前端默认日期都按 UTC 取，早 8 点前会算到前一天 | 已修（本地日期） |
+| WH-7 | P2 | `hours-summary.nodes` 按行计数（一个节点多条定额被重复计数）；完工进度用"实际工时/标准人时"冒充完成率 | 已修 |
+| WH-8 | P2 | 数据完整性：2 条报工指向不存在的工单（WO#1），日汇总会把这些"幽灵工时"算进去 | 已清理 |
+| WH-9 | P3 | 工时双轨：`process_executions.hours_worked`（扫码/工序执行）与 `work_report_details.hours_spent`（工时报工）互不同步，项目进度只取前者 | 待统一 |
+| WH-10 | P3 | 加班阈值硬编码 8h，无班次/节假日日历 | 已改可配置（`OVERTIME_DAILY_HOURS`），日历未做 |
+| WH-11 | P3 | 报工无审批流/月结锁定，填报即生效 | 待做 |
+| WH-12 | P3 | 历史报工 `worker_id` 可能为空（当时按 `req.user.sub` 取，现统一 uid 兜底） | 已修取数，历史未回填 |
+
+## 1. 模块现状（走读）
+
+```
+工时定额 process_standard_hours（节点 × 工种 → 标准工时 × 人数）
+  → 工序报工 work_report_details（工时/数量/质量/报工人）
+  → 工单实际工时 work_orders.actual_hours（报工合计）
+  → 日汇总 / 完工进度 / 工人绩效 / 加班统计
+```
+
+前端 `/process-hours` 六个页签：工时定额、工序报工、日汇总、完工进度、工人绩效、加班统计。
+
+生产数据核对：
+- `work_report_details` 2 条，均指向 `work_order_id=1`，但**工单表没有 id=1**（实际为 2/3/4/7）→ 无效报工；
+- `process_standard_hours` 3 条：1 条有效（节点 1，装配 8h×1），2 条 `process_node_id='undefined'`（脏行）；
+- 也就是说：**报工模块此前在生产上没有一条有效数据**，页面"能开"但链路没跑通。
+
+## 2. 发现与整改明细
+
+### WH-1（P1）报工无校验
+
+原实现只判断 `hours_spent != null`。实测：负工时、999 小时、0 小时、不存在的工单全部 200 入库。
+
+整改后校验：
+- 工单必须存在（404）；
+- `0 < hours_spent <= 24`（单次报工上限，`MAX_SINGLE_REPORT_HOURS` 可配）；
+- 数量 ≥ 0、完成数量 ≤ 总数、完成率 0–100；
+- `quality_result ∈ pass/fail/rework`；
+- 工序节点必须存在且**属于该工单的装备实例**；
+- `work_order_operations.id`（如传）必须存在；
+- 插入 + 工单 `actual_hours` 重算放在同一事务里。
+
+### WH-2（P1）权限错配
+
+- `POST /work-reports` 原来要求 `work_order:write`：worker/welder 没有 → **工人无法报工**（这正是本模块的核心用户）；
+- 工时定额写接口没有权限规则 → 任意登录角色（仓库除外）都能改标准工时。
+
+整改：
+- 新增权限 `work_report:read` / `work_report:write`；
+- 报工读写：worker、welder、foreman、planner、production_supervisor；qc/engineer 只读；
+- 工时定额写收口到 `process:write`（工程师/车间主任/生产主管），读放给 `process:read` / `work_report:read`；
+- 存量 7 个角色已通过 `scripts/migrate-work-report-permissions.js --apply` 补齐。
+
+实测（生产）：worker 报工 200；worker 改定额 403；engineer 改定额 200。
+
+### WH-3（P1）工人绩效公式错误
+
+原 SQL：`(SUM(hours_spent) * 8.0) AS standard_hours_calc`，效率 = 实际 / 标准 = **恒 12.5%**。
+
+整改：标准工时改为取该工人报工所涉及工序的**工时定额合计**（`process_standard_hours`，按节点去重），效率 = 标准 / 实际 × 100；无定额时返回 `null`（前端显示"无定额"），不再给假百分比；接口同时返回 `summary.avg_efficiency / total_hours_sum / total_tasks / workers_with_standard`。
+
+实测：定额 4h + 报工 2h → `standard_hours=4, efficiency=200%, summary.avg_efficiency=200`。
+
+### WH-4（P1）工时定额无校验 → 脏数据
+
+`POST /process/nodes/:id/hours` 不校验节点是否存在：实测 `POST /api/process/nodes/undefined/hours` 返回 200，`process_node_id` 落成字符串 `"undefined"`。生产库已有 2 条此类脏行（已清理）。
+
+整改：节点必须是正整数且存在（404）；标准工时 > 0 ≤ 10000；人数 1–100 整数；`work_type` 白名单；PUT 批量接口整体校验后再替换（失败不落库）。
+
+### WH-5（P2）报工不可撤销
+
+新增 `DELETE /api/work-reports/:id`：删除后在同一事务内重算该工单 `actual_hours`；权限 `work_report:write`。前端报工列表新增「撤销」按钮（无权限显示 —）。
+
+### WH-6（P2）日期 UTC 口径
+
+日汇总默认日期、绩效/加班默认区间（最近 30 天）、前端 `dailyDate` 全部改为**本地日期**；`/work-reports` 的 `end_date` 过滤补足 `23:59:59`（原来只写日期会漏掉当天记录）。
+
+### WH-7（P2）汇总口径
+
+- `hours-summary.nodes` 改为按节点去重（原来按行数，节点多工种会重复计数）；
+- 完工进度：优先「完成数量 / 总数」，没有数量数据时退化为「工时消耗率」，并同时返回 `completion_pct` 与 `hours_ratio_pct`。
+
+### WH-8（P2）幽灵工时清理
+
+`work_report_details` 2 条记录指向不存在的工单 WO#1。新增 `scripts/migrate-clean-work-hours.js`（`--apply`）：清理孤儿定额行 + 孤儿报工行，异常工时（≤0 或 >24）只报告不自动删。生产已执行：**删除孤儿报工 2 条**。
+
+## 3. 验证
+
+| 项目 | 结果 |
+|---|---|
+| `tests/processHoursGovernance.test.js`（新） | **7/7**（报工校验/跨实例工序/撤销重算/定额校验/绩效公式/完工进度/节点去重） |
+| 前端 | ESLint 0、vue-tsc 0、build 通过 |
+| 全量部署闸门 | **788/0** |
+| 生产权限矩阵（实测） | worker 报工 200 / 改定额 403；engineer 改定额 200；admin 全通 |
+| 生产报工闭环（实测） | 报工 2h → 工单 actual_hours=2 → 绩效 standard=4、efficiency=200% → 撤销 → actual_hours 重算；演练数据已清理 |
+| 数据治理 | 孤儿报工 2 条已删除；孤儿定额 0 条（此前手工清理） |
+
+## 4. 改动文件
+
+| 文件 | 说明 |
+|---|---|
+| `services/processHoursService.js` | 报工/定额校验、撤销、本地日期、汇总与进度口径 |
+| `services/processHours/analyticsRoutes.js` | 绩效标准工时改取定额、本地日期、加班阈值可配、summary 字段 |
+| `app/permissions.js` | 新增 work_report:read/write + 默认角色 |
+| `middleware/apiPermissions.js` | 报工/定额/汇总/进度权限规则 |
+| `frontend/src/composables/useProcessHoursPage.ts` | 本地日期、撤销报工、绩效空值/汇总 |
+| `frontend/src/views/ProcessHours.vue` | 撤销按钮、绩效空值展示 |
+| `scripts/migrate-work-report-permissions.js` | 存量角色补权限（幂等） |
+| `scripts/migrate-clean-work-hours.js` | 孤儿定额/报工清理（幂等） |
+| `tests/processHoursGovernance.test.js` | 7 个回归用例 |
+
+## 5. 遗留与建议
+
+1. **WH-9 工时双轨**（P3）：`process_executions`（扫码/工序执行）与 `work_report_details`（工时报工）两套工时并存，项目进度只取前者、本模块看板取后者。建议统一为"报工为准、执行记录为过程"或做定期对账；
+2. **WH-11 审批流**（P3）：报工即生效，无班长/工时审核与月结锁定；建议增加"报工审核 + 月度锁定"；
+3. **WH-10 加班日历**（P3）：阈值已可配（`OVERTIME_DAILY_HOURS`），但未接节假日/班次日历；
+4. **WH-12 历史数据**（P3）：历史 `worker_id` 为空的报工未回填（本次新增报工已统一用 uid 兜底）；
+5. 成本联动：报工工时 → `project_cost_entries` 的人工成本目前由独立回填脚本生成，建议报工后自动入账（跨域写需授权）。

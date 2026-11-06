@@ -131,9 +131,15 @@ const RULES = [
   // 2026-11-05：依赖维护需要读权限；写允许 process:write（工艺）或 equipment:write（排程/计划员）
   match(/^\/process_dependencies(?:\/.*)?$/, READ, ["process:read"]),
   match(/^\/process_dependencies(?:\/.*)?$/, WRITE, ["process:write", "equipment:write"]),
-  match(/^\/process-hours(?:\/.*)?$/, READ, ["work_order:read"]),
-  match(/^\/work-reports(?:\/.*)?$/, READ, ["work_order:read"]),
-  match(/^\/work-reports(?:\/.*)?$/, ["POST"], ["work_order:write"]),
+  // 2026-11-06（工时与报工审计）：报工是工人主责，不能只认 work_order:write；
+  // 工时定额写属于工艺主数据，收口到 process:write
+  match(/^\/process-hours(?:\/.*)?$/, READ, ["work_report:read", "work_order:read"]),
+  match(/^\/work-reports(?:\/.*)?$/, READ, ["work_report:read", "work_order:read"]),
+  match(/^\/work-reports(?:\/.*)?$/, ["POST", "DELETE"], ["work_report:write", "work_order:write"]),
+  match(/^\/process\/nodes\/\d+\/progress$/, READ, ["work_report:read", "work_order:read", "process:read"]),
+  match(/^\/process\/nodes\/\d+\/hours(?:\/.*)?$/, READ, ["process:read", "work_report:read"]),
+  match(/^\/process\/nodes\/\d+\/hours(?:\/.*)?$/, WRITE, ["process:write"]),
+  match(/^\/process\/hours-summary$/, READ, ["process:read", "work_report:read"]),
 
   match(/^\/qc(?:\/.*)?$/, READ, ["quality:read"]),
   match(/^\/qc(?:\/.*)?$/, WRITE, ["quality:write"]),

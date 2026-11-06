@@ -36,6 +36,8 @@ const PERMISSIONS = {
   'process:admin': '执行工艺节点/自动解锁',
   // 质量
   'quality:read': '查看检验记录',
+  'work_report:read': '查看工时与报工',
+  'work_report:write': '填报/撤销报工',
   'delivery:read': '查看交付/验收/回款',
   'delivery:write': '维护交付/验收/回款',
   'quality:write': '创建/更新检验',
@@ -65,36 +67,42 @@ const DEFAULT_ROLE_PERMISSIONS = {
     'work_order:write', 'process:read', 'material:read',
     'material:write', 'purchase:read', 'purchase:write',
     'report:read', 'delivery:read', 'delivery:write',
+    'work_report:read', 'work_report:write',
   ],
   foreman: [
     'work_order:read', 'work_order:write', 'shopfloor:read',
     'equipment:read', 'equipment:write', 'process:read',
     'process:write', 'quality:read', 'quality:write',
     'material:read', 'report:read', 'delivery:read', 'delivery:write',
+    'work_report:read', 'work_report:write',
   ],
   production_supervisor: [
     'work_order:read', 'work_order:write', 'work_order:admin',
     'equipment:read', 'equipment:write', 'process:read',
     'material:read', 'quality:read', 'report:read',
     'shopfloor:read', 'delivery:read', 'delivery:write',
+    'work_report:read', 'work_report:write',
   ],
   engineer: [
     'equipment:read', 'process:read', 'process:write',
     'material:read', 'document:read', 'document:write',
     'settings:read', 'report:read', 'delivery:read',
+    'work_report:read',
   ],
   qc: [
     'quality:read', 'quality:write', 'work_order:read',
     'material:read', 'document:read', 'report:read',
-    'delivery:read',
+    'delivery:read', 'work_report:read',
   ],
   worker: [
     'shopfloor:read', 'work_order:read', 'quality:read',
     'document:read', 'pick:read', 'delivery:read',
+    'work_report:read', 'work_report:write',
   ],
   welder: [
     'work_order:read', 'quality:read', 'quality:write',
     'shopfloor:read', 'delivery:read',
+    'work_report:read', 'work_report:write',
   ],
   sales: [
     'equipment:read', 'document:read', 'report:read',

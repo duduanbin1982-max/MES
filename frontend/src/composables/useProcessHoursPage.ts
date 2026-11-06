@@ -1,9 +1,16 @@
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useAuthStore } from '../stores/auth'
 import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ApiRecord } from '../types/api'
 
 export function useProcessHoursPage() {
+  const auth = useAuthStore()
+  const localToday = () => {
+    const now = new Date()
+    const pad = (value: number) => String(value).padStart(2, '0')
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  }
 
   const activeTab = ref('hours')
 
@@ -28,10 +35,24 @@ export function useProcessHoursPage() {
   const reportSaving = ref(false)
   const reportForm = reactive<{ work_order_id: number | null; process_node_id: number | null; hours_spent: number; quantity_completed: number; quality_result: string; notes: string }>({ work_order_id: null, process_node_id: null, hours_spent: 0, quantity_completed: 0, quality_result: 'pass', notes: '' })
 
+  const canVoid = computed(() => Boolean(auth.hasPerm && auth.hasPerm('work_report:write')))
+  const voidReport = async (row: any) => {
+    try {
+      await ElMessageBox.confirm(`撤销报工 #${row.id}（${row.wo_code || ''} / ${row.hours_spent}h）? 撤销后工单实际工时会重算。`, '撤销报工', { type: 'warning' })
+      const result: any = await Api.del('/work-reports/' + row.id)
+      ElMessage.success('已撤销，工单实际工时 ' + (result?.actual_hours ?? 0) + 'h')
+      await loadReports()
+      await loadDailySummary()
+    } catch (error: any) {
+      if (error === 'cancel' || error === 'close') return
+      ElMessage.error(error?.response?.data?.message || error?.message || '撤销失败')
+    }
+  }
+
   // Tab 3: 日汇总
   const dailySummary = reactive<{ workers: number; details: ApiRecord[] }>({ workers: 0, details: [] })
   const dailyLoading = ref(false)
-  const dailyDate = ref(new Date().toISOString().substring(0, 10))
+  const dailyDate = ref(localToday())
   const dailyTotalHours = computed(() => (dailySummary.details || []).reduce((sum: number, row: ApiRecord) => sum + (row.total_hours || 0), 0))
 
   // Tab 4: 完工进度
@@ -161,7 +182,7 @@ export function useProcessHoursPage() {
   const perfFilter = reactive<{ dateRange: [string, string] | null }>({ dateRange: null })
   const workerPerfData = ref<any[]>([])
   const perfLoading = ref(false)
-  const perfSummary = reactive({ avg_efficiency: 0, total_hours_sum: 0, total_tasks: 0 })
+  const perfSummary = reactive({ avg_efficiency: null as number | null, total_hours_sum: 0, total_tasks: 0 })
 
   const loadWorkerPerformance = async () => {
     if (!perfFilter.dateRange) { workerPerfData.value = []; return }
@@ -171,9 +192,11 @@ export function useProcessHoursPage() {
       if (perfFilter.dateRange) { params.from = perfFilter.dateRange[0]; params.to = perfFilter.dateRange[1] }
       const r = await Api.get('/process-hours/worker-performance', { params })
       workerPerfData.value = r?.workers || r || []
-      perfSummary.avg_efficiency = r?.avg_efficiency || (workerPerfData.value.length ? Math.round(workerPerfData.value.reduce((s:number,x:any)=>s+(x.efficiency_pct||0),0)/workerPerfData.value.length) : 0)
-      perfSummary.total_hours_sum = r?.total_hours_sum || workerPerfData.value.reduce((s:number,x:any)=>s+(x.total_hours||0),0)
-      perfSummary.total_tasks = r?.total_tasks || workerPerfData.value.reduce((s:number,x:any)=>s+(x.tasks_completed||0),0)
+      const summary = r?.summary || {}
+      const withStandard = workerPerfData.value.filter((row:any) => row.efficiency_pct != null)
+      perfSummary.avg_efficiency = summary.avg_efficiency ?? (withStandard.length ? Math.round(withStandard.reduce((s:number,x:any)=>s+x.efficiency_pct,0)/withStandard.length) : null)
+      perfSummary.total_hours_sum = summary.total_hours_sum ?? workerPerfData.value.reduce((s:number,x:any)=>s+(x.total_hours||0),0)
+      perfSummary.total_tasks = summary.total_tasks ?? workerPerfData.value.reduce((s:number,x:any)=>s+(x.tasks_completed||0),0)
     } catch (_) { workerPerfData.value = [] }
     finally { perfLoading.value = false }
   }
@@ -224,6 +247,8 @@ export function useProcessHoursPage() {
     reports,
     reportsLoading,
     reportFilter,
+    canVoid,
+    voidReport,
     showReportDialog,
     reportSaving,
     reportForm,

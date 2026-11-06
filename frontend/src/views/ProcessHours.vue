@@ -59,6 +59,12 @@
           </el-table-column>
           <el-table-column prop="reported_at" label="报工时间" width="160" />
           <el-table-column prop="notes" label="备注" min-width="100" show-overflow-tooltip />
+          <el-table-column label="操作" width="80" fixed="right">
+            <template #default="{ row }">
+              <el-button v-if="canVoid" size="small" link type="danger" @click="voidReport(row)">撤销</el-button>
+              <span v-else class="hint-text">—</span>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -117,8 +123,8 @@
           <el-date-picker v-model="perfFilter.dateRange" type="daterange" range-separator="→" start-placeholder="开始" end-placeholder="结束" value-format="YYYY-MM-DD" @change="loadWorkerPerformance" style="width:260px" />
         </div>
 
-        <el-row :gutter="12" style="margin-bottom:12px" v-if="perfSummary.avg_efficiency">
-          <el-col :span="8"><div class="stat-card"><div class="stat-label">平均效率</div><div class="stat-value" style="color:var(--el-color-success)">{{ perfSummary.avg_efficiency }}%</div></div></el-col>
+        <el-row :gutter="12" style="margin-bottom:12px" v-if="perfSummary.total_tasks">
+          <el-col :span="8"><div class="stat-card"><div class="stat-label">平均效率</div><div class="stat-value" style="color:var(--el-color-success)">{{ perfSummary.avg_efficiency == null ? '—' : perfSummary.avg_efficiency + '%' }}</div></div></el-col>
           <el-col :span="8"><div class="stat-card"><div class="stat-label">总工时</div><div class="stat-value">{{ perfSummary.total_hours_sum }}h</div></div></el-col>
           <el-col :span="8"><div class="stat-card"><div class="stat-label">总任务数</div><div class="stat-value">{{ perfSummary.total_tasks }}</div></div></el-col>
         </el-row>
@@ -126,12 +132,14 @@
         <el-table :data="workerPerfData" v-loading="perfLoading" border stripe size="small" empty-text="请选择日期范围" max-height="400">
           <el-table-column prop="full_name" label="姓名" width="100" />
           <el-table-column prop="total_hours" label="总工时(h)" width="100" align="right" sortable />
-          <el-table-column prop="standard_hours" label="标准工时(h)" width="110" align="right" />
+          <el-table-column label="标准工时(h)" width="110" align="right">
+            <template #default="{ row }">{{ row.standard_hours == null ? '—' : row.standard_hours }}</template>
+          </el-table-column>
           <el-table-column label="效率" min-width="180">
             <template #default="{row}">
               <div style="display:flex;align-items:center;gap:8px">
-                <el-progress :percentage="Math.min(100, row.efficiency_pct||0)" :status="row.efficiency_pct>=100?'success':row.efficiency_pct>=80?'':'exception'" style="flex:1" />
-                <span style="font-weight:600;min-width:45px">{{ row.efficiency_pct || 0 }}%</span>
+                <el-progress v-if="row.efficiency_pct != null" :percentage="Math.min(100, row.efficiency_pct)" :status="row.efficiency_pct>=100?'success':row.efficiency_pct>=80?'':'exception'" style="flex:1" />
+                <span style="font-weight:600;min-width:45px">{{ row.efficiency_pct == null ? '无定额' : row.efficiency_pct + '%' }}</span>
               </div>
             </template>
           </el-table-column>
@@ -249,6 +257,8 @@ const {
   reports,
   reportsLoading,
   reportFilter,
+  canVoid,
+  voidReport,
   showReportDialog,
   reportSaving,
   reportForm,
