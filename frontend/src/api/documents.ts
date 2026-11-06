@@ -17,6 +17,7 @@ export function createDocumentsApi() {
     pendingAckDocuments: (params?: any) => api.get('/documents/pending-ack', { params }),
     documentDownloadUrl: (id: number) => `/api/documents/${id}/download`,
     downloadDocument: downloadDocumentFile,
+    previewDocument: previewDocumentFile,
     documentPreviewUrl: (id: number) => `/uploads/${id}`,
   }
 }
@@ -26,6 +27,20 @@ export function createDocumentsApi() {
  * 原因：原来的 window.open(url?t=token) 无法带请求头，而后端 authMiddleware 只认
  * Authorization: Bearer，于是新标签页直接 401「未登录或 token 无效」。
  */
+async function previewDocumentFile(id: number): Promise<{ url: string; type: string }> {
+  const token = localStorage.getItem(ACCESS_KEY) || localStorage.getItem('tbm_token')
+  const response = await fetch(`/api/documents/${id}/preview`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    let message = `预览失败 (HTTP ${response.status})`
+    try { const body = await response.json(); message = body.message || body.error || message } catch (_error) { /* ignore */ }
+    throw new Error(message)
+  }
+  const blob = await response.blob()
+  return { url: URL.createObjectURL(blob), type: blob.type || 'application/octet-stream' }
+}
+
 async function downloadDocumentFile(id: number, fallbackName?: string): Promise<void> {
   const token = localStorage.getItem(ACCESS_KEY) || localStorage.getItem('tbm_token')
   const response = await fetch(`/api/documents/${id}/download`, {

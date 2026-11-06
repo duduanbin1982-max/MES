@@ -50,6 +50,12 @@ function documentFamilyBase(code) {
 
 function documentFamilyIds(db, current) {
   if (!current) return [];
+  // 2026-11-07（D-6）：优先使用显式 document_family_id，不再依赖 doc_code 后缀正则
+  const familyId = current.document_family_id || null;
+  if (familyId) {
+    const rows = db.prepare("SELECT id FROM documents WHERE document_family_id = ? OR id = ? ORDER BY id").all(familyId, familyId);
+    if (rows.length) return rows.map((row) => row.id);
+  }
   if (current.doc_code) {
     const base = documentFamilyBase(current.doc_code);
     if (base && base !== String(current.doc_code)) {

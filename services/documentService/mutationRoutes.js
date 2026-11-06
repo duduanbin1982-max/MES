@@ -2,7 +2,8 @@
 
 const fs = require("fs");
 const { ApiError } = require("../../app/errors");
-const { ISSUE_TARGETS, validateMeta, sanitizeFileName, validateDocumentFile } = require("./meta");
+const { ISSUE_TARGETS, validateMeta, sanitizeFileName, validateDocumentFile, retentionYears } = require("./meta");
+const { resolveStoredFile } = require("./storage");
 const audit = require("../../app/audit");
 const { recordDocumentEvent } = require("./history");
 const { buildStoragePath, hasStoredFile, sha256 } = require("./storage");
@@ -59,7 +60,23 @@ function registerUploadRoute(app, db) {
           if (!db.prepare("SELECT id FROM instance_eco WHERE id = ?").get(meta.eco_id)) return next(ApiError.validation(`eco_id 不存在: ${meta.eco_id}`));
         } catch (_error) { return next(ApiError.validation("ECO 表不可用，不能关联 eco_id")); }
       }
-      if (meta.doc_code) {
+      let parentDocument = null;
+      if (meta.parent_document_id) {
+        parentDocument = db.prepare("SELECT id, equipment_instance_id, document_family_id FROM documents WHERE id = ?").get(meta.parent_document_id);
+        if (!parentDocument) return next(ApiError.validation(`parent_document_id 不存在: ${meta.parent_document_id}`));
+        if (Number(parentDocument.equipment_instance_id) !== Number(meta.equipment_instance_id)) {
+          return next(ApiError.validation("parent_document_id 不属于该装备实例"));
+        }
+      }
+      const familyId = parentDocument ? Number(parentDocument.document_family_id || parentDocument.id) : null;
+      if (parentDocument && !parentDocument.document_family_id) {
+        db.prepare("UPDATE documents SET document_family_id = ? WHERE id = ?").run(parentDocument.id, parentDocument.id);
+      }
+      if (familyId) {
+        const sameVersion = db.prepare("SELECT id FROM documents WHERE document_family_id = ? AND version = ?")
+          .get(familyId, meta.version || "A0");
+        if (sameVersion) return next(ApiError.conflict(`同一文档版本已存在 (id=${sameVersion.id})`));
+      } else if (meta.doc_code) {
         const sameVersion = db.prepare("SELECT id FROM documents WHERE equipment_instance_id = ? AND doc_code = ? AND version = ?")
           .get(meta.equipment_instance_id, meta.doc_code, meta.version || "A0");
         if (sameVersion) return next(ApiError.conflict(`同一文档编号与版本已存在 (id=${sameVersion.id})`));
@@ -73,6 +90,7 @@ function registerUploadRoute(app, db) {
         equipment_instance_id, bom_node_id, eco_id,
         doc_type, doc_code, title, version,
         file_name, file_path, file_size, mime_type, file_hash,
+        document_family_id, parent_document_id,
         status, issued_to, issued_at, issued_by,
         description, tags,
         doc_name, doc_no, uploaded_by, uploaded_at
@@ -80,6 +98,7 @@ function registerUploadRoute(app, db) {
         @equipment_instance_id, @bom_node_id, @eco_id,
         @doc_type, @doc_code, @title, @version,
         @file_name, @file_path, @file_size, @mime_type, @file_hash,
+        @document_family_id, @parent_document_id,
         @status, @issued_to, @issued_at, @issued_by,
         @description, @tags,
         @title, @doc_code, @uploaded_by, datetime('now')
@@ -96,6 +115,8 @@ function registerUploadRoute(app, db) {
         file_size: buffer.length,
         mime_type: mimeType,
         file_hash: fileHash,
+        document_family_id: familyId,
+        parent_document_id: meta.parent_document_id || null,
         // 2026-11-05（文档链路深挖）：上传只能是 draft，签发必须走 PUT /:id/issue
         status: "draft",
         issued_to: null,
@@ -105,6 +126,9 @@ function registerUploadRoute(app, db) {
         tags: meta.tags ? JSON.stringify(meta.tags) : null,
         uploaded_by: userId,
       });
+      if (!familyId) {
+        db.prepare("UPDATE documents SET document_family_id = ? WHERE id = ?").run(result.lastInsertRowid, result.lastInsertRowid);
+      }
       const created = db.prepare("SELECT * FROM documents WHERE id = ?").get(result.lastInsertRowid);
       recordDocumentEvent(db, {
         doc_id: created.id,
@@ -185,7 +209,16 @@ function registerLifecycleRoutes(app, db) {
     try {
       const current = db.prepare("SELECT id, status, version, issued_to FROM documents WHERE id = ?").get(req.params.id);
       if (!current) return next(ApiError.notFound("文档不存在"));
-      db.prepare("UPDATE documents SET status='archived', updated_at=datetime('now') WHERE id=?").run(req.params.id);
+      // 2026-11-07（D-6）：归档时写入保留期（按文档类型），到期后可物理清理
+      const docTypeRow = db.prepare("SELECT doc_type FROM documents WHERE id = ?").get(req.params.id);
+      const retention = retentionYears(docTypeRow ? docTypeRow.doc_type : "other");
+      try {
+        db.prepare("UPDATE documents SET status='archived', retention_until = datetime('now', ?), updated_at=datetime('now') WHERE id=?")
+          .run(`+${retention} years`, req.params.id);
+      } catch (_error) {
+        // 兼容未迁移 retention_until 列的旧库/测试库
+        db.prepare("UPDATE documents SET status='archived', updated_at=datetime('now') WHERE id=?").run(req.params.id);
+      }
       recordDocumentEvent(db, {
         doc_id: Number(req.params.id), action: "archive", from_status: current.status, to_status: "archived",
         version: current.version, issued_to: current.issued_to, operator_id: req.user?.uid || null,
@@ -202,9 +235,54 @@ function registerLifecycleRoutes(app, db) {
   });
 }
 
+function registerPurgeRoutes(app, db) {
+  function purgeOne(req, doc, force) {
+    if (doc.status !== "archived") throw ApiError.validation("只能清理已归档文档（当前: " + doc.status + "）");
+    if (doc.purged_at) throw ApiError.validation("文档已清理");
+    if (!force && doc.retention_until && new Date(doc.retention_until).getTime() > Date.now()) {
+      throw ApiError.validation(`未到保留期截止日（${doc.retention_until}），不能清理`);
+    }
+    const absolute = resolveStoredFile(doc.file_path);
+    if (absolute) { try { fs.unlinkSync(absolute); } catch (_error) { /* 文件缺失继续标记 */ } }
+    db.prepare("UPDATE documents SET status='purged', purged_at=datetime('now'), updated_at=datetime('now') WHERE id=?").run(doc.id);
+    recordDocumentEvent(db, { doc_id: doc.id, action: "purge", from_status: "archived", to_status: "purged", version: doc.version, operator_id: req.user?.uid || null });
+    audit.record(db, req, {
+      action: "document.purge",
+      resource_type: "document",
+      resource_id: doc.id,
+      before: { status: "archived", file_path: doc.file_path },
+      after: { status: "purged" },
+      diff_summary: `物理清理文档 ${doc.title || doc.id}`,
+    });
+    return { id: doc.id, purged: true };
+  }
+
+  app.post("/api/documents/:id/purge", (req, res, next) => {
+    try {
+      const doc = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
+      if (!doc) return next(ApiError.notFound("文档不存在"));
+      const force = Boolean((req.body || {}).force) && req.user?.role === "admin";
+      res.json(purgeOne(req, doc, force));
+    } catch (error) { next(error); }
+  });
+
+  app.post("/api/documents/purge-expired", (req, res, next) => {
+    try {
+      const docs = db.prepare("SELECT * FROM documents WHERE status = 'archived' AND retention_until IS NOT NULL AND retention_until <= datetime('now')").all();
+      const results = [];
+      for (const doc of docs) {
+        try { results.push(purgeOne(req, doc, false)); }
+        catch (error) { results.push({ id: doc.id, purged: false, error: error.message }); }
+      }
+      res.json({ total: docs.length, purged: results.filter((item) => item.purged).length, results });
+    } catch (error) { next(error); }
+  });
+}
+
 function registerMutationRoutes(app, db) {
   registerUploadRoute(app, db);
   registerLifecycleRoutes(app, db);
+  registerPurgeRoutes(app, db);
 }
 
 module.exports = { registerMutationRoutes, registerUploadRoute, registerLifecycleRoutes };

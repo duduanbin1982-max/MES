@@ -61,6 +61,7 @@
         <el-table-column prop="created_at_alias" label="上传时间" width="160" />
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
+            <el-button size="small" link type="primary" @click.stop="$emit('preview', row)">预览</el-button>
             <el-button size="small" link @click.stop="$emit('download', row)">下载</el-button>
             <el-button v-if="row.status === 'issued'" size="small" link type="success" @click.stop="$emit('acknowledge', row)">签收</el-button>
             <el-button size="small" link type="info" @click.stop="$emit('load-acks', row)">签收记录</el-button>
@@ -109,6 +110,7 @@ const emit = defineEmits<{
   refresh: []
   upload: []
   'row-click': []
+  preview: [row: any]
   download: [row: any]
   acknowledge: [row: any]
   'load-acks': [row: any]

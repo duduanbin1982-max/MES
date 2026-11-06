@@ -97,6 +97,26 @@ function registerDetailRoutes(app, db) {
     fs.createReadStream(absolutePath).pipe(res);
   });
 
+  app.get("/api/documents/:id/preview", (req, res, next) => {
+    const row = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
+    if (!row) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
+    if (!canAccessDocument(req, db, row)) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
+    const mime = String(row.mime_type || "");
+    const previewable = mime.includes("pdf") || mime.startsWith("image/") || mime.startsWith("text/");
+    if (!previewable) return next(ApiError.validation("该文件类型不支持在线预览，请下载查看: " + (row.file_name || "")));
+    const absolutePath = resolveStoredFile(row.file_path);
+    if (!absolutePath) return next(ApiError.notFound(`文件已丢失: ${row.file_name}`));
+    recordDocumentEvent(db, { doc_id: row.id, action: "preview", from_status: row.status, to_status: row.status, version: row.version, issued_to: row.issued_to, operator_id: req.user?.uid || req.user?.sub || null });
+    const safeName = sanitizeFileName(row.file_name);
+    res.setHeader("Content-Type", mime || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${safeName.replace(/[^\x20-\x7e]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(safeName)}`);
+    res.setHeader("X-Document-Watermark", encodeURIComponent(`${req.user?.username || req.user?.full_name || "user"}@${new Date().toISOString()}`));
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "sandbox");
+    fs.createReadStream(absolutePath).pipe(res);
+  });
+
   app.get("/api/documents/:id/versions", (req, res) => {
     const current = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
     if (!current || !canAccessDocument(req, db, current)) return res.json({ items: [], current: null });

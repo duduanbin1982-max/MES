@@ -41,6 +41,35 @@ function validateDocumentFile(fileName, mimeType, size) {
   return errors.length ? { ok: false, errors } : { ok: true };
 }
 
+// 2026-11-07（文档审计 D-6）：签发对象 → 允许签收的角色
+const ISSUE_TARGET_ROLES = {
+  assembly: ["worker", "welder", "foreman", "production_supervisor", "assembly_worker"],
+  welding: ["welder", "foreman", "production_supervisor"],
+  qc: ["qc", "inspector", "quality_supervisor", "foreman"],
+  warehouse: ["warehouse", "storekeeper", "warehouse_supervisor"],
+  field: ["foreman", "engineer", "commissioning_engineer", "production_supervisor"],
+  design: ["engineer", "technology", "project_manager"],
+  procurement: ["purchaser", "planner", "purchase_supervisor"],
+  management: ["admin", "production_supervisor", "project_manager"],
+};
+
+// 保留期（年）：默认 5 年，可按类型覆盖
+const RETENTION_YEARS = { drawing: 10, sop: 10, process: 10, qc_std: 10, contract: 7, report: 5, other: 5 };
+
+function retentionYears(docType) {
+  const configured = Number(process.env["DOC_RETENTION_YEARS_" + String(docType || "other").toUpperCase()]);
+  if (Number.isFinite(configured) && configured > 0) return configured;
+  return RETENTION_YEARS[docType] || Number(process.env.DOC_RETENTION_YEARS_DEFAULT) || 5;
+}
+
+function canAcknowledge(role, issuedTo) {
+  if (!issuedTo) return false;
+  const roleCode = String(role || "").toLowerCase();
+  if (!roleCode) return true; // 兼容历史 token/内部服务调用（JWT 正常都带 role）
+  if (roleCode === "admin") return true;
+  return (ISSUE_TARGET_ROLES[issuedTo] || []).includes(roleCode);
+}
+
 function validateMeta(meta) {
   const errors = [];
   if (!meta.title || String(meta.title).trim().length === 0) errors.push("title 必填");
@@ -63,4 +92,5 @@ function validateMeta(meta) {
 module.exports = {
   DOC_TYPES, DOC_STATUS, ISSUE_TARGETS, validateMeta,
   ALLOWED_EXTENSIONS, BLOCKED_EXTENSIONS, MAX_DOCUMENT_BYTES, sanitizeFileName, validateDocumentFile,
+  ISSUE_TARGET_ROLES, RETENTION_YEARS, retentionYears, canAcknowledge,
 };

@@ -67,6 +67,7 @@
       @refresh="refresh"
       @upload="dlgUpload = true"
       @row-click="onRowClick"
+      @preview="openPreview"
       @download="downloadDoc"
       @acknowledge="acknowledge"
       @load-acks="loadAcks"
@@ -75,6 +76,15 @@
       @revoke="openRevoke"
       @archive="archiveDoc"
     />
+
+    <el-dialog v-model="previewVisible" :title="'预览：' + previewTitle" width="80%" top="5vh" @closed="closePreview">
+      <div style="position: relative; min-height: 60vh; background: #f5f5f5; overflow: hidden" @contextmenu.prevent>
+        <div style="position: absolute; inset: 0; pointer-events: none; z-index: 9; color: rgba(0,0,0,.10); font-size: 28px; display: flex; align-items: center; justify-content: center; transform: rotate(-25deg); user-select: none">{{ previewWatermark }}</div>
+        <iframe v-if="previewType.includes('pdf')" :src="previewUrl" style="width: 100%; height: 70vh; border: 0" />
+        <img v-else :src="previewUrl" draggable="false" style="max-width: 100%; display: block; margin: 0 auto" />
+      </div>
+      <template #footer><span style="color: var(--el-color-info); font-size: 12px">水印已绑定当前用户与时间；预览禁止右键/下载，请勿截屏外传</span></template>
+    </el-dialog>
 
     <DocumentUploadDialog
       ref="uploadDialogRef"
@@ -251,6 +261,31 @@ const onRowClick = () => { /* noop */ }
 
 // 下载
 // 2026-10-19：改走带 Authorization 的 blob 下载（window.open 无法带请求头 → 401）
+const previewVisible = ref(false)
+const previewUrl = ref('')
+const previewType = ref('')
+const previewTitle = ref('')
+const previewWatermark = ref('')
+const openPreview = async (row: any) => {
+  try {
+    const result: any = await api.previewDocument(row.id)
+    let userName = 'user'
+    try { const u = JSON.parse(localStorage.getItem('tbm_user') || '{}'); userName = u.full_name || u.username || 'user' } catch (_error) { /* ignore */ }
+    previewUrl.value = result.url
+    previewType.value = result.type
+    previewTitle.value = row.title || row.file_name
+    previewWatermark.value = `${userName} ${new Date().toLocaleString('zh-CN')}`
+    previewVisible.value = true
+  } catch (error: any) {
+    ElMessage.error(error?.message || '预览失败')
+  }
+}
+const closePreview = () => {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  previewUrl.value = ''
+  previewVisible.value = false
+}
+
 const downloadDoc = async (row: any) => {
   try {
     await api.downloadDocument(row.id)

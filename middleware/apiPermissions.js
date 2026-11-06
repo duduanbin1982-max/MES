@@ -78,7 +78,9 @@ const RULES = [
   match(/^\/work_orders\/\d+\/kit-sync$/, ["POST"], ["pick:write"]),
 
   match(/^\/documents(?:\/stats|\/pending-ack)?$/, READ, ["document:read", "process:read"]),
-  match(/^\/documents\/\d+(?:\/download|\/versions|\/acknowledgements)?$/, READ, ["document:read", "process:read"]),
+  match(/^\/documents\/\d+(?:\/download|\/versions|\/acknowledgements|\/preview)?$/, READ, ["document:read", "process:read"]),
+  match(/^\/documents\/\d+\/purge$/, ["POST"], ["document:write"]),
+  exact("/documents/purge-expired", ["POST"], ["document:write"]),
   match(/^\/documents\/\d+\/acknowledge$/, ["POST"], ["document:read"]),
   exact("/documents", ["POST"], ["document:write"]),
   match(/^\/documents\/\d+\/(?:issue|revoke)$/, ["PUT"], ["document:write"]),

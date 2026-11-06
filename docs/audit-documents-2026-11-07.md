@@ -12,7 +12,7 @@
 - 上传**不校验类型/大小/归属**：任意扩展名（exe/脚本/HTML）、任意实例 ID、跨实例 BOM 关联都能入库；
 - 文档**没有数据范围过滤、下载不审计**：有 `document:read` 即可下载任意项目图纸/合同，且下载行为无任何留痕。
 
-**整改后：A-（2 个 P1 + 3 个 P2 已修）**
+**整改后：A（2 个 P1 + 3 个 P2 + 4 项 P3 全部修复）**
 
 | 编号 | 级别 | 问题（实测） | 状态 |
 |---|---|---|---|
@@ -21,7 +21,7 @@
 | D-3 | P2 | 上传/签发/收回/归档只写 `document_events`，不写 `audit_logs` | 已修 |
 | D-4 | P2 | 列表 `LIMIT 500` 无分页、无总数 | 已修（page/page_size/total） |
 | D-5 | P2 | 同 `doc_code + version` 可重复上传；文件名原样存库/响应头 | 已修 |
-| D-6 | P3 | 签收未校验 issued_to 与用户部门/角色匹配；无保留期/物理清理；版本链依赖 doc_code 后缀 | 记录 |
+| D-6 | P3 | 签收未校验 issued_to；无保留期/物理清理；版本链依赖 doc_code 后缀；无在线预览/水印 | **已全部修复**（角色校验/保留期清理/显式版本链/预览水印） |
 
 ## 1. 发现与整改明细
 
@@ -72,6 +72,37 @@
 3. 版本链按 `doc_code` 去版本后缀聚合，依赖编码规范；
 4. 无在线预览/水印/防截屏。
 
+## 1.7 D-6 P3 全修（2026-11-07）
+
+### 1.7.1 签收角色校验
+
+- 新增 `ISSUE_TARGET_ROLES`：签发对象 → 允许签收角色（assembly: worker/welder/foreman；qc: qc/inspector；warehouse: warehouse 等），admin 始终放行；
+- 签收时校验角色，不匹配 → 403；待签收列表同样只显示当前角色可签的文档；
+- 实测：qc 签收 assembly 文档 → 403；worker 签收 → 200。
+
+### 1.7.2 保留期与物理清理
+
+- `documents` 增加 `retention_until`、`purged_at`；
+- 归档时按类型写入保留期（图纸/工艺/SOP 10 年、合同 7 年、报表 5 年，可用 `DOC_RETENTION_YEARS_*` 覆盖）；
+- `POST /api/documents/:id/purge`：仅已归档且到期（或 admin force）才物理删除文件并置 `status=purged`，写 `document.purge` 审计与 purge 事件；
+- `POST /api/documents/purge-expired`：批量清理到期文档；
+- 实测：归档 retention=2036；未到期清理 400；到期清理 200 且物理文件删除。
+
+### 1.7.3 显式版本链
+
+- `documents` 增加 `document_family_id`、`parent_document_id`；上传支持 `parent_document_id`（必须同实例），自动继承 family；
+- 版本列表/历史优先按 `document_family_id` 聚合，不再依赖 `doc_code` 后缀正则；
+- 同 family + version 重复上传 409；
+- 迁移脚本 `scripts/migrate-document-family.js --apply` 已回填 5 条历史文档；
+- 实测：A0→A1 显式版本链 versions 返回 2 条。
+
+### 1.7.4 在线预览与水印
+
+- 新增 `GET /api/documents/:id/preview`：pdf/图片/文本内联预览，带 `X-Document-Watermark`（用户@时间）、`Cache-Control: no-store`、`Content-Security-Policy: sandbox`、`X-Content-Type-Options: nosniff`；写 preview 事件；
+- 非预览类型（xlsx 等）返回 400 引导下载；
+- 前端文档列表新增「预览」按钮；预览弹窗叠加"用户+时间"水印、禁用右键、底部提示请勿截屏外传；
+- 实测：pdf 预览 200 + preview 事件；xlsx 预览 400。
+
 ## 2. 验证
 
 | 项目 | 结果 |
@@ -89,6 +120,8 @@
 | `services/documentService/mutationRoutes.js` | 上传校验/归属/重复、生命周期 audit_logs |
 | `services/documentService/queryRoutes.js` | 分页、范围过滤、下载审计与安全头 |
 | `tests/documentSecurity.test.js` | 5 个回归用例 |
+| `scripts/migrate-document-family.js` | 历史文档显式版本链回填（幂等） |
+| `frontend/src/views/documents/DocumentListCard.vue`、`DocumentManagement.vue`、`api/documents.ts` | 预览入口/水印弹窗 |
 | `docs/audit-documents-2026-11-07.md` | 本报告 |
 
 ## 4. 复验方式

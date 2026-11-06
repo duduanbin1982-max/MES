@@ -79,12 +79,12 @@ function upload(meta, fileName, body, mime = 'application/pdf') {
   });
 }
 
-function request(method, url, body) {
+function request(method, url, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null;
     const req = http.request({
       hostname: '127.0.0.1', port, path: url, method,
-      headers: { 'content-type': 'application/json', ...(payload ? { 'content-length': Buffer.byteLength(payload) } : {}) },
+      headers: { 'content-type': 'application/json', ...headers, ...(payload ? { 'content-length': Buffer.byteLength(payload) } : {}) },
     }, (res) => {
       let raw = '';
       res.on('data', (chunk) => { raw += chunk; });
@@ -110,7 +110,7 @@ test.before(async () => {
   });
   app.use(express.json());
   app.use((req, _res, next) => {
-    req.user = { uid: 1, role: 'admin', permissions: ['*'] };
+    req.user = { uid: 1, role: req.headers['x-test-role'] || 'admin', permissions: ['*'] };
     req.scope = () => scopeCtx;
     next();
   });
@@ -195,4 +195,64 @@ test('D-4 列表分页 + 数据范围过滤（instance 范围只见本项目）'
   const download = await request('GET', `/api/documents/${other.body.id}/download`);
   assert.equal(download.status, 404);
   scopeCtx = { scope: 'all', config: {} };
+});
+
+// ---------------- D-6 P3 全修 ----------------
+
+test('D-6a 签收校验角色与签发对象匹配', async () => {
+  const stamp = Date.now();
+  const result = await upload({ title: '签收演练', equipment_instance_id: 1, doc_type: 'drawing', doc_code: `ACK-${stamp}`, version: 'A0' }, 'ack.pdf', 'PDF-ACK');
+  assert.equal(result.status, 200);
+  const id = result.body.id;
+  let res = await request('PUT', `/api/documents/${id}/issue`, { issued_to: 'assembly' });
+  assert.equal(res.status, 200);
+  res = await request('POST', `/api/documents/${id}/acknowledge`, {}, { 'x-test-role': 'qc' });
+  assert.equal(res.status, 403, 'qc 不能签收装配文档');
+  res = await request('POST', `/api/documents/${id}/acknowledge`, {}, { 'x-test-role': 'worker' });
+  assert.equal(res.status, 200, 'worker 可以签收装配文档');
+});
+
+test('D-6b 显式版本链（parent_document_id）', async () => {
+  const stamp = Date.now();
+  const first = await upload({ title: '版本链', equipment_instance_id: 1, doc_type: 'drawing', doc_code: `FAM-${stamp}`, version: 'A0' }, 'fam-a0.pdf', 'PDF-A0');
+  assert.equal(first.status, 200);
+  const second = await upload({ title: '版本链', equipment_instance_id: 1, doc_type: 'drawing', doc_code: `FAM-${stamp}`, version: 'A1', parent_document_id: first.body.id }, 'fam-a1.pdf', 'PDF-A1');
+  assert.equal(second.status, 200, JSON.stringify(second.body));
+  assert.equal(second.body.parent_document_id, first.body.id);
+  const versions = await request('GET', `/api/documents/${second.body.id}/versions`);
+  assert.equal(versions.status, 200);
+  assert.equal(versions.body.items.length, 2);
+  const familyIds = new Set(versions.body.items.map((item) => item.id));
+  assert.ok(familyIds.has(first.body.id) && familyIds.has(second.body.id));
+});
+
+test('D-6c 保留期：归档写 retention_until；未到期拒绝清理；到期清理文件', async () => {
+  const stamp = Date.now();
+  const result = await upload({ title: '保留期演练', equipment_instance_id: 1, doc_type: 'contract', doc_code: `RET-${stamp}`, version: 'A0' }, 'ret.pdf', 'PDF-RET');
+  const id = result.body.id;
+  let res = await request('DELETE', `/api/documents/${id}`);
+  assert.equal(res.status, 200);
+  const archived = db.prepare('SELECT retention_until, file_path FROM documents WHERE id=?').get(id);
+  assert.ok(archived.retention_until, '归档应写入保留期');
+  res = await request('POST', `/api/documents/${id}/purge`, {});
+  assert.equal(res.status, 400, '未到保留期不能清理');
+  assert.ok(resolveStoredFile(archived.file_path), '文件应还在');
+  db.prepare("UPDATE documents SET retention_until = '2000-01-01' WHERE id=?").run(id);
+  res = await request('POST', `/api/documents/${id}/purge`, {});
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(db.prepare('SELECT status FROM documents WHERE id=?').get(id).status, 'purged');
+  assert.equal(resolveStoredFile(archived.file_path), null, '物理文件应被删除');
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM audit_logs WHERE action='document.purge'").get().c >= 1);
+});
+
+test('D-6d 在线预览：pdf 内联+水印头；xlsx 拒绝预览', async () => {
+  const stamp = Date.now();
+  const pdf = await upload({ title: '预览演练', equipment_instance_id: 1, doc_type: 'drawing', doc_code: `PRE-${stamp}`, version: 'A0' }, 'preview.pdf', 'PDF-PREVIEW');
+  let res = await request('GET', `/api/documents/${pdf.body.id}/preview`);
+  assert.equal(res.status, 200);
+  assert.ok(db.prepare("SELECT COUNT(*) c FROM document_events WHERE action='preview' AND doc_id=?").get(pdf.body.id).c >= 1);
+  const xlsx = await upload({ title: '表格', equipment_instance_id: 1, doc_type: 'report', doc_code: `XLS-${stamp}`, version: 'A0' }, 'table.xlsx', 'XLSX', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  assert.equal(xlsx.status, 200);
+  res = await request('GET', `/api/documents/${xlsx.body.id}/preview`);
+  assert.equal(res.status, 400);
 });
