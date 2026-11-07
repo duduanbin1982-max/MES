@@ -1,9 +1,9 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Files /></el-icon> 工单管理</div>
       <el-button @click="load">刷新</el-button>
-    </div>
+    </PageToolbar>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- ========== 工单列表 Tab ========== -->

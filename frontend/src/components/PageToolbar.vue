@@ -1,6 +1,7 @@
 <template>
   <header class="page-toolbar" :class="{ 'is-compact': compact, 'is-sticky': sticky }" :aria-label="ariaLabel || title || '页面工具栏'">
-    <div class="page-toolbar__top">
+    <slot v-if="$slots.default" />
+    <div v-else class="page-toolbar__top">
       <div class="page-toolbar__heading">
         <span v-if="$slots.icon" class="page-toolbar__icon" aria-hidden="true">
           <slot name="icon" />
@@ -44,6 +45,16 @@ withDefaults(defineProps<{
 </script>
 
 <style scoped>
+.page-toolbar.page-header {
+  /* 兼容包裹既有 page-header 内容：保持左右布局 */
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-md);
+  margin-bottom: 0;
+  padding-bottom: var(--space-sm);
+}
+
 .page-toolbar {
   display: grid;
   gap: var(--space-md);

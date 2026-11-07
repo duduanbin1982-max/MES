@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Avatar /></el-icon> 供应商协同</div>
         <div class="page-subtitle">评分 · 采购跟催 · 来料检验 · 外协进度</div>
       </div>
       <el-button @click="loadAll" :loading="loading">刷新</el-button>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="12" style="margin-bottom:12px">
       <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num">{{ data.overview.total_suppliers }}</div><div class="stat-label">供应商</div></el-card></el-col>

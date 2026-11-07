@@ -1,5 +1,5 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
-import * as echarts from 'echarts'
+import { echarts } from '../utils/echarts'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
 

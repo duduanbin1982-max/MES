@@ -352,6 +352,8 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-drawer, .el-input__wrapper,
 }
 
 /* 空态/加载态/骨架统一 */
+.el-card .page-state { border: 0; background: transparent; box-shadow: none; }
+
 .el-empty { padding: var(--space-lg) 0; }
 .el-empty__description { color: var(--el-text-color-secondary); font-size: 13px; }
 .el-loading-mask { background-color: color-mix(in srgb, var(--el-bg-color) 72%, transparent); }

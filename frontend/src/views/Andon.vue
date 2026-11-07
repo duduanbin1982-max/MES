@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="page">
-    <div class="page-header"><div class="page-title"><el-icon><Warning /></el-icon> ANDON 安灯报警</div></div>
+    <PageToolbar class="page-header"><div class="page-title"><el-icon><Warning /></el-icon> ANDON 安灯报警</div></PageToolbar>
 
     <el-tabs v-model="activeTab" type="border-card">
       <!-- Tab 1: 报警列表 (existing) -->
@@ -73,7 +73,7 @@
             <el-col :span="8"><el-card shadow="hover"><el-statistic title="警告报警" :value="statsData.warning || 0"><template #suffix><el-tag type="warning" size="small">警告</el-tag></template></el-statistic></el-card></el-col>
           </el-row>
           <div v-if="statsTrend.length" ref="statsChartRef" style="width:100%;height:350px"></div>
-          <el-empty v-else description="暂无统计数据" />
+          <PageState state="empty" compact :show-action="false" v-else description="暂无统计数据" />
         </el-card>
       </el-tab-pane>
     </el-tabs>
@@ -106,7 +106,7 @@
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import * as echarts from 'echarts'
+import { echarts } from '../utils/echarts'
 
 const activeTab = ref('alerts')
 const alertLevelLabels: Record<string, string> = { danger: '严重', warning: '警告', info: '提示' }

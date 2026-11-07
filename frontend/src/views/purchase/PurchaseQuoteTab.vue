@@ -22,7 +22,7 @@
             <template #default="{ row }">¥{{ (row[s.id] || 0).toLocaleString() }}</template>
           </el-table-column>
         </el-table>
-        <el-empty v-if="!quoteResults.length && quoteLoaded" description="暂无对比数据，请选择供应商和物料后点击对比报价" />
+        <PageState state="empty" compact :show-action="false" v-if="!quoteResults.length && quoteLoaded" description="暂无对比数据，请选择供应商和物料后点击对比报价" />
       </el-tab-pane>
 </template>
 

@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Tools /></el-icon> 设备维护看板</div>
         <div class="page-subtitle">维保计划 · 故障报修 · 备件库存 · 点检记录 · 现场服务</div>
@@ -11,7 +11,7 @@
         </el-select>
         <el-button @click="loadAll" :loading="loading">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <!-- Overview Cards -->
     <el-row :gutter="12" style="margin-bottom:12px">

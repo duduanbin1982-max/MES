@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title">异常中心</div>
         <div class="page-subtitle">统一汇聚延期、质量、安灯、库存、ECO 与采购风险</div>
       </div>
       <div class="header-actions"><el-button type="warning" size="small" :loading="saving" @click="escalateDue">升级到期异常</el-button><el-button :icon="Refresh" size="small" :loading="loading" @click="loadAll">刷新</el-button></div>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="16" class="kpi-row">
       <el-col :span="6"><el-card class="kpi-card"><div class="stat-label">待处理异常</div><div class="stat-value">{{ summary.total || 0 }}</div></el-card></el-col>
@@ -94,7 +94,7 @@
                 <div class="muted">{{ a.note || '-' }}</div>
               </el-timeline-item>
             </el-timeline>
-            <el-empty v-if="!detail.actions?.length" description="暂无处理记录" :image-size="48" />
+            <PageState state="empty" compact :show-action="false" v-if="!detail.actions?.length" description="暂无处理记录" />
           </el-tab-pane>
         </el-tabs>
       </template>

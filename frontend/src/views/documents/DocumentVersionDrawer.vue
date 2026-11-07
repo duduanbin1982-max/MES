@@ -26,7 +26,7 @@
       </el-timeline>
       <el-divider />
       <div class="drawer-hint"><b>签发/收回/签收流水</b></div>
-      <el-empty v-if="!events.length" description="暂无动作历史" :image-size="72" />
+      <PageState state="empty" compact :show-action="false" v-if="!events.length" description="暂无动作历史" />
       <el-timeline v-else>
         <el-timeline-item
           v-for="event in events"

@@ -19,7 +19,7 @@
       <template v-if="station.assigned_workers && station.assigned_workers.length">
         <el-tag v-for="worker in station.assigned_workers" :key="worker.id" class="tag-gap" size="small">{{ worker.full_name || worker.name }}</el-tag>
       </template>
-      <el-empty v-else description="暂无人员" :image-size="40" />
+      <PageState state="empty" compact :show-action="false" v-else description="暂无人员" />
       <el-divider />
       <div class="section-title">关联设备 / 工单</div>
       <div v-if="station.equipment?.length">

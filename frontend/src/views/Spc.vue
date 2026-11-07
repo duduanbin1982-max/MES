@@ -1,6 +1,6 @@
 ﻿<template>
   <div class="page">
-    <div class="page-header"><div class="page-title"><el-icon><DataAnalysis /></el-icon> SPC 统计过程控制</div></div>
+    <PageToolbar class="page-header"><div class="page-title"><el-icon><DataAnalysis /></el-icon> SPC 统计过程控制</div></PageToolbar>
 
     <PageState
       v-if="nodesLoading"
@@ -50,7 +50,7 @@
             <el-table-column label="失控" width="70" align="center"><template #default="{row}"><el-tag v-if="row.outOfControl" type="danger" size="small">●</el-tag></template></el-table-column>
           </el-table>
         </div>
-        <el-empty v-else description="选择工序和参数开始 SPC 分析" />
+        <PageState state="empty" compact :show-action="false" v-else description="选择工序和参数开始 SPC 分析" />
       </el-tab-pane>
 
       <!-- Tab 2: Xbar-R 控制图 -->
@@ -106,7 +106,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { Api } from '../api'
-import * as echarts from 'echarts'
+import { echarts } from '../utils/echarts'
 import { ElMessage } from 'element-plus'
 import type { ApiRecord } from '../types/api'
 import PageState from '../components/PageState.vue'

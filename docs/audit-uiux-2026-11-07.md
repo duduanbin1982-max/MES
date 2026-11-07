@@ -3,13 +3,13 @@
 > 审计对象：TBM-MES 前端（57 个页面 + 全局壳层 Layout/AppHeader/AppSidebar + 设计系统）  
 > 审计日期：2026-11-07  
 > 方法：代码走读 + 静态度量（设计令牌/响应式/可访问性/性能）+ 路由与 API 层行为审计 + 生产构建/静态资源冒烟  
-> 说明：本环境无浏览器可视化/DOM 访问能力，视觉细节（像素级布局、颜色对比实测）为静态审计，未做截图比对。
+> 说明：本环境无浏览器可视化/DOM 访问能力，视觉细节（像素级布局、颜色对比实测、组件运行时渲染）为静态审计 + 构建/产物验证，未做截图比对；PageToolbar 包裹迁移后建议重点浏览器复验页头布局。
 
 ## 0. 结论
 
 **整改前评级：B+** —— 已有较成熟的工业风设计系统（CSS 变量、暗色模式、focus-visible、减动效、打印样式、跳转主内容、移动端抽屉、菜单收藏/最近、API/WS 状态、路由懒加载、vendor 分包），但**壳层级体验**存在 2 个 P1 + 5 个 P2 缺口。
 
-**整改后：A（2 个 P1 + 5 个 P2 + 3 项 P3 全部修复）**
+**整改后：A（2 个 P1 + 5 个 P2 + 3 项 P3 + 3 项后续优化全部完成）**
 
 | 编号 | 级别 | 问题 | 状态 |
 |---|---|---|---|
@@ -20,9 +20,9 @@
 | UX-5 | P2 | API 错误提示刷屏、英文 `Network Error`、取消请求也弹错 | 已修（去重/取消/401 跳过/中文文案） |
 | UX-6 | P2 | 未捕获异常导致白屏且无兜底 | 已修（全局 errorHandler + unhandledrejection） |
 | UX-7 | P2 | 移动端固定宽弹窗/大表格/标题在窄屏溢出 | 已修（全局响应式规则） |
-| UX-8 | P3 | 46 处 icon-only 按钮缺 `aria-label`；表格/表单可达性不统一 | **已修**（精确复核后仅 2 处真正 icon-only，已补；其余为 icon+文字/动态文案） |
-| UX-9 | P3 | PageState/PageToolbar 仅 9/57 页面使用，空态/加载态/工具栏样式不统一 | **已修**（PageState 全局错误兜底 57/57；两组件全局注册；page-header/空态/加载/骨架视觉基线统一） |
-| UX-10 | P3 | Element Plus 与全部图标全量注册：vendor-element 1.12MB、vendor-echarts 1.12MB | **已修**（图标按需 73/293，vendor-element 1120→1005 kB；ECharts 仍 1.12MB，列为残余） |
+| UX-8 | P3 | icon-only 按钮缺 `aria-label`；表格/表单可达性不统一 | **已修**（精确复核后真正 icon-only 仅 2 处，已补 aria-label+title） |
+| UX-9 | P3 | PageState/PageToolbar 仅 9/57 页面使用，空态/加载态/工具栏样式不统一 | **已修**（PageState 45 个文件、PageToolbar 47 个文件；剩余 el-empty 0；PageState 全局错误兜底） |
+| UX-10 | P3 | Element Plus 与全部图标全量注册：vendor-element 1.12MB、vendor-echarts 1.12MB | **已修**（Element Plus 组件按需 + 图标 73/293 + ECharts 模块化：vendor-element 1120→954 kB、ECharts 1120→656 kB） |
 
 ## 1. 审计度量（整改前）
 
@@ -117,6 +117,29 @@
 - 新增 `frontend/tests/domain/icons.test.ts` 守卫：模板/路由用到的图标必须全部在注册表中，避免后续新增页面出现图标缺失；
 - 残余：ECharts 仍为全量引入（1.12MB）、Element Plus 仍全量注册；建议后续用按需组件/模块化 ECharts 单独立项。
 
+### 2.5 后续优化项全修（本轮追加）
+
+#### A. ECharts 模块化（1.12MB → 656KB）
+
+- 新增 `src/utils/echarts.ts`：`echarts/core` + 按需注册 `BarChart/LineChart/PieChart/ScatterChart/TreeChart`、`Grid/Tooltip/Legend/Title/DataZoom/MarkLine/Graphic`、`CanvasRenderer`；
+- 7 个使用点（Spc/ProcessParams/Andon/DashboardProjectRisk/useMindmapChart/useMaterialAlertsPage/useOeePage）由 `import * as echarts from 'echarts'` 改为 `import { echarts } from 'utils/echarts'`；
+- 构建对比：`vendor-echarts` **1,117.85 kB → 655.55 kB**（gzip **370.86 → 222.85 kB**，约 -462 kB / -148 kB gzip）。
+
+#### B. Element Plus 按需引入（vendor-element 1.12MB → 954KB，CSS 357→282KB）
+
+- 新增开发依赖 `unplugin-vue-components`，在 `vite.config.js` 注册 `ElementPlusResolver`（组件 + 按需 CSS 自动引入）；
+- `main.ts` 移除 `import ElementPlus` 与 `app.use(ElementPlus)`、移除全量 `element-plus/dist/index.css`；保留并按需注册 `v-loading` 指令、`ElMessage/ElMessageBox` 样式；
+- `App.vue` 使用 `<el-config-provider :locale="zhCn">` 提供中文 locale；`ElMessageBox.confirm` 统一默认中文按钮，避免脱离全量安装后出现英文按钮；
+- 构建对比：`vendor-element` **1,119.68 kB → 954.04 kB**（gzip 352.07→308.71 kB），组件 CSS **356.37 → 281.72 kB**（gzip 47.61→37.41 kB）；
+- 工程说明：Vite 8（Rolldown）在"按需组件 + 动态路由分包"组合下触发 Rolldown panic（`easeInOutCubic should belong to a chunk`），无法产出稳定构建；已将 `vite` 固定到 **7.3.7（Rollup）**，构建恢复稳定。该 downgrade 为构建稳定性取舍，功能/产物验证通过。
+
+#### C. PageState/PageToolbar 组件化（9/57 → 45/57、47/57，剩余 el-empty 0）
+
+- 全局注册 `PageState`/`PageToolbar`；
+- 自动迁移 57 处自闭合 `<el-empty>` 为 `<PageState state="empty" compact :show-action="false">`，并补齐 6 处带操作按钮的空态（`#actions` 插槽）；**剩余 el-empty 0**；
+- 38 个 `.page-header` 块包裹为 `<PageToolbar class="page-header">`（PageToolbar 新增默认插槽兼容既有内容、保留原左右布局），PageToolbar 覆盖 **47 个页面**，PageState 覆盖 **45 个文件**；
+- 全局 CSS 处理 `el-card` 内 PageState 的双层边框；空态/加载/骨架统一；页面错误态由 Layout 的 PageState 统一兜底。
+
 ## 3. 验证
 
 | 项目 | 结果 |
@@ -126,9 +149,9 @@
 | 前端 domain 全量 | **132/132** ✅ |
 | eslint（改动文件） | 0 |
 | vue-tsc --noEmit | 0 |
-| npm run build:safe | 通过（产物已切换到 frontend/dist）；vendor-element 1,004.71 kB / gzip 322.40 kB |
+| npm run build:safe | 通过（产物已切换到 frontend/dist）；vendor-element 954.04 kB / gzip 308.71 kB；ECharts 655.55 kB / gzip 222.85 kB；CSS 281.72 kB / gzip 37.41 kB |
 | 全量部署闸门 | **889/0** ✅ |
-| 生产静态冒烟 | `https://192.168.1.73/` 200（Host 头）、新 index 含 description/title、无 Google Fonts、入口 JS 200、未知路由 SPA 回退 200、`/api/health` 200 |
+| 生产静态冒烟 | `https://192.168.1.73/` 200、入口 JS 200、CSS 200、SPA `/spc` 200、未知路由回退 200、`/api/health` 200 |
 
 ## 4. 改动文件
 
@@ -149,6 +172,10 @@
 | `frontend/scripts/write-frontend-icons.mjs`（新） | 图标使用扫描/注册表生成器 |
 | `frontend/tests/domain/icons.test.ts`（新） | 图标注册覆盖守卫 |
 | `frontend/scripts/check-colors.py` | 既有设计 token 检查脚本（保留） |
+| `frontend/src/utils/echarts.ts`（新） | ECharts 模块化按需注册 |
+| `frontend/vite.config.js` | unplugin-vue-components 按需组件 + vendor 分包 |
+| `frontend/package.json` / lock | 新增 unplugin-vue-components；vite 7.3.7（Rolldown panic 规避） |
+| 57 个页面/组件 | el-empty → PageState；38 个 page-header → PageToolbar |
 
 ## 5. 复验方式
 

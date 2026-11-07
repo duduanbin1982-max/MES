@@ -1,13 +1,13 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Money /></el-icon> ERP 成本台账</div>
       <div style="display:flex;gap:8px">
         <el-button type="success" @click="doRollup" :loading="rolling">成本归集</el-button>
         <el-button @click="exportLedger" :loading="exporting">导出台账</el-button>
         <el-button @click="refresh" :loading="loading">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-tabs v-model="activeTab">
       <!-- Tab: 成本台账 -->

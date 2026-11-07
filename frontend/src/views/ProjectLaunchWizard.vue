@@ -53,7 +53,7 @@
               <el-descriptions-item label="阶段">{{ selectedInstance.lifecycle_stage || selectedInstance.status || '-' }}</el-descriptions-item>
             </el-descriptions>
           </div>
-          <el-empty v-else description="还没有项目装备，先点击新建" :image-size="72" />
+          <PageState state="empty" compact :show-action="false" v-else description="还没有项目装备，先点击新建" />
         </el-card>
 
         <el-card shadow="never" class="side-card">

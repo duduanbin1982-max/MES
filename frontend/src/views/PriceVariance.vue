@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><DataLine /></el-icon> 采购估价 vs 实际合同价</div>
         <div class="page-subtitle">关键件从采购估价到实际合同价的差异，用于成本归集和采购复盘。</div>
       </div>
       <el-button type="primary" :loading="loading" @click="load">刷新</el-button>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="16" class="kpi-row">
       <el-col :span="6"><el-card><el-statistic title="关键件数量" :value="summary.component_count || 0" /></el-card></el-col>

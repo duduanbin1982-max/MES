@@ -27,7 +27,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!longLeadtime.length" description="暂无长交期关键件" :image-size="72" />
+      <PageState state="empty" compact :show-action="false" v-if="!longLeadtime.length" description="暂无长交期关键件" />
     </DashboardPanel>
   </DashboardGrid>
 

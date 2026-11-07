@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import * as echarts from 'echarts'
+import { echarts } from '../../utils/echarts'
 import DashboardGrid from './DashboardGrid.vue'
 import DashboardPanel from './DashboardPanel.vue'
 import { numberText, statusLabel } from './dashboardFormat'

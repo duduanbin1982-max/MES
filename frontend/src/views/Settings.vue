@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Setting /></el-icon> 系统设置</div>
       <div>
         <el-button @click="load" :loading="loading">刷新</el-button>
         <el-button @click="showTestFeishu = true" type="primary">测试飞书</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-tabs v-model="activeTab" class="settings-tabs">
       <el-tab-pane label="参数配置" name="settings">

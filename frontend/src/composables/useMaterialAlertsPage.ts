@@ -1,6 +1,6 @@
 import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { Api } from '../api'
-import * as echarts from 'echarts'
+import { echarts } from '../utils/echarts'
 import { useRouter } from 'vue-router'
 
 export function useMaterialAlertsPage() {

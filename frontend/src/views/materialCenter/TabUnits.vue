@@ -61,8 +61,8 @@
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!loading && selectedMaterialId && units.length === 0" description="该物料暂无单位换算规则" />
-      <el-empty v-if="!loading && !selectedMaterialId" description="请先选择一个物料查看单位换算" />
+      <PageState state="empty" compact :show-action="false" v-if="!loading && selectedMaterialId && units.length === 0" description="该物料暂无单位换算规则" />
+      <PageState state="empty" compact :show-action="false" v-if="!loading && !selectedMaterialId" description="请先选择一个物料查看单位换算" />
     </el-card>
 
     <el-dialog v-model="dialogVisible" title="新增单位换算" width="520px" @closed="resetForm">

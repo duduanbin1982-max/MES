@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Setting /></el-icon> 工序 / 岗位配置</div>
         <div class="page-subtitle">工序库管“怎么做”，岗位库管“谁能做”，工艺路线引用这里的标准模板。</div>
       </div>
       <el-button @click="loadAll" :loading="loading">刷新</el-button>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="12" style="margin-bottom: 12px">
       <el-col :span="6"><el-card shadow="never"><el-statistic title="岗位数" :value="overview.positions?.active || 0" /></el-card></el-col>

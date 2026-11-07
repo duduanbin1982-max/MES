@@ -1,9 +1,9 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><UserFilled /></el-icon> 劳动力管理 (资质·技能·工时)</div>
       <el-button @click="refresh" :icon="Refresh" :loading="loading">刷新</el-button>
-    </div>
+    </PageToolbar>
 
     <!-- 统计卡片 -->
     <el-row :gutter="12" style="margin-bottom:12px">
@@ -115,7 +115,7 @@
           <el-table-column prop="tasks" label="任务数" width="80" />
           <el-table-column prop="total_hours" label="总工时(h)" width="100" />
         </el-table>
-        <el-empty v-if="!dash.top_workers?.length" description="本周暂无工时记录" />
+        <PageState state="empty" compact :show-action="false" v-if="!dash.top_workers?.length" description="本周暂无工时记录" />
       </el-tab-pane>
     </el-tabs>
 

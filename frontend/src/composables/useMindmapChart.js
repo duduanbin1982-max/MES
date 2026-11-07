@@ -1,6 +1,6 @@
 // composables/useMindmapChart.js
 // ECharts 思维导图图表逻辑 — 从 ProcessTreeMindmap.vue 拆分 (brooks-debt R1)
-import * as echarts from 'echarts'
+import { echarts } from '../utils/echarts.ts'
 
 export function useMindmapChart(chartEl, tree) {
   let chartInstance = null

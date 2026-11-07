@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Setting /></el-icon> 工艺参数监控 (MESA #8)</div>
       <div>
         <el-select v-model="selectedInstance" placeholder="选择装备实例" style="width: 240px; margin-right: 8px" @change="loadNodes">
@@ -12,10 +12,10 @@
         <el-button type="primary" @click="loadParams" :loading="loading">查询</el-button>
         <el-button @click="openAdd" :disabled="!selectedNode">+ 记录参数</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <div v-if="!selectedNode" style="text-align: center; padding: 40px">
-      <el-empty description="选择装备实例和工艺节点查看参数" />
+      <PageState state="empty" compact :show-action="false" description="选择装备实例和工艺节点查看参数" />
     </div>
 
     <div v-else v-loading="loading">
@@ -99,7 +99,7 @@
 import { ref, reactive, onMounted, nextTick } from "vue";
 import api from "../api";
 import { ElMessage } from "element-plus";
-import * as echarts from "echarts";
+import { echarts } from '../utils/echarts';
 
 const instances = ref<any[]>([]);
 const nodes = ref<any[]>([]);

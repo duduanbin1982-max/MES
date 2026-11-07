@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Calendar /></el-icon> 单项目甘特图</div>
         <div class="page-subtitle">按项目排程结果展示工序计划、真实工期、子系统分组和计划告警。</div>
@@ -18,7 +18,7 @@
         <el-button @click="$router.push('/schedule')">多项目排程 →</el-button>
         <el-button type="primary" :loading="scheduling" :disabled="!selectedInstance" @click="openScheduler">重新排程</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-alert v-if="lastBatch" type="success" :closable="false" show-icon class="schedule-alert">
       <template #title>
@@ -28,7 +28,7 @@
     </el-alert>
 
     <div v-if="!selectedInstance" class="empty-wrap">
-      <el-empty description="选实例查看甘特图" />
+      <PageState state="empty" compact :show-action="false" description="选实例查看甘特图" />
     </div>
 
     <div v-else v-loading="loading">
@@ -101,9 +101,11 @@
           </span>
         </div>
         <div v-if="!displayRows.length" class="empty-wrap small">
-          <el-empty description="该项目暂无可展示工序" :image-size="80">
-            <el-button type="primary" plain @click="$router.push('/process-tree')">去工艺树排程</el-button>
-          </el-empty>
+          <PageState state="empty" :show-action="false" description="该项目暂无可展示工序">
+            <template #actions>
+              <el-button type="primary" plain @click="$router.push('/process-tree')">去工艺树排程</el-button>
+            </template>
+          </PageState>
         </div>
         <div v-else class="gantt-container">
           <div class="gantt-header">
@@ -267,7 +269,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-else-if="!previewing" description="点「重新预览」查看排程结果" :image-size="60" />
+      <PageState state="empty" compact :show-action="false" v-else-if="!previewing" description="点「重新预览」查看排程结果" />
 
       <template #footer>
         <el-button @click="schedulerVisible = false">取消</el-button>
@@ -319,7 +321,7 @@
         class="schedule-alert"
         :title="shiftPreview.skipped.slice(0, 3).map((s: any) => `#${s.id} ${s.reason}`).join('；')"
       />
-      <el-empty v-else-if="!shiftPreviewing && !shiftPreview" description="点「预览」查看改期结果" :image-size="60" />
+      <PageState state="empty" compact :show-action="false" v-else-if="!shiftPreviewing && !shiftPreview" description="点「预览」查看改期结果" />
 
       <template #footer>
         <el-button @click="shiftVisible = false">取消</el-button>

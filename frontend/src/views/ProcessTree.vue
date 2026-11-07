@@ -25,9 +25,11 @@
     </section>
 
     <el-card v-if="!selectedInstance" class="empty-state-card">
-      <el-empty description="请选择项目装备后查看工艺树">
-        <el-button type="primary" @click="selectedInstance = instances[0]?.id; selectedInstance && reloadAll()">选择第一台装备</el-button>
-      </el-empty>
+      <PageState state="empty" :show-action="false" description="请选择项目装备后查看工艺树">
+        <template #actions>
+          <el-button type="primary" @click="selectedInstance = instances[0]?.id; selectedInstance && reloadAll()">选择第一台装备</el-button>
+        </template>
+      </PageState>
     </el-card>
 
     <div v-else v-loading="loading" class="process-tree-workspace">
@@ -123,9 +125,11 @@
       />
 
       <el-card v-if="!loading && subsystems.length === 0 && uncategorized.length === 0" class="empty-state-card">
-        <el-empty description="当前装备还没有工艺节点">
-          <el-button type="warning" :icon="MagicStick" @click="regenerate">从 BOM 生成工艺树</el-button>
-        </el-empty>
+        <PageState state="empty" :show-action="false" description="当前装备还没有工艺节点">
+          <template #actions>
+            <el-button type="warning" :icon="MagicStick" @click="regenerate">从 BOM 生成工艺树</el-button>
+          </template>
+        </PageState>
       </el-card>
     </div>
 

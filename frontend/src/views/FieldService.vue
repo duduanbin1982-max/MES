@@ -1,8 +1,8 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Tools /></el-icon> 现场服务</div>
-    </div>
+    </PageToolbar>
 
     <!-- Overdue Alert Card -->
     <el-row :gutter="16" style="margin-bottom:16px">

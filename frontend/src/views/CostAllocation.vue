@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Money /></el-icon> {{ pageTitle }}</div>
       <div>
         <el-select v-if="showInstancePicker" v-model="selectedInstance" placeholder="选择装备实例" style="width: 280px; margin-right: 8px" @change="load">
@@ -8,10 +8,10 @@
         </el-select>
         <el-button type="primary" @click="load" :loading="loading">{{ showInstancePicker ? '查询' : '刷新' }}</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <div v-if="showInstancePicker && !selectedInstance" style="text-align: center; padding: 40px">
-      <el-empty description="选择装备实例查看成本归集" />
+      <PageState state="empty" compact :show-action="false" description="选择装备实例查看成本归集" />
     </div>
 
     <div v-else v-loading="loading">

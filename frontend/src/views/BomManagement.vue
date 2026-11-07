@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <span class="page-title"><el-icon><Share /></el-icon> 项目结构 / BOM 树</span>
         <el-tag size="small" type="info" style="margin-left: 12px">树状多级结构 · 节点类型 · ECO 追溯</el-tag>
@@ -11,7 +11,7 @@
         </el-select>
         <el-button @click="loadAll" :disabled="!instanceId">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="12" v-if="instanceId">
       <!-- 顶部 4 级统计卡 -->
@@ -131,7 +131,7 @@
                   </span>
                 </template>
               </el-tree>
-              <el-empty v-else description="该项目装备暂无结构树/BOM 数据" />
+              <PageState state="empty" compact :show-action="false" v-else description="该项目装备暂无结构树/BOM 数据" />
             </el-card>
           </el-col>
           <el-col :span="14">
@@ -190,7 +190,7 @@
                 <el-descriptions-item label="备注" :span="2">{{ selected.notes || '-' }}</el-descriptions-item>
               </el-descriptions>
             </el-card>
-            <el-empty v-else description="点击左侧树节点查看详情" />
+            <PageState state="empty" compact :show-action="false" v-else description="点击左侧树节点查看详情" />
           </el-col>
         </el-row>
       </el-tab-pane>
@@ -236,7 +236,7 @@
         @risk-drill="openRiskDrill"
       />
     </el-tabs>
-    <el-empty v-else description="请先选择项目装备" />
+    <PageState state="empty" compact :show-action="false" v-else description="请先选择项目装备" />
 
     <BomDialogs
       v-model:dlg-add="dlgAdd"

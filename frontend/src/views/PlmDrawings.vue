@@ -1,13 +1,13 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><TrendCharts /></el-icon> PLM 图纸管理</div>
       <div style="display:flex;gap:8px">
         <el-button type="primary" @click="showAddDwg=true">+ 新建图纸</el-button>
         <el-button type="success" @click="showAddEco=true" :disabled="!currentDwg">+ ECO 变更</el-button>
         <el-button @click="refresh" :loading="loading">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <!-- Dashboard -->
     <el-row :gutter="12" style="margin-bottom:12px">

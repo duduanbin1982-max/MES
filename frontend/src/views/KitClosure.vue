@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title">齐套与缺料闭环</div>
         <div class="page-subtitle">工单齐套检查、缺料分派、采购跟催与补齐关闭</div>
       </div>
       <el-button :icon="Refresh" size="small" :loading="loading" @click="loadAll">刷新</el-button>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="16" class="kpi-row">
       <el-col :span="6"><el-card class="kpi-card"><div class="stat-label">待处理缺料</div><div class="stat-value">{{ summary.total || 0 }}</div></el-card></el-col>

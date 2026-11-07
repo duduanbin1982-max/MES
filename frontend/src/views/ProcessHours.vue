@@ -1,8 +1,8 @@
 <template>
   <div class="process-hours-page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <h2>工时定额与报工</h2>
-    </div>
+    </PageToolbar>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <!-- Tab 1: 工时定额管理 -->
@@ -156,7 +156,7 @@
             <el-table-column prop="notes" label="备注" show-overflow-tooltip />
           </el-table>
         </div>
-        <el-empty v-else description="请选择工艺节点查看进度" />
+        <PageState state="empty" compact :show-action="false" v-else description="请选择工艺节点查看进度" />
       </el-tab-pane>
 
       <!-- Tab 5: 工人绩效 -->

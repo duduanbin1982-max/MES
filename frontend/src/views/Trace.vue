@@ -1,5 +1,5 @@
 <template>
-  <div class="page"><div class="page-header"><div class="page-title"><el-icon><Search /></el-icon> 端到端追溯</div></div>
+  <div class="page"><PageToolbar class="page-header"><div class="page-title"><el-icon><Search /></el-icon> 端到端追溯</div></PageToolbar>
   <el-tabs v-model="tab">
     <!-- 正向追溯: 物料→工单→设备 -->
     <el-tab-pane label="正向追溯 (物料→设备)" name="forward">
@@ -42,7 +42,7 @@
           </el-table-column>
         </el-table>
       </div>
-      <el-empty v-if="!fw.result && !fw.loading" description="输入批次号或物料编码开始追溯" />
+      <PageState state="empty" compact :show-action="false" v-if="!fw.result && !fw.loading" description="输入批次号或物料编码开始追溯" />
     </el-tab-pane>
 
     <!-- 反向追溯: 设备→全部物料/工单/人员 -->
@@ -82,7 +82,7 @@
           </template>
         </el-tree>
       </div>
-      <el-empty v-if="!bw.result && !bw.loading" description="选择设备实例开始反向追溯" />
+      <PageState state="empty" compact :show-action="false" v-if="!bw.result && !bw.loading" description="选择设备实例开始反向追溯" />
     </el-tab-pane>
 
     <!-- 追溯树视图 -->
@@ -110,7 +110,7 @@
           </template>
         </el-tree>
       </el-card>
-      <el-empty v-if="!treeLoading && !treeData.length" description="选择设备实例查看追溯树" />
+      <PageState state="empty" compact :show-action="false" v-if="!treeLoading && !treeData.length" description="选择设备实例查看追溯树" />
 
       <el-dialog v-model="treeDetailVisible" title="节点详情" width="550px">
         <el-descriptions v-if="treeDetail" :column="2" border size="small">
@@ -233,7 +233,7 @@
           <div><b>签发人:</b> {{ certData.issuer || '-' }}</div>
         </div>
       </div>
-      <el-empty v-if="!certData" description="选择设备实例查看追溯证书" />
+      <PageState state="empty" compact :show-action="false" v-if="!certData" description="选择设备实例查看追溯证书" />
     </el-tab-pane>
 
     <el-tab-pane label="追溯登记" name="records">
@@ -243,7 +243,7 @@
         </el-select>
         <el-button @click="loadRecordWorkspace" :loading="recordLoading">刷新</el-button>
       </div>
-      <el-empty v-if="!recordFilter.instance_id" description="先选择设备实例" />
+      <PageState state="empty" compact :show-action="false" v-if="!recordFilter.instance_id" description="先选择设备实例" />
       <template v-else>
         <el-row :gutter="12">
           <el-col :xs="24" :lg="8">

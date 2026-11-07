@@ -36,7 +36,7 @@
             <div class="eq-name">{{ item.instance_name }}</div>
             <el-progress :percentage="item.progress_pct ?? 0" :color="progressColor(item.lifecycle_stage || item.status)" :stroke-width="8" class="eq-progress" />
           </el-card>
-          <el-empty v-if="!equipment.length" description="暂无装备数据" />
+          <PageState state="empty" compact :show-action="false" v-if="!equipment.length" description="暂无装备数据" />
         </div>
       </el-card>
     </el-col>

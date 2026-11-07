@@ -6,7 +6,7 @@
       <el-table-column prop="ack_at" label="签收时间" width="180" />
       <el-table-column prop="ack_method" label="方式" width="80" />
     </el-table>
-    <el-empty v-if="!ackList.length" description="暂无签收记录" />
+    <PageState state="empty" compact :show-action="false" v-if="!ackList.length" description="暂无签收记录" />
     <template #footer>
       <el-button @click="visible = false">关闭</el-button>
     </template>

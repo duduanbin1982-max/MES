@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Money /></el-icon> 外协/折旧成本</div>
         <div class="page-subtitle">基于 project_cost_entries 标准成本台账，按外协、折旧、返工、质量损失归集到项目。</div>
@@ -12,9 +12,9 @@
         <el-button :loading="loading" @click="load">刷新</el-button>
         <el-button type="primary" :disabled="!selectedInstance" @click="openDialog()">新增成本</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
-    <el-empty v-if="!selectedInstance" description="选择装备实例查看外协/折旧成本" :image-size="80" />
+    <PageState state="empty" compact :show-action="false" v-if="!selectedInstance" description="选择装备实例查看外协/折旧成本" />
 
     <template v-else>
       <el-row :gutter="16" class="kpi-row">

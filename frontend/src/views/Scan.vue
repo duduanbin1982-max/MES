@@ -141,7 +141,7 @@
       </el-card>
     </div>
 
-    <el-empty v-else-if="!loading && searched" description="未找到该码" :image-size="80" />
+    <PageState state="empty" compact :show-action="false" v-else-if="!loading && searched" description="未找到该码" />
 
     <el-dialog v-model="showIssue" :title="target?.type === 'work_order' ? '<el-icon><Warning /></el-icon> 上报异常' : '<el-icon><Edit /></el-icon> 添加备注'" width="90%" max-width="500px">
       <el-form :model="issueForm" label-width="80px">

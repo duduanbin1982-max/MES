@@ -82,7 +82,7 @@
                 <el-progress :percentage="summary.bottleneck.utilization_pct" :status="summary.bottleneck.utilization_pct>=90?'exception':'warning'" class="mt-xs" />
                 <div class="hint-text">利用率最高，建议优先调度</div>
               </div>
-              <el-empty v-else description="暂无数据" :image-size="60" />
+              <PageState state="empty" compact :show-action="false" v-else description="暂无数据" />
             </el-card>
           </el-col>
           <el-col :span="12">
@@ -92,7 +92,7 @@
                 <el-progress :percentage="summary.least_busy.utilization_pct" :status="summary.least_busy.utilization_pct<30?'success':'warning'" class="mt-xs" />
                 <div class="hint-text">利用率最低，可承接更多任务</div>
               </div>
-              <el-empty v-else description="暂无数据" :image-size="60" />
+              <PageState state="empty" compact :show-action="false" v-else description="暂无数据" />
             </el-card>
           </el-col>
         </el-row>

@@ -223,13 +223,13 @@
 
             <el-divider />
             <div class="section-title">优先处理</div>
-            <el-empty v-if="!selected.top_exceptions.length" description="暂无异常" :image-size="48" />
+            <PageState state="empty" compact :show-action="false" v-if="!selected.top_exceptions.length" description="暂无异常" />
             <div v-for="item in selected.top_exceptions" :key="item.id" class="exception-line" role="button" tabindex="0" @click="go(item.source_path)" @keydown.enter.prevent="go(item.source_path)" @keydown.space.prevent="go(item.source_path)">
               <el-tag :type="severityTag(item.severity)" size="small">{{ severityLabel(item.severity) }}</el-tag>
               <span class="exception-title">{{ item.title }}</span>
             </div>
           </template>
-          <el-empty v-else description="选择左侧项目查看交付闭环" />
+          <PageState state="empty" compact :show-action="false" v-else description="选择左侧项目查看交付闭环" />
         </el-card>
       </el-col>
     </el-row>

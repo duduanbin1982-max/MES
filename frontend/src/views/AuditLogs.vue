@@ -1,9 +1,9 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Memo /></el-icon> 审计日志</div>
       <el-button @click="load">刷新</el-button>
-    </div>
+    </PageToolbar>
     <el-card>
       <el-form :inline="true" size="small" style="margin-bottom: 12px">
         <el-form-item label="操作">

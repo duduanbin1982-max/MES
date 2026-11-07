@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title">设计变更 ECO</div>
         <div class="page-subtitle">变更申请、审批流转与影响分析</div>
       </div>
       <el-button :icon="Refresh" size="small" :loading="loading" @click="loadAll">刷新</el-button>
-    </div>
+    </PageToolbar>
 
     <el-card>
       <template #header>

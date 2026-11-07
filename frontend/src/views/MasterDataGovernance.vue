@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title">主数据治理</div>
         <div class="page-subtitle">物料、BOM、图纸、供应商、工序工位、人员资质的数据质量检查</div>
       </div>
       <el-button :icon="Refresh" size="small" :loading="loading" @click="loadAll">刷新</el-button>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="16" class="kpi-row">
       <el-col :span="6"><el-card class="kpi-card"><div class="stat-label">治理评分</div><div class="stat-value">{{ summary.avg_score || 0 }}</div><div class="stat-sub">平均质量分</div></el-card></el-col>

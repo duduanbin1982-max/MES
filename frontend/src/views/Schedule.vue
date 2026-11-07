@@ -1,6 +1,6 @@
 <template>
   <div class="page schedule-page" v-loading="loading">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Calendar /></el-icon> 项目排程</div>
         <div class="page-subtitle">
@@ -14,7 +14,7 @@
         <el-button @click="openBatches"><el-icon><Tickets /></el-icon> 批次记录</el-button>
         <el-button type="primary" @click="openReschedule"><el-icon><MagicStick /></el-icon> 批量重排程</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
       <!-- ------------------------------------------------------------ 本周任务 -->
@@ -213,10 +213,12 @@
           </el-card>
         </template>
 
-        <el-empty v-else-if="!loading" :description="emptyText" :image-size="80">
-          <el-button v-if="hasFilter" type="primary" plain @click="resetFilters">清除筛选</el-button>
-          <el-button v-else type="primary" @click="openReschedule">去批量重排程</el-button>
-        </el-empty>
+        <PageState v-else-if="!loading" state="empty" :show-action="false" :description="emptyText">
+          <template #actions>
+            <el-button v-if="hasFilter" type="primary" plain @click="resetFilters">清除筛选</el-button>
+            <el-button v-else type="primary" @click="openReschedule">去批量重排程</el-button>
+          </template>
+        </PageState>
       </el-tab-pane>
 
       <!-- ------------------------------------------------------------ 项目里程碑 -->
@@ -277,11 +279,13 @@
               </template>
             </el-table-column>
           </el-table>
-          <el-empty v-else description="该实例还没有里程碑" :image-size="70">
-            <el-button type="primary" plain @click="$router.push('/process-tree')">去工艺树排程</el-button>
-          </el-empty>
+          <PageState v-else state="empty" :show-action="false" description="该实例还没有里程碑">
+            <template #actions>
+              <el-button type="primary" plain @click="$router.push('/process-tree')">去工艺树排程</el-button>
+            </template>
+          </PageState>
         </el-card>
-        <el-empty v-else description="先选择一个项目" :image-size="70" />
+        <PageState state="empty" compact :show-action="false" v-else description="先选择一个项目" />
       </el-tab-pane>
 
       <!-- ------------------------------------------------------------ 甘特图 -->
@@ -346,9 +350,11 @@
           @move="onGanttMove"
           @select="onGanttSelect"
         />
-        <el-empty v-else-if="!ganttLoading" description="当前月份没有已排程的工序" :image-size="70">
-          <el-button type="primary" plain @click="openReschedule">批量重排程</el-button>
-        </el-empty>
+        <PageState v-else-if="!ganttLoading" state="empty" :show-action="false" description="当前月份没有已排程的工序">
+          <template #actions>
+            <el-button type="primary" plain @click="openReschedule">批量重排程</el-button>
+          </template>
+        </PageState>
       </el-tab-pane>
     </el-tabs>
 

@@ -67,7 +67,7 @@
         </el-tab-pane>
 
         <el-tab-pane label="领料" name="pick">
-          <el-empty v-if="!workOrders.length" description="暂无待领料工单" :image-size="48" />
+          <PageState state="empty" compact :show-action="false" v-if="!workOrders.length" description="暂无待领料工单" />
           <div v-for="wo in workOrders.slice(0, 6)" :key="wo.id" class="wo-card">
             <div class="wo-main"><strong>{{ wo.wo_code }}</strong><el-tag size="small">{{ wo.status }}</el-tag></div>
             <div class="muted">{{ wo.instance_code || '-' }} · {{ wo.title }}</div>
@@ -79,7 +79,7 @@
         </el-tab-pane>
 
         <el-tab-pane label="质检" name="qc">
-          <el-empty v-if="!workOrders.length" description="暂无可质检工单" :image-size="48" />
+          <PageState state="empty" compact :show-action="false" v-if="!workOrders.length" description="暂无可质检工单" />
           <div v-for="wo in workOrders.slice(0, 6)" :key="wo.id" class="wo-card">
             <div class="wo-main"><strong>{{ wo.wo_code }}</strong><el-tag size="small">{{ wo.status }}</el-tag></div>
             <div class="muted">{{ wo.instance_code || '-' }} · {{ wo.title }}</div>
@@ -91,7 +91,7 @@
         </el-tab-pane>
 
         <el-tab-pane label="图纸" name="docs">
-          <el-empty v-if="!pendingDocs.length" description="暂无待签文档" :image-size="48" />
+          <PageState state="empty" compact :show-action="false" v-if="!pendingDocs.length" description="暂无待签文档" />
           <div v-for="doc in pendingDocs" :key="doc.id" class="doc-line">
             <div>
               <strong>{{ doc.title || doc.file_name }}</strong>
@@ -113,7 +113,7 @@
             </el-form-item>
           </el-form>
           <el-divider content-position="left">安灯告警（最近 10 条）</el-divider>
-          <el-empty v-if="!andonAlerts.length" description="暂无未关闭安灯告警" :image-size="44" />
+          <PageState state="empty" compact :show-action="false" v-if="!andonAlerts.length" description="暂无未关闭安灯告警" />
           <el-table v-else :data="andonAlerts" size="small" border stripe max-height="240">
             <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
             <el-table-column prop="severity" label="级别" width="80" />
@@ -126,7 +126,7 @@
 
     <el-card shadow="never" class="panel">
       <template #header><div class="card-header"><span>当前工单</span><el-button link @click="go('/work-orders')">全部</el-button></div></template>
-      <el-empty v-if="!workOrders.length" description="暂无待处理工单" :image-size="48" />
+      <PageState state="empty" compact :show-action="false" v-if="!workOrders.length" description="暂无待处理工单" />
       <div v-for="wo in workOrders.slice(0, 3)" :key="wo.id" class="wo-card">
         <div class="wo-main">
           <strong>{{ wo.wo_code }}</strong>
@@ -213,7 +213,7 @@
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="退料" name="return">
-          <el-empty v-if="!pickList?.returnable_lots?.length" description="暂无可退批次" :image-size="64" />
+          <PageState state="empty" compact :show-action="false" v-if="!pickList?.returnable_lots?.length" description="暂无可退批次" />
           <el-table v-else :data="pickList.returnable_lots" size="small" height="360">
             <el-table-column prop="material_code" label="物料" width="120" />
             <el-table-column prop="material_name" label="名称" min-width="150" />
@@ -232,7 +232,7 @@
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="历史" name="history">
-          <el-empty v-if="!pickHistory.length" description="暂无领退料历史" :image-size="64" />
+          <PageState state="empty" compact :show-action="false" v-if="!pickHistory.length" description="暂无领退料历史" />
           <el-timeline v-else>
             <el-timeline-item v-for="m in pickHistory" :key="m.id" :timestamp="m.created_at" :type="m.movement_type === 'issue' ? 'success' : 'warning'">
               <div class="history-line">

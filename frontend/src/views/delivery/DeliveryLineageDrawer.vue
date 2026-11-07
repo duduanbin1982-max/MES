@@ -39,7 +39,7 @@
                   <template #reference><el-button link size="small">查看</el-button></template>
                   <div class="fix-checklist-title">{{ row.title }}</div>
                   <ol class="fix-checklist"><li v-for="item in fixEntry(row).checklist || []" :key="item">{{ item }}</li></ol>
-                  <el-empty v-if="!(fixEntry(row).checklist || []).length" description="暂无处理清单" :image-size="42" />
+                  <PageState state="empty" compact :show-action="false" v-if="!(fixEntry(row).checklist || []).length" description="暂无处理清单" />
                 </el-popover>
               </template>
             </el-table-column>

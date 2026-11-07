@@ -50,7 +50,7 @@
           </div>
         </el-timeline-item>
       </el-timeline>
-      <el-empty v-else description="暂无流转记录" :image-size="60" />
+      <PageState state="empty" compact :show-action="false" v-else description="暂无流转记录" />
     </el-card>
   </div>
 </template>

@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title">AI 预测与模型</div>
         <div class="page-subtitle">设备时序训练、故障风险、质量趋势与异常事件</div>
@@ -9,7 +9,7 @@
         <el-button type="primary" :loading="training" @click="trainModels">训练 IoT 模型</el-button>
         <el-button :loading="loading" @click="refresh">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="12" class="overview-row">
       <el-col :span="6"><div class="metric"><span>活跃模型</span><strong>{{ readiness.active_models || 0 }}</strong></div></el-col>

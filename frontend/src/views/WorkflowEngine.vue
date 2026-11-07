@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Refresh /></el-icon> 工作流引擎</div>
       <div>
         <el-radio-group v-model="viewMode" size="small" style="margin-right: 12px">
@@ -9,7 +9,7 @@
         </el-radio-group>
         <el-button type="primary" @click="openStart" :disabled="viewMode!=='instances'">+ 启动工作流</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <!-- 流程定义视图 -->
     <div v-if="viewMode==='defs'" v-loading="defLoading">

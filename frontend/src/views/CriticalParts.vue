@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Key /></el-icon> 关键件管理</div>
         <div class="page-subtitle">主轴承、刀盘、液压系统等关键件的监造过程、资质证书与追溯</div>
@@ -11,7 +11,7 @@
         </el-select>
         <el-button @click="loadAll" :loading="loading">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-row :gutter="12" style="margin-bottom:12px">
       <el-col :span="4"><el-card shadow="hover" class="stat-card"><div class="stat-num" style="color:var(--el-color-danger)">{{ data.overview.high_risk }}</div><div class="stat-label">高风险件</div></el-card></el-col>

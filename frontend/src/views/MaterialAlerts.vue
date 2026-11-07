@@ -161,7 +161,7 @@
                 </el-table>
               </el-collapse-item>
             </el-collapse>
-            <el-empty v-if="!kit.work_orders?.length" description="没有工单" :image-size="60" />
+            <PageState state="empty" compact :show-action="false" v-if="!kit.work_orders?.length" description="没有工单" />
           </el-card>
           </div>
         </div>
@@ -198,7 +198,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-empty v-else description="选择实例和需求日期，点击 MRP 计算" :image-size="80" />
+        <PageState state="empty" compact :show-action="false" v-else description="选择实例和需求日期，点击 MRP 计算" />
       </el-tab-pane>
 
       <!-- ========== Tab 3: 短缺预测 ========== -->
@@ -230,7 +230,7 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-empty v-if="!forecast.data.length" description="选择预测周数自动加载" :image-size="80" />
+        <PageState state="empty" compact :show-action="false" v-if="!forecast.data.length" description="选择预测周数自动加载" />
       </el-tab-pane>
 
       <!-- ========== Tab 4: 交货期管理 ========== -->

@@ -122,7 +122,7 @@
           </div>
         </template>
 
-        <el-empty v-else description="暂无数据" :image-size="60" />
+        <PageState state="empty" compact :show-action="false" v-else description="暂无数据" />
       </div>
     </transition>
   </div>

@@ -1,9 +1,9 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Box /></el-icon> 物料中心</div>
       <el-button @click="refresh">刷新</el-button>
-    </div>
+    </PageToolbar>
     <el-alert v-if="data.alerts.value.length" type="error" :closable="false" style="margin-bottom: 12px" show-icon>
       <el-icon><Warning /></el-icon> {{ data.alerts.value.length }} 项物料低于安全库存: {{ data.alerts.value.slice(0, 3).map(a => a.material_code).join('、') }}{{ data.alerts.value.length > 3 ? ` 等 ${data.alerts.value.length} 项` : '' }}
     </el-alert>

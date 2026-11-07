@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Promotion /></el-icon> 系统初始化向导</div>
         <div class="sub">空白 MES 首日落地：按 8 步把人、机、料、法、图纸、工单准备好。</div>
@@ -9,7 +9,7 @@
         <el-button @click="go('/delivery')">项目交付闭环</el-button>
         <el-button type="primary" :loading="loading" @click="loadStatus">刷新状态</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-card shadow="never" class="summary-card">
       <el-row :gutter="16" align="middle">
@@ -102,7 +102,7 @@
               </div>
             </div>
           </div>
-          <el-empty v-else description="该步骤已达首日可用标准" :image-size="46" />
+          <PageState state="empty" compact :show-action="false" v-else description="该步骤已达首日可用标准" />
           <div class="quick-actions">
             <el-button
               v-for="action in step.actions"

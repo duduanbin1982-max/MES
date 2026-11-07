@@ -1,12 +1,12 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><User /></el-icon> 用户与权限管理</div>
         <div class="sub">用户 → 角色组/部门 → 角色 → 权限矩阵；角色组负责批量归属和默认首页，角色负责具体权限。</div>
       </div>
       <el-button type="primary" @click="openCreate">+ 新建用户</el-button>
-    </div>
+    </PageToolbar>
 
     <el-alert v-if="myScope" :closable="false" type="info" style="margin-bottom: 12px"
       :title="'当前登录用户数据范围：' + myScope.label + (myScope.source === 'role_group' ? '（继承角色组）' : myScope.source === 'user' ? '（用户级覆盖）' : '（默认）')" />

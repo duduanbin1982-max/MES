@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <el-button @click="$router.back()" size="small" style="margin-right: 12px">
           <el-icon><ArrowLeft /></el-icon>返回
@@ -15,7 +15,7 @@
         <el-button size="small" :disabled="!canEdit" :title="canEdit ? '' : '需要 equipment:write 权限'" @click="recalcProgress">重算进度</el-button>
         <el-button size="small" @click="load">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <div v-loading="loading">
       <el-alert
@@ -69,7 +69,7 @@
             <el-col :span="10">
               <el-card>
                 <template #header>交付风险</template>
-                <el-empty v-if="!riskItems.length" description="暂无风险，漂亮。" :image-size="70" />
+                <PageState state="empty" compact :show-action="false" v-if="!riskItems.length" description="暂无风险，漂亮。" />
                 <el-timeline v-else>
                   <el-timeline-item v-for="r in riskItems" :key="r.type + r.title" :type="r.level === 'high' ? 'danger' : 'warning'">
                     <span>{{ r.title }}</span>

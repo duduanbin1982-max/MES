@@ -1,8 +1,8 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><DataAnalysis /></el-icon> 经营分析报表</div>
-    </div>
+    </PageToolbar>
 
     <el-card style="margin-bottom:12px">
       <div class="tb">
@@ -40,7 +40,7 @@
             <el-table v-if="item.result?.rows?.length" :data="item.result.rows.slice(0, 6)" stripe size="small" max-height="260">
               <el-table-column v-for="col in reportColumns(item.result)" :key="col" :prop="col" :label="col" min-width="110" show-overflow-tooltip />
             </el-table>
-            <el-empty v-else description="暂无经营数据" :image-size="60" />
+            <PageState state="empty" compact :show-action="false" v-else description="暂无经营数据" />
           </template>
         </el-card>
       </el-col>

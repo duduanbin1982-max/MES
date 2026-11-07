@@ -10,7 +10,7 @@
 
       <el-divider />
       <div class="section-title">业务堵点</div>
-      <el-empty v-if="!data.stage.blockers?.length" description="这个阶段暂无堵点" :image-size="60" />
+      <PageState state="empty" compact :show-action="false" v-if="!data.stage.blockers?.length" description="这个阶段暂无堵点" />
       <div v-for="blocker in data.stage.blockers" :key="`${blocker.type}-${blocker.title}`" class="blocker-line">
         <el-tag :type="severityTag(blocker.severity)" size="small">{{ severityLabel(blocker.severity) }}</el-tag>
         <div class="blocker-body"><div class="blocker-title">{{ blocker.title }}</div><div class="blocker-message">{{ blocker.message }}</div></div>

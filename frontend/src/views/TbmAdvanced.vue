@@ -1,5 +1,5 @@
 <template>
-  <div class="page"><div class="page-header"><div class="page-title"><el-icon><Tools /></el-icon> TBM 非标装备增强</div></div>
+  <div class="page"><PageToolbar class="page-header"><div class="page-title"><el-icon><Tools /></el-icon> TBM 非标装备增强</div></PageToolbar>
   <el-tabs v-model="tab" @tab-change="onTab">
     <!-- ===== Tab 1: 关键件管理 ===== -->
     <el-tab-pane label="关键件管理" name="critical">

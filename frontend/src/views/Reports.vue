@@ -1,8 +1,8 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><DataAnalysis /></el-icon> 报表中心</div>
-    </div>
+    </PageToolbar>
 
     <el-tabs v-model="tab">
       <!-- ========== Tab 1: 即时报表 ========== -->
@@ -44,7 +44,7 @@
             <el-table-column v-for="col in (lastResult.columns || Object.keys(lastResult.rows?.[0] || {}))" :key="col" :prop="col" :label="col" min-width="140" show-overflow-tooltip />
           </el-table>
         </el-card>
-        <el-empty v-else description="选择报表类型并点击【生成报表】" :image-size="80" />
+        <PageState state="empty" compact :show-action="false" v-else description="选择报表类型并点击【生成报表】" />
       </el-tab-pane>
 
       <!-- ========== Tab 2: 定时报表 ========== -->

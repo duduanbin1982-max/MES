@@ -28,8 +28,8 @@
     <transition name="mindmap-fade">
       <div v-if="expanded" id="process-tree-mindmap-body" class="mindmap-body">
         <el-skeleton v-if="loading && !tree" :rows="3" animated />
-        <el-empty v-else-if="error" :description="error" />
-        <el-empty v-else-if="!tree" description="无数据" />
+        <PageState state="empty" compact :show-action="false" v-else-if="error" :description="error" />
+        <PageState state="empty" compact :show-action="false" v-else-if="!tree" description="无数据" />
 
         <template v-else>
           <div v-if="breadcrumb.length > 0" class="mindmap-breadcrumb" aria-label="工艺树当前位置">

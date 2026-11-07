@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Box /></el-icon> 项目装备台账</div>
         <div class="page-subtitle">项目号、合同号、序列号统一编码；从第一天就把 TBM 交付主线立住。</div>
@@ -13,7 +13,7 @@
           <el-icon><Plus /></el-icon>创建项目装备
         </el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-card style="margin-bottom: 16px">
       <el-form :inline="true" :model="filters" size="default">

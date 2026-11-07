@@ -55,7 +55,7 @@
         <el-table-column prop="title" label="标题" min-width="180" />
         <el-table-column prop="actual_start" label="开工时间" width="170" />
       </el-table>
-      <el-empty v-else description="暂无开工动态" :image-size="72" />
+      <PageState state="empty" compact :show-action="false" v-else description="暂无开工动态" />
     </DashboardPanel>
   </DashboardGrid>
 </template>

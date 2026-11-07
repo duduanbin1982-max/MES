@@ -8,13 +8,13 @@
     description="当前 IOT_MODE=production，采集器不产生数据（iot_readings=0）。本页仅展示数据结构与界面，待接入 Modbus/OPC-UA 后自动生效。"
   />
 <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Cellphone /></el-icon> IoT 设备监控</div>
       <div style="display:flex;gap: 8px">
         <el-button type="primary" @click="showAddDevice=true">+ 添加设备</el-button>
         <el-button @click="refreshAll" :loading="loading">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <!-- Dashboard Stats -->
     <el-row :gutter="12" style="margin-bottom:12px">
@@ -44,7 +44,7 @@
         </el-card>
       </el-col>
       <el-col :span="24" v-if="devices.length===0">
-        <el-empty description="暂无设备，点击上方添加" />
+        <PageState state="empty" compact :show-action="false" description="暂无设备，点击上方添加" />
       </el-col>
     </el-row>
 

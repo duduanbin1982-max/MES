@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="page-header">
+    <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><Switch /></el-icon> 多项目资源平衡</div>
         <div class="page-subtitle">按时间窗口分析工位产能、资源占用、跨项目抢占和日负荷超载。</div>
@@ -27,7 +27,7 @@
         <el-switch v-model="includeCompleted" size="small" inline-prompt active-text="含历史" inactive-text="仅未来" @change="onFilterChange" />
         <el-button type="primary" :loading="loading" @click="load">刷新</el-button>
       </div>
-    </div>
+    </PageToolbar>
 
     <el-alert
       class="range-alert"
@@ -70,7 +70,7 @@
             </div>
           </div>
         </el-col>
-        <el-col :span="24" v-if="!topBottlenecks.length"><el-empty description="窗口内暂无工位负荷" :image-size="60" /></el-col>
+        <el-col :span="24" v-if="!topBottlenecks.length"><PageState state="empty" compact :show-action="false" description="窗口内暂无工位负荷" /></el-col>
       </el-row>
       <div v-if="topIdle.length" class="idle-line">
         <span class="stat-label">最空闲：</span>
