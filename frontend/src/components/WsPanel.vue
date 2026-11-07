@@ -12,7 +12,7 @@
       <div v-if="open" class="ws-panel">
         <div class="ws-panel-header">
           <span><el-icon><Link /></el-icon> 实时事件</span>
-          <el-button size="small" text @click="open = false"><el-icon><CloseBold /></el-icon></el-button>
+          <el-button size="small" text aria-label="关闭实时事件面板" title="关闭实时事件面板" @click="open = false"><el-icon><CloseBold /></el-icon></el-button>
         </div>
 
         <div class="ws-stats">

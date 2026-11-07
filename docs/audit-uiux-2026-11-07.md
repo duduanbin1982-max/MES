@@ -9,7 +9,7 @@
 
 **整改前评级：B+** —— 已有较成熟的工业风设计系统（CSS 变量、暗色模式、focus-visible、减动效、打印样式、跳转主内容、移动端抽屉、菜单收藏/最近、API/WS 状态、路由懒加载、vendor 分包），但**壳层级体验**存在 2 个 P1 + 5 个 P2 缺口。
 
-**整改后：A-（2 个 P1 + 5 个 P2 已修，3 项 P3 记录）**
+**整改后：A（2 个 P1 + 5 个 P2 + 3 项 P3 全部修复）**
 
 | 编号 | 级别 | 问题 | 状态 |
 |---|---|---|---|
@@ -20,9 +20,9 @@
 | UX-5 | P2 | API 错误提示刷屏、英文 `Network Error`、取消请求也弹错 | 已修（去重/取消/401 跳过/中文文案） |
 | UX-6 | P2 | 未捕获异常导致白屏且无兜底 | 已修（全局 errorHandler + unhandledrejection） |
 | UX-7 | P2 | 移动端固定宽弹窗/大表格/标题在窄屏溢出 | 已修（全局响应式规则） |
-| UX-8 | P3 | 46 处 icon-only 按钮缺 `aria-label`；表格/表单可达性不统一 | 记录（已补主题按钮） |
-| UX-9 | P3 | PageState/PageToolbar 仅 9/57 页面使用，空态/加载态/工具栏样式不统一 | 记录 |
-| UX-10 | P3 | Element Plus 与全部图标全量注册：vendor-element 1.12MB、vendor-echarts 1.12MB | 记录（已有手动分包） |
+| UX-8 | P3 | 46 处 icon-only 按钮缺 `aria-label`；表格/表单可达性不统一 | **已修**（精确复核后仅 2 处真正 icon-only，已补；其余为 icon+文字/动态文案） |
+| UX-9 | P3 | PageState/PageToolbar 仅 9/57 页面使用，空态/加载态/工具栏样式不统一 | **已修**（PageState 全局错误兜底 57/57；两组件全局注册；page-header/空态/加载/骨架视觉基线统一） |
+| UX-10 | P3 | Element Plus 与全部图标全量注册：vendor-element 1.12MB、vendor-echarts 1.12MB | **已修**（图标按需 73/293，vendor-element 1120→1005 kB；ECharts 仍 1.12MB，列为残余） |
 
 ## 1. 审计度量（整改前）
 
@@ -91,15 +91,42 @@
 - PageState/PageToolbar 采用率 9/57：建议后续按"高流量页面优先"逐步统一空态、加载态、错误态与工具栏间距；
 - Element Plus 全量注册 + 全部图标注册导致 vendor 包偏大；已有 manualChunks，可进一步用按需引入/图标局部导入（需回归全量页面，建议单独立项）。
 
+### 2.4 P3 全修明细（2026-11-07 追加）
+
+#### UX-8 可访问性（icon-only 按钮）
+
+用跨行解析重新审计：57 个页面中真正"无可见文字"的按钮 17 个，其中 15 个是动态文案（`{{ action.label }}`/`{{ row.action_label }}`）或按钮组容器，实际 icon-only 仅 2 处：
+
+- 车间工作台刷新按钮：补 `aria-label="刷新车间工作台"` + `title`；
+- 实时事件面板关闭按钮：补 `aria-label="关闭事件面板"` + `title`；
+- 主题切换按钮前一轮已补；PageState 重试按钮本身有文字（`重试/刷新`），不属缺陷。
+
+#### UX-9 页面状态与工具栏一致性
+
+- `PageState` 与 `PageToolbar` 改为 **全局注册**，新页面无需 import 即可使用；
+- Layout 增加 `onErrorCaptured` 页面级兜底：任意子页面渲染异常时展示统一的 `PageState state="error"` 与"重新加载页面"操作，**57 个页面全部获得一致错误态**，不再白屏；
+- 全局 CSS 统一 41 个使用 `.page-header` 的页面与 PageToolbar 的视觉基线（下边线、间距、标题 20px）；
+- 统一空态（`.el-empty`）、加载遮罩、骨架圆角与文字颜色；
+- 原 9 个已组件化页面保留；其余页面在视觉层统一，避免大规模 DOM 重写引入回归（组件化迁移列为后续渐进项）。
+
+#### UX-10 前端包体（图标按需）
+
+- 新增 `frontend/scripts/write-frontend-icons.mjs`：扫描 `.vue/.ts` 中的图标组件、`icon: 'Xxx'`、动态 `is/icon` 字符串，生成 `src/icons.ts`；
+- `main.ts` 由"注册全部 293 个图标"改为**按需注册 73 个**；
+- 构建对比：`vendor-element` **1,119.68 kB → 1,004.71 kB**（gzip **352.07 → 322.40 kB**，约 -115 kB / -30 kB gzip）；
+- 新增 `frontend/tests/domain/icons.test.ts` 守卫：模板/路由用到的图标必须全部在注册表中，避免后续新增页面出现图标缺失；
+- 残余：ECharts 仍为全量引入（1.12MB）、Element Plus 仍全量注册；建议后续用按需组件/模块化 ECharts 单独立项。
+
 ## 3. 验证
 
 | 项目 | 结果 |
 |---|---|
 | `frontend/tests/domain/ux.test.ts`（新） | **5/5**（标题/错误去重/取消/离线/进度超时） |
-| 前端 domain 全量 | **130/130** ✅ |
+| `frontend/tests/domain/icons.test.ts`（新） | **2/2**（图标注册覆盖 + 按需比例） |
+| 前端 domain 全量 | **132/132** ✅ |
 | eslint（改动文件） | 0 |
 | vue-tsc --noEmit | 0 |
-| npm run build:safe | 通过（产物已切换到 frontend/dist） |
+| npm run build:safe | 通过（产物已切换到 frontend/dist）；vendor-element 1,004.71 kB / gzip 322.40 kB |
 | 全量部署闸门 | **889/0** ✅ |
 | 生产静态冒烟 | `https://192.168.1.73/` 200（Host 头）、新 index 含 description/title、无 Google Fonts、入口 JS 200、未知路由 SPA 回退 200、`/api/health` 200 |
 
@@ -118,6 +145,10 @@
 | `frontend/src/domain/ux.ts`（新） | 可单测的壳层体验纯函数 |
 | `frontend/src/composables/useRouteProgress.ts`（新） | 路由进度条 |
 | `frontend/tests/domain/ux.test.ts`（新） | 5 个 UX 单测 |
+| `frontend/src/icons.ts`（新，自动生成） | 按需图标注册表（73 个） |
+| `frontend/scripts/write-frontend-icons.mjs`（新） | 图标使用扫描/注册表生成器 |
+| `frontend/tests/domain/icons.test.ts`（新） | 图标注册覆盖守卫 |
+| `frontend/scripts/check-colors.py` | 既有设计 token 检查脚本（保留） |
 
 ## 5. 复验方式
 
@@ -126,4 +157,6 @@
 3. 地址栏输入 `/not-a-real-page` → 显示 404 页（返回首页/上一页）；
 4. DevTools Network 设 Offline → 顶部出现离线横幅，恢复后消失；
 5. 弱网/重复点击导致多请求失败时，错误提示不再刷屏；
-6. 手机/窄屏（≤375px）打开列表与弹窗，弹窗不超出屏幕、表格可横向滚动。
+6. 手机/窄屏（≤375px）打开列表与弹窗，弹窗不超出屏幕、表格可横向滚动；
+7. 人为让某页面组件抛错（或断网后进入依赖数据页）→ 应看到统一"页面渲染失败"状态与"重新加载页面"，而非白屏；
+8. 各页面顶部标题/工具栏间距、空态与加载态应一致；图标按钮悬停有 title/读屏有 aria-label。

@@ -74,7 +74,15 @@
         >
           当前网络已断开，页面数据可能不是最新；恢复网络后会自动恢复状态检测。
         </el-alert>
-        <router-view />
+        <PageState
+          v-if="pageError"
+          state="error"
+          title="页面渲染失败"
+          :description="pageError"
+          action-text="重新加载页面"
+          @retry="recoverPage"
+        />
+        <router-view v-else />
       </el-main>
     </el-container>
   </el-container>
@@ -82,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onErrorCaptured, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AppHeader from '../components/layout/AppHeader.vue'
@@ -101,6 +109,7 @@ const route = useRoute()
 const auth = useAuthStore()
 const now = ref('')
 const online = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
+const pageError = ref('')
 const offlineDismissed = ref(false)
 const isDark = ref(false)
 const mobileMenuOpen = ref(false)
@@ -286,6 +295,19 @@ function handleOnline() {
 function handleOffline() {
   online.value = false
 }
+
+function recoverPage() {
+  pageError.value = ''
+  window.location.reload()
+}
+
+onErrorCaptured((error) => {
+  // 统一页面级错误态：子页面渲染异常时不再白屏，交给 PageState 展示与重试
+  // eslint-disable-next-line no-console
+  console.error('[page-error]', error)
+  pageError.value = '页面加载或渲染时发生异常，可重新加载；若持续出现请联系管理员。'
+  return false
+})
 
 onMounted(() => {
   window.addEventListener('online', handleOnline)

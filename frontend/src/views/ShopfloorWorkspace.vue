@@ -5,7 +5,7 @@
         <div class="page-title">车间工作台</div>
         <div class="page-subtitle">扫码领料、报工、图纸、质检、异常上报</div>
       </div>
-      <el-button :icon="Refresh" circle :loading="loading" @click="loadAll" />
+      <el-button :icon="Refresh" circle :loading="loading" aria-label="刷新车间工作台" title="刷新车间工作台" @click="loadAll" />
     </div>
 
     <el-alert

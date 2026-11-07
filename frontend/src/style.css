@@ -346,13 +346,22 @@ body, .el-card, .el-table, .el-menu, .el-dialog, .el-drawer, .el-input__wrapper,
   align-items: flex-start;
   gap: var(--space-md);
   margin-bottom: var(--space-lg);
+  /* 2026-11-07 UI/UX P3：与 PageToolbar 统一视觉基线（不强制重写 41 个页面 DOM） */
+  padding: 0 0 var(--space-sm);
+  border-bottom: 1px solid var(--el-border-color-lighter);
 }
+
+/* 空态/加载态/骨架统一 */
+.el-empty { padding: var(--space-lg) 0; }
+.el-empty__description { color: var(--el-text-color-secondary); font-size: 13px; }
+.el-loading-mask { background-color: color-mix(in srgb, var(--el-bg-color) 72%, transparent); }
+.el-skeleton__item { border-radius: var(--radius-sm); }
 
 .page-title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--el-text-color-primary);
   letter-spacing: 0;

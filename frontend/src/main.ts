@@ -3,7 +3,9 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import * as ElIcons from '@element-plus/icons-vue'
+import { appIcons } from './icons'
+import PageState from './components/PageState.vue'
+import PageToolbar from './components/PageToolbar.vue'
 import App from './App.vue'
 import router from './router'
 import { ElMessage } from 'element-plus'
@@ -11,10 +13,13 @@ import './style.css'
 
 const app = createApp(App)
 
-// 注册全部 Element 图标
-for (const [name, comp] of Object.entries(ElIcons)) {
+// 2026-11-07 UI/UX P3：只注册实际使用的图标（73/293），显著减小 vendor 体积
+for (const [name, comp] of Object.entries(appIcons)) {
   app.component(name, comp as any)
 }
+// 页面状态/工具栏组件全局注册，供各页面统一使用
+app.component('PageState', PageState)
+app.component('PageToolbar', PageToolbar)
 
 app.use(createPinia())
 app.use(router)
