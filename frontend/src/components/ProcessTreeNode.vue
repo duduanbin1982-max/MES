@@ -33,6 +33,7 @@
           <el-dropdown-item command="assign"><el-icon><UserFilled /></el-icon> 分配</el-dropdown-item>
           <el-dropdown-item command="addchild"><el-icon><Plus /></el-icon> 加子节点</el-dropdown-item>
           <el-dropdown-item command="hours"><el-icon><Clock /></el-icon> 工时定额</el-dropdown-item>
+          <el-dropdown-item command="itp"><el-icon><CircleCheck /></el-icon> 检验点(ITP)</el-dropdown-item>
           <el-dropdown-item command="adddep"><el-icon><Link /></el-icon> 加依赖</el-dropdown-item>
           <el-dropdown-item command="delete" divided><span class="danger-text"><el-icon><Delete /></el-icon> 删除</span></el-dropdown-item>
         </el-dropdown-menu>

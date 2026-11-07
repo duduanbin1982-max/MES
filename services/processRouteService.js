@@ -228,6 +228,12 @@ function register(app, db) {
     res.json({ ok: true, created, created_hours: createdHours, template_count: templates.length });
   }));
 
+  // 2026-11-07 工艺树升级：路线模板/健康度/依赖排程/ITP/版本/ECN/KPI
+  const { ensureProcessRouteSchema } = require("./processRoute/schema");
+  ensureProcessRouteSchema(db);
+  require("./processRoute/templates").register(app, db);
+  require("./processRoute/execution").register(app, db);
+  require("./processRoute/lifecycle").register(app, db);
 }
 
 module.exports = { register };

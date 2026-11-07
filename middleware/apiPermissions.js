@@ -144,6 +144,8 @@ const RULES = [
   // 2026-11-05：依赖维护需要读权限；写允许 process:write（工艺）或 equipment:write（排程/计划员）
   match(/^\/process_dependencies(?:\/.*)?$/, READ, ["process:read"]),
   match(/^\/process_dependencies(?:\/.*)?$/, WRITE, ["process:write", "equipment:write"]),
+  match(/^\/process_itp_points(?:\/.*)?$/, READ, ["quality:read", "process:read"]),
+  match(/^\/process_itp_points(?:\/.*)?$/, WRITE, ["quality:write", "process:write"]),
   // 2026-11-06（工时与报工审计）：报工是工人主责，不能只认 work_order:write；
   // 工时定额写属于工艺主数据，收口到 process:write
   match(/^\/process-hours(?:\/.*)?$/, READ, ["work_report:read", "work_order:read"]),

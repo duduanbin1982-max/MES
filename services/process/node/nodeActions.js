@@ -16,14 +16,15 @@ const { ApiError } = require("../../../app/errors");
 const audit = require("../../../app/audit");
 const { resolveParentId } = require("./nodeCrud");
 const { emit, Events } = require("../../../app/ws/EventBus");
+const { assertStartAllowed, assertCompleteAllowed, seedItp, recordNodeEvent } = require("../../processRoute/execution");
 
-const EXECUTE_ACTIONS = new Set(["start", "pause", "resume", "complete", "qc", "block", "note"]);
+const EXECUTE_ACTIONS = new Set(["start", "pause", "resume", "complete", "qc", "block", "note", "rework", "report"]);
 const QC_RESULTS = new Set(["pass", "fail", "conditional"]);
 
 function register(app, db) {
   app.post('/api/process_nodes/:id/execute', wrap((req, res) => {
     const body = req.body || {};
-    const node = get(db, 'SELECT id, equipment_instance_id, operation_name, status FROM process_nodes WHERE id = ?', [req.params.id]);
+    const node = get(db, 'SELECT * FROM process_nodes WHERE id = ?', [req.params.id]);
     if (!node) throw ApiError.notFound("工艺节点不存在");
     const action = String(body.action || "").trim();
     if (!EXECUTE_ACTIONS.has(action)) throw ApiError.validation(`action 必须是 ${[...EXECUTE_ACTIONS].join(" / ")}`);
@@ -52,33 +53,66 @@ function register(app, db) {
         if (error instanceof ApiError) throw error;
       }
     }
+    const fromStatus = node.status;
+    if (action === "start") {
+      if (!["pending", "ready", "blocked"].includes(node.status)) throw ApiError.validation(`当前状态 ${node.status} 不允许开工`);
+      seedItp(db, node);
+      assertStartAllowed(db, node);
+    } else if (action === "resume") {
+      if (!["paused", "blocked"].includes(node.status)) throw ApiError.validation(`当前状态 ${node.status} 不允许恢复`);
+      assertStartAllowed(db, node);
+    } else if (action === "complete" || action === "qc") {
+      if (node.status !== "in_progress") throw ApiError.validation(`当前状态 ${node.status} 不允许完工/质检`);
+      assertCompleteAllowed(db, node);
+    } else if (action === "pause") {
+      if (node.status !== "in_progress") throw ApiError.validation(`当前状态 ${node.status} 不允许暂停`);
+    }
     const t = db.transaction(() => {
       const r = run(db,
         "INSERT INTO process_executions (process_node_id, operator_id, action, hours_worked, result, notes, photos) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [req.params.id, operatorId, action, hours, resultValue, body.notes || null,
           body.photos ? JSON.stringify(body.photos) : null]
       );
-      if (action === 'start') {
+      let toStatus = fromStatus;
+      if (action === 'start' || action === 'resume') {
+        toStatus = 'in_progress';
         run(db, "UPDATE process_nodes SET status = 'in_progress', actual_start = COALESCE(actual_start, datetime('now')), updated_at = datetime('now') WHERE id = ?", [req.params.id]);
       } else if (action === 'complete' || action === 'qc') {
-        run(db, "UPDATE process_nodes SET status = 'completed', actual_end = COALESCE(actual_end, datetime('now')), updated_at = datetime('now') WHERE id = ?", [req.params.id]);
-        if (action === 'complete' || (action === 'qc' && resultValue === 'pass')) {
+        if (resultValue === 'fail') {
+          toStatus = 'blocked';
+          run(db, "UPDATE process_nodes SET status = 'blocked', updated_at = datetime('now') WHERE id = ?", [req.params.id]);
+        } else {
+          toStatus = 'completed';
+          run(db, "UPDATE process_nodes SET status = 'completed', actual_end = COALESCE(actual_end, datetime('now')), updated_at = datetime('now') WHERE id = ?", [req.params.id]);
           autoUnlockSuccessors(db, req.params.id, node.equipment_instance_id);
         }
       } else if (action === 'pause') {
+        toStatus = 'paused';
         run(db, "UPDATE process_nodes SET status = 'paused', updated_at = datetime('now') WHERE id = ?", [req.params.id]);
       } else if (action === 'block') {
+        toStatus = 'blocked';
         run(db, "UPDATE process_nodes SET status = 'blocked', updated_at = datetime('now') WHERE id = ?", [req.params.id]);
+      } else if (action === 'rework') {
+        toStatus = 'ready';
+        run(db, "UPDATE process_nodes SET status = 'ready', actual_end = NULL, updated_at = datetime('now') WHERE id = ?", [req.params.id]);
+        try { db.prepare("UPDATE process_itp_points SET status = 'pending', checked_by = NULL, checked_at = NULL WHERE process_node_id = ?").run(req.params.id); } catch (_error) { /* ignore */ }
       }
-      return r;
+      recordNodeEvent(db, node, action, {
+        fromStatus, toStatus, operatorId, hours,
+        quantity: body.quantity, reason: body.reason || body.notes || null,
+        meta: { result: resultValue, photos: body.photos || null },
+      });
+      return { r, toStatus };
     });
-    const r = t();
+    const transactionResult = t();
+    const r = transactionResult.r;
     audit.record(db, req, {
       action: "process_node.execute",
       resource_type: "process_execution",
       resource_id: r.lastInsertRowid,
-      after: { process_node_id: node.id, action, hours_worked: hours, result: resultValue, operator_id: operatorId },
-      diff_summary: `工序节点 ${node.id} 执行 ${action}`,
+      before: { status: fromStatus },
+      after: { process_node_id: node.id, action, hours_worked: hours, result: resultValue, operator_id: operatorId, status: transactionResult.toStatus },
+      diff_summary: `工序节点 ${node.id} 执行 ${action}（${fromStatus} → ${transactionResult.toStatus}）`,
     });
     emit(Events.BOM_UPDATED, { node_id: node.id, node_name: node.operation_name, equipment_instance_id: node.equipment_instance_id, action: `execute_${action}` });
     res.json({ id: r.lastInsertRowid, message: '执行已记录' });

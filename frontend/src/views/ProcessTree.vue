@@ -20,6 +20,7 @@
           <el-button :icon="Refresh" @click="reloadAll" :loading="loading">刷新</el-button>
           <el-button type="warning" :icon="MagicStick" @click="regenerate" :loading="regenerating">从 BOM 补齐</el-button>
           <el-button type="primary" :icon="Plus" @click="onAddRoot" :disabled="!selectedInstance">新增节点</el-button>
+          <el-button :icon="DataAnalysis" @click="upgradeVisible = true" :disabled="!selectedInstance">路线升级</el-button>
         </div>
       </div>
     </section>
@@ -103,7 +104,7 @@
         :workstation-id="filters.workstationId"
         :current-user-id="currentUserId"
         :force-collapsed="!allExpanded"
-        @start="onStart" @complete="onComplete" @cmd="onCmd"
+        @start="onStart" @complete="onComplete" @cmd="handleCmd"
         @node-dropped="onNodeDropped"
       />
 
@@ -120,7 +121,7 @@
         :workstation-id="filters.workstationId"
         :current-user-id="currentUserId"
         :force-collapsed="!allExpanded"
-        @start="onStart" @complete="onComplete" @cmd="onCmd"
+        @start="onStart" @complete="onComplete" @cmd="handleCmd"
         @node-dropped="onNodeDropped"
       />
 
@@ -132,6 +133,9 @@
         </PageState>
       </el-card>
     </div>
+
+    <ProcessRouteUpgradeDrawer v-model="upgradeVisible" :instance-id="selectedInstance" @changed="reloadAll" />
+    <ProcessItpDialog v-model="itpVisible" :node="itpNode" @changed="reloadAll" />
 
     <ProcessTreeDialogs
       v-model:show-edit="showEdit"
@@ -158,7 +162,8 @@
 </template>
 
 <script setup lang="ts">
-import { Refresh, Plus, MagicStick } from '@element-plus/icons-vue'
+import { Refresh, Plus, MagicStick, DataAnalysis } from '@element-plus/icons-vue'
+import { ref } from 'vue'
 import { useProcessTreePage } from '../composables/useProcessTreePage.js'
 import ProcessTreeStats from '../components/ProcessTreeStats.vue'
 import ProcessTreeRouteCompleteness from '../components/ProcessTreeRouteCompleteness.vue'
@@ -167,6 +172,8 @@ import ProcessTreeSubsystemCard from '../components/ProcessTreeSubsystemCard.vue
 import ProcessTreeDialogs from '../components/ProcessTreeDialogs.vue'
 import ProcessTreeCrossSubsystemMatrix from '../components/ProcessTreeCrossSubsystemMatrix.vue'
 import ProcessTreeMindmap from '../components/ProcessTreeMindmap.vue'
+import ProcessRouteUpgradeDrawer from '../components/ProcessRouteUpgradeDrawer.vue'
+import ProcessItpDialog from '../components/ProcessItpDialog.vue'
 
 const {
   allExpanded,
@@ -224,6 +231,19 @@ const {
   users,
   workstations,
 } = useProcessTreePage()
+
+const upgradeVisible = ref(false)
+const itpVisible = ref(false)
+const itpNode = ref<any>(null)
+
+function handleCmd(command: string, node: any) {
+  if (command === 'itp') {
+    itpNode.value = node
+    itpVisible.value = true
+    return
+  }
+  return onCmd(command, node)
+}
 
 </script>
 
