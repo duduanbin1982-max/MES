@@ -208,6 +208,21 @@ const progressPct = computed(() => props.subsystem.progress_pct || 0)
   border-top: 1px solid var(--color-border);
   margin-top: var(--space-md);
 }
+
+/* 2026-11-07 修复：el-tree 默认节点高度 26px，自定义节点是多枚标签+按钮的换行布局，
+   固定高度会让相邻节点内容上下重叠；改为自适应高度并让 label 占满剩余宽度。 */
+.card-body :deep(.el-tree-node__content) {
+  height: auto;
+  min-height: 40px;
+  align-items: stretch;
+  padding: 2px 0;
+}
+.card-body :deep(.el-tree-node__label) {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
 .subsystem-card.drop-active {
   outline: 2px dashed var(--color-success);
   outline-offset: -2px;

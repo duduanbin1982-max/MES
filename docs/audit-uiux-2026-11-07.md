@@ -162,6 +162,24 @@ ReferenceError: defineModel is not defined
 
 **经验**：纯 JS 的 `<script setup>` 中不要使用 TS 泛型宏；如需泛型请标注 `lang="ts"`，并保留 Playwright/浏览器冒烟作为构建通过之外的运行时守门。
 
+### 2.7 事故修复：工艺树“树形视图”部件信息重叠（2026-11-07）
+
+**现象**：工艺树模块选择有数据的装备后，展开各子系统/部件列表，节点行的状态、名称、数量/工时、操作按钮等信息与上下相邻行发生视觉重叠。
+
+**定位**：Playwright 打开 `/process-tree`，选择 `TBM-2026-001`（156 个工艺节点）并展开 10 个子系统卡片，对 159 个 `.node-row` 做边界框两两相交检测：修复前大量相邻节点垂直重叠；同时检测到 `.el-tree-node__content` 高度固定为 26px。
+
+**根因**：自定义节点 `ProcessTreeNode.vue` 是“类型条 + 状态标签 + 名称 + 数量/工时胶囊 + 操作按钮”的多元素行（自然高度约 40px），而 Element Plus `el-tree` 的 `.el-tree-node__content` 默认固定 26px 高、`align-items:center`，节点内容溢出容器后覆盖下一行。
+
+**修复**：
+- `ProcessTreeSubsystemCard.vue`：`.card-body :deep(.el-tree-node__content)` 改为 `height:auto; min-height:40px; align-items:stretch; padding:2px 0`，并让 `.el-tree-node__label` 占满剩余宽度；
+- `ProcessTreeNode.vue`：`.node-row` 由 `inline-flex` 改为 `display:flex; flex-wrap:wrap; width:100%`，允许信息胶囊换行，窄屏不再挤压/溢出；
+- 保留移动端换行规则，移除重复声明。
+
+**验证**：
+- Playwright + Chromium 实测：10 个卡片、159 个节点行，**重叠对数 0**，`el-tree-node__content` 固定 26px 的行数 **0**，pageerror 0；
+- 截图：`工艺树-树形视图-修复后.png`（1600×1000）；
+- 构建/部署：build:safe 通过；全量部署闸门 889/0。
+
 ## 3. 验证
 
 | 项目 | 结果 |
@@ -174,7 +192,7 @@ ReferenceError: defineModel is not defined
 | npm run build:safe | 通过（产物已切换到 frontend/dist）；vendor-element 954.04 kB / gzip 308.71 kB；ECharts 655.55 kB / gzip 222.85 kB；CSS 281.72 kB / gzip 37.41 kB |
 | 全量部署闸门 | **889/0** ✅ |
 | 生产静态冒烟 | `https://192.168.1.73/` 200、入口 JS 200、CSS 200、SPA `/spc` 200、未知路由回退 200、`/api/health` 200 |
-| Playwright 运行时冒烟 | 23 个路由全通过（含 `/process-tree`），无 pageerror/console error |
+| Playwright 运行时冒烟 | 23 个路由全通过（含 `/process-tree`），无 pageerror/console error；树形视图 159 节点行重叠对数 0 |
 
 ## 4. 改动文件
 

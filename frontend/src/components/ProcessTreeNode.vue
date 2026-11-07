@@ -89,10 +89,12 @@ const progressTooltip = computed(() => {
 
 <style scoped>
 .node-row {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  width: 100%;
   max-width: 100%;
-  gap: 6px;
+  gap: 4px 6px;
   padding: 6px 8px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
