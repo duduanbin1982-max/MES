@@ -25,6 +25,13 @@ function ensureDocumentSchema(db) {
   addColumn("serial_to", "serial_to TEXT");
   addColumn("classification", "classification TEXT DEFAULT 'internal'");
   addColumn("download_policy", "download_policy TEXT DEFAULT 'allow'");
+  // 2026-11-07（文档 P1/P2）：供应商协同、借阅、法律保留
+  addColumn("supplier_id", "supplier_id INTEGER");
+  addColumn("purchase_order_id", "purchase_order_id INTEGER");
+  addColumn("supplier_status", "supplier_status TEXT");
+  addColumn("supplier_comment", "supplier_comment TEXT");
+  addColumn("supplier_reviewed_at", "supplier_reviewed_at TEXT");
+  addColumn("supplier_reviewed_by", "supplier_reviewed_by INTEGER");
   db.exec(`
     CREATE TABLE IF NOT EXISTS document_annotations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -79,6 +86,51 @@ function ensureDocumentSchema(db) {
       created_at TEXT DEFAULT (datetime('now')),
       UNIQUE(doc_id, user_id)
     );
+    CREATE TABLE IF NOT EXISTS document_borrowings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_id INTEGER NOT NULL,
+      user_id INTEGER,
+      copy_no TEXT,
+      action TEXT DEFAULT 'borrow',
+      note TEXT,
+      return_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS document_offline_actions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_action_id TEXT UNIQUE,
+      doc_id INTEGER,
+      action TEXT,
+      payload_json TEXT,
+      status TEXT DEFAULT 'applied',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS supplier_document_acks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_id INTEGER NOT NULL,
+      supplier_id INTEGER,
+      ack_by INTEGER,
+      ack_at TEXT DEFAULT (datetime('now')),
+      note TEXT
+    );
+    CREATE TABLE IF NOT EXISTS document_legal_holds (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      scope TEXT,
+      status TEXT DEFAULT 'active',
+      released_at TEXT,
+      created_by INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS document_retention_policies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_type TEXT NOT NULL UNIQUE,
+      retention_years INTEGER NOT NULL,
+      legal_basis TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS doc_acknowledgements (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       doc_id INTEGER NOT NULL,
@@ -87,6 +139,10 @@ function ensureDocumentSchema(db) {
       ack_method TEXT DEFAULT 'web'
     )
   `);
+  try {
+    const annotationColumns = new Set(db.prepare("PRAGMA table_info(document_annotations)").all().map((column) => column.name));
+    if (!annotationColumns.has("photos_json")) db.exec("ALTER TABLE document_annotations ADD COLUMN photos_json TEXT");
+  } catch (_error) { /* 表尚未创建时忽略 */ }
 }
 
 module.exports = { ensureDocumentSchema };

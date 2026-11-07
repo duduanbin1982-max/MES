@@ -11,6 +11,7 @@
       <template #actions>
         <el-button :icon="Refresh" :loading="loading" @click="refresh">刷新</el-button>
         <el-button type="primary" :icon="UploadFilled" @click="dlgUpload = true">上传新文档</el-button>
+        <el-button @click="openEnterprise(null)">现场扫码</el-button>
       </template>
       <template #filters>
         <el-form inline size="small" class="toolbar-form">
@@ -34,6 +35,14 @@
           </el-form-item>
           <el-form-item label="BOM 节点">
             <el-input v-model.number="filter.bom_node_id" placeholder="ID" clearable style="width:120px" />
+          </el-form-item>
+          <el-form-item label="标签"><el-input v-model="filter.tag" placeholder="标签" clearable style="width:120px" /></el-form-item>
+          <el-form-item label="版本"><el-input v-model="filter.version" placeholder="如 A0" clearable style="width:100px" /></el-form-item>
+          <el-form-item label="密级">
+            <el-select v-model="filter.classification" clearable placeholder="全部" style="width:120px">
+              <el-option label="公开" value="public" /><el-option label="内部" value="internal" />
+              <el-option label="机密" value="confidential" /><el-option label="绝密" value="secret" />
+            </el-select>
           </el-form-item>
           <el-form-item label="搜索">
             <el-input v-model="filter.q" placeholder="名称/编码" clearable style="width:180px" @keyup.enter="refresh" />
@@ -73,6 +82,7 @@
       @load-acks="loadAcks"
       @versions="openVersions"
       @control="openControl"
+      @governance="openEnterprise"
       @issue="openIssue"
       @revoke="openRevoke"
       @archive="archiveDoc"
@@ -119,6 +129,7 @@
     />
 
     <DocumentControlDrawer v-model="dlgControl" :doc="controlDoc" @changed="refresh" />
+    <DocumentEnterpriseDrawer v-model="enterpriseVisible" :doc="enterpriseDoc" />
 
     <DocumentVersionDrawer
       v-model="dlgVersions"
@@ -153,6 +164,7 @@ import DocumentListCard from './documents/DocumentListCard.vue'
 import DocumentRevokeDialog from './documents/DocumentRevokeDialog.vue'
 import DocumentStats from './documents/DocumentStats.vue'
 import DocumentUploadDialog from './documents/DocumentUploadDialog.vue'
+import DocumentEnterpriseDrawer from './documents/DocumentEnterpriseDrawer.vue'
 import DocumentControlDrawer from './documents/DocumentControlDrawer.vue'
 import DocumentVersionDrawer from './documents/DocumentVersionDrawer.vue'
 
@@ -201,7 +213,7 @@ const bomLoading = ref(false)
 const filter = reactive({
   type: '' as string, status: '' as string, issued_to: '' as string,
   equipment_instance_id: null as number | null, bom_node_id: null as number | null,
-  q: '' as string
+  q: '' as string, tag: '' as string, version: '' as string, classification: '' as string
 })
 
 const resetFilter = () => {
@@ -222,6 +234,9 @@ const refresh = async () => {
     if (filter.equipment_instance_id) params.equipment_instance_id = filter.equipment_instance_id
     if (filter.bom_node_id) params.bom_node_id = filter.bom_node_id
     if (filter.q) params.q = filter.q
+    if (filter.tag) params.tag = filter.tag
+    if (filter.version) params.version = filter.version
+    if (filter.classification) params.classification = filter.classification
     const r: any = await api.documents(params)
     items.value = r.items || []
     total.value = r.total || 0
@@ -265,6 +280,8 @@ const onRowClick = () => { /* noop */ }
 
 // 下载
 // 2026-10-19：改走带 Authorization 的 blob 下载（window.open 无法带请求头 → 401）
+const enterpriseVisible = ref(false)
+const enterpriseDoc = ref<any>(null)
 const dlgControl = ref(false)
 const controlDoc = ref<any>(null)
 const previewVisible = ref(false)
@@ -423,6 +440,8 @@ const dlgVersions = ref(false)
 const versions = ref<any[]>([])
 const versionsCurrent = ref<any>(null)
 const versionsLoading = ref(false)
+const openEnterprise = (row: any) => { enterpriseDoc.value = row; enterpriseVisible.value = true }
+
 const openControl = (row: any) => { controlDoc.value = row; dlgControl.value = true }
 
 const openVersions = async (row: any) => {

@@ -59,7 +59,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="created_at_alias" label="上传时间" width="160" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <el-button size="small" link type="primary" @click.stop="$emit('preview', row)">预览</el-button>
             <el-button size="small" link @click.stop="$emit('download', row)">下载</el-button>
@@ -67,6 +67,7 @@
             <el-button size="small" link type="info" @click.stop="$emit('load-acks', row)">签收记录</el-button>
             <el-button size="small" link type="primary" @click.stop="$emit('versions', row)">版本</el-button>
             <el-button size="small" link type="warning" @click.stop="$emit('control', row)">受控</el-button>
+            <el-button size="small" link type="info" @click.stop="$emit('governance', row)">治理</el-button>
             <el-button v-if="row.status === 'draft'" size="small" link type="success" @click.stop="$emit('issue', row)">签发</el-button>
             <el-button v-if="row.status === 'issued'" size="small" link type="warning" @click.stop="$emit('revoke', row)">收回</el-button>
             <el-button v-if="row.status !== 'archived'" size="small" link type="danger" @click.stop="$emit('archive', row)">归档</el-button>
@@ -117,6 +118,7 @@ const emit = defineEmits<{
   'load-acks': [row: any]
   versions: [row: any]
   control: [row: any]
+  governance: [row: any]
   issue: [row: any]
   revoke: [row: any]
   archive: [row: any]

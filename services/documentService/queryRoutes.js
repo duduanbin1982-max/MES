@@ -10,7 +10,7 @@ const { humanSize, mimeToIcon, resolveStoredFile } = require("./storage");
 
 function registerCollectionRoutes(app, db) {
   app.get("/api/documents", (req, res) => {
-    const { equipment_instance_id, bom_node_id, eco_id, doc_type, status, issued_to, q } = req.query;
+    const { equipment_instance_id, bom_node_id, eco_id, doc_type, status, issued_to, q, tag, version, classification, uploaded_from, uploaded_to, sort } = req.query;
     const scope = scopeWhere(req, db, "d");
     let sql = `SELECT d.*, u1.full_name AS created_by_name, u2.full_name AS issued_by_name,
                       b.part_number AS bom_part_number, b.tier AS bom_tier,
@@ -31,15 +31,24 @@ function registerCollectionRoutes(app, db) {
     if (doc_type) { sql += " AND d.doc_type = ?"; params.push(doc_type); }
     if (status) { sql += " AND d.status = ?"; params.push(status); }
     if (issued_to) { sql += " AND d.issued_to = ?"; params.push(issued_to); }
+    if (tag) { sql += " AND (',' || COALESCE(d.tags,'') || ',') LIKE ?"; params.push(`%,${tag},%`); }
+    if (version) { sql += " AND d.version = ?"; params.push(version); }
+    if (classification) { sql += " AND COALESCE(d.classification,'internal') = ?"; params.push(classification); }
+    if (uploaded_from) { sql += " AND COALESCE(d.uploaded_at, d.uploaded_at) >= ?"; params.push(uploaded_from); }
+    if (uploaded_to) { sql += " AND COALESCE(d.uploaded_at, d.uploaded_at) <= ?"; params.push(uploaded_to); }
     if (q) {
-      sql += " AND (d.title LIKE ? OR d.doc_code LIKE ? OR d.file_name LIKE ?)";
-      params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+      sql += ` AND (d.title LIKE ? OR d.doc_code LIKE ? OR d.file_name LIKE ? OR d.doc_name LIKE ? OR d.description LIKE ? OR d.tags LIKE ? OR b.part_number LIKE ? OR ei.instance_code LIKE ?)`;
+      params.push(...Array(8).fill(`%${q}%`));
     }
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const pageSize = Math.min(200, Math.max(1, parseInt(req.query.page_size, 10) || 50));
     const countSql = sql.replace(/^SELECT d\.\*[\s\S]*? FROM documents d/, "SELECT COUNT(*) AS c FROM documents d");
     const countRow = db.prepare(countSql).get(...params);
-    sql += ` ORDER BY COALESCE(d.uploaded_at, d.uploaded_at) DESC LIMIT ? OFFSET ?`;
+    const sortSql = sort === "oldest" ? "COALESCE(d.uploaded_at, d.uploaded_at) ASC"
+      : sort === "title" ? "d.title COLLATE NOCASE ASC"
+      : sort === "version" ? "d.version DESC, d.id DESC"
+      : "COALESCE(d.uploaded_at, d.uploaded_at) DESC";
+    sql += ` ORDER BY ${sortSql} LIMIT ? OFFSET ?`;
     const rows = db.prepare(sql).all(...params, pageSize, (page - 1) * pageSize);
     rows.forEach((row) => {
       row.icon = mimeToIcon(row.mime_type);
