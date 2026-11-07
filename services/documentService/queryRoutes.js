@@ -5,6 +5,7 @@ const { ApiError } = require("../../app/errors");
 const { documentEvents, documentFamilyIds, recordDocumentEvent } = require("./history");
 const { scopeWhere, canAccessDocument } = require("./access");
 const { sanitizeFileName } = require("./meta");
+const { canViewClassification } = require("./p1");
 const { humanSize, mimeToIcon, resolveStoredFile } = require("./storage");
 
 function registerCollectionRoutes(app, db) {
@@ -22,6 +23,8 @@ function registerCollectionRoutes(app, db) {
                LEFT JOIN equipment_instances ei ON ei.id = d.equipment_instance_id
                WHERE 1=1` + (scope.clause ? " AND " + scope.clause : "");
     const params = [...scope.params];
+    const isAdminUser = req.user?.role === "admin" || (req.user?.permissions || []).includes("*") || (req.user?.permissions || []).includes("document:secret");
+    if (!isAdminUser) sql += " AND COALESCE(d.classification, 'internal') <> 'secret'";
     if (equipment_instance_id) { sql += " AND d.equipment_instance_id = ?"; params.push(equipment_instance_id); }
     if (bom_node_id) { sql += " AND d.bom_node_id = ?"; params.push(bom_node_id); }
     if (eco_id) { sql += " AND d.eco_id = ?"; params.push(eco_id); }
@@ -68,6 +71,7 @@ function registerDetailRoutes(app, db) {
       WHERE d.id = ?`).get(req.params.id);
     if (!row) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
     if (!canAccessDocument(req, db, row)) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
+    if (!canViewClassification(req, row)) return next(ApiError.forbidden("无权查看该密级文档"));
     row.icon = mimeToIcon(row.mime_type);
     row.human_size = humanSize(row.file_size);
     res.json(row);
@@ -77,6 +81,8 @@ function registerDetailRoutes(app, db) {
     const row = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
     if (!row) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
     if (!canAccessDocument(req, db, row)) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
+    if (!canViewClassification(req, row)) return next(ApiError.forbidden("无权下载该密级文档"));
+    if (row.download_policy === "preview_only") return next(ApiError.forbidden("该文档仅允许在线预览，禁止下载"));
     const absolutePath = resolveStoredFile(row.file_path);
     if (!absolutePath) return next(ApiError.notFound(`文件已丢失: ${row.file_name}`));
     const safeName = sanitizeFileName(row.file_name);
@@ -93,6 +99,10 @@ function registerDetailRoutes(app, db) {
     res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(safeName)}`);
     res.setHeader("X-Content-Type-Options", "nosniff");
+    if (row.download_policy === "no_print") res.setHeader("X-No-Print", "1");
+    if (row.download_policy === "watermark_only" || row.classification === "confidential" || row.classification === "secret") {
+      res.setHeader("X-Document-Watermark", encodeURIComponent(`${req.user?.username || req.user?.full_name || "user"}@${new Date().toISOString()}`));
+    }
     res.setHeader("Content-Length", row.file_size || fs.statSync(absolutePath).size);
     fs.createReadStream(absolutePath).pipe(res);
   });
@@ -101,6 +111,7 @@ function registerDetailRoutes(app, db) {
     const row = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
     if (!row) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
     if (!canAccessDocument(req, db, row)) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
+    if (!canViewClassification(req, row)) return next(ApiError.forbidden("无权预览该密级文档"));
     const mime = String(row.mime_type || "");
     const previewable = mime.includes("pdf") || mime.startsWith("image/") || mime.startsWith("text/");
     if (!previewable) return next(ApiError.validation("该文件类型不支持在线预览，请下载查看: " + (row.file_name || "")));

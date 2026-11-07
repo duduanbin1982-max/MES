@@ -73,6 +73,64 @@
           <el-form-item><el-button type="primary" @click="saveEffectivity">保存有效性</el-button></el-form-item>
         </el-form>
         <el-alert type="info" :closable="false" show-icon :title="`该文档当前所属机号：${doc?.instance_code || doc?.equipment_instance_id || '-'}；生效文件接口可按 as_of 日期查询。`" />
+
+      </el-tab-pane>
+
+      <el-tab-pane label="批注/对比" name="annotations">
+        <el-form inline>
+          <el-form-item><el-input v-model="annotationForm.content" placeholder="批注内容" style="width: 300px" /></el-form-item>
+          <el-form-item><el-select v-model="annotationForm.annotation_type" style="width: 110px"><el-option label="备注" value="note" /><el-option label="问题" value="issue" /><el-option label="变更" value="change" /></el-select></el-form-item>
+          <el-form-item><el-button type="primary" @click="addAnnotation">添加批注</el-button></el-form-item>
+        </el-form>
+        <el-table :data="annotations" size="small" max-height="240">
+          <el-table-column prop="annotation_type" label="类型" width="80" />
+          <el-table-column prop="content" label="内容" min-width="220" />
+          <el-table-column prop="status" label="状态" width="90" />
+          <el-table-column label="操作" width="110"><template #default="{ row }"><el-button size="small" link type="success" @click="resolveAnnotation(row)">解决</el-button></template></el-table-column>
+        </el-table>
+        <el-divider />
+        <el-form inline>
+          <el-form-item label="对比版本">
+            <el-select v-model="compareId" placeholder="选择同族版本" style="width: 220px">
+              <el-option v-for="item in familyVersions" :key="item.id" :label="`${item.version} · ${item.status}`" :value="item.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item><el-button @click="compareVersions">对比</el-button></el-form-item>
+        </el-form>
+        <el-table v-if="compareResult" :data="compareResult.changes" size="small" max-height="220">
+          <el-table-column prop="field" label="字段" width="150" />
+          <el-table-column prop="left" label="当前" min-width="150" />
+          <el-table-column prop="right" label="对比" min-width="150" />
+        </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane label="密级/下载" name="security">
+        <el-form label-width="110px" style="max-width: 560px">
+          <el-form-item label="文档密级">
+            <el-select v-model="securityForm.classification" style="width: 220px">
+              <el-option label="公开" value="public" /><el-option label="内部" value="internal" />
+              <el-option label="机密" value="confidential" /><el-option label="绝密" value="secret" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="下载策略">
+            <el-select v-model="securityForm.download_policy" style="width: 240px">
+              <el-option label="允许下载" value="allow" /><el-option label="仅在线预览" value="preview_only" />
+              <el-option label="下载带水印" value="watermark_only" /><el-option label="禁止打印" value="no_print" />
+            </el-select>
+          </el-form-item>
+          <el-form-item><el-button type="primary" @click="saveSecurity">保存密级/策略</el-button></el-form-item>
+        </el-form>
+      </el-tab-pane>
+
+      <el-tab-pane label="关联影响" name="links">
+        <el-descriptions v-if="links" :column="1" border>
+          <el-descriptions-item label="BOM 节点">{{ links.bom ? `${links.bom.part_number || links.bom.id}（tier ${links.bom.tier}）` : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="ECO">{{ links.eco ? `${links.eco.change_no || links.eco.id}` : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="工单">{{ links.work_order ? `${links.work_order.order_no || links.work_order.id}（${links.work_order.status}）` : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="关联工艺节点">{{ (links.process_nodes || []).map((n: any) => n.operation_name).join('、') || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="同族版本">{{ (links.family_versions || []).map((v: any) => v.version).join('、') || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="批注数">{{ links.annotation_count || 0 }}</el-descriptions-item>
+        </el-descriptions>
       </el-tab-pane>
     </el-tabs>
   </el-drawer>
@@ -94,6 +152,13 @@ const distribution = ref<any[]>([])
 const distributionAcknowledged = ref(0)
 const revisionForm = ref({ revision_note: '', revision_reason: '' })
 const effectivityForm = ref({ effectivity_type: 'all', effective_from: null, effective_to: null, serial_from: '', serial_to: '' })
+const annotations = ref<any[]>([])
+const annotationForm = ref({ content: '', annotation_type: 'note', page_no: 1 })
+const familyVersions = ref<any[]>([])
+const compareId = ref<number | null>(null)
+const compareResult = ref<any>(null)
+const securityForm = ref({ classification: 'internal', download_policy: 'allow' })
+const links = ref<any>(null)
 
 const approvalTagType = computed(() => approvalStatus.value === 'approved' ? 'success' : approvalStatus.value === 'rejected' ? 'danger' : approvalStatus.value === 'in_review' ? 'warning' : 'info')
 const approvalStatusLabel = computed(() => ({ draft: '草稿', in_review: '审批中', approved: '已批准', rejected: '已驳回' }[approvalStatus.value] || approvalStatus.value))
@@ -126,9 +191,52 @@ async function loadEffectivity() {
   effectivityForm.value = { effectivity_type: data.effectivity_type || 'all', effective_from: data.effective_from, effective_to: data.effective_to, serial_from: data.serial_from || '', serial_to: data.serial_to || '' }
 }
 
+async function loadAnnotations() {
+  if (!props.doc?.id) return
+  const data: any = await Api.get(`/documents/${props.doc.id}/annotations`)
+  annotations.value = data.items || []
+  const versions: any = await Api.get(`/documents/${props.doc.id}/versions`)
+  familyVersions.value = (versions.items || []).filter((item: any) => Number(item.id) !== Number(props.doc.id))
+  if (!compareId.value && familyVersions.value.length) compareId.value = familyVersions.value[0].id
+  const security: any = await Api.get(`/documents/${props.doc.id}/classification`)
+  securityForm.value = { classification: security.classification || 'internal', download_policy: security.download_policy || 'allow' }
+  links.value = await Api.get(`/documents/${props.doc.id}/links`)
+}
+
+async function addAnnotation() {
+  if (!annotationForm.value.content.trim()) return
+  try {
+    await Api.post(`/documents/${props.doc.id}/annotations`, annotationForm.value)
+    ElMessage.success('批注已添加')
+    annotationForm.value = { content: '', annotation_type: 'note', page_no: 1 }
+    await loadAnnotations()
+  } catch (error: any) { ElMessage.error('添加批注失败：' + (error.response?.data?.message || error.message)) }
+}
+
+async function resolveAnnotation(row: any) {
+  try {
+    await Api.patch(`/document-annotations/${row.id}`, { status: 'resolved', content: row.content })
+    ElMessage.success('批注已解决')
+    await loadAnnotations()
+  } catch (error: any) { ElMessage.error('更新批注失败：' + (error.response?.data?.message || error.message)) }
+}
+
+async function compareVersions() {
+  if (!compareId.value) return
+  try { compareResult.value = await Api.get(`/documents/${props.doc.id}/compare`, { params: { with_document_id: compareId.value } }) }
+  catch (error: any) { ElMessage.error('对比失败：' + (error.response?.data?.message || error.message)) }
+}
+
+async function saveSecurity() {
+  try {
+    await Api.put(`/documents/${props.doc.id}/classification`, securityForm.value)
+    ElMessage.success('密级/下载策略已保存')
+  } catch (error: any) { ElMessage.error('保存失败：' + (error.response?.data?.message || error.message)) }
+}
+
 async function loadAll() {
   if (!props.doc?.id) return
-  try { await Promise.all([loadApproval(), loadRevisions(), loadDistribution(), loadEffectivity()]) }
+  try { await Promise.all([loadApproval(), loadRevisions(), loadDistribution(), loadEffectivity(), loadAnnotations()]) }
   catch (error: any) { ElMessage.error('加载受控信息失败：' + (error.response?.data?.message || error.message)) }
 }
 

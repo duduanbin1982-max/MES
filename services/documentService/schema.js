@@ -23,7 +23,25 @@ function ensureDocumentSchema(db) {
   addColumn("effective_to", "effective_to TEXT");
   addColumn("serial_from", "serial_from TEXT");
   addColumn("serial_to", "serial_to TEXT");
+  addColumn("classification", "classification TEXT DEFAULT 'internal'");
+  addColumn("download_policy", "download_policy TEXT DEFAULT 'allow'");
   db.exec(`
+    CREATE TABLE IF NOT EXISTS document_annotations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_id INTEGER NOT NULL,
+      version TEXT,
+      page_no INTEGER DEFAULT 1,
+      x_pct REAL,
+      y_pct REAL,
+      annotation_type TEXT DEFAULT 'note',
+      content TEXT NOT NULL,
+      status TEXT DEFAULT 'open',
+      parent_id INTEGER,
+      created_by INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      resolved_by INTEGER,
+      resolved_at TEXT
+    );
     CREATE TABLE IF NOT EXISTS doc_approvals (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       doc_id INTEGER NOT NULL,
