@@ -150,35 +150,68 @@ function register(app, db) {
     if (!inst) throw ApiError.notFound("装备实例不存在");
     const bomRows = all("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, parent_id, id", [instanceId]);
     const components = bomRows.filter(row => Number(row.tier) === 1);
-    const existing = all("SELECT DISTINCT bom_node_id FROM process_nodes WHERE equipment_instance_id = ? AND bom_node_id IS NOT NULL", [instanceId]).map(row => Number(row.bom_node_id));
-    const existingSet = new Set(existing);
+    // 2026-11-07（工艺树审计）：按“部件 + 工序名”判断缺失，而不是“部件有任何节点就整块跳过”，
+    // 避免新增模板工序无法补齐；同时使用 process_operation_templates 的真实配置
+    // （QC/SOP/图纸要求、岗位、定员、标准工时），而不是硬编码 3 道工序。
+    const existing = all("SELECT bom_node_id, operation_name FROM process_nodes WHERE equipment_instance_id = ? AND bom_node_id IS NOT NULL", [instanceId]);
+    const existingKeys = new Set(existing.map(row => `${Number(row.bom_node_id)}:${row.operation_name}`));
+    let templates = [];
+    try {
+      templates = all("SELECT * FROM process_operation_templates WHERE is_active = 1 ORDER BY sequence_hint, id");
+    } catch (_error) { templates = []; }
+    if (!templates.length) {
+      templates = [
+        { operation_name: "装配准备", operation_type: "assembly", standard_hours: 4, worker_count: 1, required_skill: "assembly", qc_required: 0, sop_required: 0, drawing_required: 0, sequence_hint: 1 },
+        { operation_name: "部件装配", operation_type: "assembly", standard_hours: 16, worker_count: 1, required_skill: "assembly", qc_required: 0, sop_required: 0, drawing_required: 0, sequence_hint: 2 },
+        { operation_name: "过程检验", operation_type: "qc", standard_hours: 2, worker_count: 1, required_skill: "qc", qc_required: 1, sop_required: 0, drawing_required: 0, sequence_hint: 3 },
+      ];
+    }
     const insert = db.prepare(`INSERT INTO process_nodes (
       equipment_instance_id, parent_id, bom_node_id, operation_name, operation_type, sequence,
-      estimated_hours, required_workstation_id, required_skill, status, sort_order, notes
-    ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'ready', ?, ?)`);
+      estimated_hours, required_workstation_id, required_skill, operation_template_id,
+      required_position_code, worker_count, qc_required, sop_required, drawing_required,
+      status, sort_order, notes
+    ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', ?, ?)`);
+    const insertHours = db.prepare(`INSERT INTO process_standard_hours (
+      process_node_id, work_type, standard_hours, worker_count, unit, description
+    ) VALUES (?, ?, ?, ?, 'h', ?)`);
     let created = 0;
-    const templates = [
-      { name: "装配准备", type: "assembly", hours: 4, skill: "assembly" },
-      { name: "部件装配", type: "assembly", hours: 16, skill: "assembly" },
-      { name: "过程检验", type: "qc", hours: 2, skill: "qc" },
-    ];
+    let createdHours = 0;
     const tx = db.transaction(() => {
       for (const component of components) {
-        if (existingSet.has(Number(component.id))) continue;
         templates.forEach((tpl, idx) => {
-          insert.run(
+          const operationName = tpl.operation_name;
+          const key = `${Number(component.id)}:${operationName}`;
+          if (existingKeys.has(key)) return;
+          const meta = inferOperationMeta(operationName);
+          const operationType = tpl.operation_type || meta.type;
+          const standardHours = Number(tpl.standard_hours) || 0;
+          const workerCount = Number(tpl.worker_count) || 1;
+          const workstationId = workstationFor(tpl.default_station_type || operationType);
+          const result = insert.run(
             instanceId,
             component.id,
-            tpl.name,
-            tpl.type,
-            idx + 1,
-            tpl.hours,
-            workstationFor(tpl.type),
-            tpl.skill,
+            operationName,
+            operationType,
+            Number(tpl.sequence_hint) || idx + 1,
+            standardHours,
+            workstationId,
+            tpl.required_skill || meta.skill,
+            tpl.id || null,
+            tpl.required_position_code || null,
+            workerCount,
+            Number(tpl.qc_required) ? 1 : 0,
+            Number(tpl.sop_required) ? 1 : 0,
+            Number(tpl.drawing_required) ? 1 : 0,
             Number(component.id) * 100 + idx + 1,
-            "按部件默认工艺模板自动生成"
+            tpl.description || "按工序模板自动生成"
           );
           created += 1;
+          if (standardHours > 0) {
+            insertHours.run(result.lastInsertRowid, operationType, standardHours, workerCount, `模板：${operationName}`);
+            createdHours += 1;
+          }
+          existingKeys.add(key);
         });
       }
     });
@@ -188,11 +221,11 @@ function register(app, db) {
         action: "process_route.generate_missing",
         resource_type: "equipment_instance",
         resource_id: instanceId,
-        after: { created },
-        diff_summary: `按 BOM 部件生成 ${created} 条缺失工序`,
+        after: { created, created_hours: createdHours, templates: templates.length },
+        diff_summary: `按工序模板补齐 ${created} 条工序（标准工时 ${createdHours} 条）`,
       });
     }
-    res.json({ ok: true, created });
+    res.json({ ok: true, created, created_hours: createdHours, template_count: templates.length });
   }));
 
 }

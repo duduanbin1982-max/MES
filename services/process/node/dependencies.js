@@ -10,6 +10,7 @@
 
 const { wrap } = require("../../../middleware/asyncHandler");
 const { ApiError } = require("../../../app/errors");
+const audit = require("../../../app/audit");
 
 const DEP_TYPES = ["FS", "SS", "FF", "SF"];
 const MAX_LAG_HOURS = 8760;
@@ -159,6 +160,13 @@ function register(app, db) {
       "INSERT INTO process_dependencies (equipment_instance_id, predecessor_id, successor_id, dep_type, lag_hours) VALUES (?, ?, ?, ?, ?)",
       [instanceId, predecessorId, successorId, depType, lagHours],
     );
+    audit.record(db, req, {
+      action: "process_dependency.create",
+      resource_type: "process_dependency",
+      resource_id: result.lastInsertRowid,
+      after: { equipment_instance_id: instanceId, predecessor_id: predecessorId, successor_id: successorId, dep_type: depType, lag_hours: lagHours },
+      diff_summary: `新增工序依赖 ${predecessorId} → ${successorId}`,
+    });
     res.json({
       id: result.lastInsertRowid,
       equipment_instance_id: instanceId,
@@ -197,6 +205,14 @@ function register(app, db) {
       "UPDATE process_dependencies SET predecessor_id = ?, successor_id = ?, dep_type = ?, lag_hours = ? WHERE id = ?",
       [predecessorId, successorId, depType, lagHours, id],
     );
+    audit.record(db, req, {
+      action: "process_dependency.update",
+      resource_type: "process_dependency",
+      resource_id: id,
+      before: existing,
+      after: { predecessor_id: predecessorId, successor_id: successorId, dep_type: depType, lag_hours: lagHours },
+      diff_summary: `修改工序依赖 #${id}`,
+    });
     res.json({
       ok: true,
       id,
@@ -211,8 +227,16 @@ function register(app, db) {
   app.delete("/api/process_dependencies/:id", wrap((req, res) => {
     const id = toInt(req.params.id);
     if (!id) throw ApiError.validation("id 必填");
-    const result = run("DELETE FROM process_dependencies WHERE id = ?", [id]);
-    if (!result.changes) throw ApiError.notFound("依赖不存在");
+    const existing = get("SELECT * FROM process_dependencies WHERE id = ?", [id]);
+    if (!existing) throw ApiError.notFound("依赖不存在");
+    run("DELETE FROM process_dependencies WHERE id = ?", [id]);
+    audit.record(db, req, {
+      action: "process_dependency.delete",
+      resource_type: "process_dependency",
+      resource_id: id,
+      before: existing,
+      diff_summary: `删除工序依赖 #${id}`,
+    });
     res.json({ deleted: [id] });
   }));
 }

@@ -24,8 +24,9 @@ const get = (db, sql, params = []) => db.prepare(sql).get(params);
  * @param {Array<{id,parent_id}>} nodes
  * @returns {{sorted:number[], cycleNodes:number[]}}
  */
-function topoSort(nodes) {
+function topoSort(nodes, dependencies = []) {
   // 真正 Kahn：parent_id 在集合内算入度边，集合外（NULL 或外部 ID）算根
+  // 2026-11-07（工艺树审计）：同时把 process_dependencies 纳入拓扑，避免依赖环漏检
   const idSet = new Set(nodes.map(n => n.id));
   const childrenOf = new Map();
   const indeg = new Map();
@@ -33,11 +34,18 @@ function topoSort(nodes) {
     childrenOf.set(n.id, []);
     indeg.set(n.id, 0);
   }
+  const edges = [];
   for (const n of nodes) {
-    if (n.parent_id != null && idSet.has(n.parent_id)) {
-      childrenOf.get(n.parent_id).push(n.id);
-      indeg.set(n.id, indeg.get(n.id) + 1);
+    if (n.parent_id != null && idSet.has(n.parent_id)) edges.push([n.parent_id, n.id]);
+  }
+  for (const dep of dependencies || []) {
+    if (idSet.has(dep.predecessor_id) && idSet.has(dep.successor_id)) {
+      edges.push([dep.predecessor_id, dep.successor_id]);
     }
+  }
+  for (const [from, to] of edges) {
+    childrenOf.get(from).push(to);
+    indeg.set(to, indeg.get(to) + 1);
   }
   const queue = [];
   for (const n of nodes) if (indeg.get(n.id) === 0) queue.push(n.id);
@@ -60,8 +68,8 @@ function topoSort(nodes) {
  * @param {Array<{id,parent_id,duration_days}>} nodes
  * @returns {{projectDuration:number, criticalNodes:number[], allNodes:Array<{id,es,ls,slack}>}}
  */
-function computeCPM(nodes) {
-  const { sorted, cycleNodes } = topoSort(nodes);
+function computeCPM(nodes, dependencies = []) {
+  const { sorted, cycleNodes } = topoSort(nodes, dependencies);
   if (cycleNodes.length) {
     return {
       projectDuration: 0,
@@ -70,29 +78,66 @@ function computeCPM(nodes) {
       cycleNodes
     };
   }
-  const dur = new Map(nodes.map(n => [n.id, n.duration_days || 0]));
-  const childrenOf = new Map();
-  for (const n of nodes) childrenOf.set(n.id, []);
+  const duration = new Map(nodes.map(n => [n.id, n.duration_days || 0]));
+  const nodeById = new Map(nodes.map(n => [n.id, n]));
+  const incoming = new Map();
+  const outgoing = new Map();
+  for (const n of nodes) { incoming.set(n.id, []); outgoing.set(n.id, []); }
+  const addEdge = (from, to, kind, dep) => {
+    outgoing.get(from).push({ to, kind, dep });
+    incoming.get(to).push({ from, kind, dep });
+  };
   for (const n of nodes) {
-    if (n.parent_id != null) childrenOf.get(n.parent_id)?.push(n.id);
+    if (n.parent_id != null && nodeById.has(n.parent_id)) addEdge(n.parent_id, n.id, "parent", null);
   }
-  // 正推 ES / EF
+  const depType = (dep) => String(dep?.dep_type || "FS").toUpperCase();
+  const lag = (dep) => Number(dep?.lag_hours || 0);
+  for (const dep of dependencies || []) {
+    if (nodeById.has(dep.predecessor_id) && nodeById.has(dep.successor_id)) {
+      addEdge(dep.predecessor_id, dep.successor_id, depType(dep), dep);
+    }
+  }
+  // 正推 ES / EF（同时支持 FS/SS/FF/SF + lag）
   const es = new Map(), ef = new Map();
   for (const id of sorted) {
-    const parentIds = nodes.filter(n => n.id === id).map(n => n.parent_id).filter(pid => pid != null && es.has(pid));
-    const maxParentEf = parentIds.length ? Math.max(...parentIds.map(pid => ef.get(pid))) : 0;
-    es.set(id, maxParentEf);
-    ef.set(id, maxParentEf + (dur.get(id) || 0));
+    let earliest = 0;
+    for (const edge of incoming.get(id) || []) {
+      const predEs = es.get(edge.from) || 0;
+      const predEf = ef.get(edge.from) || 0;
+      const successorDuration = duration.get(id) || 0;
+      let constraint = 0;
+      if (edge.kind === "parent" || edge.kind === "FS") constraint = predEf + lag(edge.dep);
+      else if (edge.kind === "SS") constraint = predEs + lag(edge.dep);
+      else if (edge.kind === "FF") constraint = predEf + lag(edge.dep) - successorDuration;
+      else if (edge.kind === "SF") constraint = predEs + lag(edge.dep) - successorDuration;
+      earliest = Math.max(earliest, constraint);
+    }
+    es.set(id, earliest);
+    ef.set(id, earliest + (duration.get(id) || 0));
   }
   const projectDuration = sorted.length ? Math.max(...sorted.map(id => ef.get(id) || 0)) : 0;
-  // 倒推 LS / LF
+  // 倒推 LS / LF（依赖边按语义反向约束前驱）
   const ls = new Map(), lf = new Map();
   for (let i = sorted.length - 1; i >= 0; i--) {
     const id = sorted[i];
-    const childIds = (childrenOf.get(id) || []).filter(cid => ls.has(cid));
-    const minChildLs = childIds.length ? Math.min(...childIds.map(cid => ls.get(cid))) : projectDuration;
-    lf.set(id, minChildLs);
-    ls.set(id, minChildLs - (dur.get(id) || 0));
+    let latestFinish = projectDuration;
+    const succ = outgoing.get(id) || [];
+    if (succ.length) {
+      latestFinish = Infinity;
+      for (const edge of succ) {
+        const succLs = ls.get(edge.to) || 0;
+        const succLf = lf.get(edge.to) || 0;
+        const predDuration = duration.get(id) || 0;
+        let constraint;
+        if (edge.kind === "parent" || edge.kind === "FS") constraint = succLs - lag(edge.dep) - predDuration;
+        else if (edge.kind === "SS") constraint = succLs - lag(edge.dep);
+        else if (edge.kind === "FF") constraint = succLf - lag(edge.dep) - predDuration;
+        else if (edge.kind === "SF") constraint = succLf - lag(edge.dep);
+        latestFinish = Math.min(latestFinish, constraint + predDuration);
+      }
+    }
+    lf.set(id, latestFinish);
+    ls.set(id, latestFinish - (duration.get(id) || 0));
   }
   const allNodes = sorted.map(id => ({
     id,
@@ -142,7 +187,7 @@ function generateProcessTree(req, res, db) {
 
   const realRoots = nodes.filter(n => n.parent_id == null || !nodeIds.includes(n.parent_id));
 
-  const { cycleNodes } = topoSort(nodes);
+  const { cycleNodes } = topoSort(nodes, deps);
 
   // 构建 forest 树
   const childrenOf = new Map();
@@ -183,6 +228,10 @@ function getCriticalPath(req, res, db) {
     'SELECT id, parent_id, estimated_hours AS duration_days FROM process_nodes WHERE equipment_instance_id = ?',
     [instanceId]
   );
+  const dependencies = all(db,
+    'SELECT id, predecessor_id, successor_id, dep_type, lag_hours FROM process_dependencies WHERE equipment_instance_id = ?',
+    [instanceId]
+  );
   if (!nodes.length) {
     return res.json({
       instance_id: instanceId,
@@ -198,7 +247,7 @@ function getCriticalPath(req, res, db) {
       nodes_with_slack: 0
     });
   }
-  const result = computeCPM(nodes);
+  const result = computeCPM(nodes, dependencies);
   // Adapter：把 computeCPM 输出映射成前端 ProcessTree.vue 期望的 cpm 字段
   // - 前端用 `cpm.total_weeks / total_days / total_hours / critical_path / nodes_with_slack`
   // - 后端纯函数输出 `projectDuration / criticalNodes / allNodes / cycleNodes`

@@ -33,17 +33,17 @@ export function useProcessTreePageCommands({ state, reloadAll }) {
 
   const regenerate = async () => {
     try {
-      await ElMessageBox.confirm('重新生成会清空现有工艺树, 确认?', '警告', { type: 'warning' })
+      await ElMessageBox.confirm('按 BOM 部件与工序模板补齐缺失工序（已存在的节点保留，不会清空），确认?', '从 BOM 补齐', { type: 'info' })
     } catch {
       return
     }
     state.regenerating.value = true
     try {
-      await processTreePageApi.regenerate(state.selectedInstance.value)
-      ElMessage.success('已重新生成')
+      const created = await processTreePageApi.generateMissingRoutes(state.selectedInstance.value)
+      ElMessage.success(created > 0 ? `已补齐 ${created} 条缺失工序` : '没有需要补齐的工序')
       await reloadAll()
     } catch (error) {
-      ElMessage.error('重新生成失败: ' + error.message)
+      ElMessage.error('从 BOM 补齐失败: ' + error.message)
     } finally {
       state.regenerating.value = false
     }

@@ -18,7 +18,7 @@
         </el-select>
         <div class="action-row">
           <el-button :icon="Refresh" @click="reloadAll" :loading="loading">刷新</el-button>
-          <el-button type="warning" :icon="MagicStick" @click="regenerate" :loading="regenerating">从 BOM 生成</el-button>
+          <el-button type="warning" :icon="MagicStick" @click="regenerate" :loading="regenerating">从 BOM 补齐</el-button>
           <el-button type="primary" :icon="Plus" @click="onAddRoot" :disabled="!selectedInstance">新增节点</el-button>
         </div>
       </div>
@@ -127,7 +127,7 @@
       <el-card v-if="!loading && subsystems.length === 0 && uncategorized.length === 0" class="empty-state-card">
         <PageState state="empty" :show-action="false" description="当前装备还没有工艺节点">
           <template #actions>
-            <el-button type="warning" :icon="MagicStick" @click="regenerate">从 BOM 生成工艺树</el-button>
+            <el-button type="warning" :icon="MagicStick" @click="regenerate">从 BOM 补齐工艺树</el-button>
           </template>
         </PageState>
       </el-card>
