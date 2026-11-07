@@ -140,6 +140,28 @@
 - 38 个 `.page-header` 块包裹为 `<PageToolbar class="page-header">`（PageToolbar 新增默认插槽兼容既有内容、保留原左右布局），PageToolbar 覆盖 **47 个页面**，PageState 覆盖 **45 个文件**；
 - 全局 CSS 处理 `el-card` 内 PageState 的双层边框；空态/加载/骨架统一；页面错误态由 Layout 的 PageState 统一兜底。
 
+### 2.6 事故修复：工艺树页面“页面渲染失败”（2026-11-07）
+
+**现象**：打开 `/process-tree` 显示 Layout 的统一错误态“页面加载或渲染时发生异常”。
+
+**定位**：用安装后的 Playwright + headless Chromium 注入 admin 登录态访问生产页面，捕获到：
+
+```
+ReferenceError: defineModel is not defined
+  at setup (ProcessTree-*.js)
+```
+
+**根因**：`frontend/src/components/ProcessTreeDialogs.vue` 使用 **无 `lang="ts"` 的 `<script setup>`**，却写了 TS 泛型宏 `defineModel<any>('editForm', ...)`。在 Vite 8（Rolldown）构建链下被容忍；本轮切换到 Vite 7（Rollup，用于规避按需组件触发的 Rolldown panic）后，SFC 编译器未把该调用识别/改写为运行时宏，产物中残留 `defineModel(...)`，浏览器执行 setup 即抛 `ReferenceError`，被 Layout 的 `onErrorCaptured` 捕获并展示为“页面渲染失败”。
+
+**修复**：将该文件中 4 处 `defineModel<any>(...)` 改为 `defineModel(...)`（无类型泛型，符合纯 JS script setup）；构建通过。
+
+**验证**：
+- Playwright 单页：`/process-tree` 标题“工艺树 · TBM-MES”、正文正常（工艺树标题、实例选择、统计卡、完整性卡等），**pageerror 0、console error 0**；
+- Playwright 全站冒烟 23 个路由：23/23 无渲染失败（`/audit-logs`、`/equipment-instances` 为地址不存在的 404 页，非异常）；
+- 全量部署闸门 889/0；build:safe 部署。
+
+**经验**：纯 JS 的 `<script setup>` 中不要使用 TS 泛型宏；如需泛型请标注 `lang="ts"`，并保留 Playwright/浏览器冒烟作为构建通过之外的运行时守门。
+
 ## 3. 验证
 
 | 项目 | 结果 |
@@ -152,6 +174,7 @@
 | npm run build:safe | 通过（产物已切换到 frontend/dist）；vendor-element 954.04 kB / gzip 308.71 kB；ECharts 655.55 kB / gzip 222.85 kB；CSS 281.72 kB / gzip 37.41 kB |
 | 全量部署闸门 | **889/0** ✅ |
 | 生产静态冒烟 | `https://192.168.1.73/` 200、入口 JS 200、CSS 200、SPA `/spc` 200、未知路由回退 200、`/api/health` 200 |
+| Playwright 运行时冒烟 | 23 个路由全通过（含 `/process-tree`），无 pageerror/console error |
 
 ## 4. 改动文件
 

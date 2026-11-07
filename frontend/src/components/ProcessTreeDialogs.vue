@@ -136,10 +136,10 @@ const props = defineProps({
 })
 // 2026-10-17（前端 eslint 棘轮）：被模板改写的对象 prop 改为 defineModel，
 // 父组件用 v-model:xxx 绑定；改的仍是父组件同一对象，行为不变。
-const editForm = defineModel<any>('editForm', { required: true })
-const assignForm = defineModel<any>('assignForm', { required: true })
-const depForm = defineModel<any>('depForm', { required: true })
-const hoursForm = defineModel<any>('hoursForm', { required: true })
+const editForm = defineModel('editForm', { required: true })
+const assignForm = defineModel('assignForm', { required: true })
+const depForm = defineModel('depForm', { required: true })
+const hoursForm = defineModel('hoursForm', { required: true })
 
 defineEmits([
   'update:showEdit', 'update:showAssign', 'update:showDep',
