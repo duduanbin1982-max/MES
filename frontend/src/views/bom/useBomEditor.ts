@@ -161,7 +161,9 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
     } catch (error: any) {
       if (error !== 'cancel' && error !== 'close') {
         const details = error.response?.data?.details
-        ElMessage.error('发布失败: ' + (error.response?.data?.message || error.message) + (details?.errors ? '（' + details.errors.slice(0, 3).join('；') + '）' : ''))
+        const blockers = details?.errors || details?.blockers || details?.issues?.map((issue: any) => issue.message)
+        const summary = blockers ? '（' + blockers.slice(0, 4).join('；') + '）' : ''
+        ElMessage.error('发布失败: ' + (error.response?.data?.message || error.message) + summary)
       }
     }
   }

@@ -56,6 +56,7 @@
           <el-button v-if="canEdit" size="small" type="primary" plain :disabled="!selected" @click="openAddChild(selected)">+ 新增子部件</el-button>
           <el-button v-if="canEdit" size="small" type="success" :disabled="summary.total > 0" @click="initMinimumBom"><el-icon><Histogram /></el-icon> 生成最低三级骨架</el-button>
           <el-button v-if="canEdit" size="small" @click="dlgImport = true"><el-icon><Download /></el-icon> CSV 导入</el-button>
+          <el-button v-if="canEdit" size="small" type="warning" :icon="Tools" @click="repairVisible = true">缺根修复</el-button>
           <el-button v-if="canEdit" size="small" type="success" plain @click="releaseVersion"><el-icon><Upload /></el-icon> 发布版本</el-button>
           <el-button size="small" @click="loadTemplate"><el-icon><Document /></el-icon> 工业模板</el-button>
           <el-button size="small" type="warning" @click="doValidate"><el-icon><Search /></el-icon> 校验</el-button>
@@ -74,8 +75,9 @@
           <el-col :span="6">
             <el-card shadow="hover">
               <div class="health-title">BOM 健康度</div>
-              <div class="health-score" :style="{ color: health.score >= 85 ? 'var(--el-color-success)' : health.score >= 60 ? 'var(--el-color-warning)' : 'var(--el-color-danger)' }">{{ health.score || 0 }}</div>
-              <div class="health-sub">建议先把 80 分以上再流转采购/工艺</div>
+              <div class="health-score" :style="{ color: health.score >= 85 ? 'var(--el-color-success)' : health.score >= 60 ? 'var(--el-color-warning)' : 'var(--el-color-danger)' }">{{ health.grade || '-' }} · {{ health.score || 0 }}</div>
+              <div class="health-sub">根节点：{{ health.root_state === 'single' ? '正常' : health.root_state === 'empty' ? '空 BOM' : health.root_state === 'missing' ? '缺根' : '多根' }} · 发布门槛 {{ health.release_gate?.min_score ?? 70 }}</div>
+              <div class="health-sub" :style="{ color: health.release_gate?.can_release ? 'var(--el-color-success)' : 'var(--el-color-danger)' }">{{ health.release_gate?.can_release ? '可发布' : (health.release_gate?.blockers?.[0] || '需先修复') }}</div>
             </el-card>
           </el-col>
           <el-col :span="6">
@@ -238,6 +240,8 @@
     </el-tabs>
     <PageState state="empty" compact :show-action="false" v-else description="请先选择项目装备" />
 
+        <BomRepairDialog v-model="repairVisible" :instance-id="instanceId" @changed="loadAll" />
+
     <BomDialogs
       v-model:dlg-add="dlgAdd"
       v-model:dlg-import="dlgImport"
@@ -287,8 +291,13 @@
 import LevelTable from './bom/LevelTable.vue'
 import BomBusinessTabs from './bom/BomBusinessTabs.vue'
 import BomDialogs from './bom/BomDialogs.vue'
+import BomRepairDialog from './bom/BomRepairDialog.vue'
+import { ref } from 'vue'
+import { Tools } from '@element-plus/icons-vue'
 import { useBomManagement } from './bom/useBomManagement'
 import { nodeTypeLabel, tierLabel } from './bom/bomShared'
+
+const repairVisible = ref(false)
 
 const {
   instances,

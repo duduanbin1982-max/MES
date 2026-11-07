@@ -2,7 +2,7 @@
 // 2026-11-07（BOM 审计 B-8）：版本发布 / ECO 流程 / 生效期校验
 const { ApiError } = require("../../../app/errors");
 const { VERSION_RE } = require("../core/constants");
-const { validateTree } = require("../core");
+const { validateTree, computeHealth } = require("../core");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -51,7 +51,7 @@ function getRelease(db, instanceId, releaseId) {
   return { ...row, snapshot };
 }
 
-function createRelease(db, instanceId, body = {}, userId = null) {
+function createRelease(db, instanceId, body = {}, userId = null, user = null) {
   ensureTable(db);
   const version = String(body.version || "").trim();
   if (!VERSION_RE.test(version)) throw ApiError.validation("version 格式必须形如 A0/A1/B0");
@@ -69,13 +69,28 @@ function createRelease(db, instanceId, body = {}, userId = null) {
   if (!validation.ok) {
     throw ApiError.validation("BOM 结构校验未通过，不能发布版本", { errors: validation.errors.slice(0, 20) });
   }
+  const health = computeHealth(db, instanceId, rows);
+  const minScore = Number(process.env.BOM_RELEASE_MIN_SCORE || 70);
+  const canForce = Boolean(body.force) && (user?.role === "admin" || (user?.permissions || []).includes("*"));
+  if (health.score < minScore && !canForce) {
+    throw ApiError.validation(`BOM 健康分 ${health.score} 低于发布门槛 ${minScore}，请先修复健康问题`, {
+      score: health.score, min_score: minScore, grade: health.grade,
+      blockers: health.release_gate?.blockers || [],
+      issues: (health.issues || []).filter((issue) => issue.severity === "error" || issue.severity === "warning").slice(0, 20),
+    });
+  }
   const existing = db.prepare("SELECT id FROM bom_version_releases WHERE equipment_instance_id = ? AND version = ?").get(instanceId, version);
   if (existing) throw ApiError.conflict("版本已存在: " + version);
   const result = db.prepare(`
     INSERT INTO bom_version_releases (equipment_instance_id, version, status, eco_id, effective_from, effective_to, row_count, snapshot_json, notes, created_by, released_at)
     VALUES (?, ?, 'released', ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `).run(instanceId, version, ecoId, effectiveFrom, effectiveTo, rows.length, JSON.stringify(rows), body.notes || null, userId);
-  return getRelease(db, instanceId, Number(result.lastInsertRowid));
+  `).run(instanceId, version, ecoId, effectiveFrom, effectiveTo, rows.length, JSON.stringify(rows),
+    body.notes || (canForce && health.score < minScore ? `强制发布（健康分 ${health.score}）` : null), userId);
+  const release = getRelease(db, instanceId, Number(result.lastInsertRowid));
+  release.health_score = health.score;
+  release.health_grade = health.grade;
+  release.forced = Boolean(canForce && health.score < minScore);
+  return release;
 }
 
 function obsoleteRelease(db, instanceId, releaseId, userId = null) {

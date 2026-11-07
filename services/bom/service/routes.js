@@ -21,6 +21,7 @@ const { ensureBomStructureColumns } = require("./schema");
 const { importBomCsv } = require("./importer");
 const audit = require("../../../app/audit");
 const versions = require("./versions");
+const { registerRepairRoutes } = require("./repair");
 const {
   getActiveUsers,
   updateRiskOwner,
@@ -30,6 +31,7 @@ const {
 
 function registerBomRoutes(app, db) {
   ensureBomStructureColumns(db);
+  registerRepairRoutes(app, db);
   try {
     const ids = db.prepare("SELECT DISTINCT equipment_instance_id AS id FROM instance_bom").all();
     for (const row of ids) recomputeStructureMetadata(db, row.id);
@@ -211,7 +213,7 @@ function registerBomRoutes(app, db) {
 
   app.post("/api/equipment_instances/:id/bom/versions/release", (req, res, next) => {
     try {
-      const release = versions.createRelease(db, req.params.id, req.body || {}, req.user?.uid || null);
+      const release = versions.createRelease(db, req.params.id, req.body || {}, req.user?.uid || null, req.user || null);
       audit.record(db, req, {
         action: "bom.version.release",
         resource_type: "bom",
