@@ -52,7 +52,7 @@
       "ddlStatements": 2
     },
     "documentService": {
-      "schemaVersion": 6,
+      "schemaVersion": 7,
       "ddlFingerprint": "3faa67417d858270eadb6adafe58386d174292c1823f46759753cbfa461566c0",
       "ddlStatements": 4
     },

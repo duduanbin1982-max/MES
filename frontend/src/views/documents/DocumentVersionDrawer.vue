@@ -14,12 +14,19 @@
           <el-card shadow="never" class="version-card" @click="$emit('download', version)">
             <div class="version-row">
               <el-tag :type="version.id === current?.id ? 'primary' : 'info'" size="small">v{{ version.version }}</el-tag>
-              <el-tag :type="statusTag[version.status]" size="small">{{ statusLabel[version.status] }}</el-tag>
+              <el-tag v-if="version.is_current" type="success" size="small">当前有效</el-tag>
+              <el-tag :type="statusTag[version.status]" size="small">{{ statusLabel[version.status] || version.status }}</el-tag>
+              <el-tag v-if="version.version_locked" type="warning" size="small">已锁定</el-tag>
               <span>{{ version.file_name }}</span>
               <span class="version-size">{{ version.human_size }}</span>
             </div>
             <div class="version-hash">
-              点击下载 · 哈希: {{ (version.file_hash || '').slice(0, 12) }}…
+              哈希: {{ (version.file_hash || '').slice(0, 12) }}…
+            </div>
+            <div class="version-actions" @click.stop>
+              <el-button v-if="version.is_current && !version.version_locked" size="small" link type="warning" @click="$emit('lock', version)">锁定版本</el-button>
+              <el-button v-if="version.version_locked" size="small" link @click="$emit('unlock', version)">解锁</el-button>
+              <el-button v-if="!version.is_current && (version.status === 'obsolete' || version.status === 'issued')" size="small" link type="primary" @click="$emit('rollback', version)">回滚到此版本</el-button>
             </div>
           </el-card>
         </el-timeline-item>
@@ -64,6 +71,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   download: [version: any]
+  lock: [version: any]
+  unlock: [version: any]
+  rollback: [version: any]
 }>()
 
 const visible = computed({

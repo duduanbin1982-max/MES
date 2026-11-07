@@ -7,6 +7,7 @@ const { resolveStoredFile } = require("./storage");
 const audit = require("../../app/audit");
 const { recordDocumentEvent } = require("./history");
 const { onDocumentIssued } = require("./control");
+const { assertVersionOrder, applyIssueVersioning, nextVersionOf, compareVersions, parseVersion } = require("./versioning");
 const { buildStoragePath, hasStoredFile, sha256 } = require("./storage");
 
 function registerUploadRoute(app, db) {
@@ -69,17 +70,25 @@ function registerUploadRoute(app, db) {
           return next(ApiError.validation("parent_document_id 不属于该装备实例"));
         }
       }
+      let effectiveVersion = meta.version || "A0";
+      if (parentDocument) {
+        if (!meta.version) {
+          effectiveVersion = nextVersionOf(db, parentDocument);
+        } else if (parseVersion(parentDocument.version) && parseVersion(effectiveVersion) && compareVersions(effectiveVersion, parentDocument.version) <= 0) {
+          return next(ApiError.validation(`新版本号 ${effectiveVersion} 必须大于父版本 ${parentDocument.version}`));
+        }
+      }
       const familyId = parentDocument ? Number(parentDocument.document_family_id || parentDocument.id) : null;
       if (parentDocument && !parentDocument.document_family_id) {
         db.prepare("UPDATE documents SET document_family_id = ? WHERE id = ?").run(parentDocument.id, parentDocument.id);
       }
       if (familyId) {
         const sameVersion = db.prepare("SELECT id FROM documents WHERE document_family_id = ? AND version = ?")
-          .get(familyId, meta.version || "A0");
+          .get(familyId, effectiveVersion);
         if (sameVersion) return next(ApiError.conflict(`同一文档版本已存在 (id=${sameVersion.id})`));
       } else if (meta.doc_code) {
         const sameVersion = db.prepare("SELECT id FROM documents WHERE equipment_instance_id = ? AND doc_code = ? AND version = ?")
-          .get(meta.equipment_instance_id, meta.doc_code, meta.version || "A0");
+          .get(meta.equipment_instance_id, meta.doc_code, effectiveVersion);
         if (sameVersion) return next(ApiError.conflict(`同一文档编号与版本已存在 (id=${sameVersion.id})`));
       }
 
@@ -110,7 +119,7 @@ function registerUploadRoute(app, db) {
         doc_type: meta.doc_type,
         doc_code: meta.doc_code || null,
         title: meta.title,
-        version: meta.version || "A0",
+        version: effectiveVersion,
         file_name: fileName,
         file_path: storage.rel,
         file_size: buffer.length,
@@ -165,9 +174,11 @@ function registerLifecycleRoutes(app, db) {
       if (current.approval_status === "rejected") return next(ApiError.validation("审批被驳回的文档不能签发，请修改后重新提交"));
       if (["revoked", "archived"].includes(current.status)) return next(ApiError.unprocessable("已收回/归档的文档不能签发"));
       if (!hasStoredFile(current.file_path)) return next(ApiError.unprocessable(`文件不存在，不能签发: ${current.file_name || req.params.id}`));
+      assertVersionOrder(db, current);
       db.prepare("UPDATE documents SET status='issued', issued_to=?, issued_at=datetime('now'), issued_by=?, updated_at=datetime('now') WHERE id=?")
         .run(issued_to, req.user?.uid || null, req.params.id);
       const issuedDoc = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
+      const versionResult = applyIssueVersioning(db, issuedDoc.id, req.user?.uid || null);
       try { onDocumentIssued(db, issuedDoc); } catch (_error) { /* 发放生成失败不阻断签发 */ }
       recordDocumentEvent(db, {
         doc_id: Number(req.params.id), action: "issue", from_status: current.status, to_status: "issued",
@@ -177,8 +188,8 @@ function registerLifecycleRoutes(app, db) {
         action: "document.issue",
         resource_type: "document",
         resource_id: req.params.id,
-        after: { status: "issued", issued_to },
-        diff_summary: `签发文档 ${current.version || ""} → ${issued_to}`,
+        after: { status: "issued", issued_to, is_current: 1, superseded: versionResult.superseded },
+        diff_summary: `签发文档 ${current.version || ""} → ${issued_to}（替代 ${versionResult.superseded} 个历史版本）`,
       });
       res.json(db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id));
     } catch (error) { next(error); }
@@ -193,8 +204,13 @@ function registerLifecycleRoutes(app, db) {
       if (current.status !== "issued") {
         return next(ApiError.validation("只能收回已签发的文档（当前状态: " + current.status + "）"));
       }
-      db.prepare("UPDATE documents SET status='revoked', revoke_reason=?, revoked_at=datetime('now'), updated_at=datetime('now') WHERE id=?")
-        .run(reason, req.params.id);
+      try {
+        db.prepare("UPDATE documents SET status='revoked', is_current=0, revoke_reason=?, revoked_at=datetime('now'), updated_at=datetime('now') WHERE id=?")
+          .run(reason, req.params.id);
+      } catch (_error) {
+        db.prepare("UPDATE documents SET status='revoked', revoke_reason=?, revoked_at=datetime('now'), updated_at=datetime('now') WHERE id=?")
+          .run(reason, req.params.id);
+      }
       recordDocumentEvent(db, {
         doc_id: Number(req.params.id), action: "revoke", from_status: current.status, to_status: "revoked",
         version: current.version, issued_to: current.issued_to, reason, operator_id: req.user?.uid || null,
@@ -218,7 +234,7 @@ function registerLifecycleRoutes(app, db) {
       const docTypeRow = db.prepare("SELECT doc_type FROM documents WHERE id = ?").get(req.params.id);
       const retention = retentionYears(docTypeRow ? docTypeRow.doc_type : "other");
       try {
-        db.prepare("UPDATE documents SET status='archived', retention_until = datetime('now', ?), updated_at=datetime('now') WHERE id=?")
+        db.prepare("UPDATE documents SET status='archived', is_current=0, retention_until = datetime('now', ?), updated_at=datetime('now') WHERE id=?")
           .run(`+${retention} years`, req.params.id);
       } catch (_error) {
         // 兼容未迁移 retention_until 列的旧库/测试库
@@ -248,7 +264,9 @@ function registerPurgeRoutes(app, db) {
       throw ApiError.validation(`未到保留期截止日（${doc.retention_until}），不能清理`);
     }
     const absolute = resolveStoredFile(doc.file_path);
-    if (absolute) { try { fs.unlinkSync(absolute); } catch (_error) { /* 文件缺失继续标记 */ } }
+    let referenced;
+    try { referenced = db.prepare("SELECT id FROM documents WHERE file_path = ? AND id <> ? AND status <> 'purged' LIMIT 1").get(doc.file_path, doc.id); } catch (_error) { referenced = null; }
+    if (absolute && !referenced) { try { fs.unlinkSync(absolute); } catch (_error) { /* 文件缺失继续标记 */ } }
     db.prepare("UPDATE documents SET status='purged', purged_at=datetime('now'), updated_at=datetime('now') WHERE id=?").run(doc.id);
     recordDocumentEvent(db, { doc_id: doc.id, action: "purge", from_status: "archived", to_status: "purged", version: doc.version, operator_id: req.user?.uid || null });
     audit.record(db, req, {

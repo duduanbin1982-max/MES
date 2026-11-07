@@ -32,6 +32,13 @@ function ensureDocumentSchema(db) {
   addColumn("supplier_comment", "supplier_comment TEXT");
   addColumn("supplier_reviewed_at", "supplier_reviewed_at TEXT");
   addColumn("supplier_reviewed_by", "supplier_reviewed_by INTEGER");
+  // 2026-11-07（严格版本管理）：当前版/作废/版本锁定
+  addColumn("is_current", "is_current INTEGER DEFAULT 0");
+  addColumn("obsolete_at", "obsolete_at TEXT");
+  addColumn("superseded_by", "superseded_by INTEGER");
+  addColumn("version_locked", "version_locked INTEGER DEFAULT 0");
+  addColumn("locked_at", "locked_at TEXT");
+  addColumn("locked_by", "locked_by INTEGER");
   db.exec(`
     CREATE TABLE IF NOT EXISTS document_annotations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

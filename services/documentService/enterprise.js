@@ -8,6 +8,7 @@ const { recordDocumentEvent } = require("./history");
 const { canAccessDocument } = require("./access");
 const { canViewClassification } = require("./p1");
 const { onDocumentIssued } = require("./control");
+const { assertVersionOrder, applyIssueVersioning } = require("./versioning");
 
 function tableExists(db, name) {
   return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);
@@ -157,7 +158,9 @@ function registerCollectionRoutes(app, db) {
       if (!doc) { results.push({ id, status: "not_found" }); continue; }
       if (doc.approval_status === "in_review" || doc.approval_status === "rejected") { results.push({ id, status: "blocked", reason: "审批中/已驳回" }); continue; }
       try {
+        assertVersionOrder(db, doc);
         db.prepare("UPDATE documents SET status='issued', issued_to=?, issued_at=datetime('now'), issued_by=?, updated_at=datetime('now') WHERE id=?").run(issuedTo || null, req.user?.uid || null, id);
+        applyIssueVersioning(db, id, req.user?.uid || null);
         onDocumentIssued(db, get("SELECT * FROM documents WHERE id = ?", [id]));
         results.push({ id, status: "issued" });
       } catch (error) { results.push({ id, status: "error", reason: error.message }); }

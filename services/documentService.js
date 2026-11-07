@@ -10,6 +10,7 @@ const { registerMutationRoutes } = require("./documentService/mutationRoutes");
 const { registerCollectionRoutes: registerControlCollectionRoutes, registerControlRoutes } = require("./documentService/control");
 const p1 = require("./documentService/p1");
 const enterprise = require("./documentService/enterprise");
+const versioning = require("./documentService/versioning");
 
 function register(app, db) {
   ensureDocumentSchema(db);
@@ -21,6 +22,7 @@ function register(app, db) {
   registerControlRoutes(app, db);
   p1.registerControlRoutes(app, db);
   enterprise.registerControlRoutes(app, db);
+  versioning.registerControlRoutes(app, db);
   registerDetailRoutes(app, db);
   registerMutationRoutes(app, db);
 }

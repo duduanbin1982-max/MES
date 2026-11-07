@@ -6,6 +6,7 @@ const { documentEvents, documentFamilyIds, recordDocumentEvent } = require("./hi
 const { scopeWhere, canAccessDocument } = require("./access");
 const { sanitizeFileName } = require("./meta");
 const { canViewClassification } = require("./p1");
+const { canViewHistorical } = require("./versioning");
 const { humanSize, mimeToIcon, resolveStoredFile } = require("./storage");
 
 function registerCollectionRoutes(app, db) {
@@ -92,6 +93,7 @@ function registerDetailRoutes(app, db) {
     if (!canAccessDocument(req, db, row)) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
     if (!canViewClassification(req, row)) return next(ApiError.forbidden("无权下载该密级文档"));
     if (row.download_policy === "preview_only") return next(ApiError.forbidden("该文档仅允许在线预览，禁止下载"));
+    if (!canViewHistorical(req, db, row)) return next(ApiError.forbidden("历史版本仅质量/审计/管理员可下载，请使用当前有效版本"));
     const absolutePath = resolveStoredFile(row.file_path);
     if (!absolutePath) return next(ApiError.notFound(`文件已丢失: ${row.file_name}`));
     const safeName = sanitizeFileName(row.file_name);
@@ -121,6 +123,7 @@ function registerDetailRoutes(app, db) {
     if (!row) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
     if (!canAccessDocument(req, db, row)) return next(ApiError.notFound(`文档不存在: ${req.params.id}`));
     if (!canViewClassification(req, row)) return next(ApiError.forbidden("无权预览该密级文档"));
+    if (!canViewHistorical(req, db, row)) return next(ApiError.forbidden("历史版本仅质量/审计/管理员可预览"));
     const mime = String(row.mime_type || "");
     const previewable = mime.includes("pdf") || mime.startsWith("image/") || mime.startsWith("text/");
     if (!previewable) return next(ApiError.validation("该文件类型不支持在线预览，请下载查看: " + (row.file_name || "")));
@@ -145,10 +148,17 @@ function registerDetailRoutes(app, db) {
     let items = [];
     if (familyIds.length) {
       const placeholders = familyIds.map(() => "?").join(",");
-      items = db.prepare(`SELECT id, version, file_name, file_size, file_hash, status, issued_to, issued_at,
-                                 COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by
-                          FROM documents WHERE id IN (${placeholders})
-                          ORDER BY version DESC, COALESCE(uploaded_at, uploaded_at) DESC`).all(...familyIds);
+      try {
+        items = db.prepare(`SELECT id, version, file_name, file_size, file_hash, status, is_current, version_locked, obsolete_at, superseded_by, approval_status, issued_to, issued_at,
+                                   COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by
+                            FROM documents WHERE id IN (${placeholders})
+                            ORDER BY id DESC`).all(...familyIds);
+      } catch (_error) {
+        items = db.prepare(`SELECT id, version, file_name, file_size, file_hash, status, issued_to, issued_at,
+                                   COALESCE(uploaded_at, uploaded_at) AS created_at, COALESCE(uploaded_by, uploaded_by) AS created_by
+                            FROM documents WHERE id IN (${placeholders})
+                            ORDER BY version DESC, COALESCE(uploaded_at, uploaded_at) DESC`).all(...familyIds);
+      }
     }
     items.forEach((row) => { row.human_size = humanSize(row.file_size); });
     res.json({ items, current: req.params.id, events: documentEvents(db, documentFamilyIds(db, current)) });

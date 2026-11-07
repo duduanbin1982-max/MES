@@ -81,6 +81,7 @@
       @acknowledge="acknowledge"
       @load-acks="loadAcks"
       @versions="openVersions"
+      @new-version="openNewVersion"
       @control="openControl"
       @governance="openEnterprise"
       @issue="openIssue"
@@ -132,6 +133,9 @@
     <DocumentEnterpriseDrawer v-model="enterpriseVisible" :doc="enterpriseDoc" />
 
     <DocumentVersionDrawer
+      @lock="lockVersion"
+      @unlock="unlockVersion"
+      @rollback="rollbackVersion"
       v-model="dlgVersions"
       :versions="versions"
       :events="versionEvents"
@@ -181,12 +185,12 @@ const DOC_TYPES = [
   { value: 'other',    label: '<el-icon><Paperclip /></el-icon> 其他' }
 ]
 const DOC_TYPE_LABEL: Record<string, string> = Object.fromEntries(DOC_TYPES.map(t => [t.value, t.label]))
-const STATUSES = ['draft', 'issued', 'revoked', 'archived']
+const STATUSES = ['draft', 'issued', 'revoked', 'archived', 'obsolete']
 const STATUS_LABEL: Record<string, string> = {
-  draft: '草稿', issued: '已签发', revoked: '已收回', archived: '已归档'
+  draft: '草稿', issued: '已签发', revoked: '已收回', archived: '已归档', obsolete: '已作废'
 }
 const STATUS_TAG: Record<string, 'success' | 'info' | 'warning' | 'danger' | ''> = {
-  draft: 'info', issued: 'success', revoked: 'warning', archived: 'danger'
+  draft: 'info', issued: 'success', revoked: 'warning', archived: 'danger', obsolete: 'info'
 }
 const ISSUE_TARGETS = ['assembly', 'welding', 'qc', 'warehouse', 'field', 'design', 'procurement', 'management']
 const ISSUE_TARGET_LABEL: Record<string, string> = {
@@ -343,13 +347,13 @@ const uploadDialogRef = ref<any>(null)
 const uploadForm = reactive({
   title: '', doc_code: '', version: 'A0', doc_type: 'drawing',
   equipment_instance_id: null as number | null, bom_node_id: null as number | null, eco_id: '',
-  description: '', tags: ''
+  description: '', tags: '', parent_document_id: null as number | null
 })
 const resetUpload = () => {
   uploadForm.title = ''; uploadForm.doc_code = ''; uploadForm.version = 'A0'
   uploadForm.doc_type = 'drawing'; uploadForm.equipment_instance_id = null
   uploadForm.bom_node_id = null as any; uploadForm.eco_id = ''
-  uploadForm.description = ''; uploadForm.tags = ''
+  uploadForm.description = ''; uploadForm.tags = ''; uploadForm.parent_document_id = null
   uploadDialogRef.value?.clearFiles()
 }
 const onFileChange = (file: any) => {
@@ -374,7 +378,8 @@ const submitUpload = async (fileList: any[] = []) => {
     doc_type: uploadForm.doc_type, equipment_instance_id: uploadForm.equipment_instance_id,
     bom_node_id: uploadForm.bom_node_id, eco_id: uploadForm.eco_id || undefined,
     description: uploadForm.description || undefined,
-    tags: uploadForm.tags ? uploadForm.tags.split(',').map((s: string) => s.trim()).filter(Boolean) : undefined
+    tags: uploadForm.tags ? uploadForm.tags.split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
+    parent_document_id: uploadForm.parent_document_id || undefined
   }
   uploading.value = true
   try {
@@ -442,7 +447,44 @@ const versionsCurrent = ref<any>(null)
 const versionsLoading = ref(false)
 const openEnterprise = (row: any) => { enterpriseDoc.value = row; enterpriseVisible.value = true }
 
+const openNewVersion = async (row: any) => {
+  try {
+    const next: any = await api.get(`/documents/${row.id}/next-version`)
+    uploadForm.title = row.title || row.doc_name || ''
+    uploadForm.doc_code = row.doc_code || ''
+    uploadForm.version = next.suggested_version || 'A1'
+    uploadForm.doc_type = row.doc_type || 'drawing'
+    uploadForm.equipment_instance_id = row.equipment_instance_id || null
+    uploadForm.bom_node_id = row.bom_node_id || null
+    uploadForm.parent_document_id = row.id
+    dlgUpload.value = true
+  } catch (error: any) { ElMessage.error('获取新版本号失败：' + (error.response?.data?.message || error.message)) }
+}
+
 const openControl = (row: any) => { controlDoc.value = row; dlgControl.value = true }
+
+const reloadVersions = async () => {
+  if (!versionsCurrent.value?.id) return
+  const row = versionsCurrent.value
+  await openVersions(row)
+}
+
+const lockVersion = async (version: any) => {
+  try { await api.post(`/documents/${version.id}/lock`, {}); ElMessage.success('版本已锁定'); await reloadVersions() }
+  catch (error: any) { ElMessage.error('锁定失败：' + (error.response?.data?.message || error.message)) }
+}
+const unlockVersion = async (version: any) => {
+  try { await api.post(`/documents/${version.id}/unlock`, {}); ElMessage.success('版本已解锁'); await reloadVersions() }
+  catch (error: any) { ElMessage.error('解锁失败：' + (error.response?.data?.message || error.message)) }
+}
+const rollbackVersion = async (version: any) => {
+  try {
+    const { value } = await ElMessageBox.prompt('回滚原因', '回滚到 v' + version.version, { inputValue: '回退到历史版本' })
+    const result: any = await api.post(`/documents/${version.id}/rollback`, { source_document_id: version.id, reason: value })
+    ElMessage.success(`已生成新版本 v${result.version}（草稿）`)
+    await refresh()
+  } catch (error: any) { if (error !== 'cancel' && error !== 'close') ElMessage.error('回滚失败：' + (error.response?.data?.message || error.message)) }
+}
 
 const openVersions = async (row: any) => {
   versionsCurrent.value = row

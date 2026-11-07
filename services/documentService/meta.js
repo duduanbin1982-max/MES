@@ -3,7 +3,7 @@
 const path = require("path");
 
 const DOC_TYPES = ["drawing", "sop", "process", "qc_std", "contract", "report", "other"];
-const DOC_STATUS = ["draft", "issued", "revoked", "archived"];
+const DOC_STATUS = ["draft", "issued", "revoked", "archived", "obsolete"];
 const ISSUE_TARGETS = ["assembly", "welding", "qc", "warehouse", "field", "design", "procurement", "management"];
 
 // 2026-11-07（文档审计）：允许的文档类型 + 50MB 上限；拒绝可执行/脚本/HTML/SVG 等
