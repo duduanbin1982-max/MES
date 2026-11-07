@@ -14,6 +14,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Database = require('better-sqlite3');
+process.env.BOM_RELEASE_MIN_SCORE = '0';
 
 function freshDb() {
   const db = new Database(':memory:');

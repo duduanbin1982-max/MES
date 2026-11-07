@@ -4,13 +4,17 @@ const { normalizeInt, normalizeFloat, normalizeBool, cleanText } = require("../.
 const { ensureBomStructureColumns } = require("../schema");
 const { inferNodeType } = require("./_tree");
 
-function buildValidationContext(db, instanceId, excludeId = null) {
+function buildValidationContext(db, instanceId, excludeId = null, bomType = 'EBOM') {
+  let columns;
+  try { columns = new Set(db.prepare("PRAGMA table_info(instance_bom)").all().map((column) => column.name)); } catch (_error) { columns = new Set(); }
+  const typeClause = columns.has("bom_type") ? "AND COALESCE(bom_type, 'EBOM') = ?" : "";
   const rows = db.prepare(`
     SELECT id, parent_id, tier, material_id, part_number, unit, category, is_alternative, alternative_group, alternative_priority
     FROM instance_bom
     WHERE equipment_instance_id = ?
       ${excludeId ? "AND id <> ?" : ""}
-  `).all(...(excludeId ? [instanceId, excludeId] : [instanceId]));
+      ${typeClause}
+  `).all(...[instanceId, ...(excludeId ? [excludeId] : []), ...(typeClause ? [bomType] : [])]);
   const materialIds = new Set((db.prepare("SELECT id FROM materials").all() || []).map((material) => Number(material.id)));
   // 2026-11-07（BOM 审计 B-8）：替代组一致性上下文
   const alternativeGroups = new Map();
@@ -71,6 +75,8 @@ function rowToSafeNode(node, instanceId, userId = null) {
     sort_order: normalizeInt(node.sort_order, 0),
     view_flags: cleanText(node.view_flags),
     version: cleanText(node.version) || "A0",
+    bom_type: cleanText(node.bom_type) || "EBOM",
+    source_bom_id: normalizeInt(node.source_bom_id, null),
     eco_id: normalizeInt(node.eco_id, null),
     effective_from: cleanText(node.effective_from),
     effective_to: cleanText(node.effective_to),

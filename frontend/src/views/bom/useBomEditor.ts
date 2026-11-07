@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/auth'
 
 type BomEditorDeps = {
   instanceId: Ref<number | null>
+  bomType: Ref<'EBOM' | 'MBOM'>
   selected: Ref<any | null>
   drillNode: Ref<any | null>
   health: Ref<any>
@@ -14,7 +15,7 @@ type BomEditorDeps = {
   loadAll: () => Promise<void>
 }
 
-export function useBomEditor({ instanceId, selected, drillNode, health, templateMeta, allNodes, loadAll }: BomEditorDeps) {
+export function useBomEditor({ instanceId, bomType, selected, drillNode, health, templateMeta, allNodes, loadAll }: BomEditorDeps) {
   const auth = useAuthStore()
   // 2026-11-07（BOM 审计）：读 BOM 用 equipment/process/material read；写用对应 write
   const canEdit = computed(() => Boolean(auth.hasPerm && (auth.hasPerm('equipment:write') || auth.hasPerm('process:write') || auth.hasPerm('material:write'))))
@@ -109,6 +110,7 @@ export function useBomEditor({ instanceId, selected, drillNode, health, template
       } else {
         const result: any = await api.post(`/equipment_instances/${instanceId.value}/bom`, {
           ...addForm.value,
+          bom_type: bomType?.value || 'EBOM',
           parent_id: addForm.value.parent_id || null,
         })
         ElMessage.success(`已新增 #${result.id}`)

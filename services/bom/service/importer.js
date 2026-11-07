@@ -10,12 +10,14 @@ function createInsertStatement(db) {
   return db.prepare(`
     INSERT INTO instance_bom (
       equipment_instance_id, parent_id, tier, node_type, level_code, sort_order, view_flags, version, eco_id, effective_from, effective_to,
+      bom_type, source_bom_id,
       material_id, part_number, quantity, unit, scrap_factor, category, material_grade,
       surface_treatment, brand_recommend, brand_grade, is_alternative, alternative_group,
       alternative_priority, operation_id, is_phantom, is_key_component, is_wear_part,
       storage_location, weight, unit_price, labor_cost, manufacturing_cost, notes, created_by
     ) VALUES (
       @equipment_instance_id, @parent_id, @tier, @node_type, @level_code, @sort_order, @view_flags, @version, @eco_id, @effective_from, @effective_to,
+      @bom_type, @source_bom_id,
       @material_id, @part_number, @quantity, @unit, @scrap_factor, @category, @material_grade,
       @surface_treatment, @brand_recommend, @brand_grade, @is_alternative, @alternative_group,
       @alternative_priority, @operation_id, @is_phantom, @is_key_component, @is_wear_part,
@@ -79,17 +81,19 @@ function importBomCsv(db, instanceId, csv, userId = null, options = {}) {
       errorList.push({ line: row.__line, ref: nodeRef, errors: [`物料不存在且未自动创建: ${material.missing}${material.error ? " (" + material.error + ")" : ""}`] });
       continue;
     }
+    const bomType = String(options.bom_type || options.bomType || "EBOM").toUpperCase();
     const safeNode = rowToSafeNode({
       ...row,
+      bom_type: bomType,
       parent_id: parentId,
       material_id: materialId,
       version: cleanText(row.version) || "A0",
     }, instanceId, userId);
-    const ctx = buildValidationContext(db, instanceId);
+    const ctx = buildValidationContext(db, instanceId, null, bomType);
     const validation = validateNode(safeNode, { ...ctx, allowParentless: safeNode.tier === 0 });
     // 2026-11-07（BOM 审计）：导入同样遵守"单根"约束
     if (safeNode.tier === 0) {
-      const rootCount = db.prepare("SELECT COUNT(*) AS c FROM instance_bom WHERE equipment_instance_id = ? AND parent_id IS NULL").get(instanceId).c;
+      const rootCount = db.prepare("SELECT COUNT(*) AS c FROM instance_bom WHERE equipment_instance_id = ? AND parent_id IS NULL AND COALESCE(bom_type,'EBOM') = ?").get(instanceId, safeNode.bom_type || 'EBOM').c;
       if (rootCount > 0) validation.errors.push("已存在 0 级根节点，不能重复导入根节点");
     }
 
@@ -128,8 +132,13 @@ function importBomCsv(db, instanceId, csv, userId = null, options = {}) {
     materials_created: materialsCreated.length,
     materials_created_codes: materialsCreated.slice(0, 50),
     template_version: template.version,
-    health: computeHealth(db, instanceId),
+    health: computeHealth(db, instanceId, selectRowsForType(db, instanceId, options.bom_type || 'EBOM')),
   };
+}
+
+function selectRowsForType(db, instanceId, bomType) {
+  try { return db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? AND COALESCE(bom_type,'EBOM') = ? ORDER BY tier, id").all(instanceId, bomType); }
+  catch (_error) { return db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, id").all(instanceId); }
 }
 
 module.exports = {

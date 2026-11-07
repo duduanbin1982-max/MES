@@ -9,6 +9,12 @@
         <el-select v-model="instanceId" placeholder="选择项目装备" filterable style="width: 280px; margin-right: 8px" @change="loadAll">
           <el-option v-for="i in instances" :key="i.id" :label="`${i.instance_code} · ${i.instance_name}`" :value="i.id" />
         </el-select>
+        <el-radio-group v-model="bomType" size="small" style="margin-right: 8px" @change="setBomType">
+          <el-radio-button value="EBOM">EBOM 设计</el-radio-button>
+          <el-radio-button value="MBOM">MBOM 制造</el-radio-button>
+        </el-radio-group>
+        <el-button v-if="bomType === 'MBOM' && !summary.total" size="small" type="primary" plain @click="cloneToMbom">从 EBOM 生成 MBOM</el-button>
+        <el-button v-if="bomType === 'MBOM' && summary.total" size="small" @click="redlineVisible = true">Redline 对比</el-button>
         <el-button @click="loadAll" :disabled="!instanceId">刷新</el-button>
       </div>
     </PageToolbar>
@@ -241,6 +247,7 @@
     <PageState state="empty" compact :show-action="false" v-else description="请先选择项目装备" />
 
         <BomRepairDialog v-model="repairVisible" :instance-id="instanceId" @changed="loadAll" />
+    <BomRedlineDialog v-model="redlineVisible" :instance-id="instanceId" />
 
     <BomDialogs
       v-model:dlg-add="dlgAdd"
@@ -292,6 +299,7 @@ import LevelTable from './bom/LevelTable.vue'
 import BomBusinessTabs from './bom/BomBusinessTabs.vue'
 import BomDialogs from './bom/BomDialogs.vue'
 import BomRepairDialog from './bom/BomRepairDialog.vue'
+import BomRedlineDialog from './bom/BomRedlineDialog.vue'
 import { ref } from 'vue'
 import { Tools } from '@element-plus/icons-vue'
 import { useBomManagement } from './bom/useBomManagement'
@@ -302,6 +310,9 @@ const repairVisible = ref(false)
 const {
   instances,
   instanceId,
+  bomType,
+  setBomType,
+  cloneToMbom,
   summary,
   tree,
   flat,

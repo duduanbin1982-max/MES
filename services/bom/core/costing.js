@@ -3,18 +3,19 @@
 const { BOM_FIELDS } = require("./constants");
 const { normalizeInt, normalizeBool, round4 } = require("./utils");
 
-function calcCost(db, instanceId) {
+function calcCost(db, instanceId, bomType = "EBOM") {
   let columns;
   try { columns = new Set(db.prepare("PRAGMA table_info(instance_bom)").all().map((column) => column.name)); } catch (_error) { columns = new Set(); }
   const laborExpr = columns.has("labor_cost") ? "COALESCE(b.labor_cost, 0)" : "0";
   const manufacturingExpr = columns.has("manufacturing_cost") ? "COALESCE(b.manufacturing_cost, 0)" : "0";
+  const typeClause = columns.has("bom_type") && bomType ? "AND COALESCE(b.bom_type, 'EBOM') = ?" : "";
   const all = db.prepare(`
     SELECT b.id, b.parent_id, b.quantity, b.unit_price, ${laborExpr} AS labor_cost, ${manufacturingExpr} AS manufacturing_cost, b.material_id,
            m.material_name, m.material_code, b.scrap_factor, b.is_phantom
     FROM instance_bom b
     LEFT JOIN materials m ON m.id = b.material_id
-    WHERE b.equipment_instance_id = ?
-  `).all(instanceId);
+    WHERE b.equipment_instance_id = ? ${typeClause}
+  `).all(...(typeClause ? [instanceId, bomType] : [instanceId]));
 
   const byId = new Map(all.map((row) => [Number(row.id), row]));
   const childMap = new Map();

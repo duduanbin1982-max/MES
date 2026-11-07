@@ -6,16 +6,19 @@
 const { ApiError } = require("../../../app/errors");
 const audit = require("../../../app/audit");
 const { validateTree, computeHealth } = require("../core");
+const { ensureBomStructureColumns } = require("./schema");
 
 function tableExists(db, name) {
   return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
 }
 
-function diagnose(db, instanceId) {
+function diagnose(db, instanceId, bomType = 'EBOM') {
   if (!tableExists(db, "instance_bom")) throw ApiError.validation("BOM 表不存在");
+  ensureBomStructureColumns(db);
   const instance = db.prepare("SELECT id, instance_code, instance_name FROM equipment_instances WHERE id = ?").get(instanceId);
   if (!instance) throw ApiError.notFound("装备实例不存在");
-  const rows = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, id").all(instanceId);
+  let rows = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, id").all(instanceId);
+  try { rows = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? AND COALESCE(bom_type,'EBOM') = ? ORDER BY tier, id").all(instanceId, bomType); } catch (_error) { /* old schema */ }
   const byId = new Map(rows.map((row) => [Number(row.id), row]));
   const roots = rows.filter((row) => Number(row.tier) === 0 && (row.parent_id === null || Number(row.parent_id) === 0));
   const parentless = rows.filter((row) => Number(row.tier) !== 0 && (row.parent_id === null || Number(row.parent_id) === 0));
@@ -68,14 +71,15 @@ function createRoot(db, instance) {
   const exists = db.prepare("SELECT id FROM instance_bom WHERE equipment_instance_id = ? AND part_number = ?").get(instance.id, partNumber);
   const finalPartNumber = exists ? `${partNumber}-ROOT` : partNumber;
   const result = db.prepare(`INSERT INTO instance_bom
-    (equipment_instance_id, parent_id, tier, version, quantity, unit, category, part_number, node_type, created_at, updated_at)
-    VALUES (?, NULL, 0, 'A0', 1, '台', '成品', ?, 'equipment', datetime('now'), datetime('now'))`)
-    .run(instance.id, finalPartNumber);
+    (equipment_instance_id, parent_id, tier, version, quantity, unit, category, part_number, node_type, bom_type, created_at, updated_at)
+    VALUES (?, NULL, 0, 'A0', 1, '台', '成品', ?, 'equipment', ?, datetime('now'), datetime('now'))`)
+    .run(instance.id, finalPartNumber, instance.bom_type || 'EBOM');
   return Number(result.lastInsertRowid);
 }
 
 function applyRepair(db, instanceId, body = {}) {
-  const before = diagnose(db, instanceId);
+  const bomType = String(body.bom_type || 'EBOM').toUpperCase();
+  const before = diagnose(db, instanceId, bomType);
   const requested = Array.isArray(body.actions) && body.actions.length
     ? new Set(body.actions)
     : new Set(before.actions.filter((action) => action.code !== "manual").map((action) => action.code));
@@ -85,15 +89,15 @@ function applyRepair(db, instanceId, body = {}) {
   const log = { created_root: null, attached: 0, merged: 0, skipped: [] };
   const tx = db.transaction(() => {
     if (requested.has("create_root") && !rootId) {
-      rootId = createRoot(db, before.instance);
+      rootId = createRoot(db, { ...before.instance, bom_type: bomType });
       log.created_root = rootId;
     }
     if (requested.has("attach_parentless") && rootId) {
       const attach = db.prepare("UPDATE instance_bom SET parent_id = ?, updated_at = datetime('now') WHERE id = ?");
-      const candidates = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? AND tier = 1 AND (parent_id IS NULL OR parent_id = 0)").all(instanceId);
+      const candidates = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? AND COALESCE(bom_type,'EBOM') = ? AND tier = 1 AND (parent_id IS NULL OR parent_id = 0)").all(instanceId, bomType);
       for (const node of candidates) { attach.run(rootId, node.id); log.attached += 1; }
       const orphanCandidates = db.prepare(`SELECT b.* FROM instance_bom b LEFT JOIN instance_bom p ON p.id = b.parent_id
-        WHERE b.equipment_instance_id = ? AND b.tier = 1 AND b.parent_id IS NOT NULL AND b.parent_id <> 0 AND p.id IS NULL`).all(instanceId);
+        WHERE b.equipment_instance_id = ? AND COALESCE(b.bom_type,'EBOM') = ? AND b.tier = 1 AND b.parent_id IS NOT NULL AND b.parent_id <> 0 AND p.id IS NULL`).all(instanceId, bomType);
       for (const node of orphanCandidates) { attach.run(rootId, node.id); log.attached += 1; }
     }
     if (requested.has("merge_roots")) {
@@ -124,7 +128,7 @@ function applyRepair(db, instanceId, body = {}) {
     }
   });
   tx();
-  const after = diagnose(db, instanceId);
+  const after = diagnose(db, instanceId, bomType);
   audit.record(db, body.req || { headers: {}, user: body.user || null }, {
     action: "bom.repair_apply",
     resource_type: "equipment_instance",
@@ -138,11 +142,11 @@ function applyRepair(db, instanceId, body = {}) {
 
 function registerRepairRoutes(app, db) {
   app.get("/api/equipment_instances/:id/bom/repair/preview", (req, res, next) => {
-    try { res.json(diagnose(db, Number(req.params.id))); } catch (error) { next(error); }
+    try { res.json(diagnose(db, Number(req.params.id), req.query.bom_type || 'EBOM')); } catch (error) { next(error); }
   });
   app.post("/api/equipment_instances/:id/bom/repair/apply", (req, res, next) => {
     try {
-      res.json(applyRepair(db, Number(req.params.id), { ...(req.body || {}), req, user: req.user || null }));
+      res.json(applyRepair(db, Number(req.params.id), { ...(req.body || {}), bom_type: req.body?.bom_type || 'EBOM', req, user: req.user || null }));
     } catch (error) { next(error); }
   });
 }

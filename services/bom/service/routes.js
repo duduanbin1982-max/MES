@@ -22,6 +22,7 @@ const { importBomCsv } = require("./importer");
 const audit = require("../../../app/audit");
 const versions = require("./versions");
 const { registerRepairRoutes } = require("./repair");
+const { registerDualBomRoutes } = require("./dualBom");
 const {
   getActiveUsers,
   updateRiskOwner,
@@ -32,6 +33,7 @@ const {
 function registerBomRoutes(app, db) {
   ensureBomStructureColumns(db);
   registerRepairRoutes(app, db);
+  registerDualBomRoutes(app, db);
   try {
     const ids = db.prepare("SELECT DISTINCT equipment_instance_id AS id FROM instance_bom").all();
     for (const row of ids) recomputeStructureMetadata(db, row.id);
@@ -64,21 +66,21 @@ function registerBomRoutes(app, db) {
   });
 
   app.get("/api/equipment_instances/:id/bom/levels", (req, res) => {
-    res.json(buildBomLevelsResponse(db, req.params.id));
+    res.json(buildBomLevelsResponse(db, req.params.id, req.query.bom_type || "EBOM", req.query.as_of || null));
   });
 
   app.get("/api/equipment_instances/:id/bom/cost", (req, res) => {
-    const items = calcCost(db, req.params.id);
+    const items = calcCost(db, req.params.id, req.query.bom_type || "EBOM");
     res.json({ items, total_cost: items.reduce((sum, item) => sum + (item.cost || 0), 0) });
   });
 
   app.get("/api/equipment_instances/:id/bom/health", (req, res) => {
-    const rows = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, id").all(req.params.id);
+    const rows = selectBomRows(db, req.params.id, req.query.bom_type || "EBOM");
     res.json(computeHealth(db, req.params.id, rows));
   });
 
   app.get("/api/equipment_instances/:id/bom/business-views", (req, res) => {
-    const rows = selectBomRows(db, req.params.id);
+    const rows = selectBomRows(db, req.params.id, req.query.bom_type || "EBOM");
     res.json(buildBusinessViews(db, req.params.id, rows));
   });
 
@@ -111,10 +113,10 @@ function registerBomRoutes(app, db) {
   });
 
   app.get("/api/equipment_instances/:id/bom/validate", (req, res) => {
-    const rows = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, id").all(req.params.id);
+    const rows = selectBomRows(db, req.params.id, req.query.bom_type || "EBOM");
     const validation = validateTree(db, req.params.id, rows);
     const health = computeHealth(db, req.params.id, rows);
-    res.json({ ...validation, health });
+    res.json({ ...validation, health, bom_type: req.query.bom_type || "EBOM" });
   });
 
   app.post("/api/equipment_instances/:id/bom", (req, res, next) => {
@@ -188,7 +190,7 @@ function registerBomRoutes(app, db) {
 
   app.post("/api/equipment_instances/:id/bom/import", (req, res, next) => {
     try {
-      const result = importBomCsv(db, req.params.id, req.body?.csv, req.user?.uid || null, { allow_partial: req.body?.allow_partial });
+      const result = importBomCsv(db, req.params.id, req.body?.csv, req.user?.uid || null, { allow_partial: req.body?.allow_partial, bom_type: req.body?.bom_type || "EBOM" });
       audit.record(db, req, {
         action: "bom.import",
         resource_type: "bom",

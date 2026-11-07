@@ -9,6 +9,7 @@ export function useBomData() {
   const route = useRoute()
   const instances = ref<any[]>([])
   const instanceId = ref<number | null>(null)
+  const bomType = ref<'EBOM' | 'MBOM'>('EBOM')
   const summary = ref<any>({ 0: 0, 1: 0, 2: 0, 3: 0, total: 0 })
   const tree = ref<any[]>([])
   const flat = ref<any[]>([])
@@ -30,13 +31,14 @@ export function useBomData() {
   async function loadAll() {
     if (!instanceId.value) return
     try {
+      const typeQuery = `bom_type=${bomType.value}`
       const [treeR, levelsR, costR, matsR, healthR, businessR] = await Promise.all([
-        api.get(`/equipment_instances/${instanceId.value}/bom?view=tree`),
-        api.get(`/equipment_instances/${instanceId.value}/bom/levels`),
-        api.get(`/equipment_instances/${instanceId.value}/bom/cost`),
+        api.get(`/equipment_instances/${instanceId.value}/bom?view=tree&${typeQuery}`),
+        api.get(`/equipment_instances/${instanceId.value}/bom/levels?${typeQuery}`),
+        api.get(`/equipment_instances/${instanceId.value}/bom/cost?${typeQuery}`),
         api.get('/materials?limit=500').catch(() => ({ items: [] })),
-        api.get(`/equipment_instances/${instanceId.value}/bom/health`).catch(() => ({ score: 0, checks: {}, highlights: [] })),
-        api.get(`/equipment_instances/${instanceId.value}/bom/business-views`).catch(() => emptyBusinessViews()),
+        api.get(`/equipment_instances/${instanceId.value}/bom/health?${typeQuery}`).catch(() => ({ score: 0, checks: {}, highlights: [] })),
+        api.get(`/equipment_instances/${instanceId.value}/bom/business-views?${typeQuery}`).catch(() => emptyBusinessViews()),
       ])
       tree.value = treeR.tree || []
       summary.value = { ...(treeR.tier_summary || levelsR.summary || {}), ...(treeR.structure_summary || levelsR.structure_summary || {}) }
@@ -57,6 +59,18 @@ export function useBomData() {
     }
   }
 
+  async function cloneToMbom() {
+    if (!instanceId.value) return
+    try {
+      const result: any = await api.post(`/equipment_instances/${instanceId.value}/bom/clone-to-mbom`)
+      ElMessage.success(`已从 EBOM 生成 MBOM，共 ${result.created} 行`)
+      bomType.value = 'MBOM'
+      await loadAll()
+    } catch (error: any) {
+      ElMessage.error('生成 MBOM 失败：' + (error.response?.data?.message || error.message))
+    }
+  }
+
   async function loadInstances() {
     const result: any = await api.get('/equipment_instances?limit=100')
     instances.value = result.items || result || []
@@ -71,6 +85,9 @@ export function useBomData() {
   return {
     instances,
     instanceId,
+    bomType,
+    setBomType: (value: 'EBOM' | 'MBOM') => { bomType.value = value; loadAll() },
+    cloneToMbom,
     summary,
     tree,
     flat,

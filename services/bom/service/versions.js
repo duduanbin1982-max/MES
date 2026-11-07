@@ -24,6 +24,10 @@ function ensureTable(db) {
     obsolete_at TEXT,
     UNIQUE(equipment_instance_id, version)
   )`).run();
+  // 2026-11-07（EBOM/MBOM）：版本表类型与基线字段（兼容已存在旧表）
+  const columns = new Set(db.prepare("PRAGMA table_info(bom_version_releases)").all().map((column) => column.name));
+  if (!columns.has("bom_type")) db.prepare("ALTER TABLE bom_version_releases ADD COLUMN bom_type TEXT DEFAULT 'EBOM'").run();
+  if (!columns.has("baseline_type")) db.prepare("ALTER TABLE bom_version_releases ADD COLUMN baseline_type TEXT").run();
 }
 
 function normalizeDate(value, label) {
@@ -63,8 +67,19 @@ function createRelease(db, instanceId, body = {}, userId = null, user = null) {
     ecoId = Number(body.eco_id);
     if (!Number.isInteger(ecoId) || ecoId <= 0) throw ApiError.validation("eco_id 必须是正整数");
   }
-  const rows = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, id").all(instanceId);
-  if (!rows.length) throw ApiError.validation("当前项目没有 BOM，不能发布版本");
+  const bomType = String(body.bom_type || "EBOM").toUpperCase();
+  if (!["EBOM", "MBOM"].includes(bomType)) throw ApiError.validation("bom_type 必须是 EBOM 或 MBOM");
+  const baselineType = body.baseline_type ? String(body.baseline_type).trim() : null;
+  if (baselineType && !["contract", "design", "manufacturing", "other"].includes(baselineType)) {
+    throw ApiError.validation("baseline_type 必须是 contract/design/manufacturing/other");
+  }
+  let rows;
+  try {
+    rows = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? AND COALESCE(bom_type,'EBOM') = ? ORDER BY tier, id").all(instanceId, bomType);
+  } catch (_error) {
+    rows = db.prepare("SELECT * FROM instance_bom WHERE equipment_instance_id = ? ORDER BY tier, id").all(instanceId);
+  }
+  if (!rows.length) throw ApiError.validation(`当前项目没有 ${bomType} BOM，不能发布版本`);
   const validation = validateTree(db, instanceId, rows);
   if (!validation.ok) {
     throw ApiError.validation("BOM 结构校验未通过，不能发布版本", { errors: validation.errors.slice(0, 20) });
@@ -82,10 +97,10 @@ function createRelease(db, instanceId, body = {}, userId = null, user = null) {
   const existing = db.prepare("SELECT id FROM bom_version_releases WHERE equipment_instance_id = ? AND version = ?").get(instanceId, version);
   if (existing) throw ApiError.conflict("版本已存在: " + version);
   const result = db.prepare(`
-    INSERT INTO bom_version_releases (equipment_instance_id, version, status, eco_id, effective_from, effective_to, row_count, snapshot_json, notes, created_by, released_at)
-    VALUES (?, ?, 'released', ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    INSERT INTO bom_version_releases (equipment_instance_id, version, status, eco_id, effective_from, effective_to, row_count, snapshot_json, notes, created_by, released_at, bom_type, baseline_type)
+    VALUES (?, ?, 'released', ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)
   `).run(instanceId, version, ecoId, effectiveFrom, effectiveTo, rows.length, JSON.stringify(rows),
-    body.notes || (canForce && health.score < minScore ? `强制发布（健康分 ${health.score}）` : null), userId);
+    body.notes || (canForce && health.score < minScore ? `强制发布（健康分 ${health.score}）` : null), userId, bomType, baselineType);
   const release = getRelease(db, instanceId, Number(result.lastInsertRowid));
   release.health_score = health.score;
   release.health_grade = health.grade;

@@ -21,6 +21,7 @@ export function useBomManagement() {
   })
   const editor = useBomEditor({
     instanceId: data.instanceId,
+    bomType: data.bomType,
     selected,
     drillNode,
     health: data.health,

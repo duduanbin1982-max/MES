@@ -10,6 +10,7 @@ const ALLOWED_TABLES = new Set([
   "users",
   "shortage_cases",
   "instance_bom",
+  "bom_version_releases",
 ]);
 
 function tableColumns(db, tableName) {
@@ -40,6 +41,9 @@ function ensureBomStructureColumns(db) {
     // 2026-11-07（BOM 审计 B-8）：成本增加人工/制造费用
     addColumnIfMissing(db, "instance_bom", "labor_cost", "labor_cost REAL DEFAULT 0");
     addColumnIfMissing(db, "instance_bom", "manufacturing_cost", "manufacturing_cost REAL DEFAULT 0");
+    // 2026-11-07（EBOM/MBOM）：BOM 类型与来源 EBOM 行
+    addColumnIfMissing(db, "instance_bom", "bom_type", "bom_type TEXT DEFAULT 'EBOM'");
+    addColumnIfMissing(db, "instance_bom", "source_bom_id", "source_bom_id INTEGER");
     db.prepare(`CREATE TABLE IF NOT EXISTS bom_version_releases (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       equipment_instance_id INTEGER NOT NULL,
@@ -60,6 +64,9 @@ function ensureBomStructureColumns(db) {
     db.prepare("CREATE INDEX IF NOT EXISTS idx_instance_bom_parent_sort ON instance_bom(equipment_instance_id, parent_id, sort_order, id)").run();
     db.prepare("CREATE INDEX IF NOT EXISTS idx_instance_bom_level_code ON instance_bom(equipment_instance_id, level_code)").run();
     db.prepare("CREATE INDEX IF NOT EXISTS idx_instance_bom_node_type ON instance_bom(equipment_instance_id, node_type)").run();
+    db.prepare("CREATE INDEX IF NOT EXISTS idx_instance_bom_type ON instance_bom(equipment_instance_id, bom_type)").run();
+    addColumnIfMissing(db, "bom_version_releases", "bom_type", "bom_type TEXT DEFAULT 'EBOM'");
+    addColumnIfMissing(db, "bom_version_releases", "baseline_type", "baseline_type TEXT");
   } catch (_error) {
     // instance_bom may not exist in isolated unit tests; callers using BOM routes create it before production use.
   }
