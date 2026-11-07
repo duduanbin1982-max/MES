@@ -52,8 +52,8 @@
       "ddlStatements": 2
     },
     "documentService": {
-      "schemaVersion": 3,
-      "ddlFingerprint": "5ae2f4907848d1e3373384dafa5bb7294af16990b7e76ee44594251c0eecbd8b",
+      "schemaVersion": 4,
+      "ddlFingerprint": "87162e2efcb02186e3269276a6fa2c287f3328a2a4b0de121d5eeb7bbb7ed6af",
       "ddlStatements": 3
     },
     "eco": {

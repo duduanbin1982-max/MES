@@ -6,6 +6,7 @@ const { ISSUE_TARGETS, validateMeta, sanitizeFileName, validateDocumentFile, ret
 const { resolveStoredFile } = require("./storage");
 const audit = require("../../app/audit");
 const { recordDocumentEvent } = require("./history");
+const { onDocumentIssued } = require("./control");
 const { buildStoragePath, hasStoredFile, sha256 } = require("./storage");
 
 function registerUploadRoute(app, db) {
@@ -157,13 +158,17 @@ function registerLifecycleRoutes(app, db) {
     try {
       const { issued_to } = req.body || {};
       if (!issued_to || !ISSUE_TARGETS.includes(issued_to)) return next(ApiError.validation(`issued_to 必须是: ${ISSUE_TARGETS.join("/")}`));
-      const current = db.prepare("SELECT id, status, file_path, file_name, version FROM documents WHERE id = ?").get(req.params.id);
+      const current = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
       if (!current) return next(ApiError.notFound("文档不存在"));
       if (current.status === "issued") return next(ApiError.validation("文档已签发，不能重复签发"));
+      if (current.approval_status === "in_review") return next(ApiError.validation("审批中的文档不能签发，请先完成审批"));
+      if (current.approval_status === "rejected") return next(ApiError.validation("审批被驳回的文档不能签发，请修改后重新提交"));
       if (["revoked", "archived"].includes(current.status)) return next(ApiError.unprocessable("已收回/归档的文档不能签发"));
       if (!hasStoredFile(current.file_path)) return next(ApiError.unprocessable(`文件不存在，不能签发: ${current.file_name || req.params.id}`));
       db.prepare("UPDATE documents SET status='issued', issued_to=?, issued_at=datetime('now'), issued_by=?, updated_at=datetime('now') WHERE id=?")
         .run(issued_to, req.user?.uid || null, req.params.id);
+      const issuedDoc = db.prepare("SELECT * FROM documents WHERE id = ?").get(req.params.id);
+      try { onDocumentIssued(db, issuedDoc); } catch (_error) { /* 发放生成失败不阻断签发 */ }
       recordDocumentEvent(db, {
         doc_id: Number(req.params.id), action: "issue", from_status: current.status, to_status: "issued",
         version: current.version, issued_to, operator_id: req.user?.uid || null,

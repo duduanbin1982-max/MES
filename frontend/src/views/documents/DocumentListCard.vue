@@ -66,6 +66,7 @@
             <el-button v-if="row.status === 'issued'" size="small" link type="success" @click.stop="$emit('acknowledge', row)">签收</el-button>
             <el-button size="small" link type="info" @click.stop="$emit('load-acks', row)">签收记录</el-button>
             <el-button size="small" link type="primary" @click.stop="$emit('versions', row)">版本</el-button>
+            <el-button size="small" link type="warning" @click.stop="$emit('control', row)">受控</el-button>
             <el-button v-if="row.status === 'draft'" size="small" link type="success" @click.stop="$emit('issue', row)">签发</el-button>
             <el-button v-if="row.status === 'issued'" size="small" link type="warning" @click.stop="$emit('revoke', row)">收回</el-button>
             <el-button v-if="row.status !== 'archived'" size="small" link type="danger" @click.stop="$emit('archive', row)">归档</el-button>
@@ -115,6 +116,7 @@ const emit = defineEmits<{
   acknowledge: [row: any]
   'load-acks': [row: any]
   versions: [row: any]
+  control: [row: any]
   issue: [row: any]
   revoke: [row: any]
   archive: [row: any]

@@ -306,6 +306,7 @@ import { useBomManagement } from './bom/useBomManagement'
 import { nodeTypeLabel, tierLabel } from './bom/bomShared'
 
 const repairVisible = ref(false)
+const redlineVisible = ref(false)
 
 const {
   instances,

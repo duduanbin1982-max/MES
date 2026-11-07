@@ -7,11 +7,14 @@ const { ensureDocumentSchema } = require("./documentService/schema");
 const { registerCollectionRoutes, registerDetailRoutes } = require("./documentService/queryRoutes");
 const { registerAcknowledgementRoutes } = require("./documentService/acknowledgementRoutes");
 const { registerMutationRoutes } = require("./documentService/mutationRoutes");
+const { registerCollectionRoutes: registerControlCollectionRoutes, registerControlRoutes } = require("./documentService/control");
 
 function register(app, db) {
   ensureDocumentSchema(db);
+  registerControlCollectionRoutes(app, db);
   registerCollectionRoutes(app, db);
   registerAcknowledgementRoutes(app, db);
+  registerControlRoutes(app, db);
   registerDetailRoutes(app, db);
   registerMutationRoutes(app, db);
 }

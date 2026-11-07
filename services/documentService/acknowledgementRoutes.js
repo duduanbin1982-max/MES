@@ -3,6 +3,7 @@
 const { ApiError } = require("../../app/errors");
 const { recordDocumentEvent } = require("./history");
 const { canAcknowledge } = require("./meta");
+const { ackDistribution } = require("./control");
 
 function currentUserId(req) {
   return (req.user && (req.user.uid || req.user.id)) || null;
@@ -34,6 +35,7 @@ function registerAcknowledgementRoutes(app, db) {
       return res.json({ ok: true, already: true });
     }
     db.prepare("INSERT INTO doc_acknowledgements (doc_id, ack_by) VALUES (?, ?)").run(req.params.id, userId);
+    ackDistribution(db, Number(req.params.id), userId, "web");
     const acknowledged = db.prepare("SELECT id, status, version, issued_to FROM documents WHERE id = ?").get(req.params.id);
     recordDocumentEvent(db, {
       doc_id: Number(req.params.id),

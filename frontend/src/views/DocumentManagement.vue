@@ -72,6 +72,7 @@
       @acknowledge="acknowledge"
       @load-acks="loadAcks"
       @versions="openVersions"
+      @control="openControl"
       @issue="openIssue"
       @revoke="openRevoke"
       @archive="archiveDoc"
@@ -117,6 +118,8 @@
       @submit="submitRevoke"
     />
 
+    <DocumentControlDrawer v-model="dlgControl" :doc="controlDoc" @changed="refresh" />
+
     <DocumentVersionDrawer
       v-model="dlgVersions"
       :versions="versions"
@@ -150,6 +153,7 @@ import DocumentListCard from './documents/DocumentListCard.vue'
 import DocumentRevokeDialog from './documents/DocumentRevokeDialog.vue'
 import DocumentStats from './documents/DocumentStats.vue'
 import DocumentUploadDialog from './documents/DocumentUploadDialog.vue'
+import DocumentControlDrawer from './documents/DocumentControlDrawer.vue'
 import DocumentVersionDrawer from './documents/DocumentVersionDrawer.vue'
 
 const route = useRoute()
@@ -261,6 +265,8 @@ const onRowClick = () => { /* noop */ }
 
 // 下载
 // 2026-10-19：改走带 Authorization 的 blob 下载（window.open 无法带请求头 → 401）
+const dlgControl = ref(false)
+const controlDoc = ref<any>(null)
 const previewVisible = ref(false)
 const previewUrl = ref('')
 const previewType = ref('')
@@ -417,6 +423,8 @@ const dlgVersions = ref(false)
 const versions = ref<any[]>([])
 const versionsCurrent = ref<any>(null)
 const versionsLoading = ref(false)
+const openControl = (row: any) => { controlDoc.value = row; dlgControl.value = true }
+
 const openVersions = async (row: any) => {
   versionsCurrent.value = row
   dlgVersions.value = true
