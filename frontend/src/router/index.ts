@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { buildPageTitle } from '../domain/ux'
+import { startRouteProgress, finishRouteProgress } from '../composables/useRouteProgress'
 
 const routes = [
   {
@@ -71,6 +73,7 @@ const routes = [
       { path: '/workstation-resources', name: 'workstation-resources', component: () => import('../views/WorkstationResources.vue'), meta: { title: '工位/资源配置', icon: 'OfficeBuilding' } },
       { path: '/resources', name: 'resources', component: () => import('../views/ResourceDashboard.vue'), meta: { title: '资源分配与状态', icon: 'Monitor' } },
       { path: '/digital-twin', name: 'digital-twin', component: () => import('../views/DigitalTwin.vue'), meta: { title: '数字孪生', icon: 'Monitor' } },
+      { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFound.vue'), meta: { title: '页面不存在', hidden: true } },
     ]
   },
   {
@@ -100,6 +103,7 @@ const WAREHOUSE_ALLOWED_PATHS = new Set([
 const WAREHOUSE_DEFAULT_PATH = '/shopfloor?tab=pick'
 
 router.beforeEach((to, from, next) => {
+  startRouteProgress()
   const token = localStorage.getItem('tbm_access_token') || localStorage.getItem('tbm_token')
   if (to.path === '/login') return next()
   if (!token && to.meta?.requiresAuth !== false) {
@@ -116,6 +120,15 @@ router.beforeEach((to, from, next) => {
     }
   }
   next()
+})
+
+router.afterEach((to) => {
+  finishRouteProgress()
+  document.title = buildPageTitle(to.meta?.title as string | undefined)
+})
+
+router.onError(() => {
+  finishRouteProgress()
 })
 
 export default router

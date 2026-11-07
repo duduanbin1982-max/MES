@@ -22,7 +22,7 @@
         :class="`ws-indicator--${wsStatus}`"
         aria-label="WebSocket 连接状态"
       ></span>
-      <el-button class="theme-toggle" :icon="isDark ? Sunny : Moon" circle @click="emit('toggle-theme')" :title="isDark ? '切换亮色' : '切换暗色'" />
+      <el-button class="theme-toggle" :icon="isDark ? Sunny : Moon" circle @click="emit('toggle-theme')" :title="isDark ? '切换亮色' : '切换暗色'" :aria-label="isDark ? '切换亮色主题' : '切换暗色主题'" />
       <router-link to="/help/manual" class="manual-link">操作手册</router-link>
       <router-link to="/scan" class="scan-link">扫码报工</router-link>
       <span class="clock">{{ now }}</span>

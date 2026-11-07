@@ -1,5 +1,7 @@
 <template>
   <a class="skip-link" href="#main-content">跳到主内容</a>
+  <div class="route-progress" :class="{ 'is-active': routeLoading }" aria-hidden="true"></div>
+  <div class="sr-only" role="status" aria-live="polite">{{ routeAnnouncement }}</div>
   <el-container class="app-shell">
     <AppSidebar
       class="desktop-sidebar"
@@ -62,6 +64,16 @@
       />
 
       <el-main id="main-content" class="layout-main">
+        <el-alert
+          v-if="showOfflineBanner"
+          class="offline-banner"
+          type="warning"
+          show-icon
+          :closable="true"
+          @close="offlineDismissed = true"
+        >
+          当前网络已断开，页面数据可能不是最新；恢复网络后会自动恢复状态检测。
+        </el-alert>
         <router-view />
       </el-main>
     </el-container>
@@ -70,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import AppHeader from '../components/layout/AppHeader.vue'
@@ -81,11 +93,15 @@ import { filterMenuSections } from '../config/menuPolicy'
 import { useShellNotifications } from '../composables/useShellNotifications'
 import { closeWebSocket } from '../composables/useWebSocket'
 import { useAuthStore } from '../stores/auth'
+import { routeLoading } from '../composables/useRouteProgress'
+import { shouldShowOfflineBanner } from '../domain/ux'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const now = ref('')
+const online = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
+const offlineDismissed = ref(false)
 const isDark = ref(false)
 const mobileMenuOpen = ref(false)
 const menuKeyword = ref('')
@@ -259,8 +275,21 @@ async function refreshHealth() {
 }
 
 const { status: wsStatus } = useShellNotifications()
+const showOfflineBanner = computed(() => shouldShowOfflineBanner(online.value, offlineDismissed.value))
+const routeAnnouncement = computed(() => `当前页面：${currentPageTitle.value}`)
+
+function handleOnline() {
+  online.value = true
+  offlineDismissed.value = false
+  refreshHealth()
+}
+function handleOffline() {
+  online.value = false
+}
 
 onMounted(() => {
+  window.addEventListener('online', handleOnline)
+  window.addEventListener('offline', handleOffline)
   favoriteKeys.value = readMenuList(FAVORITE_STORAGE_KEY)
   recentKeys.value = readMenuList(RECENT_STORAGE_KEY)
   storageReady.value = true
@@ -284,6 +313,11 @@ watch(
   () => {
     mobileMenuOpen.value = false
     recordRecent()
+    nextTick(() => {
+      // 路由切换后回到内容顶部，避免沿用上一页滚动位置
+      const main = document.getElementById('main-content')
+      if (main) main.scrollTo({ top: 0 })
+    })
   },
 )
 
@@ -295,6 +329,8 @@ function applyTheme() {
 onUnmounted(() => {
   if (timer) clearInterval(timer)
   if (healthTimer) clearInterval(healthTimer)
+  window.removeEventListener('online', handleOnline)
+  window.removeEventListener('offline', handleOffline)
 })
 </script>
 

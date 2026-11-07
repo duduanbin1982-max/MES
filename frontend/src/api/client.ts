@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
+import { shouldToastError, type ToastMark } from '../domain/ux'
 
 type DataClient = Omit<AxiosInstance, 'get' | 'post' | 'put' | 'patch' | 'delete' | 'request'> & {
   get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
@@ -17,6 +18,7 @@ export const REFRESH_KEY = 'tbm_refresh_token'
 export const USER_KEY = 'tbm_user'
 
 let refreshing: Promise<string | null> | null = null
+let lastToast: ToastMark | null = null
 
 async function doRefresh(): Promise<string | null> {
   const refreshToken = localStorage.getItem(REFRESH_KEY)
@@ -66,8 +68,14 @@ axiosClient.interceptors.response.use(
       clearSession()
     }
 
-    const message = error.response?.data?.error || error.response?.data?.message || error.message
-    if (status !== 401) ElMessage.error(message)
+    const serverMessage = error.response?.data?.error || error.response?.data?.message
+    const message = serverMessage || (error.response ? error.message : '网络连接异常，请检查网络后重试')
+    const isCancelled = error.code === 'ERR_CANCELED' || error.message === 'canceled'
+    const now = Date.now()
+    if (shouldToastError(status, isCancelled, message, now, lastToast)) {
+      lastToast = { message, at: now }
+      ElMessage.error(message)
+    }
     return Promise.reject(error)
   }
 )
