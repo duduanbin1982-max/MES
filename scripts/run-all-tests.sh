@@ -2,7 +2,10 @@
 # scripts/run-all-tests.sh
 # 一键跑全部测试（含 processTree cross-sub 的 seed DB 准备）
 set -e
-export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
+if [ -d /home/dubin/.nvm/versions/node/v22.22.3/bin ]; then
+  export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
+fi
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # 2026-07-11 Hermes brooks-test T5 修复: JWT_SECRET 全局可用
 # 所有加载 app/jwt 的测试都需要 JWT_SECRET (>= 32 字符)
@@ -11,7 +14,7 @@ if [ -z "${JWT_SECRET:-}" ]; then
   export JWT_SECRET=$(node -e 'console.log(require("crypto").randomBytes(48).toString("hex"))')
 fi
 
-cd /home/dubin/factory-mes
+cd "$ROOT"
 
 echo "=== 0) 检查重复 API 路由 ==="
 node scripts/check-duplicate-routes.js

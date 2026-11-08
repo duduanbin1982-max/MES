@@ -12,8 +12,11 @@
 set -u
 set -o pipefail
 
-ROOT=/home/dubin/factory-mes
-LOG_DIR=/home/dubin/factory-mes/logs/predeploy
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_DIR="$ROOT/logs/predeploy"
+if [ -d /home/dubin/.nvm/versions/node/v22.22.3/bin ]; then
+  export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
+fi
 mkdir -p "$LOG_DIR"
 # 清理 predeploy 日志目录 —— 2026-10-16 批次四 C 项
 # 原实现 `find "$LOG_DIR" -name 'predeploy-*.log' -mtime +3 -delete` 有三个缺陷：
@@ -34,7 +37,6 @@ for arg in "$@"; do
   esac
 done
 
-export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 log() { [ "$QUIET" = "0" ] && echo "[predeploy] $*"; }
 

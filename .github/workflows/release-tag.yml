@@ -37,13 +37,21 @@ jobs:
       - name: 保存发布校验脚本
         run: |
           cp scripts/verify-release-tag.sh "$RUNNER_TEMP/verify-release-tag.sh"
-          chmod +x "$RUNNER_TEMP/verify-release-tag.sh"
+          cp scripts/pre-deploy-test.sh "$RUNNER_TEMP/pre-deploy-test.sh"
+          cp scripts/run-all-tests.sh "$RUNNER_TEMP/run-all-tests.sh"
+          chmod +x "$RUNNER_TEMP"/*.sh
 
       - name: Checkout release tag
         uses: actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
+
+      - name: 使用默认分支的 CI 闸门脚本（兼容历史 tag）
+        run: |
+          cp "$RUNNER_TEMP/pre-deploy-test.sh" scripts/pre-deploy-test.sh
+          cp "$RUNNER_TEMP/run-all-tests.sh" scripts/run-all-tests.sh
+          chmod +x scripts/pre-deploy-test.sh scripts/run-all-tests.sh
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
