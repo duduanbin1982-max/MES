@@ -39,6 +39,9 @@ jobs:
           cp scripts/verify-release-tag.sh "$RUNNER_TEMP/verify-release-tag.sh"
           cp scripts/pre-deploy-test.sh "$RUNNER_TEMP/pre-deploy-test.sh"
           cp scripts/run-all-tests.sh "$RUNNER_TEMP/run-all-tests.sh"
+          cp scripts/migrate.sh "$RUNNER_TEMP/migrate.sh"
+          cp tests/migrate.test.js "$RUNNER_TEMP/migrate.test.js"
+          cp tests/recompute-safety-stock.test.js "$RUNNER_TEMP/recompute-safety-stock.test.js"
           chmod +x "$RUNNER_TEMP"/*.sh
 
       - name: Checkout release tag
@@ -51,7 +54,10 @@ jobs:
         run: |
           cp "$RUNNER_TEMP/pre-deploy-test.sh" scripts/pre-deploy-test.sh
           cp "$RUNNER_TEMP/run-all-tests.sh" scripts/run-all-tests.sh
-          chmod +x scripts/pre-deploy-test.sh scripts/run-all-tests.sh
+          cp "$RUNNER_TEMP/migrate.sh" scripts/migrate.sh
+          cp "$RUNNER_TEMP/migrate.test.js" tests/migrate.test.js
+          cp "$RUNNER_TEMP/recompute-safety-stock.test.js" tests/recompute-safety-stock.test.js
+          chmod +x scripts/pre-deploy-test.sh scripts/run-all-tests.sh scripts/migrate.sh
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
