@@ -4,7 +4,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const Database = require("/home/dubin/factory-mes/node_modules/better-sqlite3");
+const Database = require("better-sqlite3");
 const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -25,7 +25,7 @@ function freshMigDir(files) {
 }
 
 function runMigrate(dbPath, migDir, args = []) {
-  const script = "/home/dubin/factory-mes/scripts/migrate.sh";
+  const script = path.resolve(__dirname, "../scripts/migrate.sh");
   try {
     return execFileSync("bash", [script, ...args], {
       encoding: "utf8",

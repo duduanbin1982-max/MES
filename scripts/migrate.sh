@@ -2,18 +2,22 @@
 # scripts/migrate.sh
 # 自动跑 db/migrations/ 下所有 .sql (按文件名排序, 已跑的通过 schema_migrations 表跳过)
 set -uo pipefail
-ROOT=/home/dubin/factory-mes
-NODE=/home/dubin/.nvm/versions/node/v22.22.3/bin/node
-export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d /home/dubin/.nvm/versions/node/v22.22.3/bin ]; then
+  export PATH=/home/dubin/.nvm/versions/node/v22.22.3/bin:$PATH
+fi
+NODE="${NODE_BIN:-$(command -v node)}"
+[ -n "$NODE" ] || { echo "node 不存在" >&2; exit 1; }
 
 cd "$ROOT" || exit 1
+export MIGRATE_ROOT="$ROOT"
 
 "$NODE" - "$@" << 'EOFNODE'
 const Database = require("better-sqlite3");
 const path = require("node:path");
 const fs = require("node:fs");
 
-const DB_PATH = process.env.MIGRATE_DB_PATH || path.join("/home/dubin/factory-mes/data/mes.db");
+const DB_PATH = process.env.MIGRATE_DB_PATH || path.join(process.env.MIGRATE_ROOT || process.cwd(), "data/mes.db");
 const db = new Database(DB_PATH);
 
 db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -21,7 +25,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TEXT NOT NULL DEFAULT (datetime('now'))
 )`);
 
-const dir = process.env.MIGRATE_DIR || "/home/dubin/factory-mes/db/migrations";
+const dir = process.env.MIGRATE_DIR || path.join(process.env.MIGRATE_ROOT || process.cwd(), "db/migrations");
 const files = fs.readdirSync(dir)
   .filter((file) => /^\d{3}_.+\.sql$/.test(file))
   .sort();

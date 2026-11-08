@@ -23,10 +23,11 @@ function freshDbFile() {
 }
 
 function runScript(dbPath) {
-  const script = '/home/dubin/factory-mes/scripts/recompute-safety-stock.js';
-  const node = '/home/dubin/.nvm/versions/node/v22.22.3/bin/node';
+  const script = path.resolve(__dirname, '../scripts/recompute-safety-stock.js');
+  const node = process.execPath;
+  const root = path.resolve(__dirname, '..');
   try {
-    return execFileSync(node, [script], { cwd: '/home/dubin/factory-mes', env: { ...process.env, DB_PATH: dbPath }, encoding: 'utf8', timeout: 30000 });
+    return execFileSync(node, [script], { cwd: root, env: { ...process.env, DB_PATH: dbPath }, encoding: 'utf8', timeout: 30000 });
   } catch (e) { return (e.stdout || '') + (e.stderr || ''); }
 }
 
