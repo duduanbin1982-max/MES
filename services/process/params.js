@@ -65,6 +65,10 @@ function normalizeSpecs(specs) {
     const usl = toSpecNumber(spec.usl, `${field}.usl`);
     if (lsl === null || usl === null) throw ApiError.validation(`${field} 必须同时提供 lsl 与 usl`);
     if (lsl > usl) throw ApiError.validation(`${field} 下限 lsl 不能大于上限 usl`);
+    const [limitMin, limitMax] = PARAM_LIMITS[field];
+    if (lsl < limitMin || usl > limitMax) {
+      throw ApiError.validation(`${field} 规格需在物理范围 ${limitMin}~${limitMax} 内`);
+    }
     const target = toSpecNumber(spec.target, `${field}.target`);
     if (target !== null && (target < lsl || target > usl)) {
       throw ApiError.validation(`${field}.target 必须落在 [lsl, usl] 区间内`);
@@ -84,6 +88,10 @@ function actorId(req) {
   if (!req || !req.user) return null;
   const id = req.user.sub != null ? req.user.sub : req.user.uid;
   return id == null ? null : Number(id);
+}
+
+function isAdmin(req) {
+  return req?.user?.role === "admin" || (req?.user?.permissions || []).includes("*");
 }
 
 function assertNode(db, nodeId) {
@@ -114,7 +122,7 @@ function parseCustomJson(raw) {
 }
 
 function findLatestSpecRow(db, nodeId) {
-  const rows = db.prepare("SELECT id, custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY id DESC LIMIT 20").all([nodeId]);
+  const rows = db.prepare("SELECT id, custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY recorded_at DESC, id DESC LIMIT 50").all([nodeId]);
   for (const row of rows) {
     try {
       const parsed = JSON.parse(row.custom_json);
@@ -131,6 +139,7 @@ function register(app, db) {
 
   // CRUD: get params for a node（排除只有 custom_json 的 spec 行）
   app.get("/api/process_nodes/:id/params", wrap((req, res) => {
+    assertNode(db, Number(req.params.id));
     res.json(all(`SELECT pp.*, u.full_name as recorder_name FROM process_params pp LEFT JOIN users u ON pp.recorded_by = u.id WHERE pp.process_node_id = ? AND (${READING_FILTER} OR pp.custom_json IS NULL) ORDER BY pp.recorded_at DESC, pp.id DESC LIMIT 500`, [req.params.id]));
   }));
 
@@ -144,7 +153,14 @@ function register(app, db) {
     const customJson = parseCustomJson(b.custom_json);
     const notes = b.notes === undefined || b.notes === null ? null : String(b.notes).trim();
     if (notes && notes.length > 2000) throw ApiError.validation("notes 长度不能超过 2000");
-    const recordedBy = assertUser(db, b.recorded_by == null || b.recorded_by === "" ? actorId(req) : Number(b.recorded_by));
+    const actor = actorId(req);
+    const requestedRecorder = b.recorded_by == null || b.recorded_by === "" ? null : Number(b.recorded_by);
+    if (requestedRecorder !== null && actor !== null && requestedRecorder !== actor && !isAdmin(req)) {
+      throw ApiError.forbidden("只能以本人身份记录工艺参数");
+    }
+    const recordedBy = assertUser(db, requestedRecorder == null ? actor : requestedRecorder);
+    const hasReading = values.some((value) => value !== null);
+    if (!hasReading && !customJson && !notes) throw ApiError.validation("至少填写一个参数值、custom_json 或备注");
     const r = run("INSERT INTO process_params (process_node_id, current_amp, voltage_v, speed_mm_min, temperature_c, pressure_mpa, feed_rate, custom_json, notes, recorded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [nodeId, ...values, customJson, notes, recordedBy]);
     audit.record(db, req, {
       action: "process_params.create",
@@ -162,6 +178,7 @@ function register(app, db) {
     const limit = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 100, 1), 1000);
     const param = req.query.param ? String(req.query.param).trim() : null;
     if (param && !PARAM_LIMITS[param]) throw ApiError.validation(`param 必须是 ${PARAM_FIELDS.join(" / ")}`);
+    assertNode(db, Number(req.params.id));
     // 先取最近 limit 条，再按时间正序返回（原实现 LIMIT 取到的是最早的数据）
     const rows = all(`SELECT * FROM (SELECT pp.*, u.full_name as recorder_name FROM process_params pp LEFT JOIN users u ON pp.recorded_by = u.id WHERE pp.process_node_id = ? AND (${READING_FILTER} OR pp.custom_json IS NULL) ORDER BY pp.recorded_at DESC, pp.id DESC LIMIT ?) ORDER BY recorded_at ASC, id ASC`, [req.params.id, limit]);
     if (param) {
@@ -175,6 +192,15 @@ function register(app, db) {
       return res.json({ param, times, values, count: values.length });
     }
     res.json(rows);
+  }));
+
+  // 2026-11-08（审计）：前端读取当前规格，用于表格判定/规格编辑
+  app.get("/api/process_nodes/:id/params/specs", wrap((req, res) => {
+    const nodeId = Number(req.params.id);
+    if (!Number.isInteger(nodeId) || nodeId <= 0) throw ApiError.validation("工艺节点 ID 非法");
+    assertNode(db, nodeId);
+    const spec = findLatestSpecRow(db, nodeId);
+    res.json({ process_node_id: nodeId, specs: spec ? spec.spc : {}, source_id: spec ? spec.row.id : null });
   }));
 
   // MESA #8: 过程参数规格设置
@@ -241,7 +267,9 @@ function register(app, db) {
   app.get("/api/process/deviations", wrap((req, res) => {
     const parsedLimit = Number.parseInt(req.query.limit, 10);
     const limit = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 50, 1), 500);
-    const nodes = all("SELECT id, operation_name FROM process_nodes LIMIT 200");
+    const nodes = all(`SELECT pn.id, pn.operation_name FROM process_nodes pn
+      WHERE EXISTS (SELECT 1 FROM process_params pp WHERE pp.process_node_id = pn.id AND pp.custom_json IS NOT NULL)
+      ORDER BY pn.id`);
     const deviations = [];
     for (const node of nodes) {
       const spec = findLatestSpecRow(db, node.id);

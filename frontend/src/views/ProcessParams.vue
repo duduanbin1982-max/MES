@@ -6,10 +6,11 @@
         <el-select v-model="selectedInstance" placeholder="选择装备实例" style="width: 240px; margin-right: 8px" @change="loadNodes">
           <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
         </el-select>
-        <el-select v-model="selectedNode" placeholder="选择工艺节点" style="width: 240px; margin-right: 8px" @change="loadParams">
-          <el-option v-for="n in nodes" :key="n.id" :label="n.name + ' (' + (n.node_type||'工序') + ')'" :value="n.id" />
+        <el-select v-model="selectedNode" placeholder="选择工艺节点" filterable style="width: 280px; margin-right: 8px" @change="loadParams">
+          <el-option v-for="n in nodes" :key="n.id" :label="`#${n.id} ${n.name || n.operation_name || ''} (${n.node_type || n.operation_type || '工序'})`" :value="n.id" />
         </el-select>
         <el-button type="primary" @click="loadParams" :loading="loading">查询</el-button>
+        <el-button @click="openSpecs" :disabled="!selectedNode">规格设置</el-button>
         <el-button @click="openAdd" :disabled="!selectedNode">+ 记录参数</el-button>
       </div>
     </PageToolbar>
@@ -51,24 +52,30 @@
       <el-table :data="params" stripe size="small" max-height="400">
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column label="电流(A)" width="90" align="right">
-          <template #default="{row}">{{ row.current_amp != null ? row.current_amp : '-' }}</template>
+          <template #default="{row}"><span :class="{ 'out-of-spec': isOut('current_amp', row.current_amp) }">{{ row.current_amp != null ? row.current_amp : '-' }}</span></template>
         </el-table-column>
         <el-table-column label="电压(V)" width="90" align="right">
-          <template #default="{row}">{{ row.voltage_v != null ? row.voltage_v : '-' }}</template>
+          <template #default="{row}"><span :class="{ 'out-of-spec': isOut('voltage_v', row.voltage_v) }">{{ row.voltage_v != null ? row.voltage_v : '-' }}</span></template>
         </el-table-column>
         <el-table-column label="速度(mm/min)" width="110" align="right">
-          <template #default="{row}">{{ row.speed_mm_min != null ? row.speed_mm_min : '-' }}</template>
+          <template #default="{row}"><span :class="{ 'out-of-spec': isOut('speed_mm_min', row.speed_mm_min) }">{{ row.speed_mm_min != null ? row.speed_mm_min : '-' }}</span></template>
         </el-table-column>
         <el-table-column label="温度(°C)" width="100" align="right">
           <template #default="{row}">
-            <span :style="{color: row.temperature_c != null && row.temperature_c > 300 ? 'var(--el-color-danger)' : ''}">{{ row.temperature_c != null ? row.temperature_c : '-' }}</span>
+            <span :class="{ 'out-of-spec': isOut('temperature_c', row.temperature_c) }">{{ row.temperature_c != null ? row.temperature_c : '-' }}</span>
           </template>
         </el-table-column>
         <el-table-column label="压力(MPa)" width="100" align="right">
-          <template #default="{row}">{{ row.pressure_mpa != null ? row.pressure_mpa : '-' }}</template>
+          <template #default="{row}"><span :class="{ 'out-of-spec': isOut('pressure_mpa', row.pressure_mpa) }">{{ row.pressure_mpa != null ? row.pressure_mpa : '-' }}</span></template>
         </el-table-column>
         <el-table-column label="进给率" width="90" align="right">
-          <template #default="{row}">{{ row.feed_rate != null ? row.feed_rate : '-' }}</template>
+          <template #default="{row}"><span :class="{ 'out-of-spec': isOut('feed_rate', row.feed_rate) }">{{ row.feed_rate != null ? row.feed_rate : '-' }}</span></template>
+        </el-table-column>
+        <el-table-column label="判定" width="120">
+          <template #default="{row}">
+            <el-tag v-if="rowStatus(row).length" size="small" type="danger">{{ rowStatus(row).join('、') }}</el-tag>
+            <el-tag v-else size="small" type="success">OK</el-tag>
+          </template>
         </el-table-column>
         <el-table-column prop="notes" label="备注" min-width="150" show-overflow-tooltip />
         <el-table-column prop="recorder_name" label="记录人" width="100" />
@@ -92,6 +99,27 @@
         <el-button type="primary" @click="saveParam" :loading="dlg.saving">记录</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="specDlg.visible" title="工艺参数规格（LSL / USL）" width="820px">
+      <el-alert type="info" :closable="false" show-icon title="规格用于 SPC 控制图、过程能力 Cpk/Ppk 和参数偏差判定；LSL/USL 必填，target 可选。" style="margin-bottom:10px" />
+      <el-form label-width="120px">
+        <el-row :gutter="10" v-for="p in trendParams" :key="p.key">
+          <el-col :span="7"><el-form-item :label="p.label"><span /></el-form-item></el-col>
+          <el-col :span="17">
+            <el-row :gutter="6">
+              <el-col :span="6"><el-form-item label="LSL"><el-input-number v-model="specDlg.form[p.key].lsl" :controls="false" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item label="USL"><el-input-number v-model="specDlg.form[p.key].usl" :controls="false" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item label="目标"><el-input-number v-model="specDlg.form[p.key].target" :controls="false" style="width:100%" /></el-form-item></el-col>
+              <el-col :span="6"><el-form-item label="单位"><el-input v-model="specDlg.form[p.key].unit" style="width:100%" /></el-form-item></el-col>
+            </el-row>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="specDlg.visible = false">取消</el-button>
+        <el-button type="primary" :loading="specDlg.saving" @click="saveSpecs">保存规格</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -112,6 +140,8 @@ const dlg = reactive({ visible: false, saving: false, form: {} as any });
 const spcParam = ref("temperature_c");
 const spcLoading = ref(false);
 const spcResult = ref<any>(null);
+const specs = ref<Record<string, any>>({});
+const specDlg = reactive<any>({ visible: false, saving: false, form: {} });
 
 const chartRefs: Record<string, any> = {};
 const chartInstances: Record<string, any> = {};
@@ -155,9 +185,13 @@ async function renderTrends() {
           areaStyle: { color: "rgba(64,158,255,0.1)" },
           markLine: {
             silent: true,
-            data: [
-              { type: "average", name: "均值", lineStyle: { color: "var(--el-color-success)", type: "dashed" } },
-            ],
+            data: (() => {
+              const spec = specFor(p.key);
+              const marks: any[] = [{ type: "average", name: "均值", lineStyle: { color: "var(--el-color-success)", type: "dashed" } }];
+              if (spec?.lsl != null) marks.push({ yAxis: spec.lsl, name: "LSL", lineStyle: { color: "var(--el-color-danger)", type: "dashed" } });
+              if (spec?.usl != null) marks.push({ yAxis: spec.usl, name: "USL", lineStyle: { color: "var(--el-color-danger)", type: "dashed" } });
+              return marks;
+            })(),
           },
         }],
       });
@@ -173,9 +207,17 @@ async function loadInstances() {
 }
 
 async function loadNodes() {
+  selectedNode.value = null;
+  params.value = [];
+  specs.value = {};
+  spcResult.value = null;
   if (!selectedInstance.value) return;
   try {
     const r = await api.get("/equipment_instances/" + selectedInstance.value + "/process_tree");
+    if (Array.isArray(r?.flat)) {
+      nodes.value = r.flat;
+      return;
+    }
     const flat: any[] = [];
     function walk(tree: any) {
       if (!tree) return;
@@ -190,8 +232,15 @@ async function loadNodes() {
 async function loadParams() {
   if (!selectedNode.value) return;
   loading.value = true;
-  try { params.value = await api.get("/process_nodes/" + selectedNode.value + "/params"); }
-  catch (_) { ElMessage.error("加载参数失败"); }
+  spcResult.value = null;
+  try {
+    const [paramData, specData] = await Promise.all([
+      api.get("/process_nodes/" + selectedNode.value + "/params"),
+      api.get("/process_nodes/" + selectedNode.value + "/params/specs"),
+    ]);
+    params.value = paramData || [];
+    specs.value = specData?.specs || {};
+  } catch (_) { ElMessage.error("加载参数失败"); }
   finally { loading.value = false; }
   renderTrends();
 }
@@ -212,6 +261,55 @@ async function saveParam() {
   finally { dlg.saving = false; }
 }
 
+function specFor(key: string) {
+  return specs.value?.[key] || null;
+}
+
+function isOut(key: string, value: any) {
+  if (value === null || value === undefined) return false;
+  const spec = specFor(key);
+  if (!spec || spec.lsl == null || spec.usl == null) return false;
+  return Number(value) < Number(spec.lsl) || Number(value) > Number(spec.usl);
+}
+
+function rowStatus(row: any) {
+  return trendParams.filter((p) => isOut(p.key, row[p.key])).map((p) => p.label.replace(/\s*\(.*$/, ""));
+}
+
+function openSpecs() {
+  const form: any = {};
+  for (const p of trendParams) {
+    const current = specFor(p.key) || {};
+    form[p.key] = { lsl: current.lsl ?? null, usl: current.usl ?? null, target: current.target ?? null, unit: current.unit || "" };
+  }
+  specDlg.form = form;
+  specDlg.visible = true;
+}
+
+async function saveSpecs() {
+  const payload: any = {};
+  for (const p of trendParams) {
+    const item = specDlg.form[p.key] || {};
+    if (item.lsl === null || item.lsl === undefined || item.usl === null || item.usl === undefined) continue;
+    if (Number(item.lsl) > Number(item.usl)) return ElMessage.warning(`${p.label} 的 LSL 不能大于 USL`);
+    payload[p.key] = { lsl: Number(item.lsl), usl: Number(item.usl) };
+    if (item.target !== null && item.target !== undefined && item.target !== "") payload[p.key].target = Number(item.target);
+    if (item.unit) payload[p.key].unit = String(item.unit).trim();
+  }
+  if (!Object.keys(payload).length) return ElMessage.warning("至少填写一个参数的 LSL/USL");
+  specDlg.saving = true;
+  try {
+    await api.put(`/process_nodes/${selectedNode.value}/params/specs`, { specs: payload });
+    ElMessage.success("规格已保存");
+    specDlg.visible = false;
+    await loadParams();
+  } catch (error: any) {
+    ElMessage.error("保存规格失败：" + (error?.response?.data?.message || error.message));
+  } finally {
+    specDlg.saving = false;
+  }
+}
+
 async function runSpc() {
   spcLoading.value = true;
   try {
@@ -227,4 +325,5 @@ onMounted(loadInstances);
 .page{padding:16px 24px}
 .page-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px}
 .page-title{font-size:20px;font-weight:600}
+.out-of-spec{color:var(--el-color-danger);font-weight:700}
 </style>
