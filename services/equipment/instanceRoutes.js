@@ -15,10 +15,18 @@ function registerInstanceRoutes({
   nextInstanceCode,
   previewInstanceCode,
   describeInstanceRule,
+  reserveInstanceCode,
   createInstance,
   ensureNotFrozen,
   buildOverview,
 }) {
+  app.post("/api/equipment_instances/code-reserve", wrap((req, res) => {
+    if (typeof reserveInstanceCode !== "function") throw ApiError.validation("编码规则未启用");
+    const result = reserveInstanceCode({ customer: req.body?.customer, year: req.body?.year });
+    if (!result) throw ApiError.validation("当前编码规则无法生成编码");
+    res.json({ code: result.code, reservation_token: result.reservation_token, expires_at: result.expires_at });
+  }));
+
   app.get("/api/equipment_instances/code-preview", wrap((req, res) => {
     const code = (previewInstanceCode || nextInstanceCode)(req.query.customer, req.query.year);
     const rule = typeof describeInstanceRule === "function" ? describeInstanceRule() : null;

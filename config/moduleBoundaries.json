@@ -46,6 +46,11 @@
       "from": "equipment",
       "to": "codingRulesService",
       "reason": "装备/模板编码生成复用编码规则与原子序列（2026-11-08 编码规则审计）"
+    },
+    {
+      "from": "workOrderService",
+      "to": "codingRulesService",
+      "reason": "工单号留空时使用编码规则原子生成（2026-11-08 编码规则审计）"
     }
   ],
   "allowedWrites": [

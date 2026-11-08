@@ -4,7 +4,7 @@ const CORE_SERVICES = [
   { name: "dashboardAlerts", module: "./dashboardAlerts", schemaVersion: 1 },
   { name: "delayAlerts", module: "./delayAlerts", schemaVersion: 1 },
   { name: "deliveryService", module: "./deliveryService", schemaVersion: 4 },
-  { name: "equipment", module: "./equipment", schemaVersion: 4 },
+  { name: "equipment", module: "./equipment", schemaVersion: 5 },
   { name: "material", module: "./material", schemaVersion: 1 },
   { name: "materialPlanner", module: "./materialPlanner", schemaVersion: 2 },
   { name: "materialService", module: "./materialService", schemaVersion: 1 },

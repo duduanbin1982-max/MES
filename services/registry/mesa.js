@@ -12,7 +12,7 @@ const MESA_SERVICES = [
     schemaVersion: 2,
     dependsOn: ["tbmAdvanced"],
   },
-  { name: "codingRulesService", module: "./codingRulesService", schemaVersion: 1 },
+  { name: "codingRulesService", module: "./codingRulesService", schemaVersion: 2 },
   { name: "cost", module: "./cost", schemaVersion: 6 },
   { name: "documentService", module: "./documentService", schemaVersion: 7 },
   { name: "eco", module: "./eco", schemaVersion: 1 },
@@ -33,7 +33,7 @@ const MESA_SERVICES = [
   { name: "spcService", module: "./spcService", schemaVersion: 1 },
   { name: "tbmAdvanced", module: "./tbmAdvanced", schemaVersion: 1 },
   { name: "traceService", module: "./traceService", schemaVersion: 3 },
-  { name: "workOrderService", module: "./workOrderService", schemaVersion: 1, deps: { onlyForemanOrAdmin, onlyForemanAdminOrPlanner, onlyWelder, foremanOrWorker } },
+  { name: "workOrderService", module: "./workOrderService", schemaVersion: 2, deps: { onlyForemanOrAdmin, onlyForemanAdminOrPlanner, onlyWelder, foremanOrWorker } },
 ];
 
 module.exports = { MESA_SERVICES };

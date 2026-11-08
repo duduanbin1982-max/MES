@@ -26,6 +26,12 @@ function register(app, db) {
     previewRuleCode: (rule, context) => codeAllocator.nextCode(rule, context, { preview: true }),
     describeRule: (rule) => codeAllocator.describeRule(rule),
   });
+  const ruleFor = (rule) => codeAllocator.getRule(rule);
+  const validateInstanceCode = (code, context) => {
+    const rule = ruleFor("equipment_instance");
+    if (!rule || !String(code || "").toUpperCase().startsWith(String(rule.prefix || "").toUpperCase())) return true;
+    return codeAllocator.validateCode("equipment_instance", code, context);
+  };
   const templateStore = createTemplateStore({ get: helpers.get, ApiError });
   const instanceFactory = createInstanceFactory({
     db,
@@ -33,6 +39,8 @@ function register(app, db) {
     ApiError,
     nextInstanceCode: codeGenerator.nextInstanceCode,
     reserveInstanceCode: (code, context) => codeAllocator.reserveCode("equipment_instance", code, context),
+    consumeInstanceReservation: (token) => codeAllocator.consumeReservation(token, "equipment_instance"),
+    validateInstanceCode,
     templateStore,
   });
   const buildOverview = createEquipmentOverview({ db, ApiError, lifecycle: LIFE_CYCLE });
@@ -56,6 +64,7 @@ function register(app, db) {
     nextInstanceCode: codeGenerator.nextInstanceCode,
     previewInstanceCode: codeGenerator.previewInstanceCode,
     describeInstanceRule: codeGenerator.describeInstanceRule,
+    reserveInstanceCode: (context) => codeAllocator.reserve("equipment_instance", context),
     createInstance: instanceFactory.createInstance,
     ensureNotFrozen: instanceFactory.ensureNotFrozen,
     buildOverview,

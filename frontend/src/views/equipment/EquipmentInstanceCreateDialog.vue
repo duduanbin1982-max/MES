@@ -341,6 +341,17 @@ const createInstance = async () => {
       sourceMode: templateSourceMode.value,
       dateRange: dateRange.value,
     })
+    // 2026-11-08：预览码只是展示；提交前预约，避免并发预览→创建撞唯一约束
+    try {
+      const reservation: any = await Api.post('/equipment_instances/code-reserve', {
+        customer: newInst.customer_name,
+        year: codeYear.value,
+      })
+      if (reservation?.code && reservation?.reservation_token) {
+        payload.instance_code = reservation.code
+        payload.code_reservation_id = reservation.reservation_token
+      }
+    } catch (_error) { /* 规则关闭时回退到当前编码 */ }
     const result: any = await Api.post('/equipment_instances', payload)
     ElMessage.success('创建成功，已生成默认交付骨架')
     visible.value = false

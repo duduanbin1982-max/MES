@@ -82,7 +82,23 @@
           <el-col :span="12"><el-form-item label="序号宽度"><el-input-number v-model="form.data.sequence_width" :min="1" :max="8" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="重置策略"><el-select v-model="form.data.reset_policy" style="width:100%"><el-option label="不重置" value="never" /><el-option label="每年" value="year" /><el-option label="每月" value="month" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="启用"><el-switch v-model="form.data.is_active" active-text="启用" inactive-text="停用" /></el-form-item></el-col>
-          <el-col :span="24"><el-form-item label="客户映射"><el-input v-model="form.data.customer_map_json" type="textarea" :rows="3" placeholder='{"郑州地铁集团":"ZZDT"}' /></el-form-item></el-col>
+          <el-col :span="24">
+            <el-form-item label="客户映射">
+              <div style="width:100%">
+                <div style="margin-bottom:6px">
+                  <el-tag v-for="(token, name) in customerMap" :key="name" closable style="margin:2px" @close="removeMapping(name)">{{ name }} → {{ token }}</el-tag>
+                </div>
+                <div style="display:flex;gap:6px">
+                  <el-select v-model="mappingCustomer" filterable allow-create default-first-option placeholder="选择客户主数据/手输" style="flex:1">
+                    <el-option v-for="name in customerOptions" :key="name" :label="name" :value="name" />
+                  </el-select>
+                  <el-input v-model="mappingToken" placeholder="缩写，如 ZZDT" style="width:130px" />
+                  <el-button @click="addMapping">添加映射</el-button>
+                </div>
+                <el-input v-model="form.data.customer_map_json" type="textarea" :rows="2" style="margin-top:6px" placeholder='{"郑州地铁集团":"ZZDT"}' />
+              </div>
+            </el-form-item>
+          </el-col>
           <el-col :span="24"><el-form-item label="说明"><el-input v-model="form.data.description" type="textarea" :rows="2" /></el-form-item></el-col>
         </el-row>
       </el-form>
@@ -95,7 +111,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis, Refresh } from '@element-plus/icons-vue'
 import PageToolbar from '../components/PageToolbar.vue'
@@ -107,8 +123,14 @@ const canManage = auth.hasPerm('settings:write')
 const loading = ref(false)
 const previewLoading = ref(false)
 const rules = ref<any[]>([])
+const customerOptions = ref<string[]>([])
+const mappingCustomer = ref('')
+const mappingToken = ref('')
 const previewRule = ref('equipment_instance')
 const preview = reactive<any>({ code: '', customer: '', year: new Date().getFullYear(), description: '' })
+const customerMap = computed<Record<string, string>>(() => {
+  try { return JSON.parse(form.data.customer_map_json || '{}') } catch (_error) { return {} }
+})
 const form = reactive<any>({ visible: false, isEdit: false, saving: false, data: defaultRule() })
 
 function defaultRule() {
@@ -122,8 +144,12 @@ function defaultRule() {
 async function loadAll() {
   loading.value = true
   try {
-    const data: any = await Api.get('/coding-rules')
+    const [data, customers]: any[] = await Promise.all([
+      Api.get('/coding-rules'),
+      Api.get('/coding-rules/customer-options').catch(() => ({ customers: [] })),
+    ])
     rules.value = data.rules || []
+    customerOptions.value = customers.customers || []
     if (!rules.value.some((rule) => rule.rule_code === previewRule.value) && rules.value.length) {
       previewRule.value = rules.value[0].rule_code
     }
@@ -146,6 +172,22 @@ async function runPreview() {
     preview.code = ''
     ElMessage.error('编码预览失败：' + (error?.response?.data?.message || error.message))
   } finally { previewLoading.value = false }
+}
+
+function addMapping() {
+  const name = String(mappingCustomer.value || '').trim()
+  const token = String(mappingToken.value || '').trim().toUpperCase()
+  if (!name || !token) return ElMessage.warning('请选择客户并填写缩写')
+  const map = { ...customerMap.value, [name]: token }
+  form.data.customer_map_json = JSON.stringify(map)
+  mappingCustomer.value = ''
+  mappingToken.value = ''
+}
+
+function removeMapping(name: string) {
+  const map = { ...customerMap.value }
+  delete map[name]
+  form.data.customer_map_json = JSON.stringify(map)
 }
 
 function openPreview(row: any) {

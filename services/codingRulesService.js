@@ -5,8 +5,9 @@ const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 const audit = require("../app/audit");
 const logger = require("../app/logger").createLogger("codingRulesService");
+const crypto = require("node:crypto");
 
-const ENTITY_TYPES = ["equipment_instance", "equipment_template", "generic"];
+const ENTITY_TYPES = ["equipment_instance", "equipment_template", "work_order", "material", "generic"];
 const YEAR_MODES = ["none", "year", "month"];
 const CUSTOMER_MODES = ["none", "token"];
 const RESET_POLICIES = ["never", "year", "month"];
@@ -14,6 +15,8 @@ const RESET_POLICIES = ["never", "year", "month"];
 const ENTITY_TABLE = {
   equipment_instance: { table: "equipment_instances", column: "instance_code" },
   equipment_template: { table: "equipment_instance_templates", column: "template_code" },
+  work_order: { table: "work_orders", column: "wo_code" },
+  material: { table: "materials", column: "material_code" },
 };
 
 const DEFAULT_RULES = [
@@ -26,6 +29,16 @@ const DEFAULT_RULES = [
     rule_code: "equipment_template", name: "项目模板编码", entity_type: "equipment_template",
     prefix: "TPL", separator: "-", year_mode: "year", customer_mode: "token",
     sequence_width: 3, reset_policy: "year", customer_map_json: "{}", description: "TPL-分类-YYYY-###",
+  },
+  {
+    rule_code: "work_order", name: "工单编码", entity_type: "work_order",
+    prefix: "WO", separator: "-", year_mode: "year", customer_mode: "none",
+    sequence_width: 3, reset_policy: "year", customer_map_json: "{}", description: "WO-YYYY-###",
+  },
+  {
+    rule_code: "material", name: "物料编码", entity_type: "material",
+    prefix: "MAT", separator: "-", year_mode: "none", customer_mode: "none",
+    sequence_width: 4, reset_policy: "never", customer_map_json: "{}", description: "MAT-####",
   },
 ];
 
@@ -57,11 +70,54 @@ function runMigration(db) {
       UNIQUE(rule_code, period_key)
     );
     CREATE INDEX IF NOT EXISTS idx_coding_sequences_rule ON coding_sequences(rule_code, period_key);
+    CREATE TABLE IF NOT EXISTS coding_reservations (
+      token TEXT PRIMARY KEY,
+      rule_code TEXT NOT NULL,
+      code TEXT NOT NULL,
+      period_key TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      context_json TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_coding_reservations_code ON coding_reservations(code, status);
   `);
   const insert = db.prepare(`INSERT OR IGNORE INTO coding_rules
     (rule_code, name, entity_type, prefix, separator, year_mode, customer_mode, sequence_width, reset_policy, customer_map_json, description)
     VALUES (@rule_code, @name, @entity_type, @prefix, @separator, @year_mode, @customer_mode, @sequence_width, @reset_policy, @customer_map_json, @description)`);
   for (const rule of DEFAULT_RULES) insert.run(rule);
+  backfillSequences(db);
+}
+
+// 2026-11-08：历史编码回填序列，避免新编码从 001 重新开始撞历史
+function backfillSequences(db) {
+  try {
+    const rules = db.prepare("SELECT * FROM coding_rules WHERE is_active = 1").all();
+    for (const rule of rules) {
+      const entity = ENTITY_TABLE[rule.entity_type];
+      if (!entity) continue;
+      let rows = [];
+      try { rows = db.prepare(`SELECT ${entity.column} AS code FROM ${entity.table} WHERE ${entity.column} LIKE ?`).all(`${rule.prefix}%`); } catch (_error) { continue; }
+      for (const row of rows) {
+        const code = String(row.code || "");
+        if (!code) continue;
+        const suffix = code.match(/(\d+)$/);
+        if (!suffix) continue;
+        const sequence = Number(suffix[1]);
+        if (!Number.isInteger(sequence) || sequence <= 0) continue;
+        let key = "all";
+        if (rule.reset_policy !== "never") {
+          const year = code.match(/((?:19|20)\d{2})/);
+          key = year ? year[1] : String(new Date().getFullYear());
+        }
+        db.prepare(`INSERT INTO coding_sequences (rule_code, period_key, last_sequence) VALUES (?, ?, ?)
+          ON CONFLICT(rule_code, period_key) DO UPDATE SET last_sequence = MAX(last_sequence, excluded.last_sequence), updated_at = datetime('now')`)
+          .run(rule.rule_code, key, sequence);
+      }
+    }
+  } catch (_error) { /* 兼容旧库 */ }
 }
 
 function cleanToken(value) {
@@ -167,12 +223,47 @@ function createCodeAllocator(db) {
       ON CONFLICT(rule_code, period_key) DO UPDATE SET last_sequence = MAX(last_sequence, excluded.last_sequence), updated_at = datetime('now')`)
       .run(ruleCode, key, sequence);
   };
+  const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const validateCode = (ruleCode, code, context = {}) => {
+    const rule = getRule(ruleCode);
+    if (!rule) return true;
+    if (!code) throw ApiError.validation("编码不能为空");
+    const sep = escapeRegex(rule.separator || "-");
+    let pattern = "^" + escapeRegex(rule.prefix || "");
+    if (rule.customer_mode === "token") pattern += `(?:${sep}[A-Z0-9]{1,8})?`;
+    if (rule.year_mode === "year") pattern += `${sep}(?:19|20)\\d{2}`;
+    else if (rule.year_mode === "month") pattern += `${sep}(?:19|20)\\d{4}`;
+    pattern += `${sep}\\d{${Number(rule.sequence_width || 3)},}$`;
+    if (!new RegExp(pattern, "i").test(String(code))) {
+      throw ApiError.validation(`编码 ${code} 不符合规则 ${rule.rule_code}（${rule.description || pattern}）`);
+    }
+    return true;
+  };
+  const reserve = (ruleCode, context = {}, ttlMinutes = 15) => {
+    const result = nextCode(ruleCode, context);
+    if (!result) return null;
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + Math.max(1, Number(ttlMinutes) || 15) * 60000).toISOString().slice(0, 19).replace("T", " ");
+    db.prepare(`INSERT INTO coding_reservations (token, rule_code, code, period_key, sequence, status, context_json, expires_at)
+      VALUES (?, ?, ?, ?, ?, 'active', ?, ?)`).run(token, result.rule.rule_code, result.code, result.period_key, result.sequence, JSON.stringify(context || {}), expiresAt);
+    return { ...result, reservation_token: token, expires_at: expiresAt };
+  };
+  const consumeReservation = (token, ruleCode = null) => {
+    try {
+      db.prepare("UPDATE coding_reservations SET status = 'expired' WHERE status = 'active' AND expires_at < datetime('now')").run();
+      const row = db.prepare("SELECT * FROM coding_reservations WHERE token = ? AND status = 'active'").get(String(token || ""));
+      if (!row) return null;
+      if (ruleCode && row.rule_code !== ruleCode) return null;
+      db.prepare("UPDATE coding_reservations SET status = 'consumed', consumed_at = datetime('now') WHERE token = ?").run(row.token);
+      return { code: row.code, rule_code: row.rule_code, period_key: row.period_key, sequence: row.sequence };
+    } catch (_error) { return null; }
+  };
   const describeRule = (ruleCode) => {
     const rule = getRule(ruleCode);
     if (!rule) return null;
     return { rule_code: rule.rule_code, description: rule.description, prefix: rule.prefix, separator: rule.separator, year_mode: rule.year_mode, customer_mode: rule.customer_mode, sequence_width: rule.sequence_width, reset_policy: rule.reset_policy };
   };
-  return { nextCode, reserveCode, describeRule, getRule };
+  return { nextCode, reserveCode, reserve, consumeReservation, validateCode, describeRule, getRule, backfillSequences: () => backfillSequences(db) };
 }
 
 function normalizeRule(body, { partial = false } = {}) {
@@ -247,6 +338,13 @@ function register(app, db) {
     res.json({ rules: all("SELECT * FROM coding_rules ORDER BY entity_type, rule_code") });
   }));
 
+  app.get("/api/coding-rules/customer-options", wrap((_req, res) => {
+    try {
+      const customers = db.prepare("SELECT DISTINCT customer_name FROM equipment_instances WHERE customer_name IS NOT NULL AND customer_name <> '' ORDER BY customer_name LIMIT 500").all().map((row) => row.customer_name);
+      res.json({ customers });
+    } catch (_error) { res.json({ customers: [] }); }
+  }));
+
   app.get("/api/coding-rules/:ruleCode", wrap((req, res) => {
     const rule = get("SELECT * FROM coding_rules WHERE rule_code = ?", [req.params.ruleCode]);
     if (!rule) throw ApiError.notFound("编码规则不存在");
@@ -259,6 +357,7 @@ function register(app, db) {
     if (get("SELECT id FROM coding_rules WHERE rule_code = ?", [payload.rule_code])) throw ApiError.conflict("rule_code 已存在");
     const columns = Object.keys(payload).filter((key) => payload[key] !== undefined);
     const result = run(`INSERT INTO coding_rules (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`, columns.map((key) => payload[key]));
+    allocator.backfillSequences();
     audit.record(db, req, { action: "coding_rule.create", resource_type: "coding_rule", resource_id: result.lastInsertRowid, after: payload, diff_summary: `新增编码规则 ${payload.rule_code}` });
     res.status(201).json({ id: result.lastInsertRowid, rule_code: payload.rule_code });
   }));
@@ -271,6 +370,7 @@ function register(app, db) {
     const entries = Object.entries(payload);
     if (!entries.length) throw ApiError.validation("无可更新字段");
     run(`UPDATE coding_rules SET ${entries.map(([key]) => `${key} = ?`).join(",")}, updated_at = datetime('now') WHERE id = ?`, [...entries.map(([, value]) => value), current.id]);
+    allocator.backfillSequences();
     audit.record(db, req, { action: "coding_rule.update", resource_type: "coding_rule", resource_id: current.id, before: current, after: payload, diff_summary: `更新编码规则 ${current.rule_code}` });
     res.json({ success: true });
   }));
@@ -278,9 +378,19 @@ function register(app, db) {
   app.delete("/api/coding-rules/:ruleCode", wrap((req, res) => {
     const current = get("SELECT * FROM coding_rules WHERE rule_code = ?", [req.params.ruleCode]);
     if (!current) throw ApiError.notFound("编码规则不存在");
+    const used = get("SELECT COUNT(*) c FROM coding_sequences WHERE rule_code = ?", [current.rule_code]).c || 0;
+    if (used > 0) throw ApiError.conflict("该规则已产生编码序列，不能删除；请停用（is_active=0）");
     run("DELETE FROM coding_rules WHERE id = ?", [current.id]);
     audit.record(db, req, { action: "coding_rule.delete", resource_type: "coding_rule", resource_id: current.id, before: current, diff_summary: `删除编码规则 ${current.rule_code}` });
     res.json({ success: true });
+  }));
+
+  app.post("/api/coding-rules/:ruleCode/reserve", wrap((req, res) => {
+    const rule = get("SELECT * FROM coding_rules WHERE rule_code = ? AND is_active = 1", [req.params.ruleCode]);
+    if (!rule) throw ApiError.notFound("编码规则不存在或已停用");
+    const result = allocator.reserve(rule.rule_code, { customer: req.body?.customer, category: req.body?.category, year: req.body?.year, month: req.body?.month });
+    if (!result) throw ApiError.validation("当前规则无法生成编码");
+    res.json({ rule_code: rule.rule_code, code: result.code, reservation_token: result.reservation_token, expires_at: result.expires_at });
   }));
 
   app.get("/api/coding-rules/:ruleCode/preview", wrap((req, res) => {

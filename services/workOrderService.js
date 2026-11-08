@@ -16,6 +16,7 @@ const { wrap } = require('../middleware/asyncHandler');
 const { emit, Events } = require('../app/ws/EventBus');
 const woStateMachine = require('./workOrder/stateMachine');
 const woAudit = require('./workOrder/workflowAudit');
+const { createCodeAllocator } = require('./codingRulesService');
 
 const HOURS_PER_DAY = 8;
 
@@ -23,6 +24,7 @@ function register(app, db, auth) {
   const all = (sql, params = []) => db.prepare(sql).all(params);
   const get = (sql, params = []) => db.prepare(sql).get(params);
   const run = (sql, params = []) => db.prepare(sql).run(params);
+  const codeAllocator = createCodeAllocator(db);
 
   // 计划员可创建/派工/改工位；测试里只 mock 了旧守卫时退回旧守卫，保证向后兼容
   const canDispatch = auth.onlyForemanAdminOrPlanner || auth.onlyForemanOrAdmin;
@@ -122,10 +124,16 @@ function register(app, db, auth) {
   // 3. 创建
   app.post('/api/work_orders', canDispatch, wrap((req, res) => {
     const { wo_code, equipment_instance_id, milestone_id, subsystem_id, title, workstation_id, estimated_hours, planned_start, planned_end, priority, description, process_node_id } = req.body || {};
-    if (!wo_code || !equipment_instance_id || !title) throw ApiError.validation('工单号、项目、标题必填');
+    if (!equipment_instance_id || !title) throw ApiError.validation('项目、标题必填');
     const instance = get('SELECT id FROM equipment_instances WHERE id = ?', [equipment_instance_id]);
     if (!instance) throw ApiError.notFound('项目不存在');
-    if (wo_code && get('SELECT id FROM work_orders WHERE wo_code = ?', [wo_code])) throw ApiError.validation('工单号已存在');
+    let woCode = String(wo_code || '').trim();
+    if (!woCode) {
+      const generated = codeAllocator.nextCode('work_order', { year: String(planned_start || '').slice(0, 4) || undefined });
+      if (generated) woCode = generated.code;
+    }
+    if (!woCode) throw ApiError.validation('工单号必填（或配置 work_order 编码规则）');
+    if (get('SELECT id FROM work_orders WHERE wo_code = ?', [woCode])) throw ApiError.validation('工单号已存在');
     const startDate = formatDate(planned_start);
     const endDate = formatDate(planned_end);
     if (planned_start && !startDate) throw ApiError.validation('计划开始格式应为 YYYY-MM-DD[ HH:mm[:ss]]');
@@ -147,10 +155,10 @@ function register(app, db, auth) {
     const insertSql = hasProcessNodeColumn
       ? "INSERT INTO work_orders (wo_code, equipment_instance_id, milestone_id, subsystem_id, title, description, workstation_id, estimated_hours, planned_start, planned_end, priority, process_node_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')"
       : "INSERT INTO work_orders (wo_code, equipment_instance_id, milestone_id, subsystem_id, title, description, workstation_id, estimated_hours, planned_start, planned_end, priority, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')";
-    const insertParams = [wo_code, equipment_instance_id, milestone_id || null, subsystem_id || null, title, description || null, workstation_id || null, estimated_hours || null, planned_start || null, planned_end || null, priority || 3];
+    const insertParams = [woCode, equipment_instance_id, milestone_id || null, subsystem_id || null, title, description || null, workstation_id || null, estimated_hours || null, planned_start || null, planned_end || null, priority || 3];
     if (hasProcessNodeColumn) insertParams.push(linkedNodeId);
     const result = run(insertSql, insertParams);
-    woAudit.startInstance(db, { id: Number(result.lastInsertRowid), wo_code, title, status: 'pending' }, req.user && req.user.sub);
+    woAudit.startInstance(db, { id: Number(result.lastInsertRowid), wo_code: woCode, title, status: 'pending' }, req.user && req.user.sub);
     res.json({ id: result.lastInsertRowid });
   }));
 

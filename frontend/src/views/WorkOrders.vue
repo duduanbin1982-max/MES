@@ -152,8 +152,8 @@
             <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="工单号" required>
-          <el-input v-model="createDlg.form.wo_code" placeholder="如 WO-2026-001" />
+        <el-form-item label="工单号">
+          <el-input v-model="createDlg.form.wo_code" placeholder="留空自动生成（WO-YYYY-###）" />
         </el-form-item>
         <el-form-item label="标题" required>
           <el-input v-model="createDlg.form.title" placeholder="工单内容" />
@@ -530,7 +530,7 @@ watch(() => createDlg.form.equipment_instance_id, async (value) => {
 })
 const submitCreate = async () => {
   const form = createDlg.form
-  if (!form.equipment_instance_id || !form.wo_code || !form.title) { ElMessage.warning('项目、工单号、标题必填'); return }
+  if (!form.equipment_instance_id || !form.title) { ElMessage.warning('项目、标题必填'); return }
   createDlg.loading = true
   try {
     await Api.post('/work_orders', { ...form })

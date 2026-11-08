@@ -22,8 +22,8 @@
       "ddlStatements": 9
     },
     "codingRulesService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "55354fd1df9777916608a670e9716786e346962998fdb69fb76e9a7915b7a59e",
+      "schemaVersion": 2,
+      "ddlFingerprint": "750de4249c4be1676cf77c4d40538bf1c49a30da709bbeaeea88407854f323ba",
       "ddlStatements": 1
     },
     "cost": {
@@ -67,8 +67,8 @@
       "ddlStatements": 0
     },
     "equipment": {
-      "schemaVersion": 4,
-      "ddlFingerprint": "aa6cfdd0c506056cb908b6007e0542055437560a6f74873e15e1e2ec68bbe71e",
+      "schemaVersion": 5,
+      "ddlFingerprint": "25c580aadb6e81f3fdaa4d0a2a736160d9c6694e7043609d94a78ca3990ba302",
       "ddlStatements": 18
     },
     "erpService": {
@@ -252,9 +252,9 @@
       "ddlStatements": 0
     },
     "workOrderService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "b58181692d2313e379dcc46be7efe08ca5b80096137cfe0e0c383e1405c3583b",
-      "ddlStatements": 1
+      "schemaVersion": 2,
+      "ddlFingerprint": "f3d2c4d483e9d0fa9583b8512a0fa8f4c962f8ecf2a84e6c8aea22aa6dc0319e",
+      "ddlStatements": 2
     }
   }
 }

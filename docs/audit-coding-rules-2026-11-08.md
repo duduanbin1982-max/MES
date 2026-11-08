@@ -157,3 +157,29 @@
 4. 预览客户“郑州地铁集团”、2026 → 应得 `TBM-ZZDT-2026-001`（新客户段无历史序列）；
 5. 到装备创建向导点“生成”，编码应使用同一规则；
 6. `node --test tests/codingRules.test.js`。
+
+
+## 9. 遗留问题闭环（2026-11-08 23:16）
+
+| 原遗留 | 闭环方式 | 验证 |
+|---|---|---|
+| 预览与创建分两次请求，并发可能撞唯一约束 | 新增 `coding_reservations` 预约表；`POST /api/equipment_instances/code-reserve` 生成预约码/token；装备创建提交前先预约，创建时 `consume` 预约码；预约 15 分钟过期 | Playwright 创建向导/接口 smoke；预约消费后不可重复消费 |
+| 手工编码未强制格式 | 装备手工编码只要以规则前缀开头（TBM），即按当前规则正则校验；不符合直接 400；非 TBM 前缀保留历史兼容 | `codingRules` CODE-3 校验通过/非法拒绝 |
+| 物料/工单等未接入 | 新增 `work_order`、`material` 默认规则；工单创建支持留空自动生成 `WO-YYYY-###`；规则页可预览/预留物料、工单编码；物料主数据导入仍保留业务编码校验 | 工单页工单号改为“留空自动生成”；物料预览 `MAT-0001` |
+| 规则删除无“已被使用”保护 | 删除前检查 `coding_sequences`，已产生编码返回 409，提示改为停用 | `codingRules` CODE-3 删除 work_order 规则返回 409 |
+| 历史编码未回填序列 | `runMigration`/规则新增更新时执行 `backfillSequences`，按前缀+年度取历史最大序号回填 | 生产 equipment 2026 序列回填为 3；work_order 2026 回填为 2 |
+| 客户映射手填 JSON | 规则页增加客户主数据下拉（`GET /coding-rules/customer-options`）+ 缩写输入 + 映射标签，仍保留 JSON 编辑 | Playwright 编辑弹窗出现客户下拉，无 pageerror |
+
+### 9.1 本轮新增验证
+
+- `tests/codingRules.test.js`：**3/3**（新增预约消费、序列回填、格式校验、物料/工单规则、删除保护）。
+- 全量部署闸门：**938/0**。
+- 生产 API smoke：rules / customer-options / material-preview / work_order-preview / equipment code-reserve 均 200。
+- Playwright：`/coding-rules` 4 条规则、客户映射下拉、预览正常；`/work-orders` 正常；无 pageerror。
+
+### 9.2 仍需注意
+
+1. 预约未消费会留下序号空档（15 分钟后过期，但不会回退序列）；后续可增加定时清理/回收策略。
+2. 工单/物料的历史编码可能不符合新规则，因此只对“以规则前缀开头”的手工编码做强校验，其他历史前缀保留兼容。
+3. 物料主数据目前仍以导入/业务编码为主，规则页提供预览/预留；是否自动生成物料码需业务确认一物一码策略。
+4. 规则删除保护基于序列表；若某规则从未生成编码，仍可删除。

@@ -3,7 +3,7 @@
 const { DEFAULT_DOC_FOLDERS, DEFAULT_MILESTONES } = require("./catalog");
 const { hasTable, tableColumns } = require("./schema");
 
-function createInstanceFactory({ db, all, get, run, ApiError, nextInstanceCode, reserveInstanceCode, templateStore }) {
+function createInstanceFactory({ db, all, get, run, ApiError, nextInstanceCode, reserveInstanceCode, consumeInstanceReservation, validateInstanceCode, templateStore }) {
   function ensureNotFrozen(id) {
     const instance = get("SELECT archive_status, frozen_at FROM equipment_instances WHERE id = ?", id);
     if (!instance) throw ApiError.notFound("项目装备不存在");
@@ -137,10 +137,18 @@ function createInstanceFactory({ db, all, get, run, ApiError, nextInstanceCode, 
 
   const createInstance = db.transaction((body, userId) => {
     const planYear = body.planned_start?.slice(0, 4);
-    const code = body.instance_code || nextInstanceCode(body.customer_name, planYear);
+    let reserved = null;
+    if (body.code_reservation_id && typeof consumeInstanceReservation === "function") {
+      reserved = consumeInstanceReservation(body.code_reservation_id);
+      if (!reserved) throw ApiError.validation("编码预约已失效，请重新生成编码");
+    }
+    const code = reserved ? reserved.code : (body.instance_code || nextInstanceCode(body.customer_name, planYear));
     if (!code || !body.customer_name) throw ApiError.validation("instance_code/customer_name 必填");
+    if (!reserved && body.instance_code && typeof validateInstanceCode === "function") {
+      validateInstanceCode(code, { customer: body.customer_name, year: planYear });
+    }
     if (get("SELECT id FROM equipment_instances WHERE instance_code = ?", [code])) throw ApiError.conflict(`项目装备编码已存在: ${code}`);
-    if (body.instance_code && typeof reserveInstanceCode === "function") {
+    if (!reserved && body.instance_code && typeof reserveInstanceCode === "function") {
       try { reserveInstanceCode(code, { customer: body.customer_name, year: planYear }); } catch (_error) { /* 回退编码不阻断 */ }
     }
     const selectedTemplate = body.template_id ? templateStore.getTemplate(body.template_id) : null;
