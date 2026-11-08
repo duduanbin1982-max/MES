@@ -1,0 +1,86 @@
+name: release-tag
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to validate (e.g. v2.4.0)"
+        required: true
+        default: "v2.4.0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-tag-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  validate-release:
+    name: 校验发布 tag / 台账 / 全套测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Checkout main (获取发布校验脚本)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: 保存发布校验脚本
+        run: |
+          cp scripts/verify-release-tag.sh "$RUNNER_TEMP/verify-release-tag.sh"
+          chmod +x "$RUNNER_TEMP/verify-release-tag.sh"
+
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 校验 tag / VERSION / CHANGELOG / 发布台账
+        run: bash "$RUNNER_TEMP/verify-release-tag.sh" "$RELEASE_TAG" --require-head
+
+      - name: 安装后端依赖
+        run: npm ci
+
+      - name: 安装前端依赖
+        run: npm ci --prefix frontend
+
+      - name: 服务 DDL 指纹守卫
+        run: npm run schema:check
+
+      - name: 部署闸门（全套用例 + ESLint + 前端）
+        run: bash scripts/pre-deploy-test.sh --quiet
+
+      - name: 失败时上传日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-tag-logs-${{ env.RELEASE_TAG }}
+          path: |
+            logs/predeploy/*.log
+            logs/*.log
+          if-no-files-found: ignore
+          retention-days: 7
