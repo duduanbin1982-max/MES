@@ -1,0 +1,21 @@
+{
+  "version": "2.4.0",
+  "tag": "v2.4.0",
+  "previous_version": "2.3.0",
+  "branch": "main",
+  "released_at": "2026-11-08T10:29:46.396Z",
+  "source_commit": "536f2ab492e23f948638c8ec1508ea2fa3792050",
+  "release_commit": "db41ede6824c9d80febeea5ceb14b3b0c69d5c94",
+  "previous_tag": "v2.3.0-cleanup-round2",
+  "commits_since_previous_tag": 136,
+  "gate": {
+    "status": "passed",
+    "summary": "[predeploy] === 总结: pass=915 fail=0 skip=0 ==="
+  },
+  "schema_manifest_sha256": "42e3453ed5552bf2a4b364f35ed273a872d263e44cf01dfb90e0cafb5f0d4413",
+  "changelog": "CHANGELOG.md",
+  "deployment": {
+    "command": "bash scripts/deploy.sh",
+    "status": "not_deployed_by_release_script"
+  }
+}
