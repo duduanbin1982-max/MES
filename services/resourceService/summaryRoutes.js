@@ -46,7 +46,7 @@ function registerSummaryRoutes(app, context) {
         SUM(CASE WHEN status IN ('maintenance','blocked') THEN 1 ELSE 0 END) AS blocked
       FROM workstations WHERE is_active = 1
     `);
-    const occupied = get("SELECT COUNT(DISTINCT workstation_id) AS cnt FROM users WHERE workstation_id IS NOT NULL AND availability = 'busy'")?.cnt || 0;
+    const occupied = get("SELECT COUNT(DISTINCT workstation_id) AS cnt FROM users WHERE workstation_id IS NOT NULL AND availability IN ('busy','online')")?.cnt || 0;
     const byType = all("SELECT station_type, COUNT(*) total, SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) available FROM workstations WHERE is_active = 1 GROUP BY station_type")
       .map((row) => ({ ...row, label: typeLabel(row.station_type) }));
     const alerts = [];

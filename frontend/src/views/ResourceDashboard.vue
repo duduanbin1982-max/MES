@@ -94,6 +94,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { OfficeBuilding, Refresh } from '@element-plus/icons-vue'
 import { Api } from '../api'
+import { ElMessage } from 'element-plus'
 import PageState from '../components/PageState.vue'
 import PageToolbar from '../components/PageToolbar.vue'
 import ResourceMainPanels from './resources/ResourceMainPanels.vue'
@@ -168,11 +169,17 @@ function openWorkerDialog(row: any) {
 }
 async function assignWorkerStation() {
   if (!currentWorker.value) return
+  if (!assignStationId.value) return ElMessage.warning('请选择工位')
   assignLoading.value = true
   try {
-    await Api.put('/resources/workers/' + currentWorker.value.id + '/station', { workstation_id: assignStationId.value })
+    await Api.put('/resources/workers/' + currentWorker.value.id + '/station', {
+      workstation_id: assignStationId.value,
+      availability: assignAvailability.value,
+    })
     workerDialogVisible.value = false
     await loadAll()
+  } catch (error: any) {
+    ElMessage.error('分配失败：' + (error?.response?.data?.message || error.message))
   } finally {
     assignLoading.value = false
   }
@@ -184,6 +191,8 @@ async function releaseWorker() {
     await Api.put('/resources/workers/' + currentWorker.value.id + '/release')
     workerDialogVisible.value = false
     await loadAll()
+  } catch (error: any) {
+    ElMessage.error('释放失败：' + (error?.response?.data?.message || error.message))
   } finally {
     releaseLoading.value = false
   }
@@ -239,6 +248,8 @@ async function saveWorkstation() {
     else await Api.post('/resources/workstations', body)
     workstationFormVisible.value = false
     await loadAll()
+  } catch (error: any) {
+    ElMessage.error('保存工位失败：' + (error?.response?.data?.message || error.message))
   } finally {
     workstationSaving.value = false
   }

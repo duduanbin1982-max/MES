@@ -109,3 +109,73 @@ test("resource allocation updates worker availability and allocation history", a
   assert.equal(db.prepare("SELECT status FROM resource_allocations WHERE id = ?").get(result.body.allocation_id).status, "active");
   db.close();
 });
+
+test("RS-1 工位容量统计包含 online 人员，且移动本人不占容量", async () => {
+  const db = createDatabase();
+  db.prepare("INSERT INTO users (id, full_name, role_code, is_active) VALUES (2,'李四','worker',1),(3,'王五','worker',1)").run();
+  const { find } = createApp(db);
+  db.prepare("UPDATE workstations SET max_workers = 2 WHERE id = 1").run();
+  db.prepare("UPDATE users SET workstation_id = 1, availability = 'online' WHERE id IN (1,2)").run();
+
+  const selfMove = await invoke(find("PUT", "/api/resources/workers/:id/station"), {
+    params: { id: "1" }, body: { workstation_id: 1, availability: "online" },
+  });
+  assert.equal(selfMove.body.ok, true);
+
+  await assert.rejects(
+    () => invoke(find("PUT", "/api/resources/workers/:id/station"), { params: { id: "3" }, body: { workstation_id: 1 } }),
+    (error) => error.status === 400 && /容量已满/.test(error.message),
+  );
+  await assert.rejects(
+    () => invoke(find("POST", "/api/resources/allocations"), { body: { user_id: 3, workstation_id: 1 } }),
+    (error) => error.status === 400 && /容量已满/.test(error.message),
+  );
+  db.close();
+});
+
+test("RS-2 工位状态/容量/编码校验与停用人员保护", async () => {
+  const db = createDatabase();
+  const { find } = createApp(db);
+  const post = (body) => invoke(find("POST", "/api/resources/workstations"), { body });
+  await assert.rejects(() => post({ code: "WS-X", name: "X", station_type: "bad" }), (error) => error.status === 400);
+  await assert.rejects(() => post({ code: "ws-asm-01", name: "重复" }), (error) => error.status === 400 && /已存在/.test(error.message));
+  await assert.rejects(() => post({ code: "WS-Y", name: "Y", status: "bad" }), (error) => error.status === 400);
+  await assert.rejects(() => post({ code: "WS-Z", name: "Z", max_workers: -1 }), (error) => error.status === 400);
+
+  const created = await post({ code: "WS-NEW", name: "新工位", station_type: "assembly", capacity_per_day: 4, max_workers: 2 });
+  assert.equal(created.status, 201);
+  await assert.rejects(
+    () => invoke(find("PUT", "/api/resources/workstations/:id"), { params: { id: "1" }, body: { status: "bad" } }),
+    (error) => error.status === 400,
+  );
+  db.prepare("UPDATE users SET workstation_id = 1, availability = 'online' WHERE id = 1").run();
+  await assert.rejects(
+    () => invoke(find("PUT", "/api/resources/workstations/:id"), { params: { id: "1" }, body: { is_active: false } }),
+    (error) => error.status === 400 && /不能停用/.test(error.message),
+  );
+  db.close();
+});
+
+test("RS-3 资源概览占用数包含 online 人员", async () => {
+  const db = createDatabase();
+  const { find } = createApp(db);
+  db.prepare("UPDATE users SET workstation_id = 1, availability = 'online' WHERE id = 1").run();
+  const overview = await invoke(find("GET", "/api/resources/overview"));
+  assert.equal(overview.body.workstations.occupied, 1);
+  db.close();
+});
+
+test("RS-4 停用工位不可分配人员/资源", async () => {
+  const db = createDatabase();
+  const { find } = createApp(db);
+  db.prepare("UPDATE workstations SET status = 'disabled' WHERE id = 1").run();
+  await assert.rejects(
+    () => invoke(find("PUT", "/api/resources/workers/:id/station"), { params: { id: "1" }, body: { workstation_id: 1 } }),
+    (error) => error.status === 400 && /已停用/.test(error.message),
+  );
+  await assert.rejects(
+    () => invoke(find("POST", "/api/resources/allocations"), { body: { user_id: 1, workstation_id: 1 } }),
+    (error) => error.status === 400 && /已停用/.test(error.message),
+  );
+  db.close();
+});

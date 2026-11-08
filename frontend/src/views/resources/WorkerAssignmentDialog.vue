@@ -30,13 +30,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="可用状态">
+        <el-form-item label="分配后状态">
           <el-select v-model="availabilityValue" placeholder="选择状态" style="width: 100%">
-            <el-option label="空闲" value="idle" />
-            <el-option label="在线" value="online" />
             <el-option label="忙碌" value="busy" />
-            <el-option label="离线" value="offline" />
-            <el-option label="请假" value="leave" />
+            <el-option label="在线" value="online" />
           </el-select>
         </el-form-item>
       </el-form>

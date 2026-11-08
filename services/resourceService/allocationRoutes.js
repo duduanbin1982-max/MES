@@ -2,26 +2,39 @@
 
 const { ApiError } = require("../../app/errors");
 const { wrap } = require("../../middleware/asyncHandler");
+const { getWorkstation, assertCapacity, assertOptionalReference } = require("./helpers");
+const audit = require("../../app/audit");
 
 function registerAllocationRoutes(app, context) {
-  const { all, get, run } = context;
+  const { all, get, run, db } = context;
 
   app.post("/api/resources/allocations", wrap((req, res) => {
     const { user_id, workstation_id, equipment_instance_id, work_order_id, notes } = req.body || {};
-    if (!user_id) throw ApiError.validation("user_id is required");
-    if (!get("SELECT id FROM users WHERE id = ? AND is_active = 1", user_id)) throw ApiError.notFound("User not found or inactive");
-    if (workstation_id && !get("SELECT id FROM workstations WHERE id = ? AND is_active = 1", workstation_id)) throw ApiError.notFound("Workstation not found or inactive");
-    if (equipment_instance_id && !get("SELECT id FROM equipment_instances WHERE id = ?", equipment_instance_id)) throw ApiError.notFound("Equipment instance not found");
+    const userId = Number(user_id);
+    if (!Number.isInteger(userId) || userId <= 0) throw ApiError.validation("user_id is required");
+    const worker = get("SELECT id, workstation_id, availability FROM users WHERE id = ? AND is_active = 1", userId);
+    if (!worker) throw ApiError.notFound("User not found or inactive");
+    const instanceId = assertOptionalReference(context, "equipment_instances", equipment_instance_id, "equipment_instance_id");
+    const orderId = assertOptionalReference(context, "work_orders", work_order_id, "work_order_id");
+    let station = null;
+    if (workstation_id) {
+      station = getWorkstation(context, workstation_id);
+      assertCapacity(context, station, userId);
+    }
 
-    run("UPDATE resource_allocations SET released_at = datetime('now'), status = 'released' WHERE user_id = ? AND status = 'active'", user_id);
+    run("UPDATE resource_allocations SET released_at = datetime('now'), status = 'released' WHERE user_id = ? AND status = 'active'", userId);
     const result = run(
       "INSERT INTO resource_allocations (user_id, workstation_id, equipment_instance_id, work_order_id, notes, status) VALUES (?, ?, ?, ?, ?, 'active')",
-      user_id, workstation_id || null, equipment_instance_id || null, work_order_id || null, notes || null
+      userId, station ? station.id : null, instanceId, orderId, notes || null
     );
-    const assignments = ["availability = ?"];
-    const params = ["busy"];
-    if (workstation_id) { assignments.push("workstation_id = ?"); params.push(workstation_id); }
-    run(`UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, ...params, user_id);
+    run("UPDATE users SET availability = 'busy', workstation_id = ? WHERE id = ?", station ? station.id : null, userId);
+    audit.record(db, req, {
+      action: "resource.allocation.create",
+      resource_type: "resource_allocation",
+      resource_id: result.lastInsertRowid,
+      after: { user_id: userId, workstation_id: station ? station.id : null, equipment_instance_id: instanceId, work_order_id: orderId },
+      diff_summary: `资源分配 user=${userId} station=${station ? station.id : "-"}`,
+    });
     res.json({ ok: true, allocation_id: result.lastInsertRowid });
   }));
 

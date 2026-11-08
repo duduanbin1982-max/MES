@@ -20,6 +20,7 @@
           <el-option label="阻塞" value="blocked" />
           <el-option label="停用" value="disabled" />
         </el-select>
+        <el-button @click="goResourceDashboard">人员分配</el-button>
         <el-button type="primary" @click="openWorkstationForm()">新建工位</el-button>
         <el-button :icon="Refresh" :loading="loading" @click="loadAll">刷新</el-button>
       </template>
@@ -134,6 +135,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { OfficeBuilding, Refresh, Search } from '@element-plus/icons-vue'
 import { Api } from '../api'
 import PageState from '../components/PageState.vue'
@@ -142,6 +145,7 @@ import ResourceSummaryGrid from './resources/ResourceSummaryGrid.vue'
 import StationDetailDialog from './resources/StationDetailDialog.vue'
 import WorkstationFormDialog from './resources/WorkstationFormDialog.vue'
 
+const router = useRouter()
 const loading = ref(false)
 const loadError = ref('')
 const keyword = ref('')
@@ -200,6 +204,7 @@ async function loadWorkstations(toggleLoading = true) {
   loadError.value = ''
   try {
     const params: any = {}
+    params.include_inactive = 1
     if (stationTypeFilter.value) params.station_type = stationTypeFilter.value
     if (statusFilter.value) params.status = statusFilter.value
     const data = await Api.get('/resources/workstations', { params })
@@ -240,7 +245,7 @@ function fillTypeDefaults() {
 }
 
 async function saveWorkstation() {
-  if (!workstationForm.code || !workstationForm.name) return
+  if (!workstationForm.code || !workstationForm.name) return ElMessage.warning('请填写工位编码和名称')
   workstationSaving.value = true
   try {
     const body = {
@@ -262,6 +267,8 @@ async function saveWorkstation() {
     else await Api.post('/resources/workstations', body)
     workstationFormVisible.value = false
     await loadAll()
+  } catch (error: any) {
+    ElMessage.error('保存工位失败：' + (error?.response?.data?.message || error.message))
   } finally {
     workstationSaving.value = false
   }
@@ -280,6 +287,8 @@ function stationStatusLabel(value: string) {
   const map: Record<string, string> = { available: '可用', occupied: '占用', maintenance: '维护', blocked: '阻塞', disabled: '停用' }
   return map[value] || value
 }
+
+function goResourceDashboard() { router.push('/resources') }
 
 onMounted(loadAll)
 </script>

@@ -182,7 +182,7 @@
       "ddlStatements": 13
     },
     "resourceService": {
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "ddlFingerprint": "7ac764de1632215343d3777f3ae27ad82bc44838042671aea62d2d3f5d84eee5",
       "ddlStatements": 4
     },
