@@ -92,9 +92,9 @@
       "ddlStatements": 0
     },
     "laborService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "d8044bb8a55a88ccd02f6462c7198598ea3f2e1e281f8ac595df31f7e7f29ac4",
-      "ddlStatements": 7
+      "schemaVersion": 2,
+      "ddlFingerprint": "89eb964a404f4dd3cf4337075062aed3ef7366da97175ee8819a20a9f561570f",
+      "ddlStatements": 8
     },
     "maintenanceDashboardService": {
       "schemaVersion": 1,

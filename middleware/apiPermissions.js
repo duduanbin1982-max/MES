@@ -222,6 +222,7 @@ const RULES = [
   match(/^\/oee(?:\/.*)?$/, READ, ["report:read"]),
   match(/^\/oee(?:\/.*)?$/, WRITE, ["equipment:write"]),
 
+  exact("/labor/validate-assignment", ["POST"], ["user:read", "user:admin"]),
   match(/^\/labor(?:\/.*)?$/, READ, ["user:read"]),
   match(/^\/labor(?:\/.*)?$/, WRITE, ["user:admin"]),
   match(/^\/field-service(?:\/.*)?$/, READ, ["equipment:read"]),

@@ -17,7 +17,7 @@ const MESA_SERVICES = [
   { name: "eco", module: "./eco", schemaVersion: 1 },
   { name: "fieldService", module: "./fieldService", schemaVersion: 1 },
   { name: "kitCheck", module: "./kitCheck", schemaVersion: 1 },
-  { name: "laborService", module: "./laborService", schemaVersion: 1 },
+  { name: "laborService", module: "./laborService", schemaVersion: 2 },
   { name: "maintenanceDashboardService", module: "./maintenanceDashboardService", schemaVersion: 1 },
   { name: "oeeService", module: "./oeeService", schemaVersion: 2 },
   { name: "pickService", module: "./pickService", schemaVersion: 1 },
