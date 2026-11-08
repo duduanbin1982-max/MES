@@ -186,6 +186,8 @@ const RULES = [
   match(/^\/qc(?:\/.*)?$/, WRITE, ["quality:write"]),
   match(/^\/qc_inspections(?:\/.*)?$/, READ, ["quality:read"]),
   match(/^\/qc_inspections(?:\/.*)?$/, WRITE, ["quality:write", "shopfloor:qc"]),
+  exact("/spc/analyze", ["GET"], ["quality:read", "process:read"]),
+  exact("/spc/nodes-with-params", ["GET"], ["quality:read", "process:read"]),
   match(/^\/spc(?:\/.*)?$/, READ, ["quality:read"]),
   match(/^\/spc(?:\/.*)?$/, WRITE, ["quality:write"]),
 

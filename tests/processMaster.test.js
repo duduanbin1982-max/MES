@@ -278,3 +278,16 @@ test("PMA-5 配置健康度返回未配置/文档缺口", async () => {
   assert.ok(Array.isArray(res.body.issues));
   assert.ok(res.body.issues.some((issue) => issue.code === "NODES_UNCONFIGURED"));
 });
+
+
+test("PMA-6 工序模板默认规格可维护", async () => {
+  const ops = await request("GET", "/api/process-master/operations");
+  const welding = ops.body.items.find((row) => row.operation_code === "welding");
+  assert.ok(welding);
+  let res = await request("PUT", `/api/process-master/operations/${welding.id}/specs`, { specs: { temperature_c: { lsl: 180, usl: 280, target: 230 } } });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  res = await request("GET", `/api/process-master/operations/${welding.id}/specs`);
+  assert.equal(res.body.specs.temperature_c.usl, 280);
+  const list = await request("GET", "/api/process-master/operations");
+  assert.equal(list.body.items.find((row) => row.id === welding.id).has_default_specs, 1);
+});

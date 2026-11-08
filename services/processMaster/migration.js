@@ -66,6 +66,7 @@ function runMigration(db) {
       sop_required INTEGER NOT NULL DEFAULT 0,
       drawing_required INTEGER NOT NULL DEFAULT 0,
       sequence_hint INTEGER NOT NULL DEFAULT 1,
+      default_specs_json TEXT,
       description TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -83,6 +84,7 @@ function runMigration(db) {
   ]) addColumn(db, "process_nodes", column[0], column[1]);
   addColumn(db, "process_nodes", "drawing_required", "drawing_required INTEGER DEFAULT 0");
   addColumn(db, "process_operation_templates", "drawing_required", "drawing_required INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "process_operation_templates", "default_specs_json", "default_specs_json TEXT");
 
   const positionInsert = db.prepare(`
     INSERT OR IGNORE INTO process_positions

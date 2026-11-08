@@ -137,8 +137,8 @@
       "ddlStatements": 1
     },
     "process": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "ac3ba723b358eeffc5085c3596e0bce4431908d1a36419e33d0564ad23b9dd43",
+      "schemaVersion": 3,
+      "ddlFingerprint": "16867e560769a75f4a4b3d5ebdaa7d1ca2a3711c32e5e3d4d5127558b7e7b304",
       "ddlStatements": 9
     },
     "processHoursService": {
@@ -147,8 +147,8 @@
       "ddlStatements": 1
     },
     "processMasterService": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "a876903ca7ed14bc2580c0af32b5d30ca986e5489819a1eda0c644d4b24de1ba",
+      "schemaVersion": 2,
+      "ddlFingerprint": "251debb2127f5eeacb27e24d9bf60c444f753d34bc5fd13c97d5e1062bb4c1e7",
       "ddlStatements": 6
     },
     "processRouteService": {

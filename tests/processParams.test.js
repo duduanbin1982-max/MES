@@ -8,12 +8,14 @@ function makeDb() {
   const db = new Database(":memory:");
   db.exec("CREATE TABLE process_params (id INTEGER PRIMARY KEY AUTOINCREMENT, process_node_id INTEGER NOT NULL, recorded_by INTEGER, recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, current_amp REAL, voltage_v REAL, speed_mm_min REAL, temperature_c REAL, pressure_mpa REAL, feed_rate REAL, custom_json TEXT, notes TEXT)");
   db.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, full_name TEXT)");
-  db.exec("CREATE TABLE process_nodes (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, operation_name TEXT)");
+  db.exec("CREATE TABLE process_nodes (id INTEGER PRIMARY KEY, equipment_instance_id INTEGER, operation_name TEXT, operation_template_id INTEGER)");
+  db.exec("CREATE TABLE process_operation_templates (id INTEGER PRIMARY KEY, operation_code TEXT, default_specs_json TEXT)");
+  db.exec("INSERT INTO process_operation_templates (id, operation_code, default_specs_json) VALUES (5, 'test_template', '{\"spc\":{\"temperature_c\":{\"lsl\":60,\"usl\":90}}}')");
   db.exec("INSERT INTO process_nodes (id, equipment_instance_id, operation_name) VALUES (1,1,'测试节点1'), (2,1,'测试节点2'), (7,1,'测试节点7'), (134,1,'测试节点134')");
   return db;
 }
 function makeApp() { const r = {}; for (const m of ["get","post","put","delete"]) r[m] = (p, ...hs) => { r[m.toUpperCase() + " " + p] = hs; }; return r; }
-function callAsync(app, method, p, body, user) {
+function callAsync(app, method, p, body, user, query = {}) {
   const pathTpl = p.replace(/\d+/g, ":id");
   const hs = app[method.toUpperCase() + " " + p] || app[method.toUpperCase() + " " + pathTpl];
   if (!hs) throw new Error("no route: " + method + " " + p);
@@ -22,7 +24,7 @@ function callAsync(app, method, p, body, user) {
   return new Promise((resolve, reject) => {
     let status = 200, payload = null;
     const res = { status(c) { status = c; return this; }, json(x) { payload = x; return this; } };
-    const req = { method, query: {}, body: body || {}, params, user };
+    const req = { method, query, body: body || {}, params, user };
     const next = (error) => reject(error);
     try {
       const ret = hs[hs.length - 1](req, res, next);
@@ -128,5 +130,37 @@ test("PPS-4 不存在的工艺节点返回 404", async () => {
     () => callAsync(app, "get", "/api/process_nodes/999/params"),
     (error) => error.status === 404,
   );
+  db.close();
+});
+
+
+test("PPS-5 参数列表分页与时间范围", async () => {
+  const db = makeDb(); const app = makeApp(); delete require.cache[svcPath]; require(svcPath).register(app, db);
+  for (let i = 1; i <= 5; i += 1) db.prepare("INSERT INTO process_params (process_node_id, current_amp) VALUES (7, ?)").run(100 + i);
+  const page = await callAsync(app, "get", "/api/process_nodes/7/params", null, undefined, { page: 1, page_size: 2 });
+  assert.equal(page.status, 200);
+  assert.equal(page.body.total, 5);
+  assert.equal(page.body.items.length, 2);
+  assert.equal(page.body.page, 1);
+  const today = new Date().toISOString().slice(0, 10);
+  const ranged = await callAsync(app, "get", "/api/process_nodes/7/params", null, undefined, { page: 1, page_size: 50, from: today, to: today });
+  assert.equal(ranged.body.total, 5);
+  const empty = await callAsync(app, "get", "/api/process_nodes/7/params", null, undefined, { page: 1, from: "2000-01-01", to: "2000-01-02" });
+  assert.equal(empty.body.total, 0);
+  db.close();
+});
+
+test("PPS-6 节点无自定义规格时回退工序模板默认规格", async () => {
+  const db = makeDb();
+  db.prepare("UPDATE process_nodes SET operation_template_id = 5 WHERE id = 7").run();
+  const app = makeApp(); delete require.cache[svcPath]; require(svcPath).register(app, db);
+  const inherited = await callAsync(app, "get", "/api/process_nodes/7/params/specs");
+  assert.equal(inherited.body.source, "template");
+  assert.equal(inherited.body.specs.temperature_c.lsl, 60);
+  const save = await callAsync(app, "put", "/api/process_nodes/7/params/specs", { specs: { temperature_c: { lsl: 70, usl: 100 } } });
+  assert.equal(save.status, 200);
+  const own = await callAsync(app, "get", "/api/process_nodes/7/params/specs");
+  assert.equal(own.body.source, "node");
+  assert.equal(own.body.specs.temperature_c.lsl, 70);
   db.close();
 });

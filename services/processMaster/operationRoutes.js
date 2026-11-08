@@ -5,6 +5,7 @@ const { wrap } = require("../../middleware/asyncHandler");
 const audit = require("../../app/audit");
 const { applyTemplateToNode, validateAssignment } = require("./assignment");
 const { createDbAccess, safeBool, toCode, toInteger, toNumber, toText } = require("./utils");
+const { normalizeSpecs, parseSpecsJson } = require("../../shared/processSpecs");
 
 const OPERATION_TYPES = new Set(["make", "buy", "assemble", "assembly", "qc", "test"]);
 
@@ -53,7 +54,8 @@ function registerOperationRoutes(app, db) {
       SELECT t.*, p.position_name,
              (SELECT COUNT(*) FROM process_nodes pn WHERE pn.operation_template_id = t.id) AS node_count,
              (SELECT COUNT(*) FROM process_operation_docs d WHERE d.operation_template_id = t.id) AS doc_count,
-             (SELECT COUNT(*) FROM process_operation_docs d WHERE d.operation_template_id = t.id AND d.is_required = 1) AS required_doc_count
+             (SELECT COUNT(*) FROM process_operation_docs d WHERE d.operation_template_id = t.id AND d.is_required = 1) AS required_doc_count,
+             CASE WHEN t.default_specs_json IS NOT NULL AND t.default_specs_json <> '' THEN 1 ELSE 0 END AS has_default_specs
       FROM process_operation_templates t
       LEFT JOIN process_positions p ON p.position_code = t.required_position_code
       ${includeInactive ? "" : "WHERE t.is_active = 1"}
@@ -153,6 +155,28 @@ function registerOperationRoutes(app, db) {
       diff_summary: `删除工序模板 ${current.operation_code}`,
     });
     response.json({ ok: true, deleted: true });
+  }));
+
+  app.get("/api/process-master/operations/:id/specs", wrap((request, response) => {
+    const operation = get("SELECT id, operation_code, default_specs_json FROM process_operation_templates WHERE id = ?", [request.params.id]);
+    if (!operation) throw ApiError.notFound("工序模板不存在");
+    response.json({ operation_template_id: operation.id, operation_code: operation.operation_code, specs: parseSpecsJson(operation.default_specs_json) || {} });
+  }));
+
+  app.put("/api/process-master/operations/:id/specs", wrap((request, response) => {
+    const operation = get("SELECT id, operation_code, default_specs_json FROM process_operation_templates WHERE id = ?", [request.params.id]);
+    if (!operation) throw ApiError.notFound("工序模板不存在");
+    const specs = normalizeSpecs((request.body || {}).specs);
+    run("UPDATE process_operation_templates SET default_specs_json = ?, updated_at = datetime('now') WHERE id = ?", [JSON.stringify({ spc: specs }), operation.id]);
+    audit.record(db, request, {
+      action: "process_master.operation_specs.update",
+      resource_type: "process_operation_template",
+      resource_id: operation.id,
+      before: { specs: parseSpecsJson(operation.default_specs_json) || {} },
+      after: { specs },
+      diff_summary: `更新工序模板默认规格 ${operation.operation_code}`,
+    });
+    response.json({ ok: true, operation_template_id: operation.id, specs });
   }));
 
   app.post("/api/process_nodes/:id/apply-template", wrap((request, response) => {

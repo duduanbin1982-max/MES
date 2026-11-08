@@ -12,15 +12,7 @@ const audit = require("../../app/audit");
 
 const logger = require("../../app/logger").createLogger("process/params");
 
-const PARAM_FIELDS = ["current_amp", "voltage_v", "speed_mm_min", "temperature_c", "pressure_mpa", "feed_rate"];
-const PARAM_LIMITS = {
-  current_amp: [0, 100000],
-  voltage_v: [0, 1000000],
-  speed_mm_min: [0, 1000000],
-  temperature_c: [-273.15, 5000],
-  pressure_mpa: [0, 10000],
-  feed_rate: [0, 1000000],
-};
+const { PARAM_FIELDS, PARAM_LIMITS, normalizeSpecs, findNodeSpecRow, resolveNodeSpecs } = require("../../shared/processSpecs");
 const READING_FILTER = `(${PARAM_FIELDS.map((field) => `${field} IS NOT NULL`).join(" OR ")})`;
 
 function tableExists(db, name) {
@@ -38,50 +30,6 @@ function toReadingNumber(value, field) {
   const [min, max] = PARAM_LIMITS[field];
   if (num < min || num > max) throw ApiError.validation(`${field} 需在 ${min}~${max} 之间`);
   return num;
-}
-
-function toSpecNumber(value, field) {
-  if (value === undefined || value === null || value === "") return null;
-  const num = Number(value);
-  if (!Number.isFinite(num)) throw ApiError.validation(`${field} 必须是数字`);
-  return num;
-}
-
-function normalizeSpecs(specs) {
-  if (specs === null || specs === undefined) throw ApiError.validation("specs object required");
-  if (typeof specs !== "object" || Array.isArray(specs)) throw ApiError.validation("specs 必须是对象");
-  const seen = new Set();
-  const clean = {};
-  for (const rawKey of Object.keys(specs)) {
-    const field = String(rawKey).trim().toLowerCase();
-    if (!PARAM_LIMITS[field]) throw ApiError.validation(`未知参数 key：${rawKey}`);
-    if (seen.has(field)) throw ApiError.validation(`重复参数 key：${field}`);
-    seen.add(field);
-    const spec = specs[rawKey];
-    if (!spec || typeof spec !== "object" || Array.isArray(spec)) {
-      throw ApiError.validation(`${field} 的规格必须是对象`);
-    }
-    const lsl = toSpecNumber(spec.lsl, `${field}.lsl`);
-    const usl = toSpecNumber(spec.usl, `${field}.usl`);
-    if (lsl === null || usl === null) throw ApiError.validation(`${field} 必须同时提供 lsl 与 usl`);
-    if (lsl > usl) throw ApiError.validation(`${field} 下限 lsl 不能大于上限 usl`);
-    const [limitMin, limitMax] = PARAM_LIMITS[field];
-    if (lsl < limitMin || usl > limitMax) {
-      throw ApiError.validation(`${field} 规格需在物理范围 ${limitMin}~${limitMax} 内`);
-    }
-    const target = toSpecNumber(spec.target, `${field}.target`);
-    if (target !== null && (target < lsl || target > usl)) {
-      throw ApiError.validation(`${field}.target 必须落在 [lsl, usl] 区间内`);
-    }
-    const unit = spec.unit === undefined || spec.unit === null ? null : String(spec.unit).trim();
-    if (unit && unit.length > 20) throw ApiError.validation(`${field}.unit 长度不能超过 20`);
-    const normalized = { lsl, usl };
-    if (target !== null) normalized.target = target;
-    if (unit) normalized.unit = unit;
-    clean[field] = normalized;
-  }
-  if (!Object.keys(clean).length) throw ApiError.validation("specs 不能为空");
-  return clean;
 }
 
 function actorId(req) {
@@ -122,14 +70,8 @@ function parseCustomJson(raw) {
 }
 
 function findLatestSpecRow(db, nodeId) {
-  const rows = db.prepare("SELECT id, custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY recorded_at DESC, id DESC LIMIT 50").all([nodeId]);
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(row.custom_json);
-      if (parsed && parsed.spc && typeof parsed.spc === "object") return { row, spc: parsed.spc };
-    } catch (_error) { /* 忽略脏 JSON */ }
-  }
-  return null;
+  const found = findNodeSpecRow(db, nodeId);
+  return found ? { row: found.row, spc: found.spc } : null;
 }
 
 function register(app, db) {
@@ -139,8 +81,26 @@ function register(app, db) {
 
   // CRUD: get params for a node（排除只有 custom_json 的 spec 行）
   app.get("/api/process_nodes/:id/params", wrap((req, res) => {
-    assertNode(db, Number(req.params.id));
-    res.json(all(`SELECT pp.*, u.full_name as recorder_name FROM process_params pp LEFT JOIN users u ON pp.recorded_by = u.id WHERE pp.process_node_id = ? AND (${READING_FILTER} OR pp.custom_json IS NULL) ORDER BY pp.recorded_at DESC, pp.id DESC LIMIT 500`, [req.params.id]));
+    const nodeId = Number(req.params.id);
+    assertNode(db, nodeId);
+    const hasPage = ["page", "page_size", "from", "to"].some((key) => req.query[key] !== undefined && req.query[key] !== "");
+    const from = req.query.from ? String(req.query.from) : null;
+    const to = req.query.to ? String(req.query.to) : null;
+    if ((from && !/^\d{4}-\d{2}-\d{2}$/.test(from)) || (to && !/^\d{4}-\d{2}-\d{2}$/.test(to))) {
+      throw ApiError.validation("from/to 必须是 YYYY-MM-DD");
+    }
+    let where = `pp.process_node_id = ? AND (${READING_FILTER} OR pp.custom_json IS NULL)`;
+    const params = [nodeId];
+    if (from) { where += " AND date(pp.recorded_at) >= date(?)"; params.push(from); }
+    if (to) { where += " AND date(pp.recorded_at) <= date(?)"; params.push(to); }
+    if (!hasPage) {
+      return res.json(all(`SELECT pp.*, u.full_name as recorder_name FROM process_params pp LEFT JOIN users u ON pp.recorded_by = u.id WHERE ${where} ORDER BY pp.recorded_at DESC, pp.id DESC LIMIT 500`, params));
+    }
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(200, Math.max(1, Number.parseInt(req.query.page_size, 10) || 50));
+    const total = db.prepare(`SELECT COUNT(*) c FROM process_params pp WHERE ${where}`).get(params).c;
+    const items = all(`SELECT pp.*, u.full_name as recorder_name FROM process_params pp LEFT JOIN users u ON pp.recorded_by = u.id WHERE ${where} ORDER BY pp.recorded_at DESC, pp.id DESC LIMIT ? OFFSET ?`, [...params, pageSize, (page - 1) * pageSize]);
+    res.json({ items, total, page, page_size: pageSize, from, to });
   }));
 
   // CRUD: add param reading
@@ -199,8 +159,8 @@ function register(app, db) {
     const nodeId = Number(req.params.id);
     if (!Number.isInteger(nodeId) || nodeId <= 0) throw ApiError.validation("工艺节点 ID 非法");
     assertNode(db, nodeId);
-    const spec = findLatestSpecRow(db, nodeId);
-    res.json({ process_node_id: nodeId, specs: spec ? spec.spc : {}, source_id: spec ? spec.row.id : null });
+    const resolved = resolveNodeSpecs(db, nodeId);
+    res.json({ process_node_id: nodeId, specs: resolved.specs, source: resolved.source, source_id: resolved.source_id || null, template_id: resolved.template_id || null, operation_code: resolved.operation_code || null });
   }));
 
   // MESA #8: 过程参数规格设置

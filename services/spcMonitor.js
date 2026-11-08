@@ -6,6 +6,7 @@
 
 const { xbarR, capability, wecoRules } = require("../app/spc/engine");
 const { emit, Events } = require("../app/ws/EventBus");
+const { resolveNodeSpecs } = require("../shared/processSpecs");
 
 const logger = require("../app/logger").createLogger("spcMonitor");
 
@@ -33,22 +34,10 @@ function analyzeNode(db, node) {
     const values = rows.map((row) => Number(row.value)).filter((value) => Number.isFinite(value));
     if (values.length < 15) continue;
 
-    // Get spec limits (2026-11-07: 与 spcService.getSpecLimits 一致, 回看最近 50 条,
-    // 只读最新 1 条会漏掉"最近一条 custom_json 不含该参数"的情况, 导致能力指标静默缺失)
-    let usl = null, lsl = null;
-    const specRows = db.prepare(
-      "SELECT custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY recorded_at DESC, id DESC LIMIT 50"
-    ).all(node.id);
-    for (const specRow of specRows) {
-      try {
-        const j = JSON.parse(specRow.custom_json);
-        if (j && j.spc && j.spc[param]) {
-          usl = j.spc[param].usl;
-          lsl = j.spc[param].lsl;
-          break;
-        }
-      } catch (_error) { /* 跳过坏 JSON */ }
-    }
+    // 2026-11-08: 统一走 shared/processSpecs（节点规格 → 工序模板默认规格）
+    const resolvedSpec = resolveNodeSpecs(db, node.id).specs?.[param] || null;
+    const usl = resolvedSpec ? resolvedSpec.usl : null;
+    const lsl = resolvedSpec ? resolvedSpec.lsl : null;
 
     const xr = xbarR(values, 5, usl, lsl);
     if (xr.error) continue;

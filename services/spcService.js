@@ -9,6 +9,7 @@ const { wrap } = require('../middleware/asyncHandler');
 const { xbarR, capability, wecoRules, A2, D2, D3, D4 } = require("../app/spc/engine");
 const { ApiError } = require("../app/errors");
 const audit = require("../app/audit");
+const { resolveNodeSpecs } = require("../shared/processSpecs");
 
 const PARAM_COLS = ["current_amp", "voltage_v", "speed_mm_min", "temperature_c", "pressure_mpa", "feed_rate"];
 const PARAM_LABELS = {
@@ -146,18 +147,9 @@ function register(app, db) {
   }
 
   function getSpecLimits(nodeId, param) {
-    // 2026-11-05: look back across rows (latest custom_json may not contain this param)
-    const rows = all(
-      "SELECT custom_json FROM process_params WHERE process_node_id = ? AND custom_json IS NOT NULL ORDER BY recorded_at DESC, id DESC LIMIT 50",
-      [nodeId]
-    );
-    for (const row of rows) {
-      try {
-        const parsed = JSON.parse(row.custom_json);
-        if (parsed && parsed.spc && parsed.spc[param]) return parsed.spc[param];
-      } catch (_error) { /* skip bad json */ }
-    }
-    return { usl: null, lsl: null };
+    // 2026-11-08: 统一走 shared/processSpecs（节点规格 → 工序模板默认规格）
+    const resolved = resolveNodeSpecs(db, nodeId);
+    return resolved.specs?.[param] || { usl: null, lsl: null };
   }
 
   app.get("/api/spc/nodes-with-params", wrap((_req, res) => {
