@@ -49,7 +49,9 @@ module.exports = function createChecks(h) {
     const levelCol = ["level_code", "level_no", "level", "tier", "hierarchy"].find((c) => has(table, c));
     const parentCol = ["parent_id", "parent_node_id"].find((c) => has(table, c));
     const qtyCol = ["quantity", "qty", "net_qty"].find((c) => has(table, c));
-    const partCol = ["part_number", "material_code", "item_code", "code"].find((c) => has(table, c));
+    const partCols = ["part_number", "item_code", "code"].filter((c) => has(table, c));
+    const materialIdCol = has(table, "material_id") ? "material_id" : null;
+    const materialCodeCol = has(table, "material_code") ? "material_code" : null;
     const versionCol = ["version", "revision", "rev"].find((c) => has(table, c));
 
     if (!levelCol) issue(issues, { domain: "bom", rule: "missing_level", severity: "critical", title: "BOM 缺少层级号", detail: `${table} 未发现 level_code/level_no/level 字段`, source: table, refId: null, path: "/bom" });
@@ -61,10 +63,22 @@ module.exports = function createChecks(h) {
         issue(issues, { domain: "bom", rule: "invalid_qty", severity: "high", title: "BOM 用量异常", detail: `节点 ${r.id} 的数量为 ${r.qty || 0}`, source: table, refId: r.id, path: "/bom" });
       }
     }
-    if (partCol) {
+    const partAnchors = [
+      ...partCols.map((col) => `(${col} IS NOT NULL AND trim(${col}) <> '')`),
+      ...(materialIdCol ? [`${materialIdCol} IS NOT NULL`] : []),
+      ...(materialCodeCol ? [`(${materialCodeCol} IS NOT NULL AND trim(${materialCodeCol}) <> '')`] : []),
+    ];
+    if (!partAnchors.length) {
+      issue(issues, { domain: "bom", rule: "missing_part_column", severity: "high", title: "BOM 缺少物料/图号字段", detail: `${table} 未发现 part_number/material_id/material_code 字段`, source: table, refId: null, path: "/bom" });
+    } else {
       if (!MDM_ALLOWED_TABLES.has(table)) throw new Error("Invalid table name: " + table);
-      for (const r of all(`SELECT ${idCol} AS id FROM ${table} WHERE ${partCol} IS NULL OR trim(${partCol}) = '' LIMIT 100`)) {
-        issue(issues, { domain: "bom", rule: "missing_part", severity: "high", title: "BOM 节点缺少物料/图号", detail: `节点 ${r.id} 未填写物料编码或图号`, source: table, refId: r.id, path: "/bom" });
+      for (const r of all(`SELECT ${idCol} AS id FROM ${table} WHERE NOT (${partAnchors.join(" OR ")}) LIMIT 100`)) {
+        issue(issues, { domain: "bom", rule: "missing_part", severity: "high", title: "BOM 节点缺少物料/图号", detail: `节点 ${r.id} 既未关联物料也未填写图号`, source: table, refId: r.id, path: "/bom" });
+      }
+      if (materialIdCol && tableExists("materials") && has("materials", "id")) {
+        for (const r of all(`SELECT b.${idCol} AS id, b.${materialIdCol} AS material_id FROM ${table} b LEFT JOIN materials m ON m.id = b.${materialIdCol} WHERE b.${materialIdCol} IS NOT NULL AND m.id IS NULL LIMIT 100`)) {
+          issue(issues, { domain: "bom", rule: "orphan_material_ref", severity: "high", title: "BOM 引用的物料不存在", detail: `节点 ${r.id} 引用物料 ${r.material_id}，物料主数据中不存在`, source: table, refId: r.id, path: "/bom" });
+        }
       }
     }
     return domainSummary("bom", "BOM 层级", total, issues);
@@ -138,9 +152,24 @@ module.exports = function createChecks(h) {
   function checkLabor(issues) {
     if (!tableExists("users")) return { domain: "labor", label: "人员资质", total: 0, issues: 0, score: 100 };
     const total = countRows("users");
-    if (has("users", "role_code") && has("users", "cert_no")) {
-      for (const r of all("SELECT id, full_name, role_code FROM users WHERE role_code IN ('worker','welder','qc') AND (cert_no IS NULL OR trim(cert_no) = '') LIMIT 100")) {
-        issue(issues, { domain: "labor", rule: "missing_certificate", severity: "high", title: "关键岗位缺少资质证书", detail: `${r.full_name || r.id} (${r.role_code}) 未维护证书编号`, source: "users", refId: r.id, path: "/labor" });
+    if (!has("users", "role_code")) return domainSummary("labor", "人员资质", total, issues);
+    const hasCertTable = tableExists("worker_certificates");
+    let rows;
+    if (hasCertTable) {
+      rows = all(`SELECT u.id, u.full_name, u.role_code, u.cert_no,
+        (SELECT COUNT(*) FROM worker_certificates c WHERE c.user_id = u.id AND c.status = 'valid' AND (c.expiry_date IS NULL OR c.expiry_date >= date('now'))) AS valid_certs,
+        (SELECT COUNT(*) FROM worker_certificates c WHERE c.user_id = u.id AND c.status = 'expired') AS expired_certs
+        FROM users u WHERE u.role_code IN ('worker','welder','qc') LIMIT 500`);
+    } else {
+      rows = all("SELECT id, full_name, role_code, cert_no, 0 AS valid_certs, 0 AS expired_certs FROM users WHERE role_code IN ('worker','welder','qc') LIMIT 500");
+    }
+    for (const r of rows) {
+      const legacyCert = r.cert_no && String(r.cert_no).trim();
+      if (Number(r.valid_certs) > 0) continue;
+      if (Number(r.expired_certs) > 0) {
+        issue(issues, { domain: "labor", rule: "expired_certificate", severity: "high", title: "关键岗位证书已过期", detail: `${r.full_name || r.id} (${r.role_code}) 证书已过期且无有效证`, source: "users", refId: r.id, path: "/labor" });
+      } else if (!legacyCert) {
+        issue(issues, { domain: "labor", rule: "missing_certificate", severity: "high", title: "关键岗位缺少资质证书", detail: `${r.full_name || r.id} (${r.role_code}) 未维护有效证书`, source: "users", refId: r.id, path: "/labor" });
       }
     }
     return domainSummary("labor", "人员资质", total, issues);

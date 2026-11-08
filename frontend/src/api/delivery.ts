@@ -20,8 +20,11 @@ export function createDeliveryApi() {
     escalateException: (id: string, data?: any) => api.post(`/exceptions/${id}/escalate`, data || {}),
     escalateDueExceptions: (data?: any) => api.post('/exceptions/escalate-due', data || {}),
     exceptionEscalationRules: () => api.get('/exceptions/escalation-rules/list'),
-    mdmOverview: () => api.get('/mdm/overview'),
+    mdmOverview: (params?: any) => api.get('/mdm/overview', { params }),
     mdmIssues: (params?: any) => api.get('/mdm/issues', { params }),
+    mdmWaivers: (params?: any) => api.get('/mdm/waivers', { params }),
+    mdmWaive: (id: string, reason: string) => api.post('/mdm/issues/' + encodeURIComponent(id) + '/waive', { reason }),
+    mdmReopen: (id: string) => api.post('/mdm/issues/' + encodeURIComponent(id) + '/reopen'),
     ecoImpact: (id: number) => api.get(`/instance_eco/${id}/impact`),
   }
 }

@@ -21,10 +21,11 @@ module.exports = function createContext(app, db) {
       closed_at TEXT
     );
   `);
-  const { tableCache, columnCache, tableExists, MDM_ALLOWED_TABLES, columns, has, all, get } = createDbHelpers(db);
+  const { tableCache, columnCache, tableExists, MDM_ALLOWED_TABLES, columns, has, all, get, scanErrors } = createDbHelpers(db);
   const { stableIssueId, ignoredIssueIds, issue, severityRank } = createIssueHelpers({ tableCache, columnCache, tableExists, MDM_ALLOWED_TABLES, columns, has, all, get });
   const { firstTable, countRows, checkMaterials, checkBom, checkDocuments, checkSuppliers, checkProcessAndStations, checkLabor, domainSummary } = createChecks({ tableCache, columnCache, tableExists, MDM_ALLOWED_TABLES, columns, has, all, get, stableIssueId, ignoredIssueIds, issue, severityRank });
   function collect() {
+    scanErrors.length = 0;
     const issues = [];
     const domains = [
       checkMaterials(issues),
@@ -42,7 +43,7 @@ module.exports = function createContext(app, db) {
     const bySeverity = { critical: 0, high: 0, warning: 0, info: 0 };
     for (const i of issues) bySeverity[i.severity] = (bySeverity[i.severity] || 0) + 1;
     const avgScore = domains.length ? Math.round(domains.reduce((s, d) => s + d.score, 0) / domains.length) : 100;
-    return { summary: { domains: domains.length, total_records: domains.reduce((s, d) => s + d.total, 0), issue_count: issues.length, avg_score: avgScore, by_severity: bySeverity }, domains, issues };
+    return { summary: { domains: domains.length, total_records: domains.reduce((s, d) => s + d.total, 0), issue_count: issues.length, avg_score: avgScore, by_severity: bySeverity, scan_errors: scanErrors.slice() }, domains, issues };
   }
   return { MDM_ALLOWED_TABLES, all, checkBom, checkDocuments, checkLabor, checkMaterials, checkProcessAndStations, checkSuppliers, collect, columnCache, columns, countRows, domainSummary, firstTable, has, ignoredIssueIds, issue, severityRank, stableIssueId, tableCache, tableExists };
 };

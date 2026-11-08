@@ -4,6 +4,7 @@
 module.exports = function createDbHelpers(db) {
   const tableCache = new Map();
   const columnCache = new Map();
+  const scanErrors = [];
 
   function tableExists(name) {
     if (!tableCache.has(name)) {
@@ -26,13 +27,19 @@ module.exports = function createDbHelpers(db) {
     return columns(table).has(col);
   }
 
+  function recordError(sql, error) {
+    if (scanErrors.length >= 30) return;
+    const message = String(error && error.message || error);
+    if (!scanErrors.some((item) => item.message === message)) scanErrors.push({ sql: String(sql).slice(0, 240), message });
+  }
+
   function all(sql, params = []) {
-    try { return db.prepare(sql).all(params); } catch (_e) { return []; }
+    try { return db.prepare(sql).all(params); } catch (error) { recordError(sql, error); return []; }
   }
 
   function get(sql, params = []) {
-    try { return db.prepare(sql).get(params) || null; } catch (_e) { return null; }
+    try { return db.prepare(sql).get(params) || null; } catch (error) { recordError(sql, error); return null; }
   }
 
-  return { tableCache, columnCache, tableExists, MDM_ALLOWED_TABLES, columns, has, all, get };
+  return { tableCache, columnCache, tableExists, MDM_ALLOWED_TABLES, columns, has, all, get, scanErrors };
 };
