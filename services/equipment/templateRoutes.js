@@ -6,7 +6,7 @@ const {
   TEMPLATE_SCOPE_OPTIONS,
 } = require("./catalog");
 
-function registerTemplateRoutes({ app, wrap, all, get, run, ApiError, nextTemplateCode, templateStore }) {
+function registerTemplateRoutes({ app, wrap, all, get, run, ApiError, nextTemplateCode, reserveTemplateCode, templateStore }) {
   app.get("/api/equipment_instance_templates/scope-options", wrap((_req, res) => {
     res.json(TEMPLATE_SCOPE_OPTIONS);
   }));
@@ -32,6 +32,9 @@ function registerTemplateRoutes({ app, wrap, all, get, run, ApiError, nextTempla
     if (!templateName) throw ApiError.validation("template_name 必填");
     const category = String(body.category || "TBM").trim() || "TBM";
     const templateCode = String(body.template_code || nextTemplateCode(category)).trim().toUpperCase();
+    if (body.template_code && typeof reserveTemplateCode === "function") {
+      try { reserveTemplateCode(templateCode, { category }); } catch (_error) { /* 回退到旧编码不阻断 */ }
+    }
     const status = ["draft", "published", "disabled"].includes(body.status) ? body.status : "published";
     const version = String(body.version || "A0").trim() || "A0";
     const sourceInstanceId = body.source_instance_id ? Number(body.source_instance_id) : null;

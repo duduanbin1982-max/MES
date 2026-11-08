@@ -21,6 +21,7 @@ const routes = [
       { path: '/setup', name: 'setup', component: () => import('../views/SetupWizard.vue'), meta: { title: '初始化向导', icon: 'Guide' } },
       { path: '/project-wizard', name: 'project-wizard', component: () => import('../views/ProjectLaunchWizard.vue'), meta: { title: '项目启动向导', icon: 'Guide' } },
       { path: '/mdm', name: 'mdm', component: () => import('../views/MasterDataGovernance.vue'), meta: { title: '主数据治理', icon: 'DataAnalysis' } },
+      { path: '/coding-rules', name: 'coding-rules', component: () => import('../views/CodingRules.vue'), meta: { title: '编码规则', icon: 'DataAnalysis', requires: 'settings:read' } },
       { path: '/exceptions', name: 'exceptions', component: () => import('../views/ExceptionCenter.vue'), meta: { title: '异常中心', icon: 'WarningFilled' } },
       { path: '/dashboard', name: 'dashboard', component: () => import('../views/Dashboard.vue'), meta: { title: '仪表盘', icon: 'DataBoard' } },
       { path: '/instances', name: 'instances', component: () => import('../views/EquipmentInstances.vue'), meta: { title: '项目装备', icon: 'Box' } },

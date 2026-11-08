@@ -13,12 +13,16 @@ function registerInstanceRoutes({
   ApiError,
   lifecycle,
   nextInstanceCode,
+  previewInstanceCode,
+  describeInstanceRule,
   createInstance,
   ensureNotFrozen,
   buildOverview,
 }) {
   app.get("/api/equipment_instances/code-preview", wrap((req, res) => {
-    res.json({ code: nextInstanceCode(req.query.customer, req.query.year), rule: "TBM-[客户缩写]-YYYY-###" });
+    const code = (previewInstanceCode || nextInstanceCode)(req.query.customer, req.query.year);
+    const rule = typeof describeInstanceRule === "function" ? describeInstanceRule() : null;
+    res.json({ code, rule: rule?.description || "TBM-[客户缩写]-YYYY-###", rule_code: rule?.rule_code || "builtin" });
   }));
 
   app.get("/api/equipment_instances/lifecycle-options", wrap((_req, res) => res.json(lifecycle)));

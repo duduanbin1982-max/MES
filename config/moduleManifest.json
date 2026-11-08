@@ -487,6 +487,13 @@
         {
           "key": "coding-rules",
           "title": "编码规则",
+          "path": "/coding-rules",
+          "entry": "/coding-rules",
+          "icon": "DataAnalysis"
+        },
+        {
+          "key": "mdm",
+          "title": "主数据治理",
           "path": "/mdm",
           "entry": "/mdm",
           "icon": "DataAnalysis"

@@ -3,7 +3,7 @@
 const { DEFAULT_DOC_FOLDERS, DEFAULT_MILESTONES } = require("./catalog");
 const { hasTable, tableColumns } = require("./schema");
 
-function createInstanceFactory({ db, all, get, run, ApiError, nextInstanceCode, templateStore }) {
+function createInstanceFactory({ db, all, get, run, ApiError, nextInstanceCode, reserveInstanceCode, templateStore }) {
   function ensureNotFrozen(id) {
     const instance = get("SELECT archive_status, frozen_at FROM equipment_instances WHERE id = ?", id);
     if (!instance) throw ApiError.notFound("项目装备不存在");
@@ -136,8 +136,13 @@ function createInstanceFactory({ db, all, get, run, ApiError, nextInstanceCode, 
   }
 
   const createInstance = db.transaction((body, userId) => {
-    const code = body.instance_code || nextInstanceCode(body.customer_name, body.planned_start?.slice(0, 4));
+    const planYear = body.planned_start?.slice(0, 4);
+    const code = body.instance_code || nextInstanceCode(body.customer_name, planYear);
     if (!code || !body.customer_name) throw ApiError.validation("instance_code/customer_name 必填");
+    if (get("SELECT id FROM equipment_instances WHERE instance_code = ?", [code])) throw ApiError.conflict(`项目装备编码已存在: ${code}`);
+    if (body.instance_code && typeof reserveInstanceCode === "function") {
+      try { reserveInstanceCode(code, { customer: body.customer_name, year: planYear }); } catch (_error) { /* 回退编码不阻断 */ }
+    }
     const selectedTemplate = body.template_id ? templateStore.getTemplate(body.template_id) : null;
     if (selectedTemplate && selectedTemplate.status !== "published") throw ApiError.validation("只能使用已发布的项目装备模板");
     const templateSourceId = selectedTemplate?.source_instance_id || body.template_instance_id || null;

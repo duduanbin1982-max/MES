@@ -21,6 +21,11 @@
       "ddlFingerprint": "02e5d21b3be465f401e9d9eb7c52ba40a67887642f7be5350274025aec9518b8",
       "ddlStatements": 9
     },
+    "codingRulesService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "55354fd1df9777916608a670e9716786e346962998fdb69fb76e9a7915b7a59e",
+      "ddlStatements": 1
+    },
     "cost": {
       "schemaVersion": 6,
       "ddlFingerprint": "91b6810c758dd41c977a872b8bc1b2cc2f849cba55009087bc42bd96a6cbe44e",
@@ -62,9 +67,9 @@
       "ddlStatements": 0
     },
     "equipment": {
-      "schemaVersion": 3,
-      "ddlFingerprint": "0ad2a730041cdd64ca20c457844380c1cb5ca330273cb98c62a9bc10ec8402fd",
-      "ddlStatements": 17
+      "schemaVersion": 4,
+      "ddlFingerprint": "aa6cfdd0c506056cb908b6007e0542055437560a6f74873e15e1e2ec68bbe71e",
+      "ddlStatements": 18
     },
     "erpService": {
       "schemaVersion": 1,

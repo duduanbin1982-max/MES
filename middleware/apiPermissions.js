@@ -146,6 +146,8 @@ const RULES = [
   match(/^\/instance_eco\/\d+$/, ["PUT"], ["equipment:write"]),
   match(/^\/instance_eco\/\d+\/transit$/, ["POST"], ["equipment:write", "process:write"]),
   match(/^\/instance_eco\/\d+\/impact$/, READ, ["equipment:read"]),
+  match(/^\/coding-rules(?:\/.*)?$/, READ, ["settings:read"]),
+  match(/^\/coding-rules(?:\/.*)?$/, WRITE, ["settings:write"]),
   match(/^\/resources(?:\/.*)?$/, READ, ["equipment:read"]),
   match(/^\/resources(?:\/.*)?$/, WRITE, ["equipment:write"]),
   match(/^\/schedule(?:\/.*)?$/, READ, ["equipment:read"]),

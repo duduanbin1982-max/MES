@@ -12,6 +12,7 @@ const MESA_SERVICES = [
     schemaVersion: 2,
     dependsOn: ["tbmAdvanced"],
   },
+  { name: "codingRulesService", module: "./codingRulesService", schemaVersion: 1 },
   { name: "cost", module: "./cost", schemaVersion: 6 },
   { name: "documentService", module: "./documentService", schemaVersion: 7 },
   { name: "eco", module: "./eco", schemaVersion: 1 },
