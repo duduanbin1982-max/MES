@@ -17,9 +17,9 @@ function assertDocument(db, docId) {
   if (docId === undefined || docId === null || docId === "") return null;
   const id = Number(docId);
   if (!Number.isInteger(id) || id <= 0) throw ApiError.validation("doc_id 非法");
-  let tableReady = true;
+  let tableReady;
   try {
-    db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'documents'").get();
+    tableReady = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'documents'").get());
   } catch (_error) {
     tableReady = false;
   }
@@ -104,6 +104,14 @@ function registerDocumentRoutes(app, db) {
       params.push(value);
     }
     if (!sets.length) throw ApiError.validation("no fields to update");
+    const nextType = payload.doc_type !== undefined ? payload.doc_type : before.doc_type;
+    const nextDocId = payload.doc_id !== undefined ? payload.doc_id : before.doc_id;
+    if (nextDocId != null) {
+      const duplicate = db.prepare(
+        "SELECT id FROM process_operation_docs WHERE operation_template_id = ? AND doc_type = ? AND doc_id = ? AND id <> ?"
+      ).get(before.operation_template_id, nextType, nextDocId, before.id);
+      if (duplicate) throw ApiError.conflict(`该文档已绑定到此工序（id=${duplicate.id}）`);
+    }
     sets.push("updated_at = datetime('now')");
     params.push(before.id, before.operation_template_id);
     const result = run(

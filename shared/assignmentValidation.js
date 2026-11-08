@@ -33,10 +33,14 @@ function validateAssignment(db, { process_node_id, user_id }) {
   if (!process_node_id || !user_id) throw ApiError.validation("process_node_id / user_id 必填");
   const hasPositions = hasTable(db, "process_positions");
   const hasTemplates = hasTable(db, "process_operation_templates");
+  const positionColumns = columnsOf(db, "process_positions");
+  const templateColumns = columnsOf(db, "process_operation_templates");
+  const positionActive = positionColumns.has("is_active") ? "p.is_active" : "1";
+  const templateActive = templateColumns.has("is_active") ? "pot.is_active" : "1";
   const node = db.prepare(`
     SELECT pn.*
-           ${hasPositions ? ", p.position_name, p.skill_category AS position_skill, p.min_level, p.required_cert_type AS position_cert_type" : ", NULL AS position_name, NULL AS position_skill, NULL AS min_level, NULL AS position_cert_type"}
-           ${hasTemplates ? ", pot.sop_required AS template_sop_required, pot.drawing_required AS template_drawing_required" : ", NULL AS template_sop_required, NULL AS template_drawing_required"}
+           ${hasPositions ? `, p.position_name, p.skill_category AS position_skill, p.min_level, p.required_cert_type AS position_cert_type, ${positionActive} AS position_active` : ", NULL AS position_name, NULL AS position_skill, NULL AS min_level, NULL AS position_cert_type, NULL AS position_active"}
+           ${hasTemplates ? `, pot.sop_required AS template_sop_required, pot.drawing_required AS template_drawing_required, ${templateActive} AS template_active` : ", NULL AS template_sop_required, NULL AS template_drawing_required, NULL AS template_active"}
     FROM process_nodes pn
     ${hasPositions ? "LEFT JOIN process_positions p ON p.position_code = pn.required_position_code" : ""}
     ${hasTemplates ? "LEFT JOIN process_operation_templates pot ON pot.id = pn.operation_template_id" : ""}
@@ -93,6 +97,14 @@ function validateAssignment(db, { process_node_id, user_id }) {
   }
 
   const missing = [];
+  if (hasPositions && node.required_position_code) {
+    if (!node.position_name) missing.push(`岗位 ${node.required_position_code} 不存在`);
+    else if (Number(node.position_active) !== 1) missing.push(`岗位「${node.position_name}」已停用`);
+  }
+  if (hasTemplates && node.operation_template_id) {
+    if (node.template_active === null || node.template_active === undefined) missing.push("工序模板不存在");
+    else if (Number(node.template_active) !== 1) missing.push("工序模板已停用");
+  }
   if (skillCategory && !skill) missing.push(`缺少 ${skillCategory} L${minLevel}+ 技能`);
   if (missingDocs.length > 0) missing.push(...missingDocs);
   if (certType && !certificate) missing.push(`缺少有效 ${certType} 资质证书`);

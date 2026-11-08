@@ -232,3 +232,49 @@ test("validation checks missing required documents", async () => {
   });
   assert.equal(r.status, 200);
 });
+
+test("PMA-1 岗位编码不允许修改，避免工序/节点引用孤儿", async () => {
+  const before = db.prepare("SELECT position_code FROM process_positions WHERE position_code = 'painter'").get();
+  assert.ok(before);
+  const renamed = await request("PUT", "/api/process-master/positions/painter", { position_code: "painter2", position_name: "涂装工2" });
+  assert.equal(renamed.status, 400);
+  assert.match(renamed.body.message, /岗位编码不允许修改/);
+  assert.ok(db.prepare("SELECT 1 FROM process_positions WHERE position_code = 'painter'").get());
+});
+
+test("PMA-2 被引用的岗位不能删除", async () => {
+  const res = await request("DELETE", "/api/process-master/positions/welder");
+  assert.equal(res.status, 409);
+  assert.match(res.body.message, /正在被/);
+});
+
+test("PMA-3 停用岗位会被派工校验拦截", async () => {
+  const before = db.prepare("SELECT is_active FROM process_positions WHERE position_code = 'welder'").get();
+  db.prepare("UPDATE process_positions SET is_active = 0 WHERE position_code = 'welder'").run();
+  const blocked = await request("POST", "/api/process-master/validate-assignment", { process_node_id: 1, user_id: 1 });
+  assert.equal(blocked.status, 200);
+  assert.ok(blocked.body.missing.some((item) => item.includes("焊工") && item.includes("停用")), JSON.stringify(blocked.body.missing));
+  db.prepare("UPDATE process_positions SET is_active = ? WHERE position_code = 'welder'").run(before.is_active);
+});
+
+test("PMA-4 工序文档更新不能制造重复绑定", async () => {
+  const op = db.prepare("SELECT id FROM process_operation_templates WHERE operation_code = 'welding'").get();
+  const doc = db.prepare("INSERT INTO documents (title, status) VALUES ('重复绑定测试','issued')").run().lastInsertRowid;
+  const first = await request("POST", `/api/process-master/operations/${op.id}/docs`, { doc_type: "sop", title: "A", doc_id: doc, is_required: true });
+  const second = await request("POST", `/api/process-master/operations/${op.id}/docs`, { doc_type: "qc_std", title: "B", doc_id: doc, is_required: true });
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  const update = await request("PUT", `/api/process-master/operations/${op.id}/docs/${second.body.id}`, { doc_type: "sop" });
+  assert.equal(update.status, 409);
+  assert.match(update.body.message, /已绑定/);
+});
+
+test("PMA-5 配置健康度返回未配置/文档缺口", async () => {
+  db.prepare("INSERT INTO process_nodes (equipment_instance_id, operation_name) VALUES (1, '未配置节点')").run();
+  const res = await request("GET", "/api/process-master/health");
+  assert.equal(res.status, 200);
+  assert.ok(res.body.nodes.total >= 1);
+  assert.ok(res.body.templates.total >= 1);
+  assert.ok(Array.isArray(res.body.issues));
+  assert.ok(res.body.issues.some((issue) => issue.code === "NODES_UNCONFIGURED"));
+});

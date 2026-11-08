@@ -16,6 +16,28 @@
     </el-row>
 
     <el-alert
+      v-if="health && health.issues && health.issues.length"
+      type="warning"
+      show-icon
+      :closable="false"
+      style="margin-bottom: 12px"
+      title="工序/岗位配置存在缺口"
+    >
+      <div v-for="issue in health.issues" :key="issue.code" class="health-line">
+        <el-tag size="small" :type="issue.severity === 'error' ? 'danger' : 'warning'">{{ issue.code }}</el-tag>
+        {{ issue.label }}
+      </div>
+    </el-alert>
+    <el-alert
+      v-else-if="health"
+      type="success"
+      show-icon
+      :closable="false"
+      style="margin-bottom: 12px"
+      :title="`工序/岗位配置健康：${health.nodes?.total || 0} 个节点，${health.documents?.total || 0} 个工序文档绑定`"
+    />
+
+    <el-alert
       title="建议先维护岗位，再维护工序模板，最后在工艺树节点中套用模板。派工时系统会校验人员技能等级和证书。"
       type="info"
       show-icon
@@ -56,12 +78,16 @@
             </template>
           </el-table-column>
           <el-table-column prop="node_count" label="引用节点" width="90" />
+          <el-table-column label="文档" width="100">
+            <template #default="{ row }">{{ row.doc_count || 0 }} / {{ row.required_doc_count || 0 }}</template>
+          </el-table-column>
           <el-table-column label="状态" width="80">
             <template #default="{ row }"><el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '启用' : '停用' }}</el-tag></template>
           </el-table-column>
-          <el-table-column label="操作" width="130" fixed="right">
+          <el-table-column label="操作" width="190" fixed="right">
             <template #default="{ row }">
               <el-button size="small" link type="primary" @click="openOperation(row)">编辑</el-button>
+              <el-button size="small" link type="success" @click="openDocs(row)">文档</el-button>
               <el-button size="small" link type="danger" @click="deleteOperation(row)">删除</el-button>
             </template>
           </el-table-column>
@@ -183,6 +209,37 @@
         <el-button type="primary" @click="savePosition" :loading="posDlg.saving">保存</el-button>
       </template>
     </el-dialog>
+    <el-dialog v-model="docDlg.visible" :title="`工序文档 · ${docDlg.operation?.operation_name || ''}`" width="720px">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="必需文档必须已签发且派工人员已签收，否则派工资质校验会拦截。"
+        style="margin-bottom: 10px"
+      />
+      <el-form inline>
+        <el-form-item label="类型">
+          <el-select v-model="docDlg.form.doc_type" style="width: 120px">
+            <el-option label="SOP" value="sop" /><el-option label="图纸" value="drawing" />
+            <el-option label="质检标准" value="qc_std" /><el-option label="WPS" value="wps" /><el-option label="其他" value="other" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="标题"><el-input v-model="docDlg.form.title" placeholder="文档标题" style="width: 200px" /></el-form-item>
+        <el-form-item label="文档ID"><el-input-number v-model="docDlg.form.doc_id" :min="1" :controls="false" style="width: 110px" /></el-form-item>
+        <el-form-item label="必需"><el-switch v-model="docDlg.form.is_required" /></el-form-item>
+        <el-form-item><el-button type="primary" :loading="docDlg.saving" @click="addDoc">绑定</el-button></el-form-item>
+      </el-form>
+      <el-table :data="docDlg.items" size="small" max-height="300">
+        <el-table-column prop="doc_type" label="类型" width="90" />
+        <el-table-column prop="title" label="标题" min-width="180" />
+        <el-table-column prop="doc_id" label="文档ID" width="90" />
+        <el-table-column label="文档状态" width="110">
+          <template #default="{ row }"><el-tag size="small" :type="row.document_status === 'issued' ? 'success' : 'info'">{{ row.document_status || '未绑定' }}</el-tag></template>
+        </el-table-column>
+        <el-table-column label="必需" width="80"><template #default="{ row }">{{ row.is_required ? '是' : '否' }}</template></el-table-column>
+        <el-table-column label="操作" width="80"><template #default="{ row }"><el-button size="small" link type="danger" @click="removeDoc(row)">解绑</el-button></template></el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -194,6 +251,7 @@ import { Api } from '../api'
 const loading = ref(false)
 const tab = ref('operations')
 const overview = ref<any>({})
+const health = ref<any>(null)
 const operations = ref<any[]>([])
 const positions = ref<any[]>([])
 const opKeyword = ref('')
@@ -202,6 +260,7 @@ const validationResult = ref<any>(null)
 const validationForm = reactive<any>({ process_node_id: null, user_id: null })
 const opDlg = reactive<any>({ visible: false, saving: false, form: {} })
 const posDlg = reactive<any>({ visible: false, saving: false, form: {} })
+const docDlg = reactive<any>({ visible: false, saving: false, operation: null, items: [], form: { doc_type: 'sop', title: '', doc_id: null, is_required: true } })
 
 const filteredOperations = computed(() => {
   const kw = opKeyword.value.trim().toLowerCase()
@@ -217,14 +276,18 @@ const filteredPositions = computed(() => {
 async function loadAll() {
   loading.value = true
   try {
-    const [ov, ops, pos] = await Promise.all([
+    const [ov, ops, pos, healthData] = await Promise.all([
       Api.get('/process-master/overview'),
       Api.get('/process-master/operations', { params: { include_inactive: 1 } }),
       Api.get('/process-master/positions', { params: { include_inactive: 1 } }),
+      Api.get('/process-master/health'),
     ])
     overview.value = ov || {}
     operations.value = ops.items || []
     positions.value = pos.items || []
+    health.value = healthData || null
+  } catch (error: any) {
+    ElMessage.error('加载工序/岗位配置失败：' + (error?.response?.data?.message || error.message))
   } finally {
     loading.value = false
   }
@@ -260,6 +323,8 @@ async function saveOperation() {
     ElMessage.success('工序模板已保存')
     opDlg.visible = false
     await loadAll()
+  } catch (error: any) {
+    ElMessage.error('保存工序失败：' + (error?.response?.data?.message || error.message))
   } finally {
     opDlg.saving = false
   }
@@ -299,6 +364,8 @@ async function savePosition() {
     ElMessage.success('岗位已保存')
     posDlg.visible = false
     await loadAll()
+  } catch (error: any) {
+    ElMessage.error('保存岗位失败：' + (error?.response?.data?.message || error.message))
   } finally {
     posDlg.saving = false
   }
@@ -317,7 +384,64 @@ async function deletePosition(row: any) {
 
 async function validateAssignment() {
   if (!validationForm.process_node_id || !validationForm.user_id) return ElMessage.warning('请填写节点ID和人员ID')
-  validationResult.value = await Api.post('/process-master/validate-assignment', validationForm)
+  try {
+    validationResult.value = await Api.post('/process-master/validate-assignment', validationForm)
+  } catch (error: any) {
+    ElMessage.error('校验失败：' + (error?.response?.data?.message || error.message))
+  }
+}
+
+async function loadDocs() {
+  if (!docDlg.operation) return
+  docDlg.loading = true
+  try {
+    const data: any = await Api.get(`/process-master/operations/${docDlg.operation.id}/docs`)
+    docDlg.items = data.items || []
+  } catch (error: any) {
+    ElMessage.error('加载工序文档失败：' + (error?.response?.data?.message || error.message))
+  } finally {
+    docDlg.loading = false
+  }
+}
+
+async function openDocs(row: any) {
+  docDlg.operation = row
+  docDlg.form = { doc_type: 'sop', title: '', doc_id: null, is_required: true }
+  docDlg.visible = true
+  await loadDocs()
+}
+
+async function addDoc() {
+  if (!docDlg.form.title) return ElMessage.warning('请填写文档标题')
+  docDlg.saving = true
+  try {
+    await Api.post(`/process-master/operations/${docDlg.operation.id}/docs`, {
+      doc_type: docDlg.form.doc_type,
+      title: docDlg.form.title,
+      doc_id: docDlg.form.doc_id || undefined,
+      is_required: docDlg.form.is_required,
+    })
+    ElMessage.success('文档已绑定')
+    docDlg.form.title = ''
+    docDlg.form.doc_id = null
+    await loadDocs()
+    await loadAll()
+  } catch (error: any) {
+    ElMessage.error('绑定失败：' + (error?.response?.data?.message || error.message))
+  } finally {
+    docDlg.saving = false
+  }
+}
+
+async function removeDoc(row: any) {
+  try {
+    await Api.del(`/process-master/operations/${docDlg.operation.id}/docs/${row.id}`)
+    ElMessage.success('已解绑')
+    await loadDocs()
+    await loadAll()
+  } catch (error: any) {
+    ElMessage.error('解绑失败：' + (error?.response?.data?.message || error.message))
+  }
 }
 
 onMounted(loadAll)
@@ -328,5 +452,6 @@ onMounted(loadAll)
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .page-title { font-size: 20px; font-weight: 700; }
 .page-subtitle { color: var(--color-text-muted); margin-top: 4px; }
+.health-line { margin: 3px 0; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
 </style>

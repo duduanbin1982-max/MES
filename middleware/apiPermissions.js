@@ -151,6 +151,7 @@ const RULES = [
   match(/^\/schedule(?:\/.*)?$/, READ, ["equipment:read"]),
   match(/^\/schedule(?:\/.*)?$/, WRITE, ["equipment:write"]),
 
+  exact("/process-master/validate-assignment", ["POST"], ["process:read", "process:write"]),
   match(/^\/process-master(?:\/.*)?$/, READ, ["process:read"]),
   match(/^\/process-master(?:\/.*)?$/, WRITE, ["process:write"]),
   match(/^\/process-route(?:\/.*)?$/, READ, ["process:read"]),

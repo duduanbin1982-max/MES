@@ -51,7 +51,9 @@ function registerOperationRoutes(app, db) {
     const includeInactive = request.query.include_inactive === "1";
     const rows = all(`
       SELECT t.*, p.position_name,
-             (SELECT COUNT(*) FROM process_nodes pn WHERE pn.operation_template_id = t.id) AS node_count
+             (SELECT COUNT(*) FROM process_nodes pn WHERE pn.operation_template_id = t.id) AS node_count,
+             (SELECT COUNT(*) FROM process_operation_docs d WHERE d.operation_template_id = t.id) AS doc_count,
+             (SELECT COUNT(*) FROM process_operation_docs d WHERE d.operation_template_id = t.id AND d.is_required = 1) AS required_doc_count
       FROM process_operation_templates t
       LEFT JOIN process_positions p ON p.position_code = t.required_position_code
       ${includeInactive ? "" : "WHERE t.is_active = 1"}

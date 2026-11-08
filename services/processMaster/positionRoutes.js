@@ -68,6 +68,9 @@ function registerPositionRoutes(app, db) {
     const current = get("SELECT * FROM process_positions WHERE position_code = ?", [request.params.code]);
     if (!current) throw ApiError.notFound("岗位不存在");
     const payload = normalizePositionPayload(request.body || {}, { partial: true });
+    if (payload.position_code && payload.position_code !== current.position_code) {
+      throw ApiError.validation("岗位编码不允许修改；请新建岗位并迁移工序/节点引用");
+    }
     const sets = [];
     const params = [];
     for (const [field, value] of Object.entries(payload)) {
