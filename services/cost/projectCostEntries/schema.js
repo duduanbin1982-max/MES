@@ -30,6 +30,24 @@ function ensureSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_project_cost_entries_type ON project_cost_entries(cost_type, status);
     CREATE INDEX IF NOT EXISTS idx_project_cost_entries_bom ON project_cost_entries(bom_node_id);
     CREATE INDEX IF NOT EXISTS idx_project_cost_entries_work_order ON project_cost_entries(work_order_id);
+
+    CREATE TABLE IF NOT EXISTS cost_periods (
+      period_key TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','locked','approved')),
+      locked_by INTEGER,
+      locked_at TEXT,
+      approved_by INTEGER,
+      approved_at TEXT,
+      notes TEXT,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS cost_fx_rates (
+      currency TEXT PRIMARY KEY,
+      rate_to_cny REAL NOT NULL DEFAULT 1,
+      updated_by INTEGER,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    INSERT OR IGNORE INTO cost_fx_rates (currency, rate_to_cny) VALUES ('CNY', 1);
   `);
 
   const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'project_cost_entries'").get()?.sql || "";

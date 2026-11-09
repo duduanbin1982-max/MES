@@ -10,6 +10,7 @@ const { wrap } = require('../../../middleware/asyncHandler');
 const { KEY_COMP_SQL, NORMAL_MAT_SQL, HOURS_SQL } = require("./queries");
 const { round2 } = require("./queries");
 const { aggregateKeyComponents, aggregateMaterials, deriveContractMetrics } = require("./aggregate");
+const { KEY_COMPONENT_PRICE_MULTIPLIER, KEY_COMPONENT_PRICE_UNIT } = require("../units");
 
 function register(app, db) {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
@@ -36,8 +37,13 @@ function register(app, db) {
     const estimated_hours = Number(hours.estimated_hours || 0);
     const actual_hours    = Number(hours.actual_hours    || 0);
 
+    // 关键件单价单位是万元/件；物料/台账是元。legacy totals 保持原口径，全口径统一换算成元。
+    const keyEstimatedYuan = round2(keyAgg.estimated_total * KEY_COMPONENT_PRICE_MULTIPLIER);
+    const keyActualYuan = round2(keyAgg.actual_total * KEY_COMPONENT_PRICE_MULTIPLIER);
     const total_estimated = round2(keyAgg.estimated_total + matAgg.estimated_total);
     const total_actual    = round2(keyAgg.actual_total    + matAgg.actual_total);
+    const totalEstimatedYuan = round2(keyEstimatedYuan + matAgg.estimated_total);
+    const totalActualYuan = round2(keyActualYuan + matAgg.actual_total);
     const total_diff      = round2(total_actual - total_estimated);
     const over_budget_diff = round2(
       keyAgg.rows.filter(r => r.actual_unit_price != null && r.actual_unit_price > r.estimated_unit_price)
@@ -56,9 +62,18 @@ function register(app, db) {
 
     // 成本台账（project_cost_entries）：归集外协/折旧/返工/质量损失，以及已过账人工。
     // 人工金额优先取台账；没有台账人工时才用 工时 × 费率 估算，避免重复计入。
-    const ledgerRows = safeAll(`SELECT cost_type, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total
-      FROM project_cost_entries WHERE equipment_instance_id = ? AND deleted_at IS NULL AND status = 'posted'
-      GROUP BY cost_type`, req.params.id);
+    const hasFxTable = Boolean(safeGet("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'cost_fx_rates'"));
+    const ledgerRows = hasFxTable
+      ? safeAll(`SELECT e.cost_type, COUNT(*) AS cnt,
+          COALESCE(SUM(e.amount * COALESCE(f.rate_to_cny, 1)), 0) AS total
+          FROM project_cost_entries e
+          LEFT JOIN cost_fx_rates f ON f.currency = e.currency
+          WHERE e.equipment_instance_id = ? AND e.deleted_at IS NULL AND e.status = 'posted'
+          GROUP BY e.cost_type`, req.params.id)
+      : safeAll(`SELECT cost_type, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total
+          FROM project_cost_entries
+          WHERE equipment_instance_id = ? AND deleted_at IS NULL AND status = 'posted'
+          GROUP BY cost_type`, req.params.id);
     const ledgerByType = {};
     let ledgerTotal = 0;
     for (const row of ledgerRows) {
@@ -74,8 +89,8 @@ function register(app, db) {
     const laborHoursCost = round2(actual_hours * hourlyRate);
     const laborActualCost = ledgerLabor > 0 ? ledgerLabor : laborHoursCost;
     const laborCostSource = ledgerLabor > 0 ? "project_cost_entries" : "hours_rate";
-    const estimatedCostFull = round2(total_estimated + laborEstimatedCost);
-    const actualCostFull = round2(total_actual + laborActualCost + otherCosts);
+    const estimatedCostFull = round2(totalEstimatedYuan + laborEstimatedCost);
+    const actualCostFull = round2(totalActualYuan + laborActualCost + otherCosts);
     const costDiffFull = round2(actualCostFull - estimatedCostFull);
     const contract = deriveContractMetrics(inst, total_actual);
     const marginFull = contract.yuan == null ? null : round2(contract.yuan - actualCostFull);
@@ -108,7 +123,11 @@ function register(app, db) {
         over_budget_count: keyAgg.over_budget,
         estimated_total: keyAgg.estimated_total,
         actual_total: keyAgg.actual_total,
-        price_diff: round2(keyAgg.actual_total - keyAgg.estimated_total)
+        price_diff: round2(keyAgg.actual_total - keyAgg.estimated_total),
+        price_unit: KEY_COMPONENT_PRICE_UNIT,
+        estimated_total_yuan: keyEstimatedYuan,
+        actual_total_yuan: keyActualYuan,
+        price_diff_yuan: round2(keyActualYuan - keyEstimatedYuan)
       },
       materials: {
         count: matAgg.rows.length,
@@ -133,6 +152,9 @@ function register(app, db) {
         estimated_cost_full: estimatedCostFull,
         actual_cost_full: actualCostFull,
         cost_diff_full: costDiffFull,
+        estimated_cost_yuan: totalEstimatedYuan,
+        actual_cost_yuan: totalActualYuan,
+        key_component_price_unit: KEY_COMPONENT_PRICE_UNIT,
         labor_estimated_cost: laborEstimatedCost,
         labor_actual_cost: laborActualCost,
         other_costs: otherCosts,

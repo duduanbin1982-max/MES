@@ -3,7 +3,7 @@
     <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><DataLine /></el-icon> 采购估价 vs 实际合同价</div>
-        <div class="page-subtitle">关键件从采购估价到实际合同价的差异，用于成本归集和采购复盘。</div>
+        <div class="page-subtitle">关键件从采购估价到实际合同价的差异；估价/合同价录入单位为万元/件，下表按元展示（×10000）。</div>
       </div>
       <el-button type="primary" :loading="loading" @click="load">刷新</el-button>
     </PageToolbar>
@@ -11,8 +11,8 @@
     <el-row :gutter="16" class="kpi-row">
       <el-col :span="6"><el-card><el-statistic title="关键件数量" :value="summary.component_count || 0" /></el-card></el-col>
       <el-col :span="6"><el-card><el-statistic title="已签合同" :value="summary.contract_signed_count || 0" /></el-card></el-col>
-      <el-col :span="6"><el-card><el-statistic title="估价合计" :value="money(summary.total_estimated_price)" /></el-card></el-col>
-      <el-col :span="6"><el-card><el-statistic title="实际合计" :value="money(summary.total_actual_price)" /></el-card></el-col>
+      <el-col :span="6"><el-card><el-statistic title="估价合计（元）" :value="money(summary.total_estimated_price)" /></el-card></el-col>
+      <el-col :span="6"><el-card><el-statistic title="实际合计（元）" :value="money(summary.total_actual_price)" /></el-card></el-col>
     </el-row>
 
     <el-card>
@@ -30,11 +30,11 @@
         <el-table-column prop="component_type" label="关键件" min-width="160" show-overflow-tooltip />
         <el-table-column prop="supplier" label="供应商" min-width="140" show-overflow-tooltip />
         <el-table-column prop="lead_time_weeks" label="交期/周" width="90" />
-        <el-table-column label="估价" width="120"><template #default="{ row }">{{ money(row.estimated_price) }}</template></el-table-column>
-        <el-table-column label="实际合同价" width="130"><template #default="{ row }">{{ row.actual_price == null ? '-' : money(row.actual_price) }}</template></el-table-column>
-        <el-table-column label="差异" width="120">
+        <el-table-column label="估价（元）" width="130"><template #default="{ row }">{{ money(row.estimated_price_yuan ?? row.estimated_price) }}</template></el-table-column>
+        <el-table-column label="实际合同价（元）" width="150"><template #default="{ row }">{{ row.actual_price_yuan == null ? '-' : money(row.actual_price_yuan) }}</template></el-table-column>
+        <el-table-column label="差异（元）" width="130">
           <template #default="{ row }">
-            <span :class="{ danger: Number(row.price_diff || 0) > 0, success: Number(row.price_diff || 0) < 0 }">{{ money(row.price_diff) }}</span>
+            <span :class="{ danger: Number(row.price_diff || 0) > 0, success: Number(row.price_diff || 0) < 0 }">{{ money(row.price_diff_yuan ?? row.price_diff) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="差异率" width="100">

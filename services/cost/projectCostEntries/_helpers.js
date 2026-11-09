@@ -89,4 +89,19 @@ function normalizeBody(body, partial = false) {
   return out;
 }
 
-module.exports = { COST_TYPES, COST_TYPE_LABELS, nowISO, todayISO, round2, normalizeBody, makeDbHelpers, validDate };
+function periodKeyOf(occurredOn) {
+  return String(occurredOn || todayISO()).slice(0, 7);
+}
+
+function assertPeriodOpen(db, occurredOn) {
+  const periodKey = periodKeyOf(occurredOn);
+  let row;
+  try { row = db.prepare("SELECT status FROM cost_periods WHERE period_key = ?").get(periodKey); } catch (_error) { return; }
+  if (row && (row.status === "locked" || row.status === "approved")) {
+    const error = new Error(`会计期间 ${periodKey} 已${row.status === "approved" ? "审批" : "锁定"}，禁止修改成本`);
+    error.statusCode = 409;
+    throw error;
+  }
+}
+
+module.exports = { COST_TYPES, COST_TYPE_LABELS, nowISO, todayISO, round2, normalizeBody, makeDbHelpers, validDate, periodKeyOf, assertPeriodOpen };

@@ -107,10 +107,18 @@ function register(app, db) {
     // 外协/折旧/返工/质量损失属于"其他成本"，单列并与计算值做台账核对。
     const ledgerRows = (() => {
       try {
-        return all(`SELECT cost_type, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total
-                    FROM project_cost_entries
-                    WHERE equipment_instance_id = ? AND deleted_at IS NULL AND status = 'posted'
-                    GROUP BY cost_type`, instance.id);
+        const hasFx = Boolean(get("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'cost_fx_rates'"));
+        return hasFx
+          ? all(`SELECT e.cost_type, COUNT(*) AS cnt,
+                  COALESCE(SUM(e.amount * COALESCE(f.rate_to_cny, 1)), 0) AS total
+                  FROM project_cost_entries e
+                  LEFT JOIN cost_fx_rates f ON f.currency = e.currency
+                  WHERE e.equipment_instance_id = ? AND e.deleted_at IS NULL AND e.status = 'posted'
+                  GROUP BY e.cost_type`, instance.id)
+          : all(`SELECT cost_type, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total
+                  FROM project_cost_entries
+                  WHERE equipment_instance_id = ? AND deleted_at IS NULL AND status = 'posted'
+                  GROUP BY cost_type`, instance.id);
       } catch (_error) {
         return [];
       }

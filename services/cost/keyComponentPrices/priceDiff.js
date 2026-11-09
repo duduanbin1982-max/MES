@@ -8,19 +8,49 @@ const { wrap } = require('../../../middleware/asyncHandler');
 
 function register(app, db) {
   const all = (sql) => db.prepare(sql).all();
+  const PRICE_DIFF_SQL = `
+    SELECT kc.id AS key_component_id, kc.component_type, kc.supplier, kc.supplier_part_no,
+           kc.lead_time_weeks, kc.unit_price AS estimated_price,
+           m.material_name, m.material_code,
+           kcp.actual_price, kcp.id AS current_price_id, kcp.contract_no,
+           kcp.valid_from AS price_valid_from, kcp.priced_at,
+           ROUND(COALESCE(kcp.actual_price, 0) - COALESCE(kc.unit_price, 0), 4) AS price_diff,
+           CASE
+             WHEN kcp.actual_price IS NULL THEN 'no_contract_yet'
+             WHEN kcp.actual_price <= kc.unit_price THEN 'on_or_under_budget'
+             WHEN kcp.actual_price <= kc.unit_price * 1.1 THEN 'over_10pct'
+             WHEN kcp.actual_price <= kc.unit_price * 1.2 THEN 'over_20pct'
+             ELSE 'over_20pct'
+           END AS cost_status
+      FROM key_components kc
+      LEFT JOIN materials m ON m.id = kc.material_id
+      LEFT JOIN key_component_prices kcp ON kcp.id = (
+        SELECT p.id FROM key_component_prices p
+         WHERE p.key_component_id = kc.id
+           AND p.valid_from <= date('now')
+           AND (p.valid_to IS NULL OR p.valid_to >= date('now'))
+         ORDER BY p.valid_from DESC, p.id DESC LIMIT 1
+      )
+     ORDER BY kc.lead_time_weeks DESC, kc.id
+  `;
+  const MULT = 10000;
   
 
   // 全部件价差列表
   app.get("/api/key_components/price_diff", wrap((req, res) => {
-    const rows = all(
-      "SELECT * FROM v_key_component_price_diff ORDER BY lead_time_weeks DESC, key_component_id"
-    );
-    res.json({ count: rows.length, items: rows });
+    const rows = all(PRICE_DIFF_SQL).map((row) => ({
+      ...row,
+      price_unit: "wan",
+      estimated_price_yuan: Math.round(Number(row.estimated_price || 0) * MULT * 100) / 100,
+      actual_price_yuan: row.actual_price == null ? null : Math.round(Number(row.actual_price) * MULT * 100) / 100,
+      price_diff_yuan: Math.round(Number(row.price_diff || 0) * MULT * 100) / 100,
+    }));
+    res.json({ count: rows.length, items: rows, price_unit: "wan" });
   }));
 
   // 价差汇总
   app.get("/api/key_components/price_diff/summary", wrap((req, res) => {
-    const rows = all("SELECT * FROM v_key_component_price_diff");
+    const rows = all(PRICE_DIFF_SQL);
     let totalEstimated = 0;
     let totalActual = 0;
     let pendingCount = 0;
@@ -51,11 +81,13 @@ function register(app, db) {
       on_or_under_budget_count: onBudgetCount,
       over_10pct_count: over10Count,
       over_20pct_count: over20Count,
-      total_estimated_price: Math.round(totalEstimated * 100) / 100,
-      total_actual_price: Math.round(totalActual * 100) / 100,
-      total_diff: Math.round((totalActual - totalEstimated) * 100) / 100,
-      over_budget_diff: Math.round(overTotalDiff * 100) / 100,
-      under_budget_saved: Math.round(underSavedDiff * 100) / 100,
+      price_unit: "wan",
+      currency: "CNY",
+      total_estimated_price: Math.round(totalEstimated * MULT * 100) / 100,
+      total_actual_price: Math.round(totalActual * MULT * 100) / 100,
+      total_diff: Math.round((totalActual - totalEstimated) * MULT * 100) / 100,
+      over_budget_diff: Math.round(overTotalDiff * MULT * 100) / 100,
+      under_budget_saved: Math.round(underSavedDiff * MULT * 100) / 100,
     });
   }));
 }

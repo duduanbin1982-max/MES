@@ -7,6 +7,7 @@ const { wrap } = require('../../../middleware/asyncHandler');
 // Author: 三狗子 | Date: 2026-06-24
 
 const { round2 } = require("./queries");
+const { KEY_COMPONENT_PRICE_MULTIPLIER, KEY_COMPONENT_PRICE_UNIT } = require("../units");
 
 function register(app, db) {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
@@ -14,6 +15,9 @@ function register(app, db) {
   // 成本台账视图依赖 project_cost_entries；老库/精简测试库里可能没有该表，查询失败按空处理
   const safeAll = (sql, ...p) => {
     try { return all(sql, ...p); } catch (_error) { return []; }
+  };
+  const safeGet = (sql, ...p) => {
+    try { return get(sql, ...p); } catch (_error) { return null; }
   };
 
   app.get('/api/equipment_instances/:id/cost_rollup/breakdown', wrap((req, res) => {
@@ -36,6 +40,8 @@ function register(app, db) {
         ROUND(estimated_unit_price * quantity, 2) AS estimated_total,
         ROUND(COALESCE(actual_unit_price, estimated_unit_price) * quantity, 2) AS actual_total,
         ROUND(COALESCE(actual_unit_price, estimated_unit_price) * quantity - estimated_unit_price * quantity, 2) AS price_diff,
+        ROUND(estimated_unit_price * quantity * ${KEY_COMPONENT_PRICE_MULTIPLIER}, 2) AS estimated_total_yuan,
+        ROUND(COALESCE(actual_unit_price, estimated_unit_price) * quantity * ${KEY_COMPONENT_PRICE_MULTIPLIER}, 2) AS actual_total_yuan,
         CASE
           WHEN actual_unit_price IS NULL THEN 'no_contract_yet'
           WHEN actual_unit_price <= estimated_unit_price THEN 'on_or_under_budget'
@@ -92,7 +98,8 @@ function register(app, db) {
       WHERE instance_id = ?
     `, req.params.id);
 
-    const projectCostRows = safeAll(`
+    const hasFx = Boolean(safeGet("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'cost_fx_rates'"));
+    const projectCostRows = hasFx ? safeAll(`
       SELECT
         'project_cost_entry' AS line_type,
         bom_node_id AS bom_id,
@@ -107,6 +114,9 @@ function register(app, db) {
         source_ref AS contract_no,
         amount AS estimated_total,
         amount AS actual_total,
+        ROUND(amount * COALESCE(f.rate_to_cny, 1), 2) AS amount_cny,
+        ROUND(amount * COALESCE(f.rate_to_cny, 1), 2) AS estimated_total_yuan,
+        ROUND(amount * COALESCE(f.rate_to_cny, 1), 2) AS actual_total_yuan,
         0 AS price_diff,
         status AS cost_status,
         cost_type,
@@ -115,6 +125,17 @@ function register(app, db) {
         vendor,
         occurred_on,
         notes
+      FROM v_instance_cost_entry_lines e
+      LEFT JOIN cost_fx_rates f ON f.currency = e.currency
+      WHERE e.instance_id = ?
+    `, req.params.id) : safeAll(`
+      SELECT
+        'project_cost_entry' AS line_type, bom_node_id AS bom_id, item_id,
+        cost_type AS material_code, description AS material_name, cost_type AS material_type,
+        currency AS unit, 1 AS quantity, amount AS estimated_unit_price, amount AS actual_unit_price,
+        source_ref AS contract_no, amount AS estimated_total, amount AS actual_total,
+        amount AS amount_cny, amount AS estimated_total_yuan, amount AS actual_total_yuan,
+        0 AS price_diff, status AS cost_status, cost_type, cost_type_label, source_type, vendor, occurred_on, notes
       FROM v_instance_cost_entry_lines
       WHERE instance_id = ?
     `, req.params.id);
@@ -124,11 +145,33 @@ function register(app, db) {
       items.push(laborRow);
     }
 
-    const totals = items.reduce((acc, r) => ({
-      estimated: round2(acc.estimated + Number(r.estimated_total || 0)),
-      actual:    round2(acc.actual    + Number(r.actual_total    || 0)),
-      diff:      round2(acc.diff      + Number(r.price_diff      || 0))
-    }), { estimated: 0, actual: 0, diff: 0 });
+    // 明细 totals 统一为金额（元）。labor 行保留工时字段供旧调用展示，但不把小时数当金额累加。
+    const rateRow = safeGet("SELECT value FROM system_settings WHERE key = 'labor_rate_per_hour'");
+    const hourlyRate = Math.max(0, Number(rateRow?.value || process.env.LABOR_RATE_PER_HOUR || 200) || 200);
+    const laborLedger = projectCostRows.filter((r) => r.cost_type === "labor").reduce((sum, r) => sum + Number(r.amount_cny || r.amount || 0), 0);
+    const laborEstimatedHours = Number(laborRow?.estimated_total || 0);
+    const laborActualHours = Number(laborRow?.actual_total || 0);
+    const laborEstimatedCost = round2(laborEstimatedHours * hourlyRate);
+    const laborActualCost = laborLedger > 0 ? round2(laborLedger) : round2(laborActualHours * hourlyRate);
+    const otherProjectCosts = projectCostRows.filter((r) => r.cost_type !== "labor").reduce((sum, r) => sum + Number(r.amount_cny || r.amount || 0), 0);
+    const totals = {
+      estimated: round2(
+        keyRows.reduce((sum, r) => sum + Number(r.estimated_total_yuan || 0), 0) +
+        matRows.reduce((sum, r) => sum + Number(r.estimated_total || 0), 0) +
+        laborEstimatedCost + otherProjectCosts
+      ),
+      actual: round2(
+        keyRows.reduce((sum, r) => sum + Number(r.actual_total_yuan || 0), 0) +
+        matRows.reduce((sum, r) => sum + Number(r.actual_total || 0), 0) +
+        laborActualCost + otherProjectCosts
+      ),
+      labor_hours: { estimated: laborEstimatedHours, actual: laborActualHours },
+      labor_cost: { estimated: laborEstimatedCost, actual: laborActualCost, source: laborLedger > 0 ? "project_cost_entries" : "hours_rate" },
+      hourly_rate: hourlyRate,
+      currency: "CNY",
+      key_component_price_unit: KEY_COMPONENT_PRICE_UNIT,
+    };
+    totals.diff = round2(totals.actual - totals.estimated);
 
     res.json({
       equipment_instance_id: Number(req.params.id),

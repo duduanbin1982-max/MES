@@ -54,7 +54,13 @@ SELECT ib.equipment_instance_id AS instance_id,
 FROM instance_bom ib
 JOIN key_components kc ON kc.material_id = ib.material_id
 JOIN materials m       ON m.id = ib.material_id
-LEFT JOIN key_component_prices kcp ON kcp.id = kc.last_price_id
+LEFT JOIN key_component_prices kcp ON kcp.id = (
+         SELECT p.id FROM key_component_prices p
+          WHERE p.key_component_id = kc.id
+            AND p.valid_from <= date('now')
+            AND (p.valid_to IS NULL OR p.valid_to >= date('now'))
+          ORDER BY p.valid_from DESC, p.id DESC LIMIT 1
+       )
 WHERE ib.is_key_component = 1
 `,
 };

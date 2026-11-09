@@ -14,6 +14,7 @@ const {
   round2,
   normalizeBody,
   makeDbHelpers,
+  assertPeriodOpen,
 } = require("./_helpers");
 const { ensureSchema } = require("./schema");
 
@@ -55,6 +56,8 @@ function register(app, db) {
     const offset = Math.max(0, Number(req.query.offset) || 0);
     const rows = all(`
       SELECT e.*,
+             COALESCE(f.rate_to_cny, 1) AS rate_to_cny,
+             ROUND(e.amount * COALESCE(f.rate_to_cny, 1), 2) AS amount_cny,
              ei.instance_code,
              ei.instance_name,
              CASE e.cost_type
@@ -68,6 +71,7 @@ function register(app, db) {
              END AS cost_type_label
         FROM project_cost_entries e
         LEFT JOIN equipment_instances ei ON ei.id = e.equipment_instance_id
+        LEFT JOIN cost_fx_rates f ON f.currency = e.currency
        WHERE ${where.join(" AND ")}
        ORDER BY e.occurred_on DESC, e.id DESC
        LIMIT ? OFFSET ?
@@ -84,10 +88,12 @@ function register(app, db) {
       params.push(Number(req.query.equipment_instance_id));
     }
     const rows = all(`
-      SELECT cost_type, COUNT(*) AS count, COALESCE(SUM(amount), 0) AS amount
-        FROM project_cost_entries
-       WHERE ${where.join(" AND ")}
-       GROUP BY cost_type
+      SELECT e.cost_type, COUNT(*) AS count,
+             COALESCE(SUM(e.amount * COALESCE(f.rate_to_cny, 1)), 0) AS amount
+        FROM project_cost_entries e
+        LEFT JOIN cost_fx_rates f ON f.currency = e.currency
+       WHERE ${where.join(" AND ").replace(/(^| AND )deleted_at/g, "$1e.deleted_at").replace(/(^| AND )status/g, "$1e.status").replace(/(^| AND )equipment_instance_id/g, "$1e.equipment_instance_id").replace(/(^| AND )cost_type/g, "$1e.cost_type")}
+       GROUP BY e.cost_type
     `, ...params);
     const by_type = Object.fromEntries(
       Array.from(COST_TYPES).map((type) => [type, { label: COST_TYPE_LABELS[type] || type, count: 0, amount: 0 }])
@@ -111,7 +117,7 @@ function register(app, db) {
     }
     const instance = get("SELECT id FROM equipment_instances WHERE id = ?", body.equipment_instance_id);
     if (!instance) return res.status(404).json({ error: "equipment_instance not found" });
-    try { assertReferences(get, body.equipment_instance_id, body); } catch (err) { return res.status(400).json({ error: err.message }); }
+    try { assertReferences(get, body.equipment_instance_id, body); assertPeriodOpen(db, body.occurred_on); } catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
     const createdBy = req.user && (req.user.uid || req.user.id || req.user.sub) ? (req.user.uid || req.user.id || req.user.sub) : null;
     const result = run(`
       INSERT INTO project_cost_entries (
@@ -137,7 +143,11 @@ function register(app, db) {
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
-    try { assertReferences(get, body.equipment_instance_id ?? existing.equipment_instance_id, { ...existing, ...body }); } catch (err) { return res.status(400).json({ error: err.message }); }
+    try {
+      assertReferences(get, body.equipment_instance_id ?? existing.equipment_instance_id, { ...existing, ...body });
+      assertPeriodOpen(db, existing.occurred_on);
+      if (body.occurred_on) assertPeriodOpen(db, body.occurred_on);
+    } catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
     const fields = Object.keys(body);
     if (!fields.length) return res.status(400).json({ error: "没有可更新字段" });
     fields.push("updated_at");
@@ -180,6 +190,7 @@ function register(app, db) {
         for (const row of rows) {
           const sourceRef = `purchase_order_item:${row.id}:material`;
           if (exists.get("purchase_order_item", sourceRef)) { skipped.material += 1; continue; }
+          assertPeriodOpen(db, String(row.ordered_date || todayISO()).slice(0, 10));
           insert.run(
             row.equipment_instance_id,
             row.bom_node_id || null,
@@ -210,6 +221,7 @@ function register(app, db) {
           const sourceRef = `work_order:${row.id}:labor`;
           if (exists.get("work_order", sourceRef)) { skipped.labor += 1; continue; }
           const hours = Number(row.actual_hours || row.estimated_hours || 0);
+          assertPeriodOpen(db, String(row.actual_end || row.planned_end || todayISO()).slice(0, 10));
           insert.run(
             row.equipment_instance_id,
             null,
@@ -239,6 +251,7 @@ function register(app, db) {
     const id = Number(req.params.id);
     const existing = get("SELECT * FROM project_cost_entries WHERE id = ? AND deleted_at IS NULL", id);
     if (!existing) return res.status(404).json({ error: "project_cost_entry not found" });
+    try { assertPeriodOpen(db, existing.occurred_on); } catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
     run("UPDATE project_cost_entries SET status = 'void', deleted_at = ?, updated_at = ? WHERE id = ?", nowISO(), nowISO(), id);
     audit.record(db, req, { action: "cost.entry.void", resource_type: "project_cost_entry", resource_id: id, before: existing, diff_summary: `作废成本 ${existing.cost_type} ${existing.amount}` });
     res.json({ ok: true });

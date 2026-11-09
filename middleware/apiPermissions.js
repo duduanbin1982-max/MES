@@ -139,6 +139,10 @@ const RULES = [
   match(/^\/equipment_instances\/\d+\/bom(?:\/.*)?$/, WRITE, ["equipment:write", "process:write", "material:write"]),
   match(/^\/bom\/\d+(?:\/move)?$/, WRITE, ["equipment:write", "process:write", "material:write"]),
   // 2026-11-09（成本归集审计）：成本/台账/偏差属于财务数据，不能走“未命中规则默认放行”。
+  match(/^\/cost_periods(?:\/.*)?$/, READ, ["report:read"]),
+  match(/^\/cost_periods(?:\/.*)?$/, WRITE, ["report:read"]),
+  match(/^\/cost_fx_rates(?:\/.*)?$/, READ, ["report:read"]),
+  match(/^\/cost_fx_rates(?:\/.*)?$/, WRITE, ["report:read"]),
   match(/^\/project_cost_entries(?:\/.*)?$/, READ, ["report:read"]),
   match(/^\/project_cost_entries(?:\/.*)?$/, WRITE, ["report:read"]),
   match(/^\/equipment_instances\/\d+\/cost_(?:rollup|variance)(?:\/.*)?$/, READ, ["report:read"]),

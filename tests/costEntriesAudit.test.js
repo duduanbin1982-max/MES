@@ -3,6 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Database = require("better-sqlite3");
 const projectCostEntries = require("../services/cost/projectCostEntries");
+const { registerPeriodRoutes } = require("../services/cost/periodRoutes");
 
 function makeApp() {
   const routes = [];
@@ -91,5 +92,32 @@ test("COST-E2 回填费率非法被拒", async () => {
   assert.equal(bad.res.statusCode, 400);
   const negative = await callRoute(app, "POST", "/api/project_cost_entries/backfill", { body: { hourly_rate: -1 } });
   assert.equal(negative.res.statusCode, 400);
+  db.close();
+});
+
+
+test("COST-E3 期间锁定/反关账 + 多币种折算", async () => {
+  const db = makeDb();
+  const app = makeApp();
+  projectCostEntries.register(app, db);
+  registerPeriodRoutes(app, db);
+  const locked = await callRoute(app, "POST", "/api/cost_periods/:period/lock", { params: { period: "2026-02" } });
+  assert.equal(locked.res.body.status, "locked");
+  const blocked = await callRoute(app, "POST", "/api/project_cost_entries", {
+    body: { equipment_instance_id: 1, cost_type: "material", description: "锁定期间", amount: 100, occurred_on: "2026-02-10" },
+  });
+  assert.equal(blocked.res.statusCode, 409);
+  const reopened = await callRoute(app, "POST", "/api/cost_periods/:period/reopen", { params: { period: "2026-02" } });
+  assert.equal(reopened.res.body.status, "open");
+
+  db.prepare("INSERT INTO cost_fx_rates (currency, rate_to_cny) VALUES ('USD', 7.2)").run();
+  const usd = await callRoute(app, "POST", "/api/project_cost_entries", {
+    body: { equipment_instance_id: 1, cost_type: "outsourcing", description: "美元外协", amount: 100, currency: "USD", occurred_on: "2026-03-01" },
+  });
+  assert.equal(usd.res.statusCode, 200);
+  const list = await callRoute(app, "GET", "/api/project_cost_entries", { query: { equipment_instance_id: "1" } });
+  assert.equal(list.res.body.items[0].amount_cny, 720);
+  const summary = await callRoute(app, "GET", "/api/project_cost_entries/summary", { query: { equipment_instance_id: "1" } });
+  assert.equal(summary.res.body.total, 720);
   db.close();
 });

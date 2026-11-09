@@ -39,14 +39,21 @@ function register(app, db) {
               p.valid_from, p.valid_to, p.priced_at, p.notes,
               u.username AS priced_by_username,
               ROUND(COALESCE(p.actual_price, 0) - COALESCE(kc.unit_price, 0), 4) AS price_diff,
-              (p.id = kc.last_price_id) AS is_current
+              (p.id = kc.last_price_id) AS is_current,
+              ROUND(kc.unit_price * 10000, 2) AS estimated_price_yuan,
+              ROUND(COALESCE(p.actual_price, 0) * 10000, 2) AS actual_price_yuan,
+              ROUND((COALESCE(p.actual_price, 0) - COALESCE(kc.unit_price, 0)) * 10000, 2) AS price_diff_yuan
          FROM key_components kc
          LEFT JOIN key_component_prices p ON p.key_component_id = kc.id
          LEFT JOIN users u ON u.id = p.priced_by
         WHERE kc.id = ?
-          AND p.id = COALESCE(kc.last_price_id, (
-            SELECT id FROM key_component_prices WHERE key_component_id = kc.id ORDER BY priced_at DESC, id DESC LIMIT 1
-          ))`,
+          AND p.id = (
+            SELECT id FROM key_component_prices p2
+             WHERE p2.key_component_id = kc.id
+               AND p2.valid_from <= date('now')
+               AND (p2.valid_to IS NULL OR p2.valid_to >= date('now'))
+             ORDER BY p2.valid_from DESC, p2.id DESC LIMIT 1
+          )`,
       id
     );
     if (!row) return res.status(404).json({ error: "key_component not found" });
@@ -92,9 +99,10 @@ function register(app, db) {
     if (!row) return res.status(404).json({ error: "price not found" });
     if (row.valid_to) return res.status(400).json({ error: "该条已停用" });
 
-    const today = todayISO();
+    // 停用当天即失效：valid_to 设为昨天，避免“今天删除、今天仍算现行价”。
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const tx = db.transaction((pid) => {
-      run("UPDATE key_component_prices SET valid_to = ? WHERE id = ?", [today, pid]);
+      run("UPDATE key_component_prices SET valid_to = ? WHERE id = ?", [yesterday, pid]);
       const next = get(
         `SELECT id FROM key_component_prices
           WHERE key_component_id = ? AND id != ?

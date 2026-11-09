@@ -112,14 +112,32 @@
         <el-table :data="entries" size="small" max-height="300" empty-text="暂无成本台账">
           <el-table-column prop="cost_type_label" label="类型" width="90" />
           <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
-          <el-table-column label="金额" width="130" align="right"><template #default="{ row }">{{ fmtMoney(row.amount) }}</template></el-table-column>
+          <el-table-column prop="currency" label="币种" width="70" />
+          <el-table-column label="金额(原币)" width="130" align="right"><template #default="{ row }">{{ fmtMoney(row.amount) }}</template></el-table-column>
+          <el-table-column label="折合CNY" width="130" align="right"><template #default="{ row }">{{ fmtMoney(row.amount_cny) }}</template></el-table-column>
           <el-table-column prop="occurred_on" label="发生日" width="110" />
           <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag size="small" :type="row.status === 'posted' ? 'success' : row.status === 'void' ? 'info' : 'warning'">{{ row.status }}</el-tag></template></el-table-column>
           <el-table-column prop="source_ref" label="来源" min-width="160" show-overflow-tooltip />
-          <el-table-column v-if="canWriteCost" label="操作" width="80" fixed="right">
-            <template #default="{ row }"><el-button link size="small" type="danger" @click="voidEntry(row)">作废</el-button></template>
+          <el-table-column v-if="canWriteCost" label="操作" width="130" fixed="right">
+            <template #default="{ row }">
+              <el-button link size="small" type="primary" @click="openEntry(row)">编辑</el-button>
+              <el-button link size="small" type="danger" @click="voidEntry(row)">作废</el-button>
+            </template>
           </el-table-column>
         </el-table>
+      </el-card>
+
+      <el-card v-if="selectedInstance" style="margin-bottom: 16px">
+        <template #header><span style="font-weight: 500"><el-icon><Lock /></el-icon> 期间关账</span></template>
+        <div class="period-row">
+          <el-date-picker v-model="periodMonth" type="month" value-format="YYYY-MM" style="width: 160px" @change="loadPeriod" />
+          <el-tag :type="periodStatus === 'approved' ? 'danger' : periodStatus === 'locked' ? 'warning' : 'success'">{{ periodLabel }}</el-tag>
+          <el-button v-if="canManagePeriod" size="small" :disabled="periodStatus === 'approved'" @click="lockPeriod">锁定</el-button>
+          <el-button v-if="canManagePeriod" size="small" type="primary" :disabled="periodStatus === 'approved'" @click="approvePeriod">审批</el-button>
+          <el-button v-if="canManagePeriod" size="small" :disabled="periodStatus === 'open'" @click="reopenPeriod">反关账</el-button>
+          <el-button v-if="canManagePeriod" size="small" @click="openFx">汇率</el-button>
+          <span class="period-hint">锁定/审批后，该期间成本新增、修改、作废、回填均被拒绝。</span>
+        </div>
       </el-card>
 
       <el-card v-if="selectedInstance" style="margin-bottom: 16px">
@@ -184,7 +202,7 @@
       </el-card>
     </div>
 
-    <el-dialog v-model="entryDlg.show" title="新增成本台账" width="560px">
+    <el-dialog v-model="entryDlg.show" :title="entryDlg.editId ? '编辑成本台账' : '新增成本台账'" width="560px">
       <el-form :model="entryDlg.form" label-width="90px" size="small">
         <el-form-item label="成本类型" required>
           <el-select v-model="entryDlg.form.cost_type" style="width:100%">
@@ -194,10 +212,28 @@
         <el-form-item label="说明" required><el-input v-model="entryDlg.form.description" maxlength="500" show-word-limit /></el-form-item>
         <el-form-item label="金额(元)" required><el-input-number v-model="entryDlg.form.amount" :min="0" :precision="2" :max="1000000000000" style="width:100%" /></el-form-item>
         <el-form-item label="发生日期" required><el-date-picker v-model="entryDlg.form.occurred_on" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+        <el-form-item label="币种">
+          <el-select v-model="entryDlg.form.currency" style="width:100%">
+            <el-option label="人民币 CNY" value="CNY" /><el-option label="美元 USD" value="USD" /><el-option label="欧元 EUR" value="EUR" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="供应商/外协"><el-input v-model="entryDlg.form.vendor" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="entryDlg.form.notes" type="textarea" :rows="2" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="entryDlg.show=false">取消</el-button><el-button type="primary" :loading="entryDlg.saving" @click="saveEntry">保存</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="fxDlg.show" title="汇率维护（折合 CNY）" width="520px">
+      <el-table :data="fxDlg.rows" size="small" max-height="220">
+        <el-table-column prop="currency" label="币种" width="90" />
+        <el-table-column prop="rate_to_cny" label="汇率" width="120" />
+        <el-table-column prop="updated_at" label="更新时间" />
+      </el-table>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <el-select v-model="fxDlg.currency" style="width:120px"><el-option label="USD" value="USD" /><el-option label="EUR" value="EUR" /><el-option label="CNY" value="CNY" /></el-select>
+        <el-input-number v-model="fxDlg.rate" :min="0.0001" :max="1000000" :precision="4" style="width:140px" />
+        <el-button type="primary" :loading="fxDlg.saving" @click="saveFx">保存</el-button>
+      </div>
     </el-dialog>
   </div>
 </template>
@@ -209,6 +245,7 @@ import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ApiRecord } from '../types/api'
 import { useAuthStore } from '../stores/auth'
+import { Lock } from '@element-plus/icons-vue'
 import {
   confidenceTag,
   contributorText,
@@ -236,7 +273,12 @@ const costTypeOptions = [
   { value: 'outsourcing', label: '外协' }, { value: 'depreciation', label: '折旧' },
   { value: 'rework', label: '返工' }, { value: 'quality_loss', label: '质量损失' },
 ]
-const entryDlg = reactive<any>({ show: false, saving: false, backfilling: false, form: { cost_type: 'material', description: '', amount: 0, occurred_on: '' } })
+const entryDlg = reactive<any>({ show: false, saving: false, backfilling: false, editId: null, form: { cost_type: 'material', description: '', amount: 0, occurred_on: '' } })
+const periodMonth = ref(new Date().toISOString().slice(0, 7))
+const periodStatus = ref('open')
+const periodLabel = computed(() => ({ open: '开放', locked: '已锁定', approved: '已审批' }[periodStatus.value] || '开放'))
+const canManagePeriod = computed(() => auth.role === 'admin')
+const fxDlg = reactive<any>({ show: false, rows: [], currency: 'USD', rate: 7.2, saving: false })
 const todayText = () => new Date().toISOString().slice(0, 10)
 const isVarianceView = computed(() => route.path === '/cost-variance' || route.query.view === 'variance' || route.query.view === 'cost-variance')
 const showInstancePicker = computed(() => !isVarianceView.value)
@@ -255,7 +297,48 @@ const load = async () => {
   catch(_) { data.value = {}; ElMessage.error('加载成本数据失败') }
   try { variance.value = await Api.get('/equipment_instances/' + selectedInstance.value + '/cost_variance') }
   catch(_) { variance.value = {} }
-  try { await loadEntries() } finally { loading.value = false }
+  try { await Promise.all([loadEntries(), loadPeriod()]) } finally { loading.value = false }
+}
+
+const openFx = async () => {
+  try {
+    const data: any = await Api.get('/cost_fx_rates')
+    fxDlg.rows = data.rates || []
+    fxDlg.show = true
+  } catch (error: any) { ElMessage.error('加载汇率失败：' + (error?.response?.data?.error || error.message)) }
+}
+
+const saveFx = async () => {
+  fxDlg.saving = true
+  try {
+    await Api.put('/cost_fx_rates/' + fxDlg.currency, { rate_to_cny: fxDlg.rate })
+    ElMessage.success('汇率已保存')
+    await openFx()
+    await loadEntries()
+  } catch (error: any) { ElMessage.error('保存汇率失败：' + (error?.response?.data?.error || error.message)) }
+  finally { fxDlg.saving = false }
+}
+
+const loadPeriod = async () => {
+  try {
+    const data: any = await Api.get('/cost_periods', { params: { period: periodMonth.value } })
+    periodStatus.value = data.periods?.[0]?.status || 'open'
+  } catch (_error) { periodStatus.value = 'open' }
+}
+
+const lockPeriod = async () => {
+  try { await Api.post('/cost_periods/' + periodMonth.value + '/lock'); ElMessage.success('期间已锁定'); await loadPeriod() }
+  catch (error: any) { ElMessage.error('锁定失败：' + (error?.response?.data?.error || error.message)) }
+}
+
+const approvePeriod = async () => {
+  try { await Api.post('/cost_periods/' + periodMonth.value + '/approve'); ElMessage.success('期间已审批'); await loadPeriod() }
+  catch (error: any) { ElMessage.error('审批失败：' + (error?.response?.data?.error || error.message)) }
+}
+
+const reopenPeriod = async () => {
+  try { await Api.post('/cost_periods/' + periodMonth.value + '/reopen'); ElMessage.success('期间已反关账'); await loadPeriod() }
+  catch (error: any) { ElMessage.error('反关账失败：' + (error?.response?.data?.error || error.message)) }
 }
 
 const loadEntries = async () => {
@@ -275,8 +358,11 @@ const loadEntries = async () => {
   }
 }
 
-const openEntry = () => {
-  entryDlg.form = { cost_type: 'material', description: '', amount: 0, occurred_on: todayText(), vendor: '', notes: '' }
+const openEntry = (row?: any) => {
+  entryDlg.editId = row?.id || null
+  entryDlg.form = row
+    ? { cost_type: row.cost_type, description: row.description, amount: Number(row.amount || 0), occurred_on: row.occurred_on, currency: row.currency || 'CNY', vendor: row.vendor || '', notes: row.notes || '' }
+    : { cost_type: 'material', description: '', amount: 0, occurred_on: todayText(), currency: 'CNY', vendor: '', notes: '' }
   entryDlg.show = true
 }
 
@@ -284,8 +370,9 @@ const saveEntry = async () => {
   if (!entryDlg.form.description || !entryDlg.form.amount) return ElMessage.warning('请填写说明和金额')
   entryDlg.saving = true
   try {
-    await Api.post('/project_cost_entries', { ...entryDlg.form, currency: 'CNY', status: 'posted' })
-    ElMessage.success('成本已入账')
+    if (entryDlg.editId) await Api.put('/project_cost_entries/' + entryDlg.editId, { ...entryDlg.form })
+    else await Api.post('/project_cost_entries', { ...entryDlg.form, status: 'posted' })
+    ElMessage.success(entryDlg.editId ? '成本已更新' : '成本已入账')
     entryDlg.show = false
     await load()
   } catch (error: any) {
@@ -340,4 +427,6 @@ onMounted(async () => {
 .stat-val{display:block;font-size:22px;font-weight:600}
 .stat-lbl{display:block;font-size:12px;color:var(--el-color-info);margin-top:2px}
 .ledger-summary{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:10px;color:var(--el-text-color-secondary);font-size:13px}
+.period-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.period-hint{color:var(--el-text-color-secondary);font-size:12px}
 </style>

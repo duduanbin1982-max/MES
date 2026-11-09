@@ -157,3 +157,45 @@
 5. 作废该条 → 不再计入；
 6. 用 worker 账号访问台账/rollup，应 403；
 7. `node --test tests/costEntriesAudit.test.js tests/costRollupFull.test.js tests/costPermissions.test.js`。
+
+
+## 9. 遗留问题闭环（2026-11-09 19:40）
+
+| 原遗留 | 闭环方式 | 验证 |
+|---|---|---|
+| 关键件万元/物料元口径 | 新增 `services/cost/units.js`：关键件单价按 **万元/件** ×10000 归一化为元；`key_components` 增加 `price_unit/estimated_total_yuan/actual_total_yuan`；rollup 全口径改用元；PriceVariance/current price 增加 `*_yuan` 字段并按元展示；legacy raw 字段保留兼容 | 生产实例 1：关键件估价 33,848,000 元、实际 34,448,000 元；全口径估算 35,492,020、实际 36,092,520、毛利 -18,092,520（-100.51%） |
+| breakdown labor 行把工时当金额 | breakdown 的 `totals` 改为金额：关键件×10000 + 物料 + 人工成本 + 其他台账；labor 行保留 hours 字段供旧调用展示，但不再把小时数累加进金额 totals；新增 `labor_cost`/`labor_hours`/`currency`/`key_component_price_unit` | 明细 totals 与实际金额可对账；costRollup 64/64 |
+| 关键件取 last_price_id、未校合同有效期 | readModel 的有效价改为“当日有效的合同价”子查询（valid_from ≤ today ≤ valid_to/null）；PriceDiff/current 接口同样按有效价；停用时 `valid_to` 设为昨天，当天即失效；旧 `last_price_id` 仅保留给历史展示/回退 | keyComponentPrices **17/17**；过期合同不再作为 current |
+| 台账无期间锁定/审批 | 新增 `cost_periods` 表与 `/api/cost_periods` 锁定/审批/反关账 API；台账新增/修改/作废/回填统一校验期间，锁定/审批后返回 **409**；成本页新增“期间关账”卡片 | 生产 2026-11 期间锁定后新增返回 409；反关账后恢复 |
+| 多币种未换算 | 新增 `cost_fx_rates` 表、CNY=1 种子、`/api/cost_fx_rates` 维护 API；台账列表/汇总、rollup、variance、breakdown 统一按 `rate_to_cny` 折算；成本页新增币种选择、折合 CNY 列与“汇率”维护弹窗 | 测试 USD 100 ×7.2 = 720 CNY；CNY 汇率 1 |
+| 台账只有新增/作废、无编辑 UI | 台账列表增加“编辑”，复用新增弹窗，PUT 更新；期间锁定/审批时编辑同样返回 409 | Playwright 打开“编辑成本台账”，无 pageerror |
+
+### 9.1 修复后生产口径
+
+| 指标 | 数值 |
+|---|---:|
+| 关键件估价 | 33,848,000 元（3,384.8 万元） |
+| 关键件实际 | 34,448,000 元（3,444.8 万元） |
+| 物料估算 | 1,620,020 元 |
+| 人工估算 / 实际 | 24,000 / 24,500 元 |
+| 全口径估算成本 | 35,492,020 元 |
+| 全口径实际成本 | 36,092,520 元 |
+| 全口径成本偏差 | +600,500 元 |
+| 合同毛利 | **-18,092,520 元（-100.51%）** |
+| 成本台账 | 3 条 / 24,500 元 |
+| 2026-11 期间 | 开放（冒烟后已反关账） |
+
+### 9.2 验证
+
+- 全量闸门：**946/0**；
+- `keyComponentPrices` 17/17；`costReadModel` 7/7；`costRollup` 64/64；`costEntriesAudit` 3/3；`costPermissions` 1/1；`costRollupFull` 1/1；
+- 前端 eslint/typecheck/build 通过；
+- Playwright `/cost` 选 TBM-2026-001：KPI 全口径、3 条台账、期间关账、汇率弹窗、编辑弹窗均正常，无 pageerror。
+
+### 9.3 仍需注意
+
+1. **单位前提**：以迁移 014 注释“万元/件”为准；若业务实际录入是元，需要改 `units.js` 或数据迁移，不能两套混用。
+2. **汇率是现行单一汇率**，未按发生日期取历史汇率；跨期外币成本仍需财务确认。
+3. 期间锁定/审批可由同一 admin 完成，尚无职责分离；重大财务项目建议增加复核角色。
+4. legacy `totals.actual_cost` 仍是不含人工/台账的原口径，外部旧调用需迁移到 `actual_cost_full`。
+5. `breakdown` 的 labor 行保留 hours 字段（兼容旧前端/测试），金额 totals 已改为 `labor_cost`/`labor_hours` 双口径。

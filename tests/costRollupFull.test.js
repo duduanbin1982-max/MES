@@ -18,7 +18,7 @@ function makeDb() {
     CREATE TABLE system_settings (key TEXT PRIMARY KEY, value TEXT);
     INSERT INTO equipment_instances VALUES (1, 'P-1', '项目一', '客户', 'C-1', 5000, 'yuan', 'active', 10);
     INSERT INTO materials VALUES (10, 'K-1', '主轴承', 'mech', 'pcs', 100), (20, 'M-1', '钢板', 'raw', 'kg', 10);
-    INSERT INTO key_components VALUES (1, 10, 'bearing', 'SKF', 100, NULL);
+    INSERT INTO key_components VALUES (1, 10, 'bearing', 'SKF', 0.01, NULL);
     INSERT INTO instance_bom VALUES (1, 1, 10, 1, 1), (2, 1, 20, 2, 0);
     INSERT INTO work_orders VALUES (1, 1, 10, 5, 'completed');
     INSERT INTO system_settings VALUES ('labor_rate_per_hour', '200');
@@ -43,8 +43,8 @@ test("COST-ROLLUP 全口径：人工按台账、外协单列、合同毛利按�
   rollup.register(app, db);
   const result = await call(app, "/api/equipment_instances/:id/cost_rollup");
   assert.equal(result.statusCode, 200);
-  assert.equal(result.body.totals.estimated_cost, 120);
-  assert.equal(result.body.totals.actual_cost, 120);
+  assert.equal(result.body.totals.estimated_cost, 20.01);
+  assert.equal(result.body.totals.actual_cost, 20.01);
   assert.equal(result.body.labor.estimated_hours, 10);
   assert.equal(result.body.labor.actual_hours, 5);
   assert.equal(result.body.labor.hourly_rate, 200);
@@ -53,6 +53,8 @@ test("COST-ROLLUP 全口径：人工按台账、外协单列、合同毛利按�
   assert.equal(result.body.labor.cost_source, "project_cost_entries");
   assert.equal(result.body.ledger.total, 1000);
   assert.equal(result.body.ledger.other_costs, 200);
+  assert.equal(result.body.key_components.price_unit, 'wan');
+  assert.equal(result.body.key_components.estimated_total_yuan, 100);
   assert.equal(result.body.totals.estimated_cost_full, 2120);
   assert.equal(result.body.totals.actual_cost_full, 1120);
   assert.equal(result.body.totals.cost_diff_full, -1000);

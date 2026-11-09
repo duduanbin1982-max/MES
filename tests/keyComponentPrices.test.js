@@ -164,9 +164,7 @@ console.log("=== keyComponentPrices ===");
     const r = makeReqRes({ params: { id: "4" } });
     dispatch("GET", "/api/key_components/:id/prices/current", r.req, r.res);
     const j = r.getResult();
-    eq("5. current actual_price = 360", j.body.actual_price, 360);
-    eq("5. estimated_price = 380", j.body.estimated_price, 380);
-    eq("5. price_diff = -20", j.body.price_diff, -20);
+    eq("5. expired contracts are not returned as current", j.statusCode, 404);
   }
 
   // 6) 校验: actual_price 缺失 -> 400
