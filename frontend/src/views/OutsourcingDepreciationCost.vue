@@ -10,7 +10,7 @@
           <el-option v-for="item in instances" :key="item.id" :label="item.instance_code + ' | ' + (item.instance_name || '')" :value="item.id" />
         </el-select>
         <el-button :loading="loading" @click="load">刷新</el-button>
-        <el-button type="primary" :disabled="!selectedInstance" @click="openDialog()">新增成本</el-button>
+        <el-button v-if="canWrite" type="primary" :disabled="!selectedInstance" @click="openDialog()">新增成本</el-button>
       </div>
     </PageToolbar>
 
@@ -18,10 +18,10 @@
 
     <template v-else>
       <el-row :gutter="16" class="kpi-row">
-        <el-col :span="6"><el-card><el-statistic title="外协成本" :value="money(summary.by_type?.outsourcing?.amount)" /></el-card></el-col>
-        <el-col :span="6"><el-card><el-statistic title="折旧成本" :value="money(summary.by_type?.depreciation?.amount)" /></el-card></el-col>
-        <el-col :span="6"><el-card><el-statistic title="返工成本" :value="money(summary.by_type?.rework?.amount)" /></el-card></el-col>
-        <el-col :span="6"><el-card><el-statistic title="质量损失" :value="money(summary.by_type?.quality_loss?.amount)" /></el-card></el-col>
+        <el-col :span="6"><el-card><el-statistic title="外协成本（CNY）" :value="money(summary.by_type?.outsourcing?.amount)" /></el-card></el-col>
+        <el-col :span="6"><el-card><el-statistic title="折旧成本（CNY）" :value="money(summary.by_type?.depreciation?.amount)" /></el-card></el-col>
+        <el-col :span="6"><el-card><el-statistic title="返工成本（CNY）" :value="money(summary.by_type?.rework?.amount)" /></el-card></el-col>
+        <el-col :span="6"><el-card><el-statistic title="质量损失（CNY）" :value="money(summary.by_type?.quality_loss?.amount)" /></el-card></el-col>
       </el-row>
 
       <el-card>
@@ -45,8 +45,12 @@
         <el-table :data="items" stripe size="small" v-loading="loading" height="560" empty-text="暂无专项成本台账">
           <el-table-column prop="cost_type_label" label="成本类别" width="120" />
           <el-table-column prop="description" label="事项" min-width="190" show-overflow-tooltip />
-          <el-table-column prop="amount" label="金额" width="120">
+          <el-table-column prop="currency" label="币种" width="70" />
+          <el-table-column label="金额(原币)" width="130">
             <template #default="{ row }">{{ money(row.amount) }}</template>
+          </el-table-column>
+          <el-table-column label="折合CNY" width="130">
+            <template #default="{ row }">{{ money(row.amount_cny ?? row.amount) }}</template>
           </el-table-column>
           <el-table-column prop="vendor" label="供应商/对象" min-width="140" show-overflow-tooltip />
           <el-table-column prop="source_type" label="来源类型" width="120" />
@@ -58,7 +62,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="notes" label="备注" min-width="160" show-overflow-tooltip />
-          <el-table-column label="操作" width="140" fixed="right">
+          <el-table-column v-if="canWrite" label="操作" width="140" fixed="right">
             <template #default="{ row }">
               <el-button link size="small" @click="openDialog(row)">编辑</el-button>
               <el-popconfirm title="确认作废这条成本台账？" @confirm="voidEntry(row)">
@@ -88,6 +92,11 @@
         </el-form-item>
         <el-form-item label="发生日期">
           <el-date-picker v-model="form.occurred_on" type="date" value-format="YYYY-MM-DD" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="币种">
+          <el-select v-model="form.currency" style="width:100%">
+            <el-option label="人民币 CNY" value="CNY" /><el-option label="美元 USD" value="USD" /><el-option label="欧元 EUR" value="EUR" />
+          </el-select>
         </el-form-item>
         <el-form-item label="供应商/对象">
           <el-input v-model="form.vendor" placeholder="外协供应商、设备名称或责任对象" />
@@ -120,7 +129,11 @@
 import { onMounted, reactive, ref } from 'vue'
 import { Api } from '../api'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '../stores/auth'
+import { computed } from 'vue'
 
+const auth = useAuthStore()
+const canWrite = computed(() => auth.role === 'admin' || auth.role === 'foreman')
 const instances = ref<any[]>([])
 const selectedInstance = ref<any>(null)
 const loading = ref(false)
@@ -138,10 +151,13 @@ const form = reactive<any>({
   vendor: '',
   source_type: 'MANUAL',
   source_ref: '',
+  currency: 'CNY',
   status: 'posted',
   notes: '',
 })
 
+const SPECIAL_COST_TYPES = 'outsourcing,depreciation,rework,quality_loss'
+const errText = (e: any) => e?.response?.data?.error || e?.response?.data?.message || e?.message || String(e)
 const money = (value: any) => Number(value || 0).toLocaleString('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 })
 const statusLabel = (status: string) => ({ draft: '草稿', posted: '已入账', void: '作废' } as any)[status] || status || '-'
 
@@ -155,6 +171,7 @@ const resetForm = (row?: any) => {
     vendor: row?.vendor || '',
     source_type: row?.source_type || 'MANUAL',
     source_ref: row?.source_ref || '',
+    currency: row?.currency || 'CNY',
     status: row?.status === 'draft' ? 'draft' : 'posted',
     notes: row?.notes || '',
   })
@@ -164,9 +181,12 @@ const loadInstances = async () => {
   try {
     const data = await Api.get('/equipment_instances')
     instances.value = data.items || data || []
-    if (!selectedInstance.value && instances.value.length) selectedInstance.value = instances.value[0].id
+    if (!selectedInstance.value && instances.value.length) {
+      const preferred = instances.value.find((item: any) => !/演示|演练|demo|培训/i.test(String(item.instance_name || '')) && item.status !== 'archived')
+      selectedInstance.value = (preferred || instances.value[0]).id
+    }
   } catch (e: any) {
-    ElMessage.error('加载装备实例失败: ' + (e?.message || e))
+    ElMessage.error('加载装备实例失败: ' + errText(e))
   }
 }
 
@@ -175,13 +195,13 @@ const load = async () => {
   loading.value = true
   try {
     const [list, sum] = await Promise.all([
-      Api.get('/project_cost_entries', { params: { equipment_instance_id: selectedInstance.value } }),
-      Api.get('/project_cost_entries/summary', { params: { equipment_instance_id: selectedInstance.value } }),
+      Api.get('/project_cost_entries', { params: { equipment_instance_id: selectedInstance.value, cost_types: SPECIAL_COST_TYPES, limit: 500 } }),
+      Api.get('/project_cost_entries/summary', { params: { equipment_instance_id: selectedInstance.value, cost_types: SPECIAL_COST_TYPES } }),
     ])
     items.value = list.items || []
     summary.value = sum || { by_type: {}, total: 0 }
   } catch (e: any) {
-    ElMessage.error('加载专项成本台账失败: ' + (e?.message || e))
+    ElMessage.error('加载专项成本台账失败: ' + errText(e))
     items.value = []
     summary.value = { by_type: {}, total: 0 }
   } finally {
@@ -209,13 +229,14 @@ const saveEntry = async () => {
       source_ref: form.source_ref,
       status: form.status,
       notes: form.notes,
+      currency: form.currency,
     }
     if (editing.value?.id) await Api.put(`/project_cost_entries/${editing.value.id}`, payload)
     else await Api.post('/project_cost_entries', payload)
     dialogVisible.value = false
     await load()
   } catch (e: any) {
-    ElMessage.error('保存专项成本失败: ' + (e?.message || e))
+    ElMessage.error('保存专项成本失败: ' + errText(e))
   } finally {
     saving.value = false
   }
@@ -226,7 +247,7 @@ const voidEntry = async (row: any) => {
     await Api.del(`/project_cost_entries/${row.id}`)
     await load()
   } catch (e: any) {
-    ElMessage.error('作废失败: ' + (e?.message || e))
+    ElMessage.error('作废失败: ' + errText(e))
   }
 }
 

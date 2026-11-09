@@ -121,3 +121,23 @@ test("COST-E3 期间锁定/反关账 + 多币种折算", async () => {
   assert.equal(summary.res.body.total, 720);
   db.close();
 });
+
+
+test("COST-E4 专项成本按 cost_types 过滤，汇总只算专项", async () => {
+  const db = makeDb();
+  const app = makeApp();
+  projectCostEntries.register(app, db);
+  const base = { equipment_instance_id: 1, description: "x", amount: 100, occurred_on: "2026-04-01" };
+  await callRoute(app, "POST", "/api/project_cost_entries", { body: { ...base, cost_type: "labor" } });
+  await callRoute(app, "POST", "/api/project_cost_entries", { body: { ...base, cost_type: "outsourcing", amount: 200 } });
+  await callRoute(app, "POST", "/api/project_cost_entries", { body: { ...base, cost_type: "depreciation", amount: 300 } });
+  const list = await callRoute(app, "GET", "/api/project_cost_entries", { query: { equipment_instance_id: "1", cost_types: "outsourcing,depreciation" } });
+  assert.equal(list.res.body.items.length, 2);
+  assert.deepEqual(list.res.body.items.map((row) => row.cost_type).sort(), ["depreciation", "outsourcing"]);
+  const summary = await callRoute(app, "GET", "/api/project_cost_entries/summary", { query: { equipment_instance_id: "1", cost_types: "outsourcing,depreciation" } });
+  assert.equal(summary.res.body.by_type.labor.amount, 0);
+  assert.equal(summary.res.body.by_type.outsourcing.amount, 200);
+  assert.equal(summary.res.body.by_type.depreciation.amount, 300);
+  assert.equal(summary.res.body.total, 500);
+  db.close();
+});

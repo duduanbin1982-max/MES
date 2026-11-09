@@ -18,6 +18,11 @@ const {
 } = require("./_helpers");
 const { ensureSchema } = require("./schema");
 
+function requestedCostTypes(query) {
+  const raw = query.cost_types || query.cost_type || "";
+  return String(raw).split(",").map((value) => value.trim()).filter((value) => COST_TYPES.has(value));
+}
+
 function assertReferences(get, instanceId, body) {
   for (const [table, field] of [["instance_bom", "bom_node_id"], ["work_orders", "work_order_id"]]) {
     const value = body[field];
@@ -43,9 +48,13 @@ function register(app, db) {
       where.push("equipment_instance_id = ?");
       params.push(Number(req.query.equipment_instance_id));
     }
-    if (req.query.cost_type) {
+    const requestedTypes = requestedCostTypes(req.query);
+    if (!req.query.cost_types && req.query.cost_type) {
       where.push("cost_type = ?");
       params.push(String(req.query.cost_type));
+    } else if (requestedTypes.length) {
+      where.push(`cost_type IN (${requestedTypes.map(() => "?").join(",")})`);
+      params.push(...requestedTypes);
     }
     if (req.query.status) {
       where.push("status = ?");
@@ -81,18 +90,26 @@ function register(app, db) {
   }));
 
   app.get("/api/project_cost_entries/summary", wrap((req, res) => {
-    const where = ["deleted_at IS NULL", "status != 'void'"];
+    const where = ["e.deleted_at IS NULL", "e.status != 'void'"];
     const params = [];
     if (req.query.equipment_instance_id) {
-      where.push("equipment_instance_id = ?");
+      where.push("e.equipment_instance_id = ?");
       params.push(Number(req.query.equipment_instance_id));
+    }
+    const requestedTypes = requestedCostTypes(req.query);
+    if (!req.query.cost_types && req.query.cost_type) {
+      where.push("e.cost_type = ?");
+      params.push(String(req.query.cost_type));
+    } else if (requestedTypes.length) {
+      where.push(`e.cost_type IN (${requestedTypes.map(() => "?").join(",")})`);
+      params.push(...requestedTypes);
     }
     const rows = all(`
       SELECT e.cost_type, COUNT(*) AS count,
              COALESCE(SUM(e.amount * COALESCE(f.rate_to_cny, 1)), 0) AS amount
         FROM project_cost_entries e
         LEFT JOIN cost_fx_rates f ON f.currency = e.currency
-       WHERE ${where.join(" AND ").replace(/(^| AND )deleted_at/g, "$1e.deleted_at").replace(/(^| AND )status/g, "$1e.status").replace(/(^| AND )equipment_instance_id/g, "$1e.equipment_instance_id").replace(/(^| AND )cost_type/g, "$1e.cost_type")}
+       WHERE ${where.join(" AND ")}
        GROUP BY e.cost_type
     `, ...params);
     const by_type = Object.fromEntries(
