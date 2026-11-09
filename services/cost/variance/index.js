@@ -9,6 +9,7 @@
 
 const { wrap } = require("../../../middleware/asyncHandler");
 const { materialVariance, laborVariance, summarize, pickLaborRate, laborCoverageOk, round2 } = require("../../../app/cost/variance");
+const { KEY_COMPONENT_PRICE_MULTIPLIER, KEY_COMPONENT_PRICE_UNIT } = require("../units");
 
 function register(app, db) {
   const all = (sql, ...params) => db.prepare(sql).all(...params);
@@ -137,9 +138,9 @@ function register(app, db) {
       const actUnit = hasActual ? Number(row.actual_unit_price) : estUnit;
       const purchase = keyPurchaseByMaterial.get(Number(row.material_id));
       const actualQty = purchase && purchase.qty > 0 ? purchase.qty : null;
-      const priceVariance = round2((actUnit - estUnit) * (actualQty == null ? qty : actualQty) * 10000);
-      const quantityVariance = actualQty == null ? null : round2((actualQty - qty) * estUnit * 10000);
-      const actualCost = quantityVariance != null ? round2(estUnit * qty * 10000 + priceVariance + quantityVariance) : round2(actUnit * qty * 10000);
+      const priceVariance = round2((actUnit - estUnit) * (actualQty == null ? qty : actualQty) * KEY_COMPONENT_PRICE_MULTIPLIER);
+      const quantityVariance = actualQty == null ? null : round2((actualQty - qty) * estUnit * KEY_COMPONENT_PRICE_MULTIPLIER);
+      const actualCost = quantityVariance != null ? round2(estUnit * qty * KEY_COMPONENT_PRICE_MULTIPLIER + priceVariance + quantityVariance) : round2(actUnit * qty * KEY_COMPONENT_PRICE_MULTIPLIER);
       return {
         key_component_id: row.key_component_id,
         material_code: row.material_code,
@@ -153,8 +154,8 @@ function register(app, db) {
         quantity_variance: quantityVariance,
         estimated_unit_price: estUnit,
         actual_unit_price: hasActual ? actUnit : null,
-        price_unit: "wan",
-        estimated_cost: round2(estUnit * qty * 10000),
+        price_unit: KEY_COMPONENT_PRICE_UNIT,
+        estimated_cost: round2(estUnit * qty * KEY_COMPONENT_PRICE_MULTIPLIER),
         actual_cost: actualCost,
         price_variance: priceVariance,
       };

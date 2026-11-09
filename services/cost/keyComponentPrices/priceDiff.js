@@ -6,6 +6,7 @@ const { wrap } = require('../../../middleware/asyncHandler');
 //   GET /api/key_components/price_diff/summary 汇总 (按 cost_status 聚合)
 // Author: 三狗子 | Date: 2026-06-24
 
+const { KEY_COMPONENT_PRICE_MULTIPLIER, KEY_COMPONENT_PRICE_UNIT } = require("../units");
 function register(app, db) {
   const all = (sql) => db.prepare(sql).all();
   const PRICE_DIFF_SQL = `
@@ -33,14 +34,14 @@ function register(app, db) {
       )
      ORDER BY kc.lead_time_weeks DESC, kc.id
   `;
-  const MULT = 10000;
+  const MULT = KEY_COMPONENT_PRICE_MULTIPLIER;
   
 
   // 全部件价差列表
   app.get("/api/key_components/price_diff", wrap((req, res) => {
     const rows = all(PRICE_DIFF_SQL).map((row) => ({
       ...row,
-      price_unit: "wan",
+      price_unit: KEY_COMPONENT_PRICE_UNIT,
       estimated_price_yuan: Math.round(Number(row.estimated_price || 0) * MULT * 100) / 100,
       actual_price_yuan: row.actual_price == null ? null : Math.round(Number(row.actual_price) * MULT * 100) / 100,
       price_diff_yuan: Math.round(Number(row.price_diff || 0) * MULT * 100) / 100,
@@ -81,7 +82,7 @@ function register(app, db) {
       on_or_under_budget_count: onBudgetCount,
       over_10pct_count: over10Count,
       over_20pct_count: over20Count,
-      price_unit: "wan",
+      price_unit: KEY_COMPONENT_PRICE_UNIT,
       currency: "CNY",
       total_estimated_price: Math.round(totalEstimated * MULT * 100) / 100,
       total_actual_price: Math.round(totalActual * MULT * 100) / 100,

@@ -8,6 +8,7 @@
 // Author: 三狗子 | Date: 2026-06-24
 
 const { makeHelpers, nowISO, todayISO } = require("./_helpers");
+const { KEY_COMPONENT_PRICE_MULTIPLIER } = require("../units");
 
 function register(app, db) {
   const { all, get, run, wrap, writeRoles } = makeHelpers(db);
@@ -40,9 +41,9 @@ function register(app, db) {
               u.username AS priced_by_username,
               ROUND(COALESCE(p.actual_price, 0) - COALESCE(kc.unit_price, 0), 4) AS price_diff,
               (p.id = kc.last_price_id) AS is_current,
-              ROUND(kc.unit_price * 10000, 2) AS estimated_price_yuan,
-              ROUND(COALESCE(p.actual_price, 0) * 10000, 2) AS actual_price_yuan,
-              ROUND((COALESCE(p.actual_price, 0) - COALESCE(kc.unit_price, 0)) * 10000, 2) AS price_diff_yuan
+              ROUND(kc.unit_price * ${KEY_COMPONENT_PRICE_MULTIPLIER}, 2) AS estimated_price_yuan,
+              ROUND(COALESCE(p.actual_price, 0) * ${KEY_COMPONENT_PRICE_MULTIPLIER}, 2) AS actual_price_yuan,
+              ROUND((COALESCE(p.actual_price, 0) - COALESCE(kc.unit_price, 0)) * ${KEY_COMPONENT_PRICE_MULTIPLIER}, 2) AS price_diff_yuan
          FROM key_components kc
          LEFT JOIN key_component_prices p ON p.key_component_id = kc.id
          LEFT JOIN users u ON u.id = p.priced_by
