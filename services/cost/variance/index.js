@@ -103,6 +103,36 @@ function register(app, db) {
 
     const summary = summarize({ materialLines, labor });
 
+    // 关键件价格差异（万元/件 → 元）：项目成本偏差不能只看物料+人工。
+    const keyRows = all(`
+      SELECT key_component_id, material_code, material_name, component_type, supplier,
+             quantity, estimated_unit_price, actual_unit_price
+        FROM v_instance_key_component_costs WHERE instance_id = ?
+    `, instance.id);
+    const keyLines = keyRows.map((row) => {
+      const qty = Number(row.quantity || 0);
+      const estUnit = Number(row.estimated_unit_price || 0);
+      const hasActual = row.actual_unit_price != null;
+      const actUnit = hasActual ? Number(row.actual_unit_price) : estUnit;
+      return {
+        key_component_id: row.key_component_id,
+        material_code: row.material_code,
+        material_name: row.material_name,
+        component_type: row.component_type,
+        supplier: row.supplier,
+        quantity: qty,
+        estimated_unit_price: estUnit,
+        actual_unit_price: hasActual ? actUnit : null,
+        price_unit: "wan",
+        estimated_cost: round2(estUnit * qty * 10000),
+        actual_cost: round2(actUnit * qty * 10000),
+        price_variance: round2((actUnit - estUnit) * qty * 10000),
+      };
+    });
+    const keyEstimated = round2(keyLines.reduce((sum, row) => sum + row.estimated_cost, 0));
+    const keyActual = round2(keyLines.reduce((sum, row) => sum + row.actual_cost, 0));
+    const keyVariance = round2(keyActual - keyEstimated);
+
     // 成本台账（project_cost_entries）：P2-2 的真实成本来源。三层差异只覆盖材料+人工，
     // 外协/折旧/返工/质量损失属于"其他成本"，单列并与计算值做台账核对。
     const ledgerRows = (() => {
@@ -154,6 +184,22 @@ function register(app, db) {
       actual_total_including_other: round2(summary.totals.actual_cost + otherCosts),
     };
 
+    // 全口径：关键件按有效合同价折算，台账有值时优先用台账（避免与领料/工时推算重复）
+    const materialStandard = round2(materialLines.reduce((sum, line) => sum + Number(line.standard_cost || 0), 0));
+    const materialActualComputed = round2(materialLines.filter((line) => line.available !== false).reduce((sum, line) => sum + Number(line.actual_cost || 0), 0));
+    const materialUnavailableStandard = round2(materialLines.filter((line) => line.available === false).reduce((sum, line) => sum + Number(line.standard_cost || 0), 0));
+    // 没有领料记录的物料不能当节约；用标准成本占位，差异只看有实际记录的物料。
+    const materialActual = ledgerMaterial > 0 ? round2(ledgerMaterial) : round2(materialActualComputed + materialUnavailableStandard);
+    const laborActual = ledgerLabor > 0 ? round2(ledgerLabor) : (labor.available ? round2(labor.actual_cost || 0) : 0);
+    // 其他成本（外协/折旧/返工/质量）没有标准预算，只进实际，不抬高预算基线
+    const standardCostFull = round2(materialStandard + Number(labor.standard_cost || 0) + keyEstimated);
+    const actualCostFull = round2(materialActual + laborActual + keyActual + otherCosts);
+    const totalVarianceFull = round2(actualCostFull - standardCostFull);
+    ledger.actual_total_including_other = actualCostFull;
+    ledger.material_actual_full = materialActual;
+    ledger.labor_actual_full = laborActual;
+    ledger.key_component_actual = keyActual;
+
     // 数据缺口（诚实标注，避免把"没有数据"当成"没有差异"）
     const dataGaps = [];
     const missingActual = materialLines.filter((line) => line.actual_missing).length;
@@ -172,6 +218,28 @@ function register(app, db) {
       totals: summary.totals,
       not_computed: summary.not_computed,
       ledger,
+      key_components: {
+        count: keyLines.length,
+        estimated_total: keyEstimated,
+        actual_total: keyActual,
+        price_variance: keyVariance,
+        price_unit: "wan",
+        lines: keyLines,
+      },
+      full_totals: {
+        standard_cost: standardCostFull,
+        actual_cost: actualCostFull,
+        total_variance: totalVarianceFull,
+        material_standard: materialStandard,
+        material_actual: materialActual,
+        material_actual_computed: materialActualComputed,
+        material_unavailable_standard_proxy: materialUnavailableStandard,
+        labor_standard: Number(labor.standard_cost || 0),
+        labor_actual: laborActual,
+        key_component_standard: keyEstimated,
+        key_component_actual: keyActual,
+        other_costs: otherCosts,
+      },
       top_contributors: summary.top_contributors,
       data_gaps: dataGaps,
       basis: "标准成本法：标准用量取 instance_bom，实际用量取 material_movements(issue)；标准工时取 process_nodes.estimated_hours；台账取 project_cost_entries(posted)",

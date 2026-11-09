@@ -168,7 +168,8 @@
         </div>
         <el-descriptions v-if="variance.ledger" :column="3" border size="small" style="margin-bottom: 8px">
           <el-descriptions-item label="台账其他成本">{{ fmtMoney(variance.ledger.other_costs) }} 元</el-descriptions-item>
-          <el-descriptions-item label="台账合计（含其他）">{{ fmtMoney(variance.ledger.actual_total_including_other) }} 元</el-descriptions-item>
+          <el-descriptions-item label="台账已过账">{{ fmtMoney(variance.ledger.total) }} 元</el-descriptions-item>
+          <el-descriptions-item label="全口径实际（含关键件）">{{ fmtMoney(variance.ledger.actual_total_including_other) }} 元</el-descriptions-item>
           <el-descriptions-item label="台账条目">{{ variance.ledger.entries || 0 }} 条（已过账）</el-descriptions-item>
           <el-descriptions-item label="材料台账 vs 计算">{{ signedMoney(variance.ledger.cross_check?.material_diff) }} 元</el-descriptions-item>
           <el-descriptions-item label="人工台账 vs 计算">{{ variance.ledger.cross_check?.labor_diff == null ? '-' : signedMoney(variance.ledger.cross_check.labor_diff) + ' 元' }}</el-descriptions-item>
@@ -177,6 +178,21 @@
             <span v-else style="color: var(--el-color-info)">（无）</span>
           </el-descriptions-item>
         </el-descriptions>
+        <el-descriptions v-if="variance.full_totals" :column="3" border size="small" style="margin-bottom: 8px">
+          <el-descriptions-item label="全口径标准成本">{{ fmtMoney(variance.full_totals.standard_cost) }} 元</el-descriptions-item>
+          <el-descriptions-item label="全口径实际成本">{{ fmtMoney(variance.full_totals.actual_cost) }} 元</el-descriptions-item>
+          <el-descriptions-item label="全口径差异">{{ signedMoney(variance.full_totals.total_variance) }} 元</el-descriptions-item>
+          <el-descriptions-item label="关键件标准/实际">{{ fmtMoney(variance.full_totals.key_component_standard) }} / {{ fmtMoney(variance.full_totals.key_component_actual) }} 元</el-descriptions-item>
+          <el-descriptions-item label="材料标准/实际">{{ fmtMoney(variance.full_totals.material_standard) }} / {{ fmtMoney(variance.full_totals.material_actual) }} 元</el-descriptions-item>
+          <el-descriptions-item label="人工标准/实际">{{ fmtMoney(variance.full_totals.labor_standard) }} / {{ fmtMoney(variance.full_totals.labor_actual) }} 元</el-descriptions-item>
+        </el-descriptions>
+        <div v-if="variance.key_components?.count" class="key-var-row">
+          <span class="stat-lbl">关键件价差（{{ variance.key_components.count }} 项，万元→元）：</span>
+          <el-tag size="small" :type="(variance.key_components.price_variance||0) > 0 ? 'danger' : 'success'">
+            {{ signedMoney(variance.key_components.price_variance) }} 元
+          </el-tag>
+          <span class="stat-lbl">估价 {{ fmtMoney(variance.key_components.estimated_total) }} / 合同 {{ fmtMoney(variance.key_components.actual_total) }}</span>
+        </div>
         <el-alert v-if="variance.ledger && !variance.ledger.entries" type="info" :closable="false" style="margin-bottom: 8px"
           title="还没有成本台账数据：三层差异目前只包含材料+人工的推算值；导入台账后这里会显示外协/折旧/返工与账实核对" />
         <el-alert v-for="(line, index) in notComputedSummary(variance.not_computed)" :key="'nc' + index"
@@ -188,16 +204,16 @@
       <el-card v-if="isVarianceView" style="margin-top: 16px">
         <template #header><span style="font-weight: 500"><el-icon><DataAnalysis /></el-icon> 偏差诊断</span></template>
         <el-row :gutter="16">
-          <el-col :span="8"><div class="stat-mini"><span class="stat-val">{{ data.totals?.budget_cost != null ? fmtMoney(data.totals.budget_cost) : '-' }}</span><span class="stat-lbl">预算基线</span></div></el-col>
-          <el-col :span="8"><div class="stat-mini"><span class="stat-val">{{ data.totals?.actual_cost != null ? fmtMoney(data.totals.actual_cost) : '-' }}</span><span class="stat-lbl">实际归集</span></div></el-col>
-          <el-col :span="8"><div class="stat-mini"><span class="stat-val" :style="{color: (data.totals?.cost_diff||0) > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)'}">{{ data.totals?.cost_diff != null ? fmtMoney(data.totals.cost_diff) : '-' }}</span><span class="stat-lbl">偏差</span></div></el-col>
+          <el-col :span="8"><div class="stat-mini"><span class="stat-val">{{ variance.full_totals?.standard_cost != null ? fmtMoney(variance.full_totals.standard_cost) : '-' }}</span><span class="stat-lbl">预算基线</span></div></el-col>
+          <el-col :span="8"><div class="stat-mini"><span class="stat-val">{{ variance.full_totals?.actual_cost != null ? fmtMoney(variance.full_totals.actual_cost) : '-' }}</span><span class="stat-lbl">实际归集</span></div></el-col>
+          <el-col :span="8"><div class="stat-mini"><span class="stat-val" :style="{color: (variance.full_totals?.total_variance||0) > 0 ? 'var(--el-color-danger)' : 'var(--el-color-success)'}">{{ variance.full_totals?.total_variance != null ? fmtMoney(variance.full_totals.total_variance) : '-' }}</span><span class="stat-lbl">偏差</span></div></el-col>
         </el-row>
         <el-alert
           style="margin-top: 12px"
-          :type="(data.totals?.cost_diff||0) > 0 ? 'error' : 'success'"
+          :type="(variance.full_totals?.total_variance||0) > 0 ? 'error' : 'success'"
           :closable="false"
           show-icon
-          :title="(data.totals?.cost_diff||0) > 0 ? '当前项目存在超支风险，建议从材料、外协、折旧和返工优先排查。' : '当前项目成本偏差受控，可继续按计划归集。'"
+          :title="(variance.full_totals?.total_variance||0) > 0 ? '当前项目存在超支风险，建议从材料、关键件、外协、折旧和返工优先排查。' : '当前项目成本偏差受控，可继续按计划归集。'"
         />
       </el-card>
     </div>
@@ -281,7 +297,7 @@ const canManagePeriod = computed(() => auth.role === 'admin')
 const fxDlg = reactive<any>({ show: false, rows: [], currency: 'USD', rate: 7.2, saving: false })
 const todayText = () => new Date().toISOString().slice(0, 10)
 const isVarianceView = computed(() => route.path === '/cost-variance' || route.query.view === 'variance' || route.query.view === 'cost-variance')
-const showInstancePicker = computed(() => !isVarianceView.value)
+const showInstancePicker = computed(() => true)
 const pageTitle = computed(() => isVarianceView.value ? '项目成本偏差' : '成本归集')
 const projectStatusLabels: Record<string, string> = { over_budget: '超预算', partial: '部分签约', fully_contracted: '全部签约', no_key_components: '无关键件' }
 
@@ -429,4 +445,5 @@ onMounted(async () => {
 .ledger-summary{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:10px;color:var(--el-text-color-secondary);font-size:13px}
 .period-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .period-hint{color:var(--el-text-color-secondary);font-size:12px}
+.key-var-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 </style>
