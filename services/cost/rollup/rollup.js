@@ -42,8 +42,15 @@ function register(app, db) {
     const keyActualYuan = round2(keyAgg.actual_total * KEY_COMPONENT_PRICE_MULTIPLIER);
     const total_estimated = round2(keyAgg.estimated_total + matAgg.estimated_total);
     const total_actual    = round2(keyAgg.actual_total    + matAgg.actual_total);
+    // 物料实际价优先读 materials.actual_unit_price；老库无该列时回退估价。
+    const materialActualRow = safeGet(`SELECT COALESCE(SUM(ib.quantity * COALESCE(NULLIF(m.actual_unit_price, 0), m.estimated_unit_price, 0)), 0) AS total
+      FROM instance_bom ib JOIN materials m ON m.id = ib.material_id
+      WHERE ib.equipment_instance_id = ?`, req.params.id);
+    const materialActualFull = materialActualRow && Number(materialActualRow.total) > 0
+      ? round2(materialActualRow.total)
+      : matAgg.actual_total;
     const totalEstimatedYuan = round2(keyEstimatedYuan + matAgg.estimated_total);
-    const totalActualYuan = round2(keyActualYuan + matAgg.actual_total);
+    const totalActualYuan = round2(keyActualYuan + materialActualFull);
     const total_diff      = round2(total_actual - total_estimated);
     const over_budget_diff = round2(
       keyAgg.rows.filter(r => r.actual_unit_price != null && r.actual_unit_price > r.estimated_unit_price)

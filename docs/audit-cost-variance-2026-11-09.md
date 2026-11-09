@@ -131,3 +131,45 @@
 5. 确认台账“已过账 24,500”和“全口径实际（含关键件）36,095,904.80”；
 6. 查看数据缺口提示（27 种物料无领料、报工覆盖 0.18%）；
 7. `node --test tests/costVarianceRoute.test.js tests/costVariance.test.js`。
+
+
+## 8. 二次闭环（2026-11-09 21:00）
+
+| 原遗留 | 闭环方式 | 结果 |
+|---|---|---|
+| 关键件只有价差、没有量差 | variance 新增采购订单实际数量查询：`purchase_order_items` 按项目+物料汇总 `received_qty/quantity`；有实际数量时计算 `quantity_variance = (实际数量−BOM数量)×标准单价`，无数据时 `quantity_variance_available=false` 并写入 data_gaps | 逻辑已支持；生产 PO 明细为空，仍显示“无采购实际数量”数据缺口，不伪造量差 |
+| 材料实际价取 materials.actual_unit_price | 优先用采购订单 `total_price / 实际数量`；无采购记录再回退 `material_movements` 领料，再回退物料实际/标准价；行上增加 `actual_source` | 逻辑已支持采购实价；生产无 PO 明细，回退为物料实际价，data_gaps 标注 |
+| 报工覆盖 0.18%，人工效率差不可用 | 台账人工 24,500 元优先计入全口径；新增 `labor.ledger_actual_cost / ledger_actual_hours (122.5h) / ledger_cost_variance (-253,100)`；效率差仍需报工，但**人工成本差异已可见** | 全口径实际含台账人工；效率差仍标记不可用并提示补报工 |
+| 未领料物料用标准成本占位 | 未领料物料按“标准用量 × 当前实际/标准单价”占位，与 rollup 的“BOM 用量 × 实际价”统一；分列 `material_unavailable_standard_proxy` / `material_unavailable_actual_proxy` | 不再把未领料误读为节约；差异只在有领料/采购的数据上计算 |
+| 两页面口径差异 | cost_rollup 的物料实际改为优先 `materials.actual_unit_price × BOM 用量`；variance 物料实际同口径；生产两侧全口径实际均为 **36,241,272.80**，差异 0 | 已统一；legacy raw 字段保留兼容 |
+| 关键件单位万元/元 | `units.js` 支持 `KEY_COMPONENT_PRICE_UNIT=yuan` 环境配置（默认 wan）；variance/PriceDiff/pricesCrud 统一使用 `KEY_COMPONENT_PRICE_MULTIPLIER`；PriceVariance 页面按 API 返回单位动态显示 | 不再硬编码 10000；默认万元/件，业务可配置为元 |
+| 偏差页默认第一个实例（演练机） | 默认项目优先：route `instance_id` → 非“演练/演示/demo/培训”且非 archived 的实例 → 第一个实例 | 默认跳过演练机（当前为 TBM-1-2026-001），仍可用选择器切换目标项目 |
+
+### 8.1 修复后生产口径
+
+| 指标 | 数值 |
+|---|---:|
+| 全口径标准成本 | 35,749,004.80 |
+| 全口径实际成本 | **36,241,272.80** |
+| 全口径差异 | **+492,268.00（超支）** |
+| 关键件标准/实际 | 33,848,000 / 34,448,000 |
+| 关键件价差 | +600,000 |
+| 材料标准/实际 | 1,623,404.80 / 1,768,772.80 |
+| 人工标准/实际 | 277,600 / 24,500 |
+| 台账人工差异 | -253,100（台账 24,500，折 122.5h） |
+| 成本归集 vs 偏差全口径实际 | 36,241,272.80 = 36,241,272.80 |
+
+### 8.2 数据缺口（仍然存在，不能代码造数）
+
+1. `purchase_order_items` 生产为 **0 行**，关键件/材料无法从采购单取实际数量/单价；
+2. 29 行物料中 27 行无领料记录；
+3. 报工覆盖 0.18%（2.5h / 1,388h），人工效率差仍需补报工；
+4. 关键件量差在采购明细补齐后自动可算。
+
+### 8.3 验证
+
+- 全量闸门：**947/0**；
+- `costVarianceRoute` 1/1、`costVariance` 8/8、`costReadModel` 7/7、`costRollup` 64/64；
+- 前端 eslint/typecheck/build 通过；
+- 生产 API：rollup 全口径实际 36,241,272.80，variance 全口径实际 36,241,272.80，差异 +492,268；
+- 默认项目应为 TBM-2026-001（非演练机）。

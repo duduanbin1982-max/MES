@@ -3,7 +3,7 @@
     <PageToolbar class="page-header">
       <div>
         <div class="page-title"><el-icon><DataLine /></el-icon> 采购估价 vs 实际合同价</div>
-        <div class="page-subtitle">关键件从采购估价到实际合同价的差异；估价/合同价录入单位为万元/件，下表按元展示（×10000）。</div>
+        <div class="page-subtitle">关键件从采购估价到实际合同价的差异；录入单位：{{ summary.price_unit === 'yuan' ? '元/件' : '万元/件' }}，下表统一按元展示。</div>
       </div>
       <el-button type="primary" :loading="loading" @click="load">刷新</el-button>
     </PageToolbar>

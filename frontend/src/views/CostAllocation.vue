@@ -185,6 +185,7 @@
           <el-descriptions-item label="关键件标准/实际">{{ fmtMoney(variance.full_totals.key_component_standard) }} / {{ fmtMoney(variance.full_totals.key_component_actual) }} 元</el-descriptions-item>
           <el-descriptions-item label="材料标准/实际">{{ fmtMoney(variance.full_totals.material_standard) }} / {{ fmtMoney(variance.full_totals.material_actual) }} 元</el-descriptions-item>
           <el-descriptions-item label="人工标准/实际">{{ fmtMoney(variance.full_totals.labor_standard) }} / {{ fmtMoney(variance.full_totals.labor_actual) }} 元</el-descriptions-item>
+          <el-descriptions-item label="台账人工差异">{{ signedMoney(variance.labor?.ledger_cost_variance) }} 元（台账 {{ fmtMoney(variance.labor?.ledger_actual_cost) }}，折 {{ variance.labor?.ledger_actual_hours ?? '-' }}h）</el-descriptions-item>
         </el-descriptions>
         <div v-if="variance.key_components?.count" class="key-var-row">
           <span class="stat-lbl">关键件价差（{{ variance.key_components.count }} 项，万元→元）：</span>
@@ -429,7 +430,11 @@ const fmtMoney = (v: unknown) => {
 onMounted(async () => {
   await loadInstances()
   if (isVarianceView.value) {
-    selectedInstance.value = Number(route.query.instance_id || instances.value[0]?.id || 0) || null
+    const queryId = Number(route.query.instance_id || 0)
+    const preferred = instances.value.find((item: any) => queryId && Number(item.id) === queryId)
+      || instances.value.find((item: any) => !/演示|演练|demo|培训/i.test(String(item.instance_name || '')) && item.status !== 'archived')
+      || instances.value[0]
+    selectedInstance.value = preferred ? Number(preferred.id) : null
     if (selectedInstance.value) await load()
   }
 })

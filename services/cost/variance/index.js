@@ -13,6 +13,7 @@ const { materialVariance, laborVariance, summarize, pickLaborRate, laborCoverage
 function register(app, db) {
   const all = (sql, ...params) => db.prepare(sql).all(...params);
   const get = (sql, ...params) => db.prepare(sql).get(...params);
+  const safeAll = (sql, ...params) => { try { return all(sql, ...params); } catch (_error) { return []; } };
 
   function resolveRate() {
     // system_settings 可能不存在（老库）→ 用 IIFE 包一层，避免"赋值后未使用"的 lint 噪音
@@ -55,14 +56,25 @@ function register(app, db) {
       GROUP BY ml.material_id
     `, instance.id, instance.id);
     const actualByMaterial = new Map(issueRows.map((row) => [Number(row.material_id), Number(row.actual_qty) || 0]));
+    const purchaseRows = safeAll(`
+      SELECT poi.material_id,
+             SUM(CASE WHEN COALESCE(poi.received_qty, 0) > 0 THEN poi.received_qty ELSE poi.quantity END) AS actual_qty,
+             SUM(COALESCE(poi.total_price, poi.quantity * poi.unit_price, 0)) AS actual_amount
+        FROM purchase_order_items poi JOIN purchase_orders po ON po.id = poi.po_id
+       WHERE po.equipment_instance_id = ? AND poi.material_id IS NOT NULL
+       GROUP BY poi.material_id`, instance.id);
+    const purchaseByMaterial = new Map(purchaseRows.map((row) => [Number(row.material_id), { qty: Number(row.actual_qty || 0), amount: Number(row.actual_amount || 0) }]));
 
     const materialLines = bomRows.map((row) => {
-      const hasIssue = actualByMaterial.has(Number(row.material_id));
+      const purchase = purchaseByMaterial.get(Number(row.material_id));
+      const hasIssue = actualByMaterial.has(Number(row.material_id)) || Boolean(purchase && purchase.qty > 0);
+      const actualQty = purchase && purchase.qty > 0 ? purchase.qty : (actualByMaterial.get(Number(row.material_id)) || 0);
+      const actualPrice = purchase && purchase.amount > 0 && purchase.qty > 0 ? round2(purchase.amount / purchase.qty) : row.actual_price;
       const line = materialVariance({
         standardQty: row.standard_qty,
-        actualQty: actualByMaterial.get(Number(row.material_id)) || 0,
+        actualQty,
         standardPrice: row.standard_price,
-        actualPrice: row.actual_price,
+        actualPrice,
       });
       return {
         ...line,
@@ -70,7 +82,8 @@ function register(app, db) {
         material_code: row.material_code,
         material_name: row.material_name,
         actual_missing: !hasIssue,
-        price_missing: !row.actual_price || !row.standard_price,
+        actual_source: purchase && purchase.qty > 0 ? "purchase_order" : (hasIssue ? "material_movement" : "none"),
+        price_missing: !actualPrice || !row.standard_price,
         // 没领料就没有量差：标为不可用，金额进 not_computed，不能算成"节约"
         available: hasIssue,
         unavailable_reason: hasIssue ? null : "no_issue_record",
@@ -105,15 +118,28 @@ function register(app, db) {
 
     // 关键件价格差异（万元/件 → 元）：项目成本偏差不能只看物料+人工。
     const keyRows = all(`
-      SELECT key_component_id, material_code, material_name, component_type, supplier,
+      SELECT key_component_id, material_id, material_code, material_name, component_type, supplier,
              quantity, estimated_unit_price, actual_unit_price
         FROM v_instance_key_component_costs WHERE instance_id = ?
     `, instance.id);
+    const keyPurchaseRows = safeAll(`
+      SELECT poi.material_id,
+             SUM(CASE WHEN COALESCE(poi.received_qty, 0) > 0 THEN poi.received_qty ELSE poi.quantity END) AS actual_qty,
+             SUM(COALESCE(poi.total_price, poi.quantity * poi.unit_price, 0)) AS actual_amount
+        FROM purchase_order_items poi JOIN purchase_orders po ON po.id = poi.po_id
+       WHERE po.equipment_instance_id = ? AND poi.material_id IS NOT NULL
+       GROUP BY poi.material_id`, instance.id);
+    const keyPurchaseByMaterial = new Map(keyPurchaseRows.map((row) => [Number(row.material_id), { qty: Number(row.actual_qty || 0), amount: Number(row.actual_amount || 0) }]));
     const keyLines = keyRows.map((row) => {
       const qty = Number(row.quantity || 0);
       const estUnit = Number(row.estimated_unit_price || 0);
       const hasActual = row.actual_unit_price != null;
       const actUnit = hasActual ? Number(row.actual_unit_price) : estUnit;
+      const purchase = keyPurchaseByMaterial.get(Number(row.material_id));
+      const actualQty = purchase && purchase.qty > 0 ? purchase.qty : null;
+      const priceVariance = round2((actUnit - estUnit) * (actualQty == null ? qty : actualQty) * 10000);
+      const quantityVariance = actualQty == null ? null : round2((actualQty - qty) * estUnit * 10000);
+      const actualCost = quantityVariance != null ? round2(estUnit * qty * 10000 + priceVariance + quantityVariance) : round2(actUnit * qty * 10000);
       return {
         key_component_id: row.key_component_id,
         material_code: row.material_code,
@@ -121,12 +147,16 @@ function register(app, db) {
         component_type: row.component_type,
         supplier: row.supplier,
         quantity: qty,
+        actual_qty: actualQty,
+        actual_qty_source: actualQty == null ? "none" : "purchase_order",
+        quantity_variance_available: actualQty != null,
+        quantity_variance: quantityVariance,
         estimated_unit_price: estUnit,
         actual_unit_price: hasActual ? actUnit : null,
         price_unit: "wan",
         estimated_cost: round2(estUnit * qty * 10000),
-        actual_cost: round2(actUnit * qty * 10000),
-        price_variance: round2((actUnit - estUnit) * qty * 10000),
+        actual_cost: actualCost,
+        price_variance: priceVariance,
       };
     });
     const keyEstimated = round2(keyLines.reduce((sum, row) => sum + row.estimated_cost, 0));
@@ -188,13 +218,22 @@ function register(app, db) {
     const materialStandard = round2(materialLines.reduce((sum, line) => sum + Number(line.standard_cost || 0), 0));
     const materialActualComputed = round2(materialLines.filter((line) => line.available !== false).reduce((sum, line) => sum + Number(line.actual_cost || 0), 0));
     const materialUnavailableStandard = round2(materialLines.filter((line) => line.available === false).reduce((sum, line) => sum + Number(line.standard_cost || 0), 0));
-    // 没有领料记录的物料不能当节约；用标准成本占位，差异只看有实际记录的物料。
-    const materialActual = ledgerMaterial > 0 ? round2(ledgerMaterial) : round2(materialActualComputed + materialUnavailableStandard);
+    // 没有领料记录的物料不能当节约：按标准用量 × 当前实际/标准单价占位，
+    // 与 cost_rollup 的“物料实际价 × BOM 用量”口径保持一致。
+    const materialUnavailableActualProxy = round2(materialLines.filter((line) => line.available === false).reduce((sum, line) => {
+      const qty = Number(line.standard_qty || 0);
+      const price = Number(line.actual_price || line.standard_price || 0);
+      return sum + qty * price;
+    }, 0));
+    const materialActual = ledgerMaterial > 0 ? round2(ledgerMaterial) : round2(materialActualComputed + materialUnavailableActualProxy);
     const laborActual = ledgerLabor > 0 ? round2(ledgerLabor) : (labor.available ? round2(labor.actual_cost || 0) : 0);
     // 其他成本（外协/折旧/返工/质量）没有标准预算，只进实际，不抬高预算基线
     const standardCostFull = round2(materialStandard + Number(labor.standard_cost || 0) + keyEstimated);
     const actualCostFull = round2(materialActual + laborActual + keyActual + otherCosts);
     const totalVarianceFull = round2(actualCostFull - standardCostFull);
+    labor.ledger_actual_cost = ledgerLabor;
+    labor.ledger_actual_hours = rate.rate > 0 ? round2(ledgerLabor / rate.rate) : null;
+    labor.ledger_cost_variance = ledgerLabor > 0 ? round2(ledgerLabor - Number(labor.standard_cost || 0)) : null;
     ledger.actual_total_including_other = actualCostFull;
     ledger.material_actual_full = materialActual;
     ledger.labor_actual_full = laborActual;
@@ -206,6 +245,8 @@ function register(app, db) {
     const missingPrice = materialLines.filter((line) => line.price_missing).length;
     if (missingActual) dataGaps.push(`${missingActual} 种物料没有领料记录，其量差未计入合计（标准金额见 not_computed，避免被误读成节约）`);
     if (missingPrice) dataGaps.push(`${missingPrice} 种物料缺标准/实际单价，价差按 0 计`);
+    if (ledgerLabor > 0) dataGaps.push(`人工实际成本按台账 ${ledgerLabor} 元计入全口径；台账折算工时 ${round2(ledgerLabor / rate.rate)}h，与报工覆盖需财务复核`);
+    if (keyLines.some((line) => line.actual_qty == null)) dataGaps.push("部分关键件没有采购实际数量，关键件量差不可算（价差仍按合同价计算）");
     if (coverage.reason === "no_actual_hours") dataGaps.push("没有实际工时（报工/工单均未回填），效率差未计入合计");
     else if (coverage.reason === "insufficient_actual_hours") dataGaps.push(`实际工时只覆盖标准工时的 ${coverage.coverage_pct}%（低于 ${coverage.min_pct}%），效率差未计入合计；补齐报工后再看`);
     else if (Number(reportedHours) === 0 && Number(bookedHours) > 0) dataGaps.push("实际工时取自工单 actual_hours（无工序级报工），精度到工单级");
@@ -234,6 +275,7 @@ function register(app, db) {
         material_actual: materialActual,
         material_actual_computed: materialActualComputed,
         material_unavailable_standard_proxy: materialUnavailableStandard,
+        material_unavailable_actual_proxy: materialUnavailableActualProxy,
         labor_standard: Number(labor.standard_cost || 0),
         labor_actual: laborActual,
         key_component_standard: keyEstimated,
