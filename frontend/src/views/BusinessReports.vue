@@ -37,8 +37,11 @@
                 <span class="mini-stat-value">{{ val }}</span>
               </div>
             </div>
-            <el-table v-if="item.result?.rows?.length" :data="item.result.rows.slice(0, 6)" stripe size="small" max-height="260">
-              <el-table-column v-for="col in reportColumns(item.result)" :key="col" :prop="col" :label="col" min-width="110" show-overflow-tooltip />
+            <div v-if="trendPoints(item).length" class="mini-trend" title="最近趋势">
+              <span v-for="(point, idx) in trendPoints(item)" :key="idx" :style="{ height: point.height + '%' }" :title="point.label"></span>
+            </div>
+            <el-table v-if="item.result?.rows?.length" :data="item.result.rows" stripe size="small" max-height="260" :row-class-name="item.type === 'cost_summary' ? 'clickable-row' : ''" @row-click="(row: any) => onRowClick(item, row)">
+              <el-table-column v-for="col in reportColumns(item.result)" :key="col" :prop="col" :label="columnLabel(col)" min-width="110" show-overflow-tooltip />
             </el-table>
             <PageState state="empty" compact :show-action="false" v-else description="暂无经营数据" />
           </template>
@@ -104,6 +107,7 @@ const loadBusinessReports = async () => {
 const SUMMARY_LABELS: Record<string, string> = {
   total_projects: '项目数', total_contract: '合同额(元)', total_actual_cost: '全口径成本(元)',
   total_gross_margin: '毛利(元)', total_margin_pct: '毛利率', total_material_cost: '物料成本(元)',
+  total_period_cost: '期间台账成本(元)', total_rework_cost: '返工成本(元)', total_quality_loss_cost: '质量损失(元)', total_other_cost: '其他成本(元)',
   total_labor_cost: '人工成本(元)', total_outsourcing_cost: '其他成本(元)', total: '记录数',
   completed: '已完成', in_progress: '进行中', pending: '待开始', pass: '合格', fail: '不合格',
   pass_rate: '合格率', avg_oee: '平均 OEE', avg_availability: '平均可用率',
@@ -118,7 +122,40 @@ const formatSummaryValue = (key: string, value: any) => {
 }
 const summaryEntries = (result: any) => Object.entries(result?.summary || {}).slice(0, 6)
   .map(([key, value]) => [SUMMARY_LABELS[key] || key, formatSummaryValue(key, value)])
-const reportColumns = (result: any) => result?.columns || Object.keys(result?.rows?.[0] || {})
+const COLUMN_LABELS: Record<string, string> = {
+  id: 'ID', instance_code: '项目编号', instance_name: '项目名称', contract_no: '合同号',
+  contract_amount: '合同原值', contract_amount_unit: '合同单位', contract_yuan: '合同额(元)',
+  material_estimated: '物料估算(元)', material_cost: '物料实际(元)', key_component_estimated: '关键件估算(元)',
+  key_component_cost: '关键件实际(元)', labor_hours: '实际工时', labor_ledger_cost: '台账人工(元)',
+  labor_cost: '人工成本(元)', labor_cost_source: '人工来源', outsourcing_cost: '外协(元)',
+  depreciation_cost: '折旧(元)', rework_cost: '返工(元)', quality_loss_cost: '质量损失(元)',
+  other_cost: '其他成本(元)', period_cost: '期间台账成本(元)', total_cost: '全口径成本(元)',
+  gross_margin: '毛利(元)', margin_pct: '毛利率(%)', delivery: '交付', status: '状态',
+  inspection_type: '检验类型', result: '结果', inspection_date: '检验日期', wo_code: '工单号',
+  title: '标题', planned_start: '计划开始', planned_end: '计划结束', actual_hours: '实际工时',
+  shift_date: '班次日期', shift_name: '班次', oee: 'OEE(%)', availability: '可用率(%)',
+  performance: '性能(%)', quality: '质量(%)', total_output: '产量', good_output: '合格数',
+}
+const columnLabel = (col: string) => COLUMN_LABELS[col] || col
+const reportColumns = (result: any) => (result?.columns || Object.keys(result?.rows?.[0] || {}))
+  .filter((col: string) => col !== 'period_cost' || Boolean(business.dateRange))
+const trendPoints = (item: any) => {
+  const rows = item.result?.rows || []
+  if (item.type === 'oee_weekly') {
+    return rows.slice(0, 12).reverse().map((row: any) => ({ height: Math.max(4, Math.min(100, Number(row.oee || 0))), label: row.shift_date + ' OEE ' + row.oee + '%' }))
+  }
+  if (item.type === 'quality_monthly') {
+    return rows.slice(0, 12).reverse().map((row: any) => ({ height: row.result === 'pass' ? 90 : 25, label: row.inspection_date + ' ' + row.result }))
+  }
+  if (item.type === 'daily_production') {
+    const map: Record<string, number> = { completed: 90, in_progress: 55, pending: 20, cancelled: 10 }
+    return rows.slice(0, 12).reverse().map((row: any) => ({ height: map[row.status] || 30, label: row.wo_code + ' ' + row.status }))
+  }
+  return []
+}
+const onRowClick = (item: any, row: any) => {
+  if (item.type === 'cost_summary' && row?.id) router.push({ path: '/cost-variance', query: { instance_id: row.id } })
+}
 const goInstantReport = (type: string) => router.push({ path: '/reports', query: { tab: 'instant', type } })
 
 onMounted(async () => {
@@ -135,6 +172,9 @@ onMounted(async () => {
 .card-header{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .business-card{margin-bottom:12px;min-height:360px}
 .business-summary{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.mini-trend{display:flex;align-items:flex-end;gap:3px;height:46px;padding:4px 2px;margin-bottom:8px}
+.mini-trend span{flex:1;min-width:4px;background:var(--el-color-primary-light-5);border-radius:2px 2px 0 0;transition:height .2s}
+:deep(.clickable-row){cursor:pointer}
 .business-error{color:var(--el-color-danger);font-size:13px;padding:16px;background:var(--el-color-danger-light-9);border-radius:6px}
 .mini-stat{background:var(--el-fill-color-light);border-radius:6px;padding:8px 14px;text-align:center;min-width:80px}
 .mini-stat-label{display:block;font-size:12px;color:var(--el-color-info)}

@@ -93,11 +93,24 @@ function register(app, db) {
                     LIMIT ?`, [fromDate, toDate, ...(instance_id ? [Number(instance_id)] : []), parseInt(limit) || 500])
           : [];
         if (rows.length) {
-          const avgAvailability = rows.reduce((s, r) => s + Number(r.availability || 0), 0) / rows.length;
-          const avgPerformance = rows.reduce((s, r) => s + Number(r.performance || 0), 0) / rows.length;
-          const avgQuality = rows.reduce((s, r) => s + Number(r.quality || 0), 0) / rows.length;
-          const avgOee = rows.reduce((s, r) => s + Number(r.oee || 0), 0) / rows.length;
-          const summary = { total: rows.length, avg_availability: avgAvailability.toFixed(1) + "%", avg_performance: avgPerformance.toFixed(1) + "%", avg_quality: avgQuality.toFixed(1) + "%", avg_oee: avgOee.toFixed(1) + "%" };
+          // 2026-11-09：OEE 汇总改为加权口径，避免简单平均掩盖大班次/大产量影响。
+          const planned = rows.reduce((s, r) => s + Number(r.planned_minutes || 0), 0);
+          const operating = rows.reduce((s, r) => s + Number(r.operating_minutes || 0), 0);
+          const totalOutput = rows.reduce((s, r) => s + Number(r.total_output || 0), 0);
+          const goodOutput = rows.reduce((s, r) => s + Number(r.good_output || 0), 0);
+          const idealOutput = rows.reduce((s, r) => s + Number(r.total_output || 0) * Number(r.ideal_cycle_time || 0), 0);
+          const weightedAvailability = planned > 0 ? operating * 100 / planned : 0;
+          const weightedPerformance = operating > 0 ? idealOutput * 100 / operating : 0;
+          const weightedQuality = totalOutput > 0 ? goodOutput * 100 / totalOutput : 0;
+          const weightedOee = weightedAvailability * weightedPerformance * weightedQuality / 10000;
+          const summary = {
+            total: rows.length,
+            avg_availability: weightedAvailability.toFixed(1) + "%",
+            avg_performance: weightedPerformance.toFixed(1) + "%",
+            avg_quality: weightedQuality.toFixed(1) + "%",
+            avg_oee: weightedOee.toFixed(1) + "%",
+            weighted: true,
+          };
           return { type, summary, rows, generated_at: new Date().toISOString() };
         }
         return { type, summary: { total: 0 }, rows: [], generated_at: new Date().toISOString() };
@@ -136,8 +149,20 @@ function register(app, db) {
                        FROM project_cost_entries pce
                        WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL
                          AND pce.status = 'posted' AND pce.cost_type IN (${types})), 0)`;
+        const fromDate = filters?.from || null;
+        const toDate = filters?.to || null;
         const laborLedger = ledgerSum("'labor'");
+        const outsourcingLedger = ledgerSum("'outsourcing'");
+        const depreciationLedger = ledgerSum("'depreciation'");
+        const reworkLedger = ledgerSum("'rework'");
+        const qualityLossLedger = ledgerSum("'quality_loss'");
         const otherLedger = ledgerSum("'outsourcing','depreciation','rework','quality_loss'");
+        const periodLedger = fromDate && toDate
+          ? `COALESCE((SELECT SUM(pce.amount * ${fx("pce")})
+                       FROM project_cost_entries pce
+                       WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL
+                         AND pce.status = 'posted' AND pce.occurred_on >= ? AND pce.occurred_on <= ?), 0)`
+          : "0";
         const laborHours = `COALESCE((SELECT SUM(wo.actual_hours) FROM work_orders wo WHERE wo.equipment_instance_id = ei.id), 0)`;
         const rateRow = get("SELECT value FROM system_settings WHERE key = 'labor_rate_per_hour'");
         const hourlyRate = Math.max(0, Number(rateRow?.value || process.env.LABOR_RATE_PER_HOUR || 200) || 200);
@@ -148,6 +173,7 @@ function register(app, db) {
           where.push("ei.instance_code NOT LIKE 'TBM-DEMO%' AND ei.instance_code NOT LIKE 'DEMO%' AND ei.instance_name NOT LIKE '%演练%' AND ei.instance_name NOT LIKE '%演示%'");
         }
         if (instance_id) { where.push("ei.id = ?"); params.push(Number(instance_id)); }
+        const periodParams = fromDate && toDate ? [fromDate, toDate] : [];
         const rows = safeAll(`SELECT ei.id, ei.instance_code, ei.instance_name, ei.contract_no,
           ei.contract_amount, ei.contract_amount_unit,
           CASE WHEN COALESCE(ei.contract_amount_unit, 'yuan') IN ('wan','万元') THEN COALESCE(ei.contract_amount,0) * 10000
@@ -158,10 +184,15 @@ function register(app, db) {
           ${keyActual} AS key_component_cost,
           ${laborHours} AS labor_hours,
           ${laborLedger} AS labor_ledger_cost,
-          ${otherLedger} AS other_cost
+          ${outsourcingLedger} AS outsourcing_cost,
+          ${depreciationLedger} AS depreciation_cost,
+          ${reworkLedger} AS rework_cost,
+          ${qualityLossLedger} AS quality_loss_cost,
+          ${otherLedger} AS other_cost,
+          ${periodLedger} AS period_cost
           FROM equipment_instances ei
           WHERE ${where.join(" AND ")}
-          ORDER BY contract_yuan DESC LIMIT ?`, [...params, Math.min(parseInt(limit) || 100, 500)]);
+          ORDER BY contract_yuan DESC`, [...periodParams, ...params]);
         const enriched = rows.map((row) => {
           const laborCost = Number(row.labor_ledger_cost || 0) > 0
             ? Number(row.labor_ledger_cost)
@@ -176,24 +207,30 @@ function register(app, db) {
             total_cost: totalCost,
             gross_margin: margin,
             margin_pct: contractYuan > 0 ? Math.round((margin / contractYuan) * 10000) / 100 : null,
+            period_cost: Math.round(Number(row.period_cost || 0) * 100) / 100,
           };
         });
-        const summary = {
+        const allSummary = {
           total_projects: enriched.length,
           total_contract: enriched.reduce((sum, row) => sum + Number(row.contract_yuan || 0), 0),
           total_actual_cost: enriched.reduce((sum, row) => sum + Number(row.total_cost || 0), 0),
+          total_period_cost: enriched.reduce((sum, row) => sum + Number(row.period_cost || 0), 0),
           total_gross_margin: enriched.reduce((sum, row) => sum + Number(row.gross_margin || 0), 0),
-          // 兼容旧字段
+          // 兼容旧字段：按真实类别拆分，不再把“其他成本”塞进外协
           total_material_cost: enriched.reduce((sum, row) => sum + Number(row.material_cost || 0), 0),
           total_labor_cost: enriched.reduce((sum, row) => sum + Number(row.labor_cost || 0), 0),
-          total_outsourcing_cost: enriched.reduce((sum, row) => sum + Number(row.other_cost || 0), 0),
-          total_depreciation_cost: 0,
-          total_loss_cost: 0,
+          total_outsourcing_cost: enriched.reduce((sum, row) => sum + Number(row.outsourcing_cost || 0), 0),
+          total_depreciation_cost: enriched.reduce((sum, row) => sum + Number(row.depreciation_cost || 0), 0),
+          total_rework_cost: enriched.reduce((sum, row) => sum + Number(row.rework_cost || 0), 0),
+          total_quality_loss_cost: enriched.reduce((sum, row) => sum + Number(row.quality_loss_cost || 0), 0),
+          total_other_cost: enriched.reduce((sum, row) => sum + Number(row.other_cost || 0), 0),
+          total_loss_cost: enriched.reduce((sum, row) => sum + Number(row.rework_cost || 0) + Number(row.quality_loss_cost || 0), 0),
         };
-        summary.total_margin_pct = summary.total_contract > 0
-          ? Math.round((summary.total_gross_margin / summary.total_contract) * 10000) / 100
+        allSummary.total_margin_pct = allSummary.total_contract > 0
+          ? Math.round((allSummary.total_gross_margin / allSummary.total_contract) * 10000) / 100
           : null;
-        return { type, summary, rows: enriched, generated_at: new Date().toISOString() };
+        const maxRows = Math.min(parseInt(limit) || 100, 500);
+        return { type, summary: allSummary, rows: enriched.slice(0, maxRows), returned_projects: Math.min(enriched.length, maxRows), generated_at: new Date().toISOString() };
       }
       default:
         throw ApiError.validation("未知报表类型: " + type);
