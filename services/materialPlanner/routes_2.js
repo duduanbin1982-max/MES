@@ -6,6 +6,7 @@ const { ApiError } = require('../../app/errors');
 const { wrap } = require('../../middleware/asyncHandler');
 const { DEFAULT_ROLE_PERMISSIONS, hasPermission } = require('../../app/permissions');
 const { all, get, run } = ctx;
+const systemSettings = require('../systemSettings');
 
   // 2026-11-07 审计修复: /material-planner/* 不在 apiPermissions 规则表内,
   // 写接口此前对任意登录用户开放; 交期直接影响预警下单截止日, 必须校验 material:write。
@@ -44,7 +45,8 @@ const { all, get, run } = ctx;
         row.material_id
       ) || { stock_on_hand: 0, allocated: 0 };
 
-      const leadTimeDays = (row.lead_time_weeks || 4) * 7;
+      const bufferDays = Math.max(0, Math.min(365, Number(systemSettings.getNum('default_lead_time_buffer_days', 0)) || 0));
+      const leadTimeDays = (row.lead_time_weeks || 4) * 7 + bufferDays;
       const netRequired = Math.max(0, row.bom_qty - stock.stock_on_hand + stock.allocated);
       const suggestedOrder = netRequired > 0 ? Math.ceil(netRequired * 1.1) : 0;
       const orderByDate = new Date(new Date(targetDate).getTime() - leadTimeDays * 86400000).toISOString().slice(0, 10);
@@ -60,6 +62,7 @@ const { all, get, run } = ctx;
         net_required: netRequired,
         suggested_order: suggestedOrder,
         lead_time_days: leadTimeDays,
+        lead_time_buffer_days: bufferDays,
         order_by_date: orderByDate,
         supplier: row.supplier || null,
         status: netRequired <= 0 ? "sufficient" : (orderByDate < today ? "overdue" : "planned")
