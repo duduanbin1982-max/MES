@@ -45,7 +45,7 @@ function register(app, db) {
     // 物料实际价优先读 materials.actual_unit_price；老库无该列时回退估价。
     const materialActualRow = safeGet(`SELECT COALESCE(SUM(ib.quantity * COALESCE(NULLIF(m.actual_unit_price, 0), m.estimated_unit_price, 0)), 0) AS total
       FROM instance_bom ib JOIN materials m ON m.id = ib.material_id
-      WHERE ib.equipment_instance_id = ?`, req.params.id);
+      WHERE ib.equipment_instance_id = ? AND COALESCE(ib.is_key_component, 0) = 0`, req.params.id);
     const materialActualFull = materialActualRow && Number(materialActualRow.total) > 0
       ? round2(materialActualRow.total)
       : matAgg.actual_total;

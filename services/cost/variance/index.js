@@ -42,7 +42,7 @@ function register(app, db) {
              COALESCE(NULLIF(m.actual_unit_price, 0), NULLIF(m.estimated_unit_price, 0), 0) AS actual_price
       FROM instance_bom ib
       JOIN materials m ON m.id = ib.material_id
-      WHERE ib.equipment_instance_id = ? AND ib.material_id IS NOT NULL
+      WHERE ib.equipment_instance_id = ? AND ib.material_id IS NOT NULL AND COALESCE(ib.is_key_component, 0) = 0
       GROUP BY ib.material_id
       ORDER BY ib.material_id
     `, instance.id);
@@ -226,7 +226,12 @@ function register(app, db) {
       const price = Number(line.actual_price || line.standard_price || 0);
       return sum + qty * price;
     }, 0));
-    const materialActual = ledgerMaterial > 0 ? round2(ledgerMaterial) : round2(materialActualComputed + materialUnavailableActualProxy);
+    const materialProjectRow = safeAll(`SELECT COALESCE(SUM(ib.quantity * COALESCE(NULLIF(m.actual_unit_price, 0), m.estimated_unit_price, 0)), 0) AS total
+      FROM instance_bom ib JOIN materials m ON m.id = ib.material_id
+      WHERE ib.equipment_instance_id = ? AND COALESCE(ib.is_key_component, 0) = 0`, instance.id)[0];
+    const materialActualProjectWide = round2(materialProjectRow?.total || 0);
+    // 与 cost_rollup/cost_summary 完全同口径：物料实际价 × BOM 标准用量（排除关键件，避免重复）。
+    const materialActual = ledgerMaterial > 0 ? round2(ledgerMaterial) : (materialActualProjectWide || round2(materialActualComputed + materialUnavailableActualProxy));
     const laborActual = ledgerLabor > 0 ? round2(ledgerLabor) : (labor.available ? round2(labor.actual_cost || 0) : 0);
     // 其他成本（外协/折旧/返工/质量）没有标准预算，只进实际，不抬高预算基线
     const standardCostFull = round2(materialStandard + Number(labor.standard_cost || 0) + keyEstimated);
@@ -275,6 +280,7 @@ function register(app, db) {
         material_standard: materialStandard,
         material_actual: materialActual,
         material_actual_computed: materialActualComputed,
+        material_actual_project_wide: materialActualProjectWide,
         material_unavailable_standard_proxy: materialUnavailableStandard,
         material_unavailable_actual_proxy: materialUnavailableActualProxy,
         labor_standard: Number(labor.standard_cost || 0),

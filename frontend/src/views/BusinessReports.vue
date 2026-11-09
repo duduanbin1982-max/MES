@@ -16,7 +16,7 @@
         type="info"
         :closable="false"
         show-icon
-        title="经营分析报表聚合成本、交付、质量和 OEE，用于经营层看趋势；报表中心只保留通用报表生成、定时与历史。"
+        title="经营分析报表聚合全口径成本、交付、质量和 OEE；项目/日期筛选对成本、交付、质量、OEE 生效（成本报表按项目，不按日期截断）。报表中心负责通用报表生成、定时与历史。"
       />
     </el-card>
 
@@ -57,7 +57,7 @@ import { ElMessage } from 'element-plus'
 const router = useRouter()
 const instances = ref<any[]>([])
 const businessTypes = [
-  { type: 'cost_summary', label: '项目成本与毛利' },
+  { type: 'cost_summary', label: '项目成本与毛利（全口径）' },
   { type: 'daily_production', label: '交付与生产进度' },
   { type: 'quality_monthly', label: '质量趋势' },
   { type: 'oee_weekly', label: '设备绩效 OEE' },
@@ -66,12 +66,20 @@ const business = reactive({ instance_id: null as any, dateRange: null as any })
 const businessLoading = ref(false)
 const businessReports = ref<any[]>([])
 
+const fmtDate = (value: any) => {
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return value
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
+const errText = (e: any) => e?.response?.data?.error || e?.response?.data?.message || e?.message || String(e)
 const buildReportFilters = () => {
   const filters: any = {}
   if (business.instance_id) filters.instance_id = business.instance_id
   if (business.dateRange) {
-    filters.from = business.dateRange[0]?.toISOString?.() || business.dateRange[0]
-    filters.to = business.dateRange[1]?.toISOString?.() || business.dateRange[1]
+    filters.from = fmtDate(business.dateRange[0])
+    filters.to = fmtDate(business.dateRange[1])
   }
   return filters
 }
@@ -85,7 +93,7 @@ const loadBusinessReports = async () => {
         const result = await Api.post('/reports/generate', { type: item.type, filters })
         return { ...item, result }
       } catch (e: any) {
-        return { ...item, error: e?.message || String(e) }
+        return { ...item, error: errText(e) }
       }
     }))
   } finally {
@@ -93,12 +101,28 @@ const loadBusinessReports = async () => {
   }
 }
 
+const SUMMARY_LABELS: Record<string, string> = {
+  total_projects: '项目数', total_contract: '合同额(元)', total_actual_cost: '全口径成本(元)',
+  total_gross_margin: '毛利(元)', total_margin_pct: '毛利率', total_material_cost: '物料成本(元)',
+  total_labor_cost: '人工成本(元)', total_outsourcing_cost: '其他成本(元)', total: '记录数',
+  completed: '已完成', in_progress: '进行中', pending: '待开始', pass: '合格', fail: '不合格',
+  pass_rate: '合格率', avg_oee: '平均 OEE', avg_availability: '平均可用率',
+  avg_performance: '平均性能', avg_quality: '平均质量',
+}
+const formatSummaryValue = (key: string, value: any) => {
+  if (typeof value === 'number') {
+    const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(value)
+    return key.includes('pct') ? number + '%' : number
+  }
+  return value
+}
 const summaryEntries = (result: any) => Object.entries(result?.summary || {}).slice(0, 6)
+  .map(([key, value]) => [SUMMARY_LABELS[key] || key, formatSummaryValue(key, value)])
 const reportColumns = (result: any) => result?.columns || Object.keys(result?.rows?.[0] || {})
 const goInstantReport = (type: string) => router.push({ path: '/reports', query: { tab: 'instant', type } })
 
 onMounted(async () => {
-  try { instances.value = await Api.instances() } catch (e: any) { ElMessage.error('加载实例失败: ' + (e?.message || e)) }
+  try { instances.value = await Api.instances() } catch (e: any) { ElMessage.error('加载实例失败: ' + errText(e)) }
   loadBusinessReports()
 })
 </script>

@@ -54,10 +54,10 @@ test("COST-VAR 项目偏差全口径：关键件价差+台账人工/其他+材�
   assert.equal(result.body.full_totals.key_component_standard, 100);
   assert.equal(result.body.full_totals.labor_actual, 800, "台账人工优先");
   assert.equal(result.body.full_totals.other_costs, 200);
-  assert.equal(result.body.full_totals.material_actual, 120, "未领料物料用标准成本占位，不能当节约");
-  assert.equal(result.body.full_totals.actual_cost, 1220);
-  assert.equal(result.body.full_totals.standard_cost, 2220);
+  assert.equal(result.body.full_totals.material_actual, 20, "关键件不计入普通物料，避免重复");
+  assert.equal(result.body.full_totals.actual_cost, 1120);
+  assert.equal(result.body.full_totals.standard_cost, 2120);
   assert.equal(result.body.full_totals.total_variance, -1000);
-  assert.equal(result.body.ledger.actual_total_including_other, 1220);
+  assert.equal(result.body.ledger.actual_total_including_other, 1120);
   db.close();
 });

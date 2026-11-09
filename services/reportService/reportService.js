@@ -3,6 +3,7 @@ const { wrap } = require('../../middleware/asyncHandler');
 const { ApiError } = require('../../app/errors');
 const { makeHelpers } = require('./_helpers');
 const { compileCron, executeScheduledReport, startScheduler } = require('./scheduler');
+const { KEY_COMPONENT_PRICE_MULTIPLIER } = require('../cost/units');
 // services/reportService/reportService.js
 // 报表中心: 计划报表 / 即时生成 / CSV导出 / 调度管理
 // Author: 三狗子 | Date: 2026-06-26
@@ -59,9 +60,9 @@ function register(app, db) {
                     FROM qc_inspections qc
                     JOIN equipment_instances ei ON qc.equipment_instance_id = ei.id
                     LEFT JOIN work_orders wo ON qc.work_order_id = wo.id
-                    WHERE qc.inspection_date >= ? AND qc.inspection_date <= ?
+                    WHERE qc.inspection_date >= ? AND qc.inspection_date <= ?${instance_id ? ' AND qc.equipment_instance_id = ?' : ''}
                     ORDER BY qc.inspection_date DESC
-                    LIMIT ?`, [fromDate, toDate, parseInt(limit) || 500])
+                    LIMIT ?`, [fromDate, toDate, ...(instance_id ? [Number(instance_id)] : []), parseInt(limit) || 500])
           : [];
         const pass = rows.filter(r => r.result === "pass").length;
         const fail = rows.filter(r => r.result === "fail").length;
@@ -87,9 +88,9 @@ function register(app, db) {
                            ) AS oee
                     FROM oee_shift_log o
                     JOIN equipment_instances ei ON o.equipment_instance_id = ei.id
-                    WHERE o.shift_date >= ? AND o.shift_date <= ?
+                    WHERE o.shift_date >= ? AND o.shift_date <= ?${instance_id ? ' AND o.equipment_instance_id = ?' : ''}
                     ORDER BY o.shift_date DESC
-                    LIMIT ?`, [fromDate, toDate, parseInt(limit) || 500])
+                    LIMIT ?`, [fromDate, toDate, ...(instance_id ? [Number(instance_id)] : []), parseInt(limit) || 500])
           : [];
         if (rows.length) {
           const avgAvailability = rows.reduce((s, r) => s + Number(r.availability || 0), 0) / rows.length;
@@ -112,23 +113,87 @@ function register(app, db) {
         return { type, summary, rows, generated_at: new Date().toISOString() };
       }
       case "cost_summary": {
-        const rows = safeAll(`SELECT ei.instance_code, ei.instance_name, ei.contract_amount,
-          COALESCE((SELECT SUM(pce.amount) FROM project_cost_entries pce WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL AND COALESCE(pce.status, 'posted') NOT IN ('cancelled','void') AND pce.cost_type IN ('material','materials','purchase')), 0) AS material_cost,
-          COALESCE((SELECT SUM(wo.actual_hours * 200) FROM work_orders wo WHERE wo.equipment_instance_id = ei.id), 0) AS labor_cost,
-          COALESCE((SELECT SUM(pce.amount) FROM project_cost_entries pce WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL AND pce.cost_type = 'outsourcing'), 0) AS outsourcing_cost,
-          COALESCE((SELECT SUM(pce.amount) FROM project_cost_entries pce WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL AND pce.cost_type = 'depreciation'), 0) AS depreciation_cost,
-          COALESCE((SELECT SUM(pce.amount) FROM project_cost_entries pce WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL AND pce.cost_type IN ('rework','quality_loss')), 0) AS loss_cost
-          FROM equipment_instances ei ORDER BY ei.contract_amount DESC LIMIT ?`, [parseInt(limit) || 100]);
+        // 2026-11-09：经营分析的项目成本必须与成本归集/偏差同口径。
+        // 关键件按万元×10000，物料按实际价×BOM，人工优先台账，其他按台账并折算汇率。
+        const hasFx = !!get("SELECT name FROM sqlite_master WHERE type='table' AND name='cost_fx_rates'");
+        const hasKeyView = !!get("SELECT name FROM sqlite_master WHERE type='view' AND name='v_instance_key_component_costs'");
+        const fx = (alias) => hasFx ? `COALESCE((SELECT rate_to_cny FROM cost_fx_rates WHERE currency = ${alias}.currency), 1)` : "1";
+        const keyActual = hasKeyView
+          ? `COALESCE((SELECT SUM(v.quantity * COALESCE(v.actual_unit_price, v.estimated_unit_price) * ${KEY_COMPONENT_PRICE_MULTIPLIER})
+                       FROM v_instance_key_component_costs v WHERE v.instance_id = ei.id), 0)`
+          : "0";
+        const keyEstimated = hasKeyView
+          ? `COALESCE((SELECT SUM(v.quantity * v.estimated_unit_price * ${KEY_COMPONENT_PRICE_MULTIPLIER})
+                       FROM v_instance_key_component_costs v WHERE v.instance_id = ei.id), 0)`
+          : "0";
+        const materialActual = `COALESCE((SELECT SUM(ib.quantity * COALESCE(NULLIF(m.actual_unit_price, 0), m.estimated_unit_price, 0))
+                       FROM instance_bom ib JOIN materials m ON m.id = ib.material_id
+                       WHERE ib.equipment_instance_id = ei.id AND COALESCE(ib.is_key_component, 0) = 0), 0)`;
+        const materialEstimated = `COALESCE((SELECT SUM(ib.quantity * COALESCE(m.estimated_unit_price, 0))
+                       FROM instance_bom ib JOIN materials m ON m.id = ib.material_id
+                       WHERE ib.equipment_instance_id = ei.id AND COALESCE(ib.is_key_component, 0) = 0), 0)`;
+        const ledgerSum = (types) => `COALESCE((SELECT SUM(pce.amount * ${fx("pce")})
+                       FROM project_cost_entries pce
+                       WHERE pce.equipment_instance_id = ei.id AND pce.deleted_at IS NULL
+                         AND pce.status = 'posted' AND pce.cost_type IN (${types})), 0)`;
+        const laborLedger = ledgerSum("'labor'");
+        const otherLedger = ledgerSum("'outsourcing','depreciation','rework','quality_loss'");
+        const laborHours = `COALESCE((SELECT SUM(wo.actual_hours) FROM work_orders wo WHERE wo.equipment_instance_id = ei.id), 0)`;
+        const rateRow = get("SELECT value FROM system_settings WHERE key = 'labor_rate_per_hour'");
+        const hourlyRate = Math.max(0, Number(rateRow?.value || process.env.LABOR_RATE_PER_HOUR || 200) || 200);
+        const where = ["1=1"];
+        const params = [];
+        // 经营分析默认排除演练/演示机，避免其异常合同金额污染汇总。
+        if (String(filters?.include_demo) !== "true" && !instance_id) {
+          where.push("ei.instance_code NOT LIKE 'TBM-DEMO%' AND ei.instance_code NOT LIKE 'DEMO%' AND ei.instance_name NOT LIKE '%演练%' AND ei.instance_name NOT LIKE '%演示%'");
+        }
+        if (instance_id) { where.push("ei.id = ?"); params.push(Number(instance_id)); }
+        const rows = safeAll(`SELECT ei.id, ei.instance_code, ei.instance_name, ei.contract_no,
+          ei.contract_amount, ei.contract_amount_unit,
+          CASE WHEN COALESCE(ei.contract_amount_unit, 'yuan') IN ('wan','万元') THEN COALESCE(ei.contract_amount,0) * 10000
+               ELSE COALESCE(ei.contract_amount,0) END AS contract_yuan,
+          ${materialEstimated} AS material_estimated,
+          ${materialActual} AS material_cost,
+          ${keyEstimated} AS key_component_estimated,
+          ${keyActual} AS key_component_cost,
+          ${laborHours} AS labor_hours,
+          ${laborLedger} AS labor_ledger_cost,
+          ${otherLedger} AS other_cost
+          FROM equipment_instances ei
+          WHERE ${where.join(" AND ")}
+          ORDER BY contract_yuan DESC LIMIT ?`, [...params, Math.min(parseInt(limit) || 100, 500)]);
+        const enriched = rows.map((row) => {
+          const laborCost = Number(row.labor_ledger_cost || 0) > 0
+            ? Number(row.labor_ledger_cost)
+            : Number(row.labor_hours || 0) * hourlyRate;
+          const totalCost = Math.round((Number(row.material_cost || 0) + Number(row.key_component_cost || 0) + laborCost + Number(row.other_cost || 0)) * 100) / 100;
+          const contractYuan = Number(row.contract_yuan || 0);
+          const margin = Math.round((contractYuan - totalCost) * 100) / 100;
+          return {
+            ...row,
+            labor_cost: Math.round(laborCost * 100) / 100,
+            labor_cost_source: Number(row.labor_ledger_cost || 0) > 0 ? "ledger" : "hours_rate",
+            total_cost: totalCost,
+            gross_margin: margin,
+            margin_pct: contractYuan > 0 ? Math.round((margin / contractYuan) * 10000) / 100 : null,
+          };
+        });
         const summary = {
-          total_projects: rows.length,
-          total_contract: rows.reduce((s, r) => s + Number(r.contract_amount || 0), 0),
-          total_material_cost: rows.reduce((s, r) => s + Number(r.material_cost || 0), 0),
-          total_labor_cost: rows.reduce((s, r) => s + Number(r.labor_cost || 0), 0),
-          total_outsourcing_cost: rows.reduce((s, r) => s + Number(r.outsourcing_cost || 0), 0),
-          total_depreciation_cost: rows.reduce((s, r) => s + Number(r.depreciation_cost || 0), 0),
-          total_loss_cost: rows.reduce((s, r) => s + Number(r.loss_cost || 0), 0),
+          total_projects: enriched.length,
+          total_contract: enriched.reduce((sum, row) => sum + Number(row.contract_yuan || 0), 0),
+          total_actual_cost: enriched.reduce((sum, row) => sum + Number(row.total_cost || 0), 0),
+          total_gross_margin: enriched.reduce((sum, row) => sum + Number(row.gross_margin || 0), 0),
+          // 兼容旧字段
+          total_material_cost: enriched.reduce((sum, row) => sum + Number(row.material_cost || 0), 0),
+          total_labor_cost: enriched.reduce((sum, row) => sum + Number(row.labor_cost || 0), 0),
+          total_outsourcing_cost: enriched.reduce((sum, row) => sum + Number(row.other_cost || 0), 0),
+          total_depreciation_cost: 0,
+          total_loss_cost: 0,
         };
-        return { type, summary, rows, generated_at: new Date().toISOString() };
+        summary.total_margin_pct = summary.total_contract > 0
+          ? Math.round((summary.total_gross_margin / summary.total_contract) * 10000) / 100
+          : null;
+        return { type, summary, rows: enriched, generated_at: new Date().toISOString() };
       }
       default:
         throw ApiError.validation("未知报表类型: " + type);
@@ -152,7 +217,7 @@ function register(app, db) {
       { type: "quality_monthly", name: "质量月报", description: "质检结果、合格率统计" },
       { type: "oee_weekly", name: "OEE周报", description: "设备综合效率趋势" },
       { type: "inventory_snapshot", name: "库存快照", description: "当前库存状态与低库存预警" },
-      { type: "cost_summary", name: "成本汇总", description: "项目合同金额与物料/人工成本对比" }
+      { type: "cost_summary", name: "成本汇总", description: "项目合同金额与全口径成本/毛利对比（默认不含演练机）" }
     ]);
   }));
 
