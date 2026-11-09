@@ -6,22 +6,54 @@ const { typeLabel } = require("./catalog");
 function registerSummaryRoutes(app, context) {
   const { all, get } = context;
 
-  app.get("/api/resources/equipment", wrap((_req, res) => {
+  app.get("/api/resources/equipment", wrap((req, res) => {
+    const hasTable = (name) => !!get("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", name);
+    const hasDelivery = hasTable("delivery_orders");
+    const hasAcceptance = hasTable("acceptance_records");
+    const keyword = String(req.query.keyword || "").trim();
+    const stage = String(req.query.stage || "").trim();
+    const includeArchived = String(req.query.include_archived || "true") !== "false";
+    const where = ["1=1"];
+    const params = [];
+    if (!includeArchived) where.push("COALESCE(ei.archive_status, 'active') != 'archived'");
+    if (keyword) {
+      where.push("(ei.instance_code LIKE ? OR ei.instance_name LIKE ? OR COALESCE(ei.customer_name,'') LIKE ? OR COALESCE(ei.serial_no,'') LIKE ? OR COALESCE(ei.project_no,'') LIKE ? OR COALESCE(ei.contract_no,'') LIKE ?)");
+      const like = `%${keyword}%`;
+      params.push(like, like, like, like, like, like);
+    }
+    if (stage) {
+      where.push("(CASE WHEN ei.lifecycle_stage = 'S1' THEN 'design' ELSE COALESCE(NULLIF(ei.lifecycle_stage,''), ei.status) END) = ?");
+      params.push(stage);
+    }
     const equipment = all(`
-      SELECT ei.id, ei.instance_code, ei.instance_name, ei.status,
-             ei.lifecycle_stage, ei.progress_pct, ei.customer_name
+      SELECT ei.*,
+             em.model_code, em.model_name, et.name_zh AS type_name,
+             CASE WHEN ei.lifecycle_stage = 'S1' THEN 'design'
+                  ELSE COALESCE(NULLIF(ei.lifecycle_stage,''), ei.status) END AS lifecycle_stage_normalized,
+             CASE WHEN ei.archive_status = 'archived' OR ei.status IN ('delivered','operation','completed','archived')
+                    OR (CASE WHEN ei.lifecycle_stage = 'S1' THEN 'design' ELSE COALESCE(NULLIF(ei.lifecycle_stage,''), ei.status) END) IN ('delivered','operation','completed','archived')
+                  THEN 1 ELSE 0 END AS is_terminal,
+             CASE WHEN ei.planned_end IS NOT NULL AND ei.planned_end < date('now')
+                    AND COALESCE(ei.archive_status,'active') != 'archived'
+                    AND (CASE WHEN ei.lifecycle_stage = 'S1' THEN 'design' ELSE COALESCE(NULLIF(ei.lifecycle_stage,''), ei.status) END) NOT IN ('delivered','operation','completed','archived')
+                  THEN 1 ELSE 0 END AS is_overdue
+             ${hasDelivery ? ", (SELECT d.status FROM delivery_orders d WHERE d.equipment_instance_id = ei.id ORDER BY COALESCE(d.planned_date, d.created_at) DESC, d.id DESC LIMIT 1) AS delivery_status" : ", NULL AS delivery_status"}
+             ${hasAcceptance ? ", (SELECT a.result FROM acceptance_records a WHERE a.equipment_instance_id = ei.id ORDER BY COALESCE(a.planned_date, a.created_at) DESC, a.id DESC LIMIT 1) AS acceptance_result" : ", NULL AS acceptance_result"}
       FROM equipment_instances ei
+      LEFT JOIN equipment_models em ON em.id = ei.equipment_model_id
+      LEFT JOIN equipment_types et ON et.id = em.equipment_type_id
+      WHERE ${where.join(" AND ")}
       ORDER BY ei.id
-    `);
-    res.json({
-      equipment,
-      summary: {
-        total: equipment.length,
-        in_progress: equipment.filter((item) => !["delivered", "operation", "archived", "completed"].includes(item.status)).length,
-        completed: equipment.filter((item) => ["delivered", "operation", "completed"].includes(item.status)).length,
-        delayed: equipment.filter((item) => item.status === "delayed").length,
-      },
-    });
+    `, ...params);
+    const summary = {
+      total: equipment.length,
+      active: equipment.filter((item) => String(item.archive_status || "active") !== "archived").length,
+      in_progress: equipment.filter((item) => !Number(item.is_terminal)).length,
+      completed: equipment.filter((item) => Number(item.is_terminal)).length,
+      archived: equipment.filter((item) => String(item.archive_status) === "archived").length,
+      delayed: equipment.filter((item) => Number(item.is_overdue) || item.status === "delayed" || item.lifecycle_stage === "delayed").length,
+    };
+    res.json({ equipment, summary, filters: { keyword, stage, include_archived: includeArchived } });
   }));
 
   app.get("/api/resources/overview", wrap((_req, res) => {

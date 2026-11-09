@@ -19,6 +19,8 @@
         <el-select v-model="stageFilter" clearable placeholder="生命周期" class="toolbar-select">
           <el-option v-for="stage in lifecycleStages" :key="stage.value" :label="stage.label" :value="stage.value" />
         </el-select>
+        <el-switch v-model="includeArchived" active-text="含归档" @change="loadEquipment" />
+        <el-button :icon="Download" :disabled="!filteredEquipment.length" @click="exportCsv">导出</el-button>
         <el-button :icon="Refresh" :loading="loading" @click="loadEquipment">刷新</el-button>
       </template>
     </PageToolbar>
@@ -51,7 +53,7 @@
           <el-card class="metric-card">
             <div class="metric-label">设备总数</div>
             <div class="metric-value">{{ summary.total || equipment.length }}</div>
-            <div class="metric-sub">纳入 MES 管理的装备实例</div>
+            <div class="metric-sub">含归档；当前展示 {{ filteredEquipment.length }} 台</div>
           </el-card>
         </el-col>
         <el-col :span="6">
@@ -65,7 +67,7 @@
           <el-card class="metric-card">
             <div class="metric-label">已完成/交付</div>
             <div class="metric-value">{{ summary.completed || 0 }}</div>
-            <div class="metric-sub">交付、运维或归档状态</div>
+            <div class="metric-sub">交付/运维/完成/归档</div>
           </el-card>
         </el-col>
         <el-col :span="6">
@@ -84,22 +86,43 @@
             <span class="header-hint">共 {{ filteredEquipment.length }} 台</span>
           </div>
         </template>
-        <el-table :data="filteredEquipment" stripe>
+        <el-table :data="filteredEquipment" stripe style="width:100%">
           <el-table-column prop="instance_code" label="设备编码" min-width="140" />
           <el-table-column prop="instance_name" label="设备名称" min-width="180" />
+          <el-table-column label="型号/类型" min-width="150">
+            <template #default="{ row }">{{ [row.model_code, row.type_name].filter(Boolean).join(' / ') || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="序列号/项目号" min-width="150">
+            <template #default="{ row }">{{ [row.serial_no, row.project_no].filter(Boolean).join(' / ') || '-' }}</template>
+          </el-table-column>
           <el-table-column prop="customer_name" label="客户" min-width="140">
             <template #default="{ row }">{{ row.customer_name || '-' }}</template>
           </el-table-column>
+          <el-table-column label="合同/合同额" min-width="170">
+            <template #default="{ row }">{{ row.contract_no || '-' }}<br /><span class="muted">{{ contractText(row) }}</span></template>
+          </el-table-column>
+          <el-table-column label="计划完成" width="120">
+            <template #default="{ row }">{{ row.planned_end || '-' }}</template>
+          </el-table-column>
+          <el-table-column label="交付/验收" width="130">
+            <template #default="{ row }">
+              <el-tag v-if="row.delivery_status || row.acceptance_result" size="small" :type="deliveryTagType(row)">
+                {{ deliveryLabel(row) }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
           <el-table-column label="生命周期" width="130">
             <template #default="{ row }">
-              <el-tag :type="stageTagType(row.lifecycle_stage || row.status)" size="small">
-                {{ lifecycleLabel(row.lifecycle_stage || row.status) }}
+              <el-tag :type="stageTagType(row.lifecycle_stage_normalized || row.lifecycle_stage || row.status)" size="small">
+                {{ lifecycleLabel(row.lifecycle_stage_normalized || row.lifecycle_stage || row.status) }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="状态" width="120">
             <template #default="{ row }">
               <el-tag :type="statusTagType(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag>
+              <el-tag v-if="row.archive_status === 'archived'" type="info" size="small" style="margin-left:4px">已归档</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="进度" min-width="180">
@@ -121,7 +144,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Monitor, Refresh, Search } from '@element-plus/icons-vue'
+import { Download, Monitor, Refresh, Search } from '@element-plus/icons-vue'
+import { EQUIPMENT_LIFECYCLE_META, EQUIPMENT_LIFECYCLE_OPTIONS } from '../domain/statusCatalog'
 import { Api } from '../api'
 import PageState from '../components/PageState.vue'
 import PageToolbar from '../components/PageToolbar.vue'
@@ -131,40 +155,32 @@ const loading = ref(false)
 const loadError = ref('')
 const keyword = ref('')
 const stageFilter = ref('')
+const includeArchived = ref(true)
 const equipment = ref<any[]>([])
 const summary = reactive<any>({ total: 0, in_progress: 0, completed: 0, delayed: 0 })
 
-const lifecycleStages = [
-  { value: 'design', label: '设计中' },
-  { value: 'procurement', label: '采购中' },
-  { value: 'manufacturing', label: '制造中' },
-  { value: 'assembly', label: '总装中' },
-  { value: 'commissioning', label: '调试中' },
-  { value: 'acceptance', label: '验收中' },
-  { value: 'delivered', label: '已交付' },
-  { value: 'operation', label: '运维中' },
-  { value: 'delayed', label: '延期' },
-]
+const lifecycleStages = EQUIPMENT_LIFECYCLE_OPTIONS
 
 const filteredEquipment = computed(() => {
   const text = keyword.value.trim().toLowerCase()
   return equipment.value.filter((item) => {
-    const stage = item.lifecycle_stage || item.status || ''
+    const stage = normalizeStage(item.lifecycle_stage_normalized || item.lifecycle_stage || item.status || '')
+    const matchArchive = includeArchived.value || item.archive_status !== 'archived'
     const matchStage = !stageFilter.value || stage === stageFilter.value
-    const matchText = !text || [item.instance_code, item.instance_name, item.customer_name]
+    const matchText = !text || [item.instance_code, item.instance_name, item.customer_name, item.model_code, item.model_name, item.serial_no, item.project_no, item.contract_no]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(text))
-    return matchStage && matchText
+    return matchArchive && matchStage && matchText
   })
 })
 
-const delayedCount = computed(() => equipment.value.filter((item) => item.status === 'delayed' || item.lifecycle_stage === 'delayed').length)
+const delayedCount = computed(() => equipment.value.filter((item) => Number(item.is_overdue) || item.status === 'delayed' || item.lifecycle_stage === 'delayed').length)
 
 async function loadEquipment() {
   loading.value = true
   loadError.value = ''
   try {
-    const data = await Api.get('/resources/equipment')
+    const data = await Api.get('/resources/equipment', { params: { include_archived: includeArchived.value } })
     equipment.value = data.equipment || data || []
     Object.assign(summary, data.summary || {})
   } catch (error: any) {
@@ -181,9 +197,50 @@ function normalProgress(value: any) {
   return Math.max(0, Math.min(100, Math.round(progress)))
 }
 
+function normalizeStage(value: string) {
+  return value === 'S1' ? 'design' : value
+}
+
 function lifecycleLabel(value: string) {
-  const found = lifecycleStages.find((item) => item.value === value)
-  return found?.label || statusLabel(value)
+  const normalized = normalizeStage(value)
+  const found = lifecycleStages.find((item) => item.value === normalized)
+  return found?.label || EQUIPMENT_LIFECYCLE_META[normalized]?.label || statusLabel(normalized)
+}
+
+function contractText(row: any) {
+  const amount = Number(row.contract_amount || 0)
+  if (!amount) return '-'
+  const yuan = ['wan', '万元'].includes(String(row.contract_amount_unit || '').toLowerCase()) ? amount * 10000 : amount
+  return '¥' + new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(yuan)
+}
+
+function deliveryLabel(row: any) {
+  const delivery: Record<string, string> = { planned: '待发运', shipped: '已发运', in_transit: '运输中', arrived: '已到货', accepted: '已交付', cancelled: '已取消' }
+  if (row.delivery_status) return delivery[row.delivery_status] || row.delivery_status
+  if (row.acceptance_result) return '验收 ' + (({ pending: '待验收', passed: '合格', conditional: '有条件', rejected: '不合格' } as Record<string, string>)[row.acceptance_result] || row.acceptance_result)
+  return '-'
+}
+
+function deliveryTagType(row: any) {
+  if (row.acceptance_result === 'passed' || row.delivery_status === 'accepted') return 'success'
+  if (row.acceptance_result === 'rejected' || row.delivery_status === 'cancelled') return 'danger'
+  if (row.acceptance_result === 'conditional') return 'warning'
+  return 'info'
+}
+
+function exportCsv() {
+  const rows = filteredEquipment.value
+  if (!rows.length) return
+  const columns = ['instance_code', 'instance_name', 'model_code', 'type_name', 'serial_no', 'project_no', 'customer_name', 'contract_no', 'lifecycle_stage_normalized', 'status', 'archive_status', 'progress_pct', 'planned_start', 'planned_end', 'delivery_status', 'acceptance_result']
+  const header = columns.join(',')
+  const body = rows.map((row) => columns.map((key) => '"' + String(row[key] ?? '').replace(/"/g, '""') + '"').join(','))
+  const blob = new Blob(['\uFEFF' + [header, ...body].join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '设备台账_' + new Date().toISOString().slice(0, 10) + '.csv'
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 function statusLabel(value: string) {
@@ -265,6 +322,11 @@ onMounted(loadEquipment)
 }
 
 .metric-sub,
+.muted {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
 .header-hint {
   color: var(--el-text-color-placeholder);
   font-size: 12px;
