@@ -87,8 +87,8 @@
       "ddlStatements": 4
     },
     "iotService": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "d19296a6f123403112c5ff990868c9b2ea573996bceb99a5e458f0a1a514ab29",
+      "schemaVersion": 3,
+      "ddlFingerprint": "2e29de5330bd719f85902f54f9df23787d43d825a7741e2b2d3892a7543cfdff",
       "ddlStatements": 3
     },
     "kitCheck": {

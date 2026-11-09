@@ -28,6 +28,7 @@ function runMigration(db) {
       register_count INTEGER,
       scan_interval_ms INTEGER NOT NULL DEFAULT 5000,
       equipment_id INTEGER,
+      production_equipment_id INTEGER,
       location TEXT,
       manufacturer TEXT,
       model TEXT,
@@ -84,6 +85,7 @@ function runMigration(db) {
     CREATE INDEX IF NOT EXISTS idx_iot_alarms_device ON iot_alarms(device_id, acknowledged);
     CREATE INDEX IF NOT EXISTS idx_iot_devices_status ON iot_devices(status);
   `);
+  addColumn(db, "iot_devices", "production_equipment_id", "production_equipment_id INTEGER");
   addColumn(db, "iot_readings", "source", "source TEXT NOT NULL DEFAULT 'external_adapter'");
   addColumn(db, "iot_alarms", "source", "source TEXT NOT NULL DEFAULT 'external_adapter'");
   db.exec(`
