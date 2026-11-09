@@ -2,344 +2,224 @@
   <div class="page">
     <PageToolbar
       title="设备台账"
-      subtitle="以设备/装备实例为主线查看生命周期、客户、进度与交付状态。"
-      aria-label="设备台账工具栏"
+      subtitle="车间生产设备主数据：设备、工位、IoT 状态与基础资产信息；项目装备见“项目装备台账”。"
+      aria-label="车间设备台账工具栏"
     >
-      <template #icon>
-        <el-icon><Monitor /></el-icon>
-      </template>
+      <template #icon><el-icon><Monitor /></el-icon></template>
       <template #actions>
-        <el-input
-          v-model="keyword"
-          clearable
-          placeholder="搜索编码、名称、客户"
-          class="toolbar-search"
-          :prefix-icon="Search"
-        />
-        <el-select v-model="stageFilter" clearable placeholder="生命周期" class="toolbar-select">
-          <el-option v-for="stage in lifecycleStages" :key="stage.value" :label="stage.label" :value="stage.value" />
+        <el-input v-model="filters.keyword" clearable placeholder="编码/名称/资产/型号/序列号" class="toolbar-search" :prefix-icon="Search" @keyup.enter="load" @clear="load" />
+        <el-select v-model="filters.equipment_type" clearable placeholder="设备类型" class="toolbar-select" @change="load">
+          <el-option v-for="item in meta.types" :key="item.value" :label="item.label" :value="item.value" />
         </el-select>
-        <el-switch v-model="includeArchived" active-text="含归档" @change="loadEquipment" />
-        <el-button :icon="Download" :disabled="!filteredEquipment.length" @click="exportCsv">导出</el-button>
-        <el-button :icon="Refresh" :loading="loading" @click="loadEquipment">刷新</el-button>
+        <el-select v-model="filters.status" clearable placeholder="状态" class="toolbar-select" @change="load">
+          <el-option v-for="item in meta.statuses" :key="item.value" :label="item.label" :value="item.value" />
+        </el-select>
+        <el-select v-model="filters.workshop_id" clearable placeholder="工位" class="toolbar-select" @change="load">
+          <el-option v-for="item in meta.workstations" :key="item.id" :label="item.workshop + ' / ' + item.name" :value="item.id" />
+        </el-select>
+        <el-switch v-model="includeRetired" active-text="含退役" @change="load" />
+        <el-button :icon="Refresh" :loading="loading" @click="load">刷新</el-button>
+        <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增设备</el-button>
       </template>
     </PageToolbar>
 
-    <PageState
-      v-if="loadError"
-      state="error"
-      title="设备台账加载失败"
-      :description="loadError"
-      action-text="重新加载"
-      @retry="loadEquipment"
-    />
-    <PageState
-      v-else-if="loading && !equipment.length"
-      state="loading"
-      title="正在加载设备台账"
-      description="正在获取装备实例生命周期与交付状态。"
-    />
-    <PageState
-      v-else-if="!loading && !equipment.length"
-      state="empty"
-      title="暂无设备台账"
-      description="请先在“项目与装备 / 装备实例”中创建设备实例。"
-      action-text="刷新"
-      @retry="loadEquipment"
-    />
+    <PageState v-if="loadError" state="error" title="设备台账加载失败" :description="loadError" action-text="重新加载" @retry="load" />
+    <PageState v-else-if="loading && !equipment.length" state="loading" title="正在加载车间设备台账" description="正在获取设备、工位与 IoT 状态。" />
+    <PageState v-else-if="!equipment.length" state="empty" title="暂无车间设备" description="请新增设备或调整筛选条件。" action-text="刷新" @retry="load" />
+
     <template v-else>
-      <el-row :gutter="16" class="summary-row">
-        <el-col :span="6">
-          <el-card class="metric-card">
-            <div class="metric-label">设备总数</div>
-            <div class="metric-value">{{ summary.total || equipment.length }}</div>
-            <div class="metric-sub">含归档；当前展示 {{ filteredEquipment.length }} 台</div>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="metric-card">
-            <div class="metric-label">进行中</div>
-            <div class="metric-value">{{ summary.in_progress || 0 }}</div>
-            <div class="metric-sub">设计/采购/制造/总装/调试</div>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="metric-card">
-            <div class="metric-label">已完成/交付</div>
-            <div class="metric-value">{{ summary.completed || 0 }}</div>
-            <div class="metric-sub">交付/运维/完成/归档</div>
-          </el-card>
-        </el-col>
-        <el-col :span="6">
-          <el-card class="metric-card danger-soft">
-            <div class="metric-label">延期风险</div>
-            <div class="metric-value">{{ summary.delayed || delayedCount }}</div>
-            <div class="metric-sub">需项目经理跟进</div>
-          </el-card>
-        </el-col>
+      <el-row :gutter="14" class="summary-row">
+        <el-col :span="6"><el-card class="metric-card"><div class="metric-label">设备总数</div><div class="metric-value">{{ summary.total || 0 }}</div><div class="metric-sub">当前筛选；含退役 {{ summary.retired || 0 }}</div></el-card></el-col>
+        <el-col :span="6"><el-card class="metric-card"><div class="metric-label">运行中</div><div class="metric-value">{{ summary.running || 0 }}</div><div class="metric-sub">空闲 {{ summary.idle || 0 }}</div></el-card></el-col>
+        <el-col :span="6"><el-card class="metric-card"><div class="metric-label">维保/故障</div><div class="metric-value">{{ (summary.maintenance || 0) + (summary.fault || 0) }}</div><div class="metric-sub">维保 {{ summary.maintenance || 0 }} · 故障 {{ summary.fault || 0 }}</div></el-card></el-col>
+        <el-col :span="6"><el-card class="metric-card"><div class="metric-label">IoT 在线</div><div class="metric-value">{{ summary.iot_online || 0 }}</div><div class="metric-sub">共 {{ summary.iot_total || 0 }} 个采集设备</div></el-card></el-col>
       </el-row>
 
       <el-card>
         <template #header>
           <div class="card-header">
-            <span>设备生命周期台账</span>
-            <span class="header-hint">共 {{ filteredEquipment.length }} 台</span>
+            <span>车间设备清单</span>
+            <span class="header-hint">共 {{ equipment.length }} 台</span>
           </div>
         </template>
-        <el-table :data="filteredEquipment" stripe style="width:100%">
-          <el-table-column prop="instance_code" label="设备编码" min-width="140" />
-          <el-table-column prop="instance_name" label="设备名称" min-width="180" />
-          <el-table-column label="型号/类型" min-width="150">
-            <template #default="{ row }">{{ [row.model_code, row.type_name].filter(Boolean).join(' / ') || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="序列号/项目号" min-width="150">
-            <template #default="{ row }">{{ [row.serial_no, row.project_no].filter(Boolean).join(' / ') || '-' }}</template>
-          </el-table-column>
-          <el-table-column prop="customer_name" label="客户" min-width="140">
-            <template #default="{ row }">{{ row.customer_name || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="合同/合同额" min-width="170">
-            <template #default="{ row }">{{ row.contract_no || '-' }}<br /><span class="muted">{{ contractText(row) }}</span></template>
-          </el-table-column>
-          <el-table-column label="计划完成" width="120">
-            <template #default="{ row }">{{ row.planned_end || '-' }}</template>
-          </el-table-column>
-          <el-table-column label="交付/验收" width="130">
+        <el-table :data="equipment" stripe style="width:100%">
+          <el-table-column label="设备" min-width="200">
             <template #default="{ row }">
-              <el-tag v-if="row.delivery_status || row.acceptance_result" size="small" :type="deliveryTagType(row)">
-                {{ deliveryLabel(row) }}
-              </el-tag>
-              <span v-else>-</span>
+              <div class="device-name">{{ row.name }}</div>
+              <div class="muted">{{ row.code }}<span v-if="row.asset_no"> · 资产 {{ row.asset_no }}</span></div>
             </template>
           </el-table-column>
-          <el-table-column label="生命周期" width="130">
+          <el-table-column label="类型/工位" min-width="180">
             <template #default="{ row }">
-              <el-tag :type="stageTagType(row.lifecycle_stage_normalized || row.lifecycle_stage || row.status)" size="small">
-                {{ lifecycleLabel(row.lifecycle_stage_normalized || row.lifecycle_stage || row.status) }}
-              </el-tag>
+              <div>{{ typeLabel(row.equipment_type) }}</div>
+              <div class="muted">{{ row.workshop || '-' }} / {{ row.workstation_name || '未绑定工位' }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="120">
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }"><el-tag :type="statusMeta(row.status).type" size="small">{{ statusMeta(row.status).label }}</el-tag></template>
+          </el-table-column>
+          <el-table-column label="型号/序列号" min-width="170">
             <template #default="{ row }">
-              <el-tag :type="statusTagType(row.status)" effect="plain" size="small">{{ statusLabel(row.status) }}</el-tag>
-              <el-tag v-if="row.archive_status === 'archived'" type="info" size="small" style="margin-left:4px">已归档</el-tag>
+              <div>{{ row.model || '-' }}</div>
+              <div class="muted">{{ row.serial_no || '-' }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="进度" min-width="180">
+          <el-table-column label="厂商/关键度" min-width="150">
             <template #default="{ row }">
-              <el-progress :percentage="normalProgress(row.progress_pct)" :stroke-width="8" />
+              <div>{{ row.manufacturer || '-' }}</div>
+              <div class="muted">关键度 {{ row.criticality || '-' }}</div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="120" fixed="right">
+          <el-table-column label="最近保养" width="120"><template #default="{ row }">{{ row.last_maintenance || '-' }}</template></el-table-column>
+          <el-table-column label="IoT" width="150">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openInstance(row)">查看实例</el-button>
+              <el-tag v-if="row.iot_count" size="small" :type="row.iot_online ? 'success' : 'info'">{{ row.iot_online }}/{{ row.iot_count }} 在线</el-tag>
+              <span v-else class="muted">未接入</span>
+              <div v-if="row.iot_last_seen" class="muted">{{ row.iot_last_seen }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column v-if="canWrite" label="操作" width="190" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+              <el-button link @click="openStatus(row)">状态</el-button>
+              <el-popconfirm title="确认删除该设备？" @confirm="removeEquipment(row)"><template #reference><el-button link type="danger">删除</el-button></template></el-popconfirm>
             </template>
           </el-table-column>
         </el-table>
       </el-card>
     </template>
+
+    <el-dialog v-model="formDlg.show" :title="formDlg.id ? '编辑设备' : '新增设备'" width="720px">
+      <el-form label-width="95px">
+        <el-row :gutter="16">
+          <el-col :span="12"><el-form-item label="设备编码" required><el-input v-model="form.code" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="设备名称" required><el-input v-model="form.name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="设备类型"><el-select v-model="form.equipment_type" style="width:100%"><el-option v-for="item in meta.types" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="资产编号"><el-input v-model="form.asset_no" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="工位"><el-select v-model="form.workstation_id" clearable style="width:100%"><el-option v-for="item in meta.workstations" :key="item.id" :label="item.workshop + ' / ' + item.name" :value="item.id" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="状态"><el-select v-model="form.status" style="width:100%"><el-option v-for="item in meta.statuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="厂商"><el-input v-model="form.manufacturer" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="型号"><el-input v-model="form.model" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="序列号"><el-input v-model="form.serial_no" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="关键度"><el-select v-model="form.criticality" style="width:100%"><el-option v-for="item in meta.criticalities" :key="item" :label="item" :value="item" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="存放位置"><el-input v-model="form.location" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="最近保养"><el-date-picker v-model="form.last_maintenance" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="购置日期"><el-date-picker v-model="form.purchase_date" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="保修到期"><el-date-picker v-model="form.warranty_end" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="备注"><el-input v-model="form.notes" type="textarea" :rows="2" /></el-form-item></el-col>
+        </el-row>
+      </el-form>
+      <template #footer><el-button @click="formDlg.show = false">取消</el-button><el-button type="primary" :loading="formDlg.saving" @click="saveEquipment">保存</el-button></template>
+    </el-dialog>
+
+    <el-dialog v-model="statusDlg.show" title="变更设备状态" width="420px">
+      <el-form label-width="80px"><el-form-item label="设备"><strong>{{ statusDlg.name }}</strong></el-form-item><el-form-item label="新状态"><el-select v-model="statusDlg.status" style="width:100%"><el-option v-for="item in meta.statuses" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-form>
+      <template #footer><el-button @click="statusDlg.show = false">取消</el-button><el-button type="primary" :loading="statusDlg.saving" @click="saveStatus">保存</el-button></template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { Download, Monitor, Refresh, Search } from '@element-plus/icons-vue'
-import { EQUIPMENT_LIFECYCLE_META, EQUIPMENT_LIFECYCLE_OPTIONS } from '../domain/statusCatalog'
+import { Monitor, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { Api } from '../api'
 import PageState from '../components/PageState.vue'
 import PageToolbar from '../components/PageToolbar.vue'
+import { useAuthStore } from '../stores/auth'
 
-const router = useRouter()
+const auth = useAuthStore()
+const canWrite = computed(() => auth.role === 'admin' || auth.role === 'foreman')
+const statusMap: Record<string, { label: string; type: string }> = {
+  running: { label: '运行', type: 'success' }, idle: { label: '空闲', type: 'info' },
+  maintenance: { label: '维保', type: 'warning' }, fault: { label: '故障', type: 'danger' },
+  offline: { label: '离线', type: 'info' }, retired: { label: '退役', type: 'info' },
+}
+const statusMeta = (status: string) => statusMap[status] || { label: status || '-', type: 'info' }
+const typeLabel = (value: string) => meta.types.find((item: any) => item.value === value)?.label || value || '-'
+const errText = (error: any) => error?.response?.data?.error || error?.response?.data?.message || error?.message || String(error)
+const filters = reactive({ keyword: '', equipment_type: '', status: '', workshop_id: null as any })
+const includeRetired = ref(true)
 const loading = ref(false)
 const loadError = ref('')
-const keyword = ref('')
-const stageFilter = ref('')
-const includeArchived = ref(true)
 const equipment = ref<any[]>([])
-const summary = reactive<any>({ total: 0, in_progress: 0, completed: 0, delayed: 0 })
+const summary = reactive<any>({ total: 0, running: 0, idle: 0, maintenance: 0, fault: 0, offline: 0, retired: 0, iot_online: 0, iot_total: 0 })
+const meta = reactive<any>({ types: [], statuses: [], criticalities: ['A', 'B', 'C'], workstations: [] })
+const emptyForm = () => ({ code: '', name: '', equipment_type: 'other', workstation_id: null, status: 'idle', asset_no: '', manufacturer: '', model: '', serial_no: '', location: '', criticality: 'B', purchase_date: null, warranty_end: null, last_maintenance: null, notes: '' })
+const form = reactive<any>(emptyForm())
+const formDlg = reactive<any>({ show: false, id: null, saving: false })
+const statusDlg = reactive<any>({ show: false, id: null, name: '', status: 'idle', saving: false })
 
-const lifecycleStages = EQUIPMENT_LIFECYCLE_OPTIONS
+async function loadMeta() {
+  try { Object.assign(meta, await Api.get('/equipment-ledger/meta')) } catch (error: any) { ElMessage.error('加载元数据失败：' + errText(error)) }
+}
 
-const filteredEquipment = computed(() => {
-  const text = keyword.value.trim().toLowerCase()
-  return equipment.value.filter((item) => {
-    const stage = normalizeStage(item.lifecycle_stage_normalized || item.lifecycle_stage || item.status || '')
-    const matchArchive = includeArchived.value || item.archive_status !== 'archived'
-    const matchStage = !stageFilter.value || stage === stageFilter.value
-    const matchText = !text || [item.instance_code, item.instance_name, item.customer_name, item.model_code, item.model_name, item.serial_no, item.project_no, item.contract_no]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(text))
-    return matchArchive && matchStage && matchText
-  })
-})
-
-const delayedCount = computed(() => equipment.value.filter((item) => Number(item.is_overdue) || item.status === 'delayed' || item.lifecycle_stage === 'delayed').length)
-
-async function loadEquipment() {
+async function load() {
   loading.value = true
   loadError.value = ''
   try {
-    const data = await Api.get('/resources/equipment', { params: { include_archived: includeArchived.value } })
-    equipment.value = data.equipment || data || []
+    const data: any = await Api.get('/equipment-ledger', { params: { keyword: filters.keyword || undefined, equipment_type: filters.equipment_type || undefined, status: filters.status || undefined, workshop_id: filters.workshop_id || undefined, include_retired: includeRetired.value } })
+    equipment.value = data.equipment || []
     Object.assign(summary, data.summary || {})
-  } catch (error: any) {
-    /* 2026-10-17: 移除前端调试日志（前端统一用 ElMessage 提示） */
-    loadError.value = error?.message || '设备台账接口暂时不可用，请稍后重试。'
-  } finally {
-    loading.value = false
-  }
+  } catch (error: any) { loadError.value = errText(error) } finally { loading.value = false }
 }
 
-function normalProgress(value: any) {
-  const progress = Number(value || 0)
-  if (Number.isNaN(progress)) return 0
-  return Math.max(0, Math.min(100, Math.round(progress)))
+function openCreate() {
+  Object.assign(form, emptyForm())
+  formDlg.id = null
+  formDlg.show = true
 }
 
-function normalizeStage(value: string) {
-  return value === 'S1' ? 'design' : value
+function openEdit(row: any) {
+  Object.assign(form, emptyForm(), row)
+  formDlg.id = row.id
+  formDlg.show = true
 }
 
-function lifecycleLabel(value: string) {
-  const normalized = normalizeStage(value)
-  const found = lifecycleStages.find((item) => item.value === normalized)
-  return found?.label || EQUIPMENT_LIFECYCLE_META[normalized]?.label || statusLabel(normalized)
+async function saveEquipment() {
+  if (!form.code.trim() || !form.name.trim()) { ElMessage.warning('设备编码和名称必填'); return }
+  formDlg.saving = true
+  try {
+    if (formDlg.id) await Api.put('/equipment-ledger/' + formDlg.id, form)
+    else await Api.post('/equipment-ledger', form)
+    ElMessage.success('设备已保存')
+    formDlg.show = false
+    await Promise.all([loadMeta(), load()])
+  } catch (error: any) { ElMessage.error('保存失败：' + errText(error)) } finally { formDlg.saving = false }
 }
 
-function contractText(row: any) {
-  const amount = Number(row.contract_amount || 0)
-  if (!amount) return '-'
-  const yuan = ['wan', '万元'].includes(String(row.contract_amount_unit || '').toLowerCase()) ? amount * 10000 : amount
-  return '¥' + new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(yuan)
+function openStatus(row: any) { Object.assign(statusDlg, { show: true, id: row.id, name: row.name, status: row.status, saving: false }) }
+
+async function saveStatus() {
+  statusDlg.saving = true
+  try {
+    await Api.post('/equipment-ledger/' + statusDlg.id + '/status', { status: statusDlg.status })
+    ElMessage.success('状态已更新')
+    statusDlg.show = false
+    await load()
+  } catch (error: any) { ElMessage.error('更新失败：' + errText(error)) } finally { statusDlg.saving = false }
 }
 
-function deliveryLabel(row: any) {
-  const delivery: Record<string, string> = { planned: '待发运', shipped: '已发运', in_transit: '运输中', arrived: '已到货', accepted: '已交付', cancelled: '已取消' }
-  if (row.delivery_status) return delivery[row.delivery_status] || row.delivery_status
-  if (row.acceptance_result) return '验收 ' + (({ pending: '待验收', passed: '合格', conditional: '有条件', rejected: '不合格' } as Record<string, string>)[row.acceptance_result] || row.acceptance_result)
-  return '-'
+async function removeEquipment(row: any) {
+  try {
+    await Api.del('/equipment-ledger/' + row.id)
+    ElMessage.success('设备已删除')
+    await load()
+  } catch (error: any) { ElMessage.error('删除失败：' + errText(error)) }
 }
 
-function deliveryTagType(row: any) {
-  if (row.acceptance_result === 'passed' || row.delivery_status === 'accepted') return 'success'
-  if (row.acceptance_result === 'rejected' || row.delivery_status === 'cancelled') return 'danger'
-  if (row.acceptance_result === 'conditional') return 'warning'
-  return 'info'
-}
-
-function exportCsv() {
-  const rows = filteredEquipment.value
-  if (!rows.length) return
-  const columns = ['instance_code', 'instance_name', 'model_code', 'type_name', 'serial_no', 'project_no', 'customer_name', 'contract_no', 'lifecycle_stage_normalized', 'status', 'archive_status', 'progress_pct', 'planned_start', 'planned_end', 'delivery_status', 'acceptance_result']
-  const header = columns.join(',')
-  const body = rows.map((row) => columns.map((key) => '"' + String(row[key] ?? '').replace(/"/g, '""') + '"').join(','))
-  const blob = new Blob(['\uFEFF' + [header, ...body].join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = '设备台账_' + new Date().toISOString().slice(0, 10) + '.csv'
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-function statusLabel(value: string) {
-  const map: Record<string, string> = {
-    design: '设计中',
-    procurement: '采购中',
-    manufacturing: '制造中',
-    assembly: '总装中',
-    commissioning: '调试中',
-    acceptance: '验收中',
-    delivered: '已交付',
-    operation: '运维中',
-    completed: '已完成',
-    archived: '已归档',
-    delayed: '延期',
-  }
-  return map[value] || value || '-'
-}
-
-function stageTagType(value: string) {
-  const map: Record<string, string> = {
-    commissioning: 'warning',
-    acceptance: 'warning',
-    delivered: 'success',
-    operation: 'success',
-    completed: 'success',
-    archived: 'info',
-    delayed: 'danger',
-  }
-  return map[value] || 'primary'
-}
-
-function statusTagType(value: string) {
-  if (value === 'delayed') return 'danger'
-  if (['delivered', 'operation', 'completed'].includes(value)) return 'success'
-  if (value === 'archived') return 'info'
-  return 'primary'
-}
-
-function openInstance(row: any) {
-  if (row?.id) router.push(`/instances/${row.id}`)
-}
-
-onMounted(loadEquipment)
+onMounted(async () => { await loadMeta(); await load() })
 </script>
 
 <style scoped>
-.page {
-  padding: 16px;
-}
-
-.toolbar-search {
-  width: 240px;
-}
-
-.toolbar-select {
-  width: 150px;
-}
-
-.summary-row {
-  margin-bottom: 16px;
-}
-
-.metric-card {
-  min-height: 118px;
-}
-
-.metric-label {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  margin-bottom: 8px;
-}
-
-.metric-value {
-  color: var(--el-text-color-primary);
-  font-size: 30px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.metric-sub,
-.muted {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
-
-.header-hint {
-  color: var(--el-text-color-placeholder);
-  font-size: 12px;
-  margin-top: 8px;
-}
-
-.danger-soft {
-  border-color: var(--el-color-danger-light-7);
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
+.page { padding: 16px; }
+.toolbar-search { width: 230px; }
+.toolbar-select { width: 150px; }
+.summary-row { margin-bottom: 16px; }
+.metric-card { min-height: 110px; }
+.metric-label { color: var(--el-text-color-secondary); font-size: 13px; margin-bottom: 8px; }
+.metric-value { color: var(--el-text-color-primary); font-size: 28px; font-weight: 700; line-height: 1.2; }
+.metric-sub, .header-hint, .muted { color: var(--el-text-color-secondary); font-size: 12px; margin-top: 6px; }
+.device-name { font-weight: 600; }
+.card-header { display: flex; align-items: center; justify-content: space-between; }
 </style>

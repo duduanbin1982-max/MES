@@ -57,6 +57,14 @@
           "icon": "Box"
         },
         {
+          "key": "project-equipment-ledger",
+          "title": "项目装备台账",
+          "path": "/project-equipment-ledger",
+          "entry": "/project-equipment-ledger",
+          "icon": "Box",
+          "permission": "equipment:read"
+        },
+        {
           "key": "schedule",
           "title": "项目排程",
           "path": "/schedule",

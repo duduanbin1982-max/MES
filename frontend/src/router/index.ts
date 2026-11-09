@@ -70,6 +70,7 @@ const routes = [
       { path: '/erp', name: 'erp', component: () => import('../views/ErpLedger.vue'), meta: { title: 'ERP 台账', icon: 'Money' } },
       
       { path: '/suppliers', name: 'suppliers', component: () => import('../views/SupplierDashboard.vue'), meta: { title: '供应商协同', icon: 'Connection' } },
+      { path: '/project-equipment-ledger', name: 'project-equipment-ledger', component: () => import('../views/ProjectEquipmentLedger.vue'), meta: { title: '项目装备台账', icon: 'Box' } },
       { path: '/equipment-ledger', name: 'equipment-ledger', component: () => import('../views/EquipmentLedger.vue'), meta: { title: '设备台账', icon: 'Monitor' } },
       { path: '/workstation-resources', name: 'workstation-resources', component: () => import('../views/WorkstationResources.vue'), meta: { title: '工位/资源配置', icon: 'OfficeBuilding' } },
       { path: '/resources', name: 'resources', component: () => import('../views/ResourceDashboard.vue'), meta: { title: '资源分配与状态', icon: 'Monitor' } },

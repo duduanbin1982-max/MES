@@ -113,6 +113,8 @@ const RULES = [
   match(/^\/dashboard(?:\/alerts|\/delays|\/delays\/summary|\/risk-summary|\/long-leadtime|\/live-status|\/process-health)?$/, READ, ["report:read"]),
   match(/^\/reports(?:\/.*)?$/, READ.concat(["POST", "PUT", "DELETE"]), ["report:read"]),
 
+  match(/^\/equipment-ledger(?:\/.*)?$/, READ, ["equipment:read"]),
+  match(/^\/equipment-ledger(?:\/.*)?$/, WRITE, ["equipment:write"]),
   match(/^\/equipment(?:\/(?:live_status|oee))?$/, READ, ["equipment:read", "report:read"]),
   match(/^\/equipment_(?:types|models|subsystems)(?:\/\d+)?$/, READ, ["equipment:read"]),
   match(/^\/equipment_instances(?:\/\d+)?$/, READ, ["equipment:read"]),

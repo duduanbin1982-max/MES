@@ -5,6 +5,7 @@ const { ApiError } = require("../../app/errors");
 const { wrap } = require("../../middleware/asyncHandler");
 const { LIFE_CYCLE } = require("./catalog");
 const { registerCatalogRoutes } = require("./catalogRoutes");
+const { registerLedgerRoutes } = require("./ledgerRoutes");
 const { createCodeGenerator } = require("./codeGenerator");
 const { createInstanceFactory } = require("./instanceFactory");
 const { registerInstanceRoutes } = require("./instanceRoutes");
@@ -70,6 +71,7 @@ function register(app, db) {
     buildOverview,
   });
   registerCatalogRoutes({ app, wrap, ...helpers, ApiError });
+  registerLedgerRoutes({ app, wrap, ...helpers, ApiError });
 }
 
 module.exports = { register };
