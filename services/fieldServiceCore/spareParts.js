@@ -5,7 +5,7 @@ const { helpers } = require("./_helpers");
 
 function listSpareParts(db, query = {}) {
   const { all } = helpers(db);
-  let sql = "SELECT sp.*, ei.instance_code, ei.instance_name FROM spare_parts sp LEFT JOIN equipment_instances ei ON sp.equipment_instance_id = ei.id WHERE 1=1";
+  let sql = "SELECT sp.*, sp.quantity AS current_stock, ei.instance_code, ei.instance_name FROM spare_parts sp LEFT JOIN equipment_instances ei ON sp.equipment_instance_id = ei.id WHERE 1=1";
   const params = [];
   if (query.equipment_instance_id) {
     sql += " AND sp.equipment_instance_id = ?";
@@ -25,7 +25,7 @@ function listSpareParts(db, query = {}) {
 function getSparePart(db, id) {
   const { get } = helpers(db);
   return get(
-    "SELECT sp.*, ei.instance_code, ei.instance_name FROM spare_parts sp LEFT JOIN equipment_instances ei ON sp.equipment_instance_id = ei.id WHERE sp.id = ?",
+    "SELECT sp.*, sp.quantity AS current_stock, ei.instance_code, ei.instance_name FROM spare_parts sp LEFT JOIN equipment_instances ei ON sp.equipment_instance_id = ei.id WHERE sp.id = ?",
     [id],
   );
 }

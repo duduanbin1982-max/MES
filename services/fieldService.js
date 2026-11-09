@@ -29,6 +29,10 @@ function register(app, db) {
     res.json(fieldServiceCore.updateMaintenancePlan(db, req.params.id, req.body));
   }));
 
+  app.post("/api/field-service/maintenance-plans/:id/complete", wrap(function(req, res) {
+    res.json(fieldServiceCore.completeMaintenancePlan(db, req.params.id));
+  }));
+
   // ========== MAINTENANCE LOGS ==========
   app.post("/api/field-service/maintenance-logs", wrap(function(req, res) {
     const body = req.body;
@@ -39,10 +43,13 @@ function register(app, db) {
   }));
 
   app.get("/api/field-service/maintenance-logs", wrap(function(req, res) {
-    let sql = "SELECT ml.*, ei.instance_code FROM maintenance_logs ml LEFT JOIN equipment_instances ei ON ml.equipment_instance_id = ei.id WHERE 1=1";
+    let sql = "SELECT ml.*, ei.instance_code, ei.instance_name, mp.plan_name, u.full_name AS performer_name FROM maintenance_logs ml LEFT JOIN equipment_instances ei ON ml.equipment_instance_id = ei.id LEFT JOIN maintenance_plans mp ON ml.plan_id = mp.id LEFT JOIN users u ON ml.performed_by = u.id WHERE 1=1";
     const params = [];
     if (req.query.plan_id) { sql += " AND ml.plan_id = ?"; params.push(req.query.plan_id); }
     if (req.query.equipment_instance_id) { sql += " AND ml.equipment_instance_id = ?"; params.push(req.query.equipment_instance_id); }
+    if (req.query.start_date) { sql += " AND date(ml.performed_at) >= date(?)"; params.push(req.query.start_date); }
+    if (req.query.end_date) { sql += " AND date(ml.performed_at) <= date(?)"; params.push(req.query.end_date); }
+    if (req.query.status) { sql += " AND ml.status = ?"; params.push(req.query.status); }
     sql += " ORDER BY ml.performed_at DESC LIMIT 200";
     res.json(all(sql, params));
   }));
@@ -131,9 +138,11 @@ function register(app, db) {
 
   app.put("/api/field-service/checklists/:id/execute", wrap(function(req, res) {
     const body = req.body;
+    const checklist = get("SELECT * FROM maintenance_checklists WHERE id = ?", [req.params.id]);
+    if (!checklist) throw ApiError.notFound("Checklist not found");
     const results_json = JSON.stringify(body.results || []);
     const r = run("INSERT INTO maintenance_logs (plan_id, equipment_instance_id, performed_by, hours_spent, findings, actions_taken, status) VALUES (?,?,?,?,?,?,?)",
-      [null, body.equipment_instance_id, body.performed_by || null, body.hours_spent || 0.5, "Checklist: " + (body.checklist_name || ""), results_json, body.all_pass ? "completed" : "issues_found"]);
+      [null, body.equipment_instance_id || checklist.equipment_instance_id, body.performed_by || null, body.hours_spent || 0.5, "Checklist: " + (body.checklist_name || checklist.checklist_name), results_json, body.all_pass ? "completed" : "issues_found"]);
     res.json({ id: r.lastInsertRowid, log_type: "checklist" });
   }));
 

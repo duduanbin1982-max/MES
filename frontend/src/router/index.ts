@@ -51,7 +51,7 @@ const routes = [
       { path: '/andon', name: 'andon', component: () => import('../views/Andon.vue'), meta: { title: 'ANDON 安灯', icon: 'Bell' } },
       
       { path: '/maintenance', name: 'maintenance', component: () => import('../views/MaintenanceDashboard.vue'), meta: { title: '设备维护看板', icon: 'Tools' } },
-      { path: '/field-service', name: 'field-service', component: () => import('../views/FieldService.vue'), meta: { title: '现场服务', icon: 'Tools' } },
+      { path: '/field-service', name: 'field-service', component: () => import('../views/FieldService.vue'), meta: { title: '点检 / TPM', icon: 'Tools' } },
       { path: '/audit', name: 'audit', component: () => import('../views/AuditLogs.vue'), meta: { title: '审计日志', icon: 'DocumentChecked' } },
       { path: '/labor', name: 'labor', component: () => import('../views/LaborDashboard.vue'), meta: { title: '劳动力管理', icon: 'UserFilled', requires: 'user:read' } },
       { path: '/documents', name: 'documents', component: () => import('../views/DocumentManagement.vue'), meta: { title: '文档/图纸', icon: 'FolderOpened', requires: 'document:read' } },
