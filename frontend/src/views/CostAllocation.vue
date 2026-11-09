@@ -18,23 +18,23 @@
       <!-- 汇总卡片 -->
       <el-row :gutter="16" style="margin-bottom: 16px">
         <el-col :span="6">
-          <el-card shadow="hover"><el-statistic title="估算总成本" :value="fmtMoney(data.totals?.estimated_cost)" /></el-card>
+          <el-card shadow="hover"><el-statistic title="估算总成本" :value="fmtMoney(data.totals?.estimated_cost_full ?? data.totals?.estimated_cost)" /></el-card>
         </el-col>
         <el-col :span="6">
-          <el-card shadow="hover"><el-statistic title="实际总成本" :value="fmtMoney(data.totals?.actual_cost)" /></el-card>
+          <el-card shadow="hover"><el-statistic title="实际总成本（含人工/台账）" :value="fmtMoney(data.totals?.actual_cost_full ?? data.totals?.actual_cost)" /></el-card>
         </el-col>
         <el-col :span="6">
           <el-card shadow="hover">
-            <el-statistic title="成本偏差" :value="fmtMoney(data.totals?.cost_diff)">
+            <el-statistic title="成本偏差" :value="fmtMoney(data.totals?.cost_diff_full ?? data.totals?.cost_diff)">
               <template #suffix>
-                <el-tag :type="(data.totals?.cost_diff||0) > 0 ? 'danger' : 'success'" size="small">{{ (data.totals?.cost_diff||0) > 0 ? '超支' : '节约' }}</el-tag>
+                <el-tag :type="(data.totals?.cost_diff_full ?? data.totals?.cost_diff ?? 0) > 0 ? 'danger' : 'success'" size="small">{{ (data.totals?.cost_diff_full ?? data.totals?.cost_diff ?? 0) > 0 ? '超支' : '节约' }}</el-tag>
               </template>
             </el-statistic>
           </el-card>
         </el-col>
         <el-col :span="6">
-          <el-card shadow="hover"><el-statistic title="合同毛利" :value="fmtMoney(data.contract_margin)">
-            <template #suffix><span style="font-size:14px">{{ data.contract_margin_pct != null ? '('+data.contract_margin_pct+'%)' : '' }}</span></template>
+          <el-card shadow="hover"><el-statistic title="合同毛利" :value="fmtMoney(data.contract_margin_full ?? data.contract_margin)">
+            <template #suffix><span style="font-size:14px">{{ (data.contract_margin_pct_full ?? data.contract_margin_pct) != null ? '('+(data.contract_margin_pct_full ?? data.contract_margin_pct)+'%)' : '' }}</span></template>
           </el-statistic></el-card>
         </el-col>
       </el-row>
@@ -89,6 +89,37 @@
             <el-tag :type="data.equipment_instance.status==='active'?'success':''" size="small">{{ data.equipment_instance.status || '-' }}</el-tag>
           </el-descriptions-item>
         </el-descriptions>
+      </el-card>
+
+      <el-card v-if="selectedInstance" style="margin-bottom: 16px">
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight: 500"><el-icon><Money /></el-icon> 成本台账（{{ entriesTotal }} 条 / {{ fmtMoney(entrySummary.total) }} 元）</span>
+            <div v-if="canWriteCost">
+              <el-button size="small" @click="backfillCost" :loading="entryDlg.backfilling">回填材料/人工</el-button>
+              <el-button size="small" type="primary" @click="openEntry">新增成本</el-button>
+            </div>
+          </div>
+        </template>
+        <div class="ledger-summary">
+          <span>材料 {{ fmtMoney(entrySummary.by_type?.material?.amount) }} 元</span>
+          <span>人工 {{ fmtMoney(entrySummary.by_type?.labor?.amount) }} 元</span>
+          <span>外协 {{ fmtMoney(entrySummary.by_type?.outsourcing?.amount) }} 元</span>
+          <span>折旧 {{ fmtMoney(entrySummary.by_type?.depreciation?.amount) }} 元</span>
+          <span>返工 {{ fmtMoney(entrySummary.by_type?.rework?.amount) }} 元</span>
+          <span>质量损失 {{ fmtMoney(entrySummary.by_type?.quality_loss?.amount) }} 元</span>
+        </div>
+        <el-table :data="entries" size="small" max-height="300" empty-text="暂无成本台账">
+          <el-table-column prop="cost_type_label" label="类型" width="90" />
+          <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
+          <el-table-column label="金额" width="130" align="right"><template #default="{ row }">{{ fmtMoney(row.amount) }}</template></el-table-column>
+          <el-table-column prop="occurred_on" label="发生日" width="110" />
+          <el-table-column label="状态" width="80"><template #default="{ row }"><el-tag size="small" :type="row.status === 'posted' ? 'success' : row.status === 'void' ? 'info' : 'warning'">{{ row.status }}</el-tag></template></el-table-column>
+          <el-table-column prop="source_ref" label="来源" min-width="160" show-overflow-tooltip />
+          <el-table-column v-if="canWriteCost" label="操作" width="80" fixed="right">
+            <template #default="{ row }"><el-button link size="small" type="danger" @click="voidEntry(row)">作废</el-button></template>
+          </el-table-column>
+        </el-table>
       </el-card>
 
       <el-card v-if="selectedInstance" style="margin-bottom: 16px">
@@ -152,15 +183,32 @@
         />
       </el-card>
     </div>
+
+    <el-dialog v-model="entryDlg.show" title="新增成本台账" width="560px">
+      <el-form :model="entryDlg.form" label-width="90px" size="small">
+        <el-form-item label="成本类型" required>
+          <el-select v-model="entryDlg.form.cost_type" style="width:100%">
+            <el-option v-for="item in costTypeOptions" :key="item.value" :label="item.label" :value="item.value" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="说明" required><el-input v-model="entryDlg.form.description" maxlength="500" show-word-limit /></el-form-item>
+        <el-form-item label="金额(元)" required><el-input-number v-model="entryDlg.form.amount" :min="0" :precision="2" :max="1000000000000" style="width:100%" /></el-form-item>
+        <el-form-item label="发生日期" required><el-date-picker v-model="entryDlg.form.occurred_on" type="date" value-format="YYYY-MM-DD" style="width:100%" /></el-form-item>
+        <el-form-item label="供应商/外协"><el-input v-model="entryDlg.form.vendor" /></el-form-item>
+        <el-form-item label="备注"><el-input v-model="entryDlg.form.notes" type="textarea" :rows="2" /></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="entryDlg.show=false">取消</el-button><el-button type="primary" :loading="entryDlg.saving" @click="saveEntry">保存</el-button></template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { Api } from '../api'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ApiRecord } from '../types/api'
+import { useAuthStore } from '../stores/auth'
 import {
   confidenceTag,
   contributorText,
@@ -171,6 +219,7 @@ import {
   varianceTone,
 } from '../domain/costVariance'
 
+const auth = useAuthStore()
 const route = useRoute()
 const instances = ref<ApiRecord[]>([])
 const selectedInstance = ref<number | null>(null)
@@ -178,6 +227,17 @@ const data = ref<ApiRecord>({})
 // P2-2：三层差异（量差 / 价差 / 效率差）
 const variance = ref<ApiRecord>({})
 const loading = ref(false)
+const entries = ref<ApiRecord[]>([])
+const entriesTotal = ref(0)
+const entrySummary = ref<ApiRecord>({ by_type: {} })
+const canWriteCost = computed(() => auth.role === 'admin' || auth.role === 'foreman')
+const costTypeOptions = [
+  { value: 'material', label: '材料' }, { value: 'labor', label: '人工' },
+  { value: 'outsourcing', label: '外协' }, { value: 'depreciation', label: '折旧' },
+  { value: 'rework', label: '返工' }, { value: 'quality_loss', label: '质量损失' },
+]
+const entryDlg = reactive<any>({ show: false, saving: false, backfilling: false, form: { cost_type: 'material', description: '', amount: 0, occurred_on: '' } })
+const todayText = () => new Date().toISOString().slice(0, 10)
 const isVarianceView = computed(() => route.path === '/cost-variance' || route.query.view === 'variance' || route.query.view === 'cost-variance')
 const showInstancePicker = computed(() => !isVarianceView.value)
 const pageTitle = computed(() => isVarianceView.value ? '项目成本偏差' : '成本归集')
@@ -195,7 +255,67 @@ const load = async () => {
   catch(_) { data.value = {}; ElMessage.error('加载成本数据失败') }
   try { variance.value = await Api.get('/equipment_instances/' + selectedInstance.value + '/cost_variance') }
   catch(_) { variance.value = {} }
-  finally { loading.value = false }
+  try { await loadEntries() } finally { loading.value = false }
+}
+
+const loadEntries = async () => {
+  if (!selectedInstance.value) { entries.value = []; entriesTotal.value = 0; entrySummary.value = { by_type: {} }; return }
+  try {
+    const [list, summary]: any[] = await Promise.all([
+      Api.get('/project_cost_entries', { params: { equipment_instance_id: selectedInstance.value, limit: 500 } }),
+      Api.get('/project_cost_entries/summary', { params: { equipment_instance_id: selectedInstance.value } }),
+    ])
+    entries.value = list.items || []
+    entriesTotal.value = Number(list.total ?? entries.value.length)
+    entrySummary.value = summary || { by_type: {} }
+  } catch (_error) {
+    entries.value = []
+    entriesTotal.value = 0
+    entrySummary.value = { by_type: {} }
+  }
+}
+
+const openEntry = () => {
+  entryDlg.form = { cost_type: 'material', description: '', amount: 0, occurred_on: todayText(), vendor: '', notes: '' }
+  entryDlg.show = true
+}
+
+const saveEntry = async () => {
+  if (!entryDlg.form.description || !entryDlg.form.amount) return ElMessage.warning('请填写说明和金额')
+  entryDlg.saving = true
+  try {
+    await Api.post('/project_cost_entries', { ...entryDlg.form, currency: 'CNY', status: 'posted' })
+    ElMessage.success('成本已入账')
+    entryDlg.show = false
+    await load()
+  } catch (error: any) {
+    ElMessage.error('保存失败：' + (error?.response?.data?.error || error.message))
+  } finally { entryDlg.saving = false }
+}
+
+const voidEntry = async (row: any) => {
+  try {
+    await ElMessageBox.confirm('作废成本 ' + row.description + '（' + fmtMoney(row.amount) + ' 元）？作废后不再计入归集。', '确认作废', { type: 'warning' })
+    await Api.del('/project_cost_entries/' + row.id)
+    ElMessage.success('已作废')
+    await load()
+  } catch (error: any) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error('作废失败：' + (error?.response?.data?.error || error.message))
+  }
+}
+
+const backfillCost = async () => {
+  try {
+    await ElMessageBox.confirm('按采购订单明细回填材料成本、按工单工时回填人工成本？已存在的来源会自动跳过。', '确认回填', { type: 'warning' })
+    entryDlg.backfilling = true
+    const result: any = await Api.post('/project_cost_entries/backfill', { include: ['material', 'labor'], hourly_rate: variance.value?.labor_rate?.rate || 200 })
+    ElMessage.success('回填完成：材料 ' + (result.created?.material || 0) + ' 条，人工 ' + (result.created?.labor || 0) + ' 条')
+    await load()
+  } catch (error: any) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error('回填失败：' + (error?.response?.data?.error || error.message))
+  } finally { entryDlg.backfilling = false }
 }
 
 const fmtMoney = (v: unknown) => {
@@ -219,4 +339,5 @@ onMounted(async () => {
 .stat-mini{text-align:center;padding:8px}
 .stat-val{display:block;font-size:22px;font-weight:600}
 .stat-lbl{display:block;font-size:12px;color:var(--el-color-info);margin-top:2px}
+.ledger-summary{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:10px;color:var(--el-text-color-secondary);font-size:13px}
 </style>

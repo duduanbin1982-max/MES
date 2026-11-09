@@ -4,6 +4,7 @@
 // (原 services/cost/projectCostEntries.js 第 130-332 行)
 
 const { wrap } = require("../../../middleware/asyncHandler");
+const audit = require("../../../app/audit");
 const { requireRole } = require("../../../middleware/auth");
 const {
   COST_TYPES,
@@ -15,6 +16,18 @@ const {
   makeDbHelpers,
 } = require("./_helpers");
 const { ensureSchema } = require("./schema");
+
+function assertReferences(get, instanceId, body) {
+  for (const [table, field] of [["instance_bom", "bom_node_id"], ["work_orders", "work_order_id"]]) {
+    const value = body[field];
+    if (value == null) continue;
+    let row;
+    try { row = get(`SELECT equipment_instance_id FROM ${table} WHERE id = ?`, value); } catch (_error) { continue; }
+    if (row && Number(row.equipment_instance_id) !== Number(instanceId)) {
+      throw new Error(`${field} 不属于该项目装备`);
+    }
+  }
+}
 
 function register(app, db) {
   ensureSchema(db);
@@ -37,6 +50,9 @@ function register(app, db) {
       where.push("status = ?");
       params.push(String(req.query.status));
     }
+    const rawLimit = Number(req.query.limit);
+    const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(Math.floor(rawLimit), 5000)) : 1000;
+    const offset = Math.max(0, Number(req.query.offset) || 0);
     const rows = all(`
       SELECT e.*,
              ei.instance_code,
@@ -54,8 +70,10 @@ function register(app, db) {
         LEFT JOIN equipment_instances ei ON ei.id = e.equipment_instance_id
        WHERE ${where.join(" AND ")}
        ORDER BY e.occurred_on DESC, e.id DESC
-    `, ...params);
-    res.json({ count: rows.length, items: rows });
+       LIMIT ? OFFSET ?
+    `, ...params, limit, offset);
+    const total = get(`SELECT COUNT(*) AS c FROM project_cost_entries e WHERE ${where.join(" AND ")}`, ...params).c;
+    res.json({ count: rows.length, total: Number(total || 0), limit, offset, items: rows });
   }));
 
   app.get("/api/project_cost_entries/summary", wrap((req, res) => {
@@ -93,6 +111,7 @@ function register(app, db) {
     }
     const instance = get("SELECT id FROM equipment_instances WHERE id = ?", body.equipment_instance_id);
     if (!instance) return res.status(404).json({ error: "equipment_instance not found" });
+    try { assertReferences(get, body.equipment_instance_id, body); } catch (err) { return res.status(400).json({ error: err.message }); }
     const createdBy = req.user && (req.user.uid || req.user.id || req.user.sub) ? (req.user.uid || req.user.id || req.user.sub) : null;
     const result = run(`
       INSERT INTO project_cost_entries (
@@ -103,7 +122,9 @@ function register(app, db) {
       body.source_type || null, body.source_ref || null, body.description, body.vendor || null,
       body.amount, body.currency || "CNY", body.occurred_on, body.status || "posted", body.notes || null,
       createdBy, nowISO(), nowISO());
-    res.json({ ok: true, item: get("SELECT * FROM project_cost_entries WHERE id = ?", result.lastInsertRowid) });
+    const created = get("SELECT * FROM project_cost_entries WHERE id = ?", result.lastInsertRowid);
+    audit.record(db, req, { action: "cost.entry.create", resource_type: "project_cost_entry", resource_id: created.id, after: created, diff_summary: `新增成本 ${created.cost_type} ${created.amount}` });
+    res.json({ ok: true, item: created });
   }));
 
   app.put("/api/project_cost_entries/:id", writeRoles, wrap((req, res) => {
@@ -116,19 +137,23 @@ function register(app, db) {
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
+    try { assertReferences(get, body.equipment_instance_id ?? existing.equipment_instance_id, { ...existing, ...body }); } catch (err) { return res.status(400).json({ error: err.message }); }
     const fields = Object.keys(body);
     if (!fields.length) return res.status(400).json({ error: "没有可更新字段" });
     fields.push("updated_at");
     const params = Object.keys(body).map((key) => body[key]);
     params.push(nowISO(), id);
     run(`UPDATE project_cost_entries SET ${fields.map((field) => `${field} = ?`).join(", ")} WHERE id = ?`, ...params);
-    res.json({ ok: true, item: get("SELECT * FROM project_cost_entries WHERE id = ?", id) });
+    const updated = get("SELECT * FROM project_cost_entries WHERE id = ?", id);
+    audit.record(db, req, { action: "cost.entry.update", resource_type: "project_cost_entry", resource_id: id, before: existing, after: updated, diff_summary: `修改成本 ${existing.cost_type}/${existing.amount} -> ${updated.cost_type}/${updated.amount}` });
+    res.json({ ok: true, item: updated });
   }));
 
 
   app.post("/api/project_cost_entries/backfill", writeRoles, wrap((req, res) => {
-    const hourlyRate = Number(req.body?.hourly_rate || 200);
-    const include = new Set(Array.isArray(req.body?.include) && req.body.include.length ? req.body.include : ["material", "labor"]);
+    const hourlyRate = Number(req.body?.hourly_rate ?? 200);
+    if (!Number.isFinite(hourlyRate) || hourlyRate <= 0 || hourlyRate > 10000) return res.status(400).json({ error: "hourly_rate 必须在 1~10000" });
+    const include = new Set(Array.isArray(req.body?.include) && req.body.include.length ? req.body.include.filter((x) => ["material", "labor"].includes(x)) : ["material", "labor"]);
     const createdBy = req.user && (req.user.uid || req.user.id || req.user.sub) ? (req.user.uid || req.user.id || req.user.sub) : null;
     const created = { material: 0, labor: 0 };
     const skipped = { material: 0, labor: 0 };
@@ -138,13 +163,13 @@ function register(app, db) {
         description, vendor, amount, currency, occurred_on, status, notes, created_by, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'CNY', ?, 'posted', ?, ?, ?, ?)
     `);
-    const exists = db.prepare("SELECT id FROM project_cost_entries WHERE source_type = ? AND source_ref = ? AND deleted_at IS NULL LIMIT 1");
+    const exists = db.prepare("SELECT id FROM project_cost_entries WHERE source_type = ? AND source_ref = ? AND deleted_at IS NULL AND status <> 'void' LIMIT 1");
 
     const tx = db.transaction(() => {
       if (include.has("material")) {
         const rows = all(`
           SELECT poi.id, poi.bom_node_id, poi.material_id, poi.quantity, poi.unit_price, poi.total_price,
-                 po.id AS po_id, po.po_no, po.equipment_instance_id, NULL AS supplier_name,
+                 po.id AS po_id, po.po_no, po.equipment_instance_id, po.ordered_date, NULL AS supplier_name,
                  m.material_code, m.material_name
             FROM purchase_order_items poi
             JOIN purchase_orders po ON po.id = poi.po_id
@@ -165,7 +190,7 @@ function register(app, db) {
             `采购材料成本 ${row.po_no || row.po_id} ${row.material_code || row.material_name || ""}`.trim(),
             row.supplier_name || null,
             round2(row.total_price || Number(row.quantity || 0) * Number(row.unit_price || 0)),
-            todayISO(),
+            String(row.ordered_date || todayISO()).slice(0, 10),
             "由采购订单明细自动回填",
             createdBy,
             nowISO(),
@@ -206,6 +231,7 @@ function register(app, db) {
       }
     });
     tx();
+    audit.record(db, req, { action: "cost.entry.backfill", resource_type: "project_cost_entry", resource_id: "backfill", after: { created, skipped, hourly_rate: hourlyRate, include: [...include] }, diff_summary: `成本回填 材料 ${created.material}/人工 ${created.labor}` });
     res.json({ ok: true, created, skipped, hourly_rate: hourlyRate });
   }));
 
@@ -214,6 +240,7 @@ function register(app, db) {
     const existing = get("SELECT * FROM project_cost_entries WHERE id = ? AND deleted_at IS NULL", id);
     if (!existing) return res.status(404).json({ error: "project_cost_entry not found" });
     run("UPDATE project_cost_entries SET status = 'void', deleted_at = ?, updated_at = ? WHERE id = ?", nowISO(), nowISO(), id);
+    audit.record(db, req, { action: "cost.entry.void", resource_type: "project_cost_entry", resource_id: id, before: existing, diff_summary: `作废成本 ${existing.cost_type} ${existing.amount}` });
     res.json({ ok: true });
   }));
 }
