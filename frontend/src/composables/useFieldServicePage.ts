@@ -23,8 +23,10 @@ export function useFieldServicePage() {
 
   // ==================== 装备实例 ====================
   const loadInstances = async () => {
-    try { instances.value = await Api.get('/equipment_instances') } catch (_) { instances.value = [] }
+    try { const data: any = await Api.get('/equipment-ledger', { params: { limit: 200 } }); instances.value = (data.equipment || []).map((row: any) => ({ ...row, instance_code: row.code, instance_name: row.name })) } catch (_) { instances.value = [] }
   }
+
+  const normalizeEquip = (rows: any[]) => (rows || []).map((row: any) => ({ ...row, instance_code: row.equipment_code, instance_name: row.equipment_name }))
 
   // ==================== 维保计划 ====================
   const plans = ref<any[]>([])
@@ -42,12 +44,12 @@ export function useFieldServicePage() {
 
   const loadPlans = async () => {
     planLoading.value = true
-    try { plans.value = await Api.get('/field-service/maintenance-plans', { params: planFilter.status ? { status: planFilter.status } : {} }) }
+    try { plans.value = normalizeEquip(await Api.get('/field-service/maintenance-plans', { params: planFilter.status ? { status: planFilter.status } : {} })) }
     catch (_) { plans.value = [] } finally { planLoading.value = false }
   }
   const openPlanDialog = (row?: any) => {
     planDlg.isEdit = !!row
-    if (row) Object.assign(planForm, emptyPlan(), row)
+    if (row) Object.assign(planForm, emptyPlan(), row, { equipment_instance_id: row.equipment_id })
     else resetPlanForm()
     planDlg.visible = true
   }
@@ -57,6 +59,8 @@ export function useFieldServicePage() {
     try {
       const body: any = { ...planForm }
       delete body.id
+      body.equipment_id = planForm.equipment_instance_id
+      delete body.equipment_instance_id
       if (planDlg.isEdit && planForm.id) await Api.put(`/field-service/maintenance-plans/${planForm.id}`, body)
       else await Api.post('/field-service/maintenance-plans', body)
       ElMessage.success('已保存'); planDlg.visible = false; loadPlans(); loadOverdue()
@@ -76,7 +80,7 @@ export function useFieldServicePage() {
     try {
       await Api.post('/field-service/maintenance-logs', {
         plan_id: execPlan.value.id,
-        equipment_instance_id: execPlan.value.equipment_instance_id,
+        equipment_id: execPlan.value.equipment_id,
         performed_by: Number(execForm.performed_by) || userId(),
         hours_spent: execForm.hours_spent,
         findings: execForm.findings || undefined,
@@ -99,9 +103,9 @@ export function useFieldServicePage() {
     try {
       const params: any = {}
       if (logFilter.dateRange?.length === 2) { params.start_date = logFilter.dateRange[0]; params.end_date = logFilter.dateRange[1] }
-      if (logFilter.instance) params.equipment_instance_id = logFilter.instance
+      if (logFilter.instance) params.equipment_id = logFilter.instance
       if (logFilter.status) params.status = logFilter.status
-      logs.value = await Api.get('/field-service/maintenance-logs', { params })
+      logs.value = normalizeEquip(await Api.get('/field-service/maintenance-logs', { params }))
     } catch (_) { logs.value = [] } finally { logLoading.value = false }
   }
 
@@ -113,14 +117,14 @@ export function useFieldServicePage() {
   const execChecklistDlg = reactive({ visible: false, row: null as any, results: [] as any[], hours_spent: 0.5 })
   const loadChecklists = async () => {
     checklistLoading.value = true
-    try { checklists.value = await Api.get('/field-service/checklists') } catch (_) { checklists.value = [] } finally { checklistLoading.value = false }
+    try { checklists.value = normalizeEquip(await Api.get('/field-service/checklists')) } catch (_) { checklists.value = [] } finally { checklistLoading.value = false }
   }
   const openChecklistDialog = () => { Object.assign(checklistForm, { equipment_instance_id: '', checklist_name: '', check_type: 'daily' }); checklistDlg.visible = true }
   const parseItems = (row: any) => { try { return JSON.parse(row?.items_json || '[]') } catch (_) { return [] } }
   const saveChecklist = async () => {
     if (!checklistForm.checklist_name) { ElMessage.warning('点检表名称必填'); return }
     saving.value = true
-    try { await Api.post('/field-service/checklists', checklistForm); ElMessage.success('点检表已创建'); checklistDlg.visible = false; loadChecklists() }
+    try { await Api.post('/field-service/checklists', { ...checklistForm, equipment_id: checklistForm.equipment_instance_id }); ElMessage.success('点检表已创建'); checklistDlg.visible = false; loadChecklists() }
     catch (error: any) { ElMessage.error('保存失败：' + errText(error)) } finally { saving.value = false }
   }
   const openExecChecklist = (row: any) => {
@@ -133,7 +137,7 @@ export function useFieldServicePage() {
     try {
       const allPass = execChecklistDlg.results.every((item: any) => item.result === 'pass')
       await Api.put(`/field-service/checklists/${execChecklistDlg.row.id}/execute`, {
-        equipment_instance_id: execChecklistDlg.row.equipment_instance_id,
+        equipment_id: execChecklistDlg.row.equipment_id,
         checklist_name: execChecklistDlg.row.checklist_name,
         performed_by: userId(), hours_spent: execChecklistDlg.hours_spent,
         results: execChecklistDlg.results, all_pass: allPass,
@@ -150,13 +154,13 @@ export function useFieldServicePage() {
   const breakdownEditDlg = reactive({ visible: false, row: null as any, status: 'open', downtime_hours: null, root_cause: '', repair_actions: '' })
   const loadBreakdowns = async () => {
     breakdownLoading.value = true
-    try { breakdowns.value = await Api.get('/field-service/breakdowns') } catch (_) { breakdowns.value = [] } finally { breakdownLoading.value = false }
+    try { breakdowns.value = normalizeEquip(await Api.get('/field-service/breakdowns')) } catch (_) { breakdowns.value = [] } finally { breakdownLoading.value = false }
   }
   const openBreakdownDialog = () => { Object.assign(breakdownForm, { equipment_instance_id: '', fault_type: 'mechanical', fault_desc: '', severity: 'medium' }); breakdownDlg.visible = true }
   const saveBreakdown = async () => {
     if (!breakdownForm.equipment_instance_id || !breakdownForm.fault_desc) { ElMessage.warning('装备和故障描述必填'); return }
     saving.value = true
-    try { await Api.post('/field-service/breakdowns', { ...breakdownForm, reported_by: userId() }); ElMessage.success('故障已报修'); breakdownDlg.visible = false; loadBreakdowns() }
+    try { await Api.post('/field-service/breakdowns', { ...breakdownForm, equipment_id: breakdownForm.equipment_instance_id, reported_by: userId() }); ElMessage.success('故障已报修'); breakdownDlg.visible = false; loadBreakdowns() }
     catch (error: any) { ElMessage.error('报修失败：' + errText(error)) } finally { saving.value = false }
   }
   const openBreakdownEdit = (row: any) => { Object.assign(breakdownEditDlg, { visible: true, row, status: row.status, downtime_hours: row.downtime_hours, root_cause: row.root_cause || '', repair_actions: row.repair_actions || '' }) }
@@ -175,7 +179,7 @@ export function useFieldServicePage() {
   const spareDlg = reactive({ visible: false, type: 'in' as 'in' | 'out' })
   const spareForm = reactive({ spare_part_id: null as any, quantity: 1, notes: '' })
   const lowStockCount = computed(() => spares.value.filter((s: any) => Number(s.current_stock) <= Number(s.min_stock)).length)
-  const loadSpares = async () => { spareLoading.value = true; try { spares.value = await Api.get('/field-service/spare-parts') } catch (_) { spares.value = [] } finally { spareLoading.value = false } }
+  const loadSpares = async () => { spareLoading.value = true; try { spares.value = normalizeEquip(await Api.get('/field-service/spare-parts')) } catch (_) { spares.value = [] } finally { spareLoading.value = false } }
   const openSpareAdjustDialog = (type: 'in' | 'out') => { spareDlg.type = type; Object.assign(spareForm, { spare_part_id: null, quantity: 1, notes: '' }); spareDlg.visible = true }
   const submitSpareAdjust = async () => {
     if (!spareForm.spare_part_id) { ElMessage.warning('请选择备件'); return }

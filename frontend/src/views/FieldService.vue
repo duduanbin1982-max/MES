@@ -2,7 +2,7 @@
   <div class="page">
     <PageToolbar class="page-header">
       <div class="page-title"><el-icon><Tools /></el-icon> 点检 / TPM</div>
-      <div class="page-subtitle">项目装备维保计划、点检表、故障报修与备件；车间生产设备维保见“设备台账-维保”。</div>
+      <div class="page-subtitle">车间生产设备维保计划、点检表、故障报修与备件。项目装备维护不在此模块。</div>
     </PageToolbar>
 
     <el-row :gutter="14" style="margin-bottom:16px">

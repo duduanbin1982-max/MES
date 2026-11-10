@@ -92,6 +92,13 @@
           "path": "/tbm-advanced",
           "entry": "/tbm-advanced?tab=accept",
           "icon": "CircleCheck"
+        },
+        {
+          "key": "digital-twin",
+          "title": "数字孪生",
+          "path": "/digital-twin",
+          "entry": "/digital-twin",
+          "icon": "Monitor"
         }
       ]
     },
@@ -351,13 +358,6 @@
           "path": "/field-service",
           "entry": "/field-service?tab=spares",
           "icon": "Box"
-        },
-        {
-          "key": "digital-twin",
-          "title": "数字孪生",
-          "path": "/digital-twin",
-          "entry": "/digital-twin",
-          "icon": "Monitor"
         }
       ]
     },
