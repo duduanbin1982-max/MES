@@ -99,6 +99,14 @@
           "path": "/digital-twin",
           "entry": "/digital-twin",
           "icon": "Monitor"
+        },
+        {
+          "key": "project-equipment-maintenance",
+          "title": "项目装备维护",
+          "path": "/project-equipment-maintenance",
+          "entry": "/project-equipment-maintenance",
+          "icon": "Tools",
+          "permission": "equipment:read"
         }
       ]
     },

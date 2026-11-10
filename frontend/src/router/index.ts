@@ -50,7 +50,8 @@ const routes = [
       { path: '/spc', name: 'spc', component: () => import('../views/Spc.vue'), meta: { title: 'SPC 控制图', icon: 'TrendCharts' } },
       { path: '/andon', name: 'andon', component: () => import('../views/Andon.vue'), meta: { title: 'ANDON 安灯', icon: 'Bell' } },
       
-      { path: '/maintenance', redirect: '/field-service' },
+      { path: '/project-equipment-maintenance', name: 'project-equipment-maintenance', component: () => import('../views/MaintenanceDashboard.vue'), meta: { title: '项目装备维护', icon: 'Tools', requires: 'equipment:read' } },
+      { path: '/maintenance', redirect: '/project-equipment-maintenance' },
       { path: '/field-service', name: 'field-service', component: () => import('../views/FieldService.vue'), meta: { title: '点检 / TPM', icon: 'Tools' } },
       { path: '/audit', name: 'audit', component: () => import('../views/AuditLogs.vue'), meta: { title: '审计日志', icon: 'DocumentChecked' } },
       { path: '/labor', name: 'labor', component: () => import('../views/LaborDashboard.vue'), meta: { title: '劳动力管理', icon: 'UserFilled', requires: 'user:read' } },

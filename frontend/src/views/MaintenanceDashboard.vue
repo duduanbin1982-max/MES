@@ -2,8 +2,8 @@
   <div class="page">
     <PageToolbar class="page-header">
       <div>
-        <div class="page-title"><el-icon><Tools /></el-icon> 设备维护看板</div>
-        <div class="page-subtitle">维保计划 · 故障报修 · 备件库存 · 点检记录 · 现场服务</div>
+        <div class="page-title"><el-icon><Tools /></el-icon> 项目装备维护</div>
+        <div class="page-subtitle">TBM 项目装备维保计划、故障报修、备件、点检与现场服务（车间设备维护请到设备台账/点检TPM）</div>
       </div>
       <div style="display:flex;gap:8px;">
         <el-select v-model="filterInstanceId" clearable placeholder="筛选装备实例" style="width:240px" @change="loadAll">
@@ -131,6 +131,19 @@
           <el-table-column prop="findings" label="检查发现" width="150" />
           <el-table-column prop="hours_spent" label="工时(h)" width="80" />
           <el-table-column prop="status" label="状态" width="90"><template #default="{row}"><el-tag type="success" size="small">{{ row.status }}</el-tag></template></el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <!-- Checklists -->
+      <el-tab-pane name="checklists">
+        <template #label><el-icon><DocumentChecked /></el-icon> 点检表</template>
+        <el-table :data="data.checklists" size="small" stripe max-height="400">
+          <el-table-column prop="checklist_name" label="点检表" min-width="180" />
+          <el-table-column prop="equipment_instance_id" label="项目装备ID" width="120" />
+          <el-table-column prop="check_type" label="类型" width="100" />
+          <el-table-column label="检查项" width="90"><template #default="{row}">{{ (() => { try { return JSON.parse(row.items_json || '[]').length } catch { return 0 } })() }}</template></el-table-column>
+          <el-table-column prop="status" label="状态" width="90" />
+          <el-table-column prop="created_at" label="创建时间" width="160" />
         </el-table>
       </el-tab-pane>
 

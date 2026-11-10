@@ -247,6 +247,10 @@ const RULES = [
   match(/^\/field_service(?:\/.*)?$/, WRITE, ["equipment:write"]),
   match(/^\/spare_parts(?:\/.*)?$/, READ, ["equipment:read"]),
   match(/^\/spare_parts(?:\/.*)?$/, WRITE, ["equipment:write"]),
+  match(/^\/maintenance\/dashboard$/, READ, ["equipment:read"]),
+  match(/^\/maintenance\/plans\/\d+\/complete$/, WRITE, ["equipment:write"]),
+  match(/^\/maintenance\/dashboard$/, READ, ["equipment:read"]),
+  match(/^\/maintenance\/plans\/\d+\/complete$/, WRITE, ["equipment:write"]),
   match(/^\/maintenance_plans(?:\/.*)?$/, READ, ["equipment:read"]),
   match(/^\/maintenance_plans(?:\/.*)?$/, WRITE, ["equipment:write"]),
 
