@@ -15,7 +15,7 @@
     <el-tabs v-model="tab" @tab-change="onTabChange">
       <el-tab-pane label="维保计划" name="plans">
         <div class="tb">
-          <el-button type="primary" @click="openPlanDialog()">+ 新建计划</el-button>
+          <el-button v-if="canWrite" type="primary" @click="openPlanDialog()">+ 新建计划</el-button>
           <el-select v-model="planFilter.status" placeholder="状态筛选" clearable style="width:130px" @change="loadPlans">
             <el-option label="待执行" value="pending" /><el-option label="进行中" value="in_progress" /><el-option label="已完成" value="completed" />
           </el-select>
@@ -28,7 +28,7 @@
           <el-table-column prop="last_done_date" label="上次执行" width="110" />
           <el-table-column label="下次到期" width="120"><template #default="{ row }"><span :class="{ 'danger-text': isOverdue(row.next_due_date) }">{{ row.next_due_date || '-' }}</span></template></el-table-column>
           <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="planStatusTag(row.status)" size="small">{{ planStatusLabel(row.status) }}</el-tag></template></el-table-column>
-          <el-table-column label="操作" width="180" fixed="right"><template #default="{ row }"><el-button link type="primary" @click="openPlanDialog(row)">编辑</el-button><el-button v-if="row.status !== 'completed'" link type="success" @click="openExecDialog(row)">执行维保</el-button></template></el-table-column>
+          <el-table-column label="操作" width="180" fixed="right"><template #default="{ row }"><el-button v-if="canWrite" link type="primary" @click="openPlanDialog(row)">编辑</el-button><el-button v-if="canWrite && row.status !== 'completed'" link type="success" @click="openExecDialog(row)">执行维保</el-button></template></el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -50,19 +50,19 @@
       </el-tab-pane>
 
       <el-tab-pane label="点检表" name="checklists">
-        <div class="tb"><el-button type="primary" @click="openChecklistDialog">+ 新建点检表</el-button><span class="muted">点检执行会写入维保记录</span></div>
+        <div class="tb"><el-button v-if="canWrite" type="primary" @click="openChecklistDialog">+ 新建点检表</el-button><span class="muted">点检执行会写入维保记录</span></div>
         <el-table :data="checklists" v-loading="checklistLoading" size="small" stripe>
           <el-table-column prop="checklist_name" label="点检表" min-width="180" />
           <el-table-column label="装备" width="150"><template #default="{ row }">{{ row.instance_code || row.equipment_instance_id }}</template></el-table-column>
           <el-table-column prop="check_type" label="类型" width="90" />
           <el-table-column label="检查项" width="80"><template #default="{ row }">{{ parseItems(row).length }}</template></el-table-column>
           <el-table-column prop="status" label="状态" width="90" />
-          <el-table-column label="操作" width="100"><template #default="{ row }"><el-button link type="primary" @click="openExecChecklist(row)">执行点检</el-button></template></el-table-column>
+          <el-table-column label="操作" width="100"><template #default="{ row }"><el-button v-if="canWrite" link type="primary" @click="openExecChecklist(row)">执行点检</el-button></template></el-table-column>
         </el-table>
       </el-tab-pane>
 
       <el-tab-pane label="故障报修" name="breakdowns">
-        <div class="tb"><el-button type="primary" @click="openBreakdownDialog">+ 故障报修</el-button></div>
+        <div class="tb"><el-button v-if="canWrite" type="primary" @click="openBreakdownDialog">+ 故障报修</el-button></div>
         <el-table :data="breakdowns" v-loading="breakdownLoading" size="small" max-height="520" stripe>
           <el-table-column prop="report_code" label="单号" width="150" />
           <el-table-column label="装备" width="150"><template #default="{ row }">{{ row.instance_code || row.equipment_instance_id }}</template></el-table-column>
@@ -71,12 +71,12 @@
           <el-table-column label="严重度" width="90"><template #default="{ row }"><el-tag size="small" :type="severityTag(row.severity)">{{ severityLabel(row.severity) }}</el-tag></template></el-table-column>
           <el-table-column prop="status" label="状态" width="100" />
           <el-table-column prop="downtime_hours" label="停机(h)" width="90" />
-          <el-table-column label="操作" width="100"><template #default="{ row }"><el-button link type="primary" @click="openBreakdownEdit(row)">处理</el-button></template></el-table-column>
+          <el-table-column label="操作" width="100"><template #default="{ row }"><el-button v-if="canWrite" link type="primary" @click="openBreakdownEdit(row)">处理</el-button></template></el-table-column>
         </el-table>
       </el-tab-pane>
 
       <el-tab-pane label="备件库" name="spares">
-        <div class="tb"><el-button type="primary" @click="openSpareAdjustDialog('in')">+ 入库</el-button><el-button type="warning" @click="openSpareAdjustDialog('out')">- 出库</el-button><el-tag v-if="lowStockCount" type="danger">{{ lowStockCount }} 项低库存预警</el-tag></div>
+        <div class="tb"><el-button v-if="canWrite" type="primary" @click="openSpareAdjustDialog('in')">+ 入库</el-button><el-button v-if="canWrite" type="warning" @click="openSpareAdjustDialog('out')">- 出库</el-button><el-tag v-if="lowStockCount" type="danger">{{ lowStockCount }} 项低库存预警</el-tag></div>
         <el-table :data="spares" v-loading="spareLoading" size="small" max-height="520" stripe>
           <el-table-column prop="part_name" label="备件" min-width="180" />
           <el-table-column prop="part_code" label="编码" width="130" />
@@ -148,7 +148,7 @@
 <script setup lang="ts">
 import { useFieldServicePage } from '../composables/useFieldServicePage'
 const {
-  tab, saving, overdueCount, instances, planLoading, plans, planFilter, maintTypeLabel, planStatusLabel, planStatusTag, isOverdue,
+  tab, saving, overdueCount, instances, canWrite, planLoading, plans, planFilter, maintTypeLabel, planStatusLabel, planStatusTag, isOverdue,
   planDlg, planForm, loadPlans, openPlanDialog, resetPlanForm, savePlan,
   execDlg, execPlan, execForm, openExecDialog, resetExecForm, submitExecution,
   logLoading, logs, logFilter, logStatusLabel, logStatusTag, loadLogs,

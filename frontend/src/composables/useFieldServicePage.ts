@@ -20,6 +20,7 @@ export function useFieldServicePage() {
   const errText = (error: any) => error?.response?.data?.error || error?.response?.data?.message || error?.message || String(error)
   const today = () => new Date().toISOString().slice(0, 10)
   const userId = () => Number(auth.user?.id || auth.user?.uid || 0) || null
+  const canWrite = computed(() => auth.role === 'admin' || auth.role === 'foreman')
 
   // ==================== 装备实例 ====================
   const loadInstances = async () => {
@@ -45,7 +46,7 @@ export function useFieldServicePage() {
   const loadPlans = async () => {
     planLoading.value = true
     try { plans.value = normalizeEquip(await Api.get('/field-service/maintenance-plans', { params: planFilter.status ? { status: planFilter.status } : {} })) }
-    catch (_) { plans.value = [] } finally { planLoading.value = false }
+    catch (error: any) { plans.value = []; ElMessage.error('加载维保计划失败：' + errText(error)) } finally { planLoading.value = false }
   }
   const openPlanDialog = (row?: any) => {
     planDlg.isEdit = !!row
@@ -106,7 +107,7 @@ export function useFieldServicePage() {
       if (logFilter.instance) params.equipment_id = logFilter.instance
       if (logFilter.status) params.status = logFilter.status
       logs.value = normalizeEquip(await Api.get('/field-service/maintenance-logs', { params }))
-    } catch (_) { logs.value = [] } finally { logLoading.value = false }
+    } catch (error: any) { logs.value = []; ElMessage.error('加载维保记录失败：' + errText(error)) } finally { logLoading.value = false }
   }
 
   // ==================== 点检表 ====================
@@ -117,7 +118,7 @@ export function useFieldServicePage() {
   const execChecklistDlg = reactive({ visible: false, row: null as any, results: [] as any[], hours_spent: 0.5 })
   const loadChecklists = async () => {
     checklistLoading.value = true
-    try { checklists.value = normalizeEquip(await Api.get('/field-service/checklists')) } catch (_) { checklists.value = [] } finally { checklistLoading.value = false }
+    try { checklists.value = normalizeEquip(await Api.get('/field-service/checklists')) } catch (error: any) { checklists.value = []; ElMessage.error('加载点检表失败：' + errText(error)) } finally { checklistLoading.value = false }
   }
   const openChecklistDialog = () => { Object.assign(checklistForm, { equipment_instance_id: '', checklist_name: '', check_type: 'daily' }); checklistDlg.visible = true }
   const parseItems = (row: any) => { try { return JSON.parse(row?.items_json || '[]') } catch (_) { return [] } }
@@ -154,7 +155,7 @@ export function useFieldServicePage() {
   const breakdownEditDlg = reactive({ visible: false, row: null as any, status: 'open', downtime_hours: null, root_cause: '', repair_actions: '' })
   const loadBreakdowns = async () => {
     breakdownLoading.value = true
-    try { breakdowns.value = normalizeEquip(await Api.get('/field-service/breakdowns')) } catch (_) { breakdowns.value = [] } finally { breakdownLoading.value = false }
+    try { breakdowns.value = normalizeEquip(await Api.get('/field-service/breakdowns')) } catch (error: any) { breakdowns.value = []; ElMessage.error('加载故障单失败：' + errText(error)) } finally { breakdownLoading.value = false }
   }
   const openBreakdownDialog = () => { Object.assign(breakdownForm, { equipment_instance_id: '', fault_type: 'mechanical', fault_desc: '', severity: 'medium' }); breakdownDlg.visible = true }
   const saveBreakdown = async () => {
@@ -201,7 +202,7 @@ export function useFieldServicePage() {
   onMounted(async () => { await Promise.all([loadInstances(), loadPlans(), loadOverdue(), loadChecklists(), loadBreakdowns(), loadSpares()]); onTabChange(tab.value) })
 
   return {
-    route, router, tabNames, routeTab, tab, saving, overdueCount, instances,
+    route, router, tabNames, routeTab, tab, saving, overdueCount, instances, canWrite,
     planLoading, plans, planFilter, maintTypeLabel, planStatusLabel, planStatusTag, isOverdue,
     planDlg, planForm, loadPlans, openPlanDialog, resetPlanForm, savePlan,
     execDlg, execPlan, execForm, openExecDialog, resetExecForm, submitExecution,
