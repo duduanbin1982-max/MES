@@ -546,6 +546,13 @@
           "path": "/audit",
           "entry": "/audit",
           "icon": "DocumentChecked"
+        },
+        {
+          "key": "mobile-center",
+          "title": "移动端设置",
+          "path": "/mobile-center",
+          "entry": "/mobile-center",
+          "icon": "Cellphone"
         }
       ]
     }

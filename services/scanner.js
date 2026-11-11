@@ -37,6 +37,20 @@ const TERMINAL_WO = ["completed", "closed", "cancelled"];
 const TERMINAL_NODE = ["completed", "cancelled"];
 
 // Part B: add quantity columns to process_executions (idempotent)
+const scanSchemaEnsured = new WeakSet();
+
+function ensureScanColumns(db) {
+  if (scanSchemaEnsured.has(db)) return;
+  for (const [table, definition] of [
+    ["work_order_operations", "timestamp TEXT NOT NULL DEFAULT (datetime('now'))"],
+    ["process_executions", "timestamp TEXT NOT NULL DEFAULT (datetime('now'))"],
+  ]) {
+    try { db.prepare("ALTER TABLE " + table + " ADD COLUMN " + definition).run(); } catch (_error) { /* exists */ }
+  }
+  try { ensureTimerColumns(db); } catch (_error) { /* 老库无 work_orders */ }
+  scanSchemaEnsured.add(db);
+}
+
 function ensureQuantityColumns(db) {
   const addCol = (table, colDef) => {
     try { db.prepare("ALTER TABLE " + table + " ADD COLUMN " + colDef).run(); }
@@ -128,10 +142,35 @@ function validateScanQuantities(body) {
   };
 }
 
+function normalizeOccurredAt(value) {
+  if (!value) return null;
+  const ms = Date.parse(String(value));
+  if (!Number.isFinite(ms)) return null;
+  if (ms > Date.now() + 5 * 60 * 1000) return null;
+  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function nowSql() {
+  return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
+
 function scanExecute(req, res, db) {
+  ensureScanColumns(db);
   const body = req.body || {};
   const { code, action, notes } = body;
   if (!code || !action) throw ApiError.validation('code/action 必填');
+
+  const headers = req.headers || {};
+  const idemKey = String(headers['idempotency-key'] || body.idempotency_key || '').trim().slice(0, 160);
+  const deviceId = String(headers['x-device-id'] || body.device_id || '').trim().slice(0, 120) || null;
+  if (idemKey) {
+    const previous = get(db, 'SELECT response_json FROM scan_action_receipts WHERE idempotency_key = ?', idemKey);
+    if (previous) {
+      const replay = JSON.parse(previous.response_json);
+      replay.idempotent_replay = true;
+      return res.json(replay);
+    }
+  }
 
   let target = null;
   let targetType = null;
@@ -151,6 +190,7 @@ function scanExecute(req, res, db) {
   validateScanAction(targetType, action);
   const operatorId = resolveScanOperator(req, body);
   const quantities = validateScanQuantities(body);
+  const occurredAt = normalizeOccurredAt(body.occurred_at || body.client_occurred_at) || nowSql();
 
   // 状态机在事务内用最新数据校验，避免并发/脏读
   const t = db.transaction(() => {
@@ -165,17 +205,17 @@ function scanExecute(req, res, db) {
         }
       }
       const r = run(db,
-        "INSERT INTO work_order_operations (work_order_id, operator_id, action, hours_worked, quantity_completed, defect_quantity, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [current.id, operatorId, action, quantities.hours, quantities.quantityCompleted, quantities.defectQuantity, notes || null]
+        "INSERT INTO work_order_operations (work_order_id, operator_id, action, hours_worked, quantity_completed, defect_quantity, notes, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [current.id, operatorId, action, quantities.hours, quantities.quantityCompleted, quantities.defectQuantity, notes || null, occurredAt]
       );
       let statusAfter = current.status;
       if (action === 'start') {
-        run(db, "UPDATE work_orders SET status = 'in_progress', actual_start = COALESCE(actual_start, datetime('now')) WHERE id = ?", [current.id]);
+        run(db, "UPDATE work_orders SET status = 'in_progress', actual_start = COALESCE(actual_start, ?) WHERE id = ?", [occurredAt, current.id]);
         statusAfter = 'in_progress';
       } else if (action === 'complete') {
         const qtyDone = (current.quantity_completed || 0) + quantities.quantityCompleted;
         if (qtyDone >= (current.quantity_planned || 1)) {
-          run(db, "UPDATE work_orders SET status = 'completed', actual_end = datetime('now'), quantity_completed = ? WHERE id = ?", [qtyDone, current.id]);
+          run(db, "UPDATE work_orders SET status = 'completed', actual_end = ?, quantity_completed = ? WHERE id = ?", [occurredAt, qtyDone, current.id]);
           statusAfter = 'completed';
         } else {
           run(db, "UPDATE work_orders SET quantity_completed = ? WHERE id = ?", [qtyDone, current.id]);
@@ -196,16 +236,16 @@ function scanExecute(req, res, db) {
     const qcResult = action === 'qc' ? String(body.result || '') : null;
     if (action === 'qc' && !["pass", "fail"].includes(qcResult)) throw ApiError.validation("质检动作必须提供 result=pass/fail");
     const r = run(db,
-      "INSERT INTO process_executions (process_node_id, operator_id, action, hours_worked, quantity_completed, defect_quantity, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [current.id, operatorId, action, quantities.hours, quantities.quantityCompleted, quantities.defectQuantity, notes || null]
+      "INSERT INTO process_executions (process_node_id, operator_id, action, hours_worked, quantity_completed, defect_quantity, notes, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [current.id, operatorId, action, quantities.hours, quantities.quantityCompleted, quantities.defectQuantity, notes || null, occurredAt]
     );
     const inst = get(db, 'SELECT equipment_instance_id FROM process_nodes WHERE id = ?', current.id);
     let statusAfter = current.status;
     if (action === 'start') {
-      run(db, "UPDATE process_nodes SET status = 'in_progress', actual_start = COALESCE(actual_start, datetime('now')), updated_at = datetime('now') WHERE id = ?", [current.id]);
+      run(db, "UPDATE process_nodes SET status = 'in_progress', actual_start = COALESCE(actual_start, ?), updated_at = datetime('now') WHERE id = ?", [occurredAt, current.id]);
       statusAfter = 'in_progress';
     } else if (action === 'complete' || (action === 'qc' && qcResult === 'pass')) {
-      run(db, "UPDATE process_nodes SET status = 'completed', actual_end = COALESCE(actual_end, datetime('now')), updated_at = datetime('now') WHERE id = ?", [current.id]);
+      run(db, "UPDATE process_nodes SET status = 'completed', actual_end = COALESCE(actual_end, ?), updated_at = datetime('now') WHERE id = ?", [occurredAt, current.id]);
       statusAfter = 'completed';
       if (inst) autoUnlockSuccessors(db, current.id, inst.equipment_instance_id);
       if (current.work_order_id && quantities.quantityCompleted) {
@@ -242,7 +282,7 @@ function scanExecute(req, res, db) {
   if (targetType === 'work_order') {
     try { timer = recalcWorkOrderTimer(db, target.id, { discardStaleOpen: ['pause', 'block', 'complete'].includes(action) }); } catch (_error) { timer = null; }
   }
-  res.json({
+  const payload = {
     id: result.id,
     target_type: targetType,
     target_id: target.id,
@@ -253,8 +293,19 @@ function scanExecute(req, res, db) {
     actual_duration_hours: timer?.actual_duration_hours,
     timer_status: timer?.timer_status,
     timer_started_at: timer?.timer_started_at,
+    occurred_at: occurredAt,
     message: '执行已记录',
-  });
+    idempotent_replay: false,
+  };
+  if (idemKey) {
+    try {
+      run(db, `INSERT OR IGNORE INTO scan_action_receipts
+        (idempotency_key, device_id, action, target_type, target_id, operator_id, response_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [idemKey, deviceId, action, targetType, target.id, operatorId, JSON.stringify(payload)]);
+    } catch (_error) { /* 回执表不可用时不影响扫码 */ }
+  }
+  res.json(payload);
 }
 
 module.exports = {

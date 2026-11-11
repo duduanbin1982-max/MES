@@ -58,6 +58,8 @@
         :title="currentPageTitle"
         :user="auth.user"
         :ws-status="wsStatus"
+        :pending-sync="scanSyncState.pending"
+        :failed-sync="scanSyncState.failed"
         @command="onCmd"
         @toggle-menu="mobileMenuOpen = true"
         @toggle-theme="toggleTheme"
@@ -103,6 +105,7 @@ import { closeWebSocket } from '../composables/useWebSocket'
 import { useAuthStore } from '../stores/auth'
 import { routeLoading } from '../composables/useRouteProgress'
 import { shouldShowOfflineBanner } from '../domain/ux'
+import { scanSyncState } from '../mobile/useScanSync'
 
 const router = useRouter()
 const route = useRoute()
@@ -134,6 +137,7 @@ type NavMenuItem = MenuItem & {
 
 const onCmd = (cmd: string) => {
   if (cmd === 'logout') {
+    navigator.serviceWorker?.controller?.postMessage('CLEAR_DATA_CACHE')
     closeWebSocket()
     auth.logout()
     ElMessage.success('已登出')

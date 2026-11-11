@@ -126,6 +126,11 @@
       "ddlFingerprint": null,
       "ddlStatements": 0
     },
+    "mobileService": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "ceae13c508b64553325edb9ab374f106041dd6457e59c787e7b93c5de9865e09",
+      "ddlStatements": 1
+    },
     "oeeService": {
       "schemaVersion": 2,
       "ddlFingerprint": "152b91f0b603669b0a3b84475c091c137cedee12c699d1db0645017e9a2b79c6",
@@ -192,9 +197,9 @@
       "ddlStatements": 4
     },
     "scanner": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "3e1051a96034555aa4fe7a1e8112ec525bc2638e3a3a1723b7cb4328d7036630",
-      "ddlStatements": 2
+      "schemaVersion": 3,
+      "ddlFingerprint": "5a21500d42a3f4c7ad1eb397dd2ae2d802df984cf28309a1552fae6c59c78a71",
+      "ddlStatements": 3
     },
     "scheduleService": {
       "schemaVersion": 5,

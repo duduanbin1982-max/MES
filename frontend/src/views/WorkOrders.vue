@@ -56,7 +56,7 @@
             <el-tag v-if="unplannedCount > 0" size="small" type="info" style="margin-left: 8px">另有 {{ unplannedCount }} 张完全未排期</el-tag>
           </div>
 
-          <el-table :data="rows" stripe v-loading="loading" size="small" :row-class-name="woRowClass">
+          <el-table class="wo-desktop-table" :data="rows" stripe v-loading="loading" size="small" :row-class-name="woRowClass">
             <el-table-column prop="wo_code" label="工单号" width="160" />
             <el-table-column prop="instance_code" label="实例" width="140" />
             <el-table-column prop="subsystem_name" label="子系统" width="100" />
@@ -119,6 +119,30 @@
               </template>
             </el-table-column>
           </el-table>
+
+          <div class="wo-mobile-cards" v-loading="loading">
+            <el-card v-for="row in rows" :key="row.id" shadow="never" class="wo-mobile-card">
+              <div class="wo-mobile-head">
+                <div>
+                  <div class="wo-mobile-code">{{ row.wo_code }}</div>
+                  <div class="muted">{{ row.instance_code }} · {{ row.title }}</div>
+                </div>
+                <el-tag :type="woStatusTagType(row.status)" size="small">{{ woStatusLabel(row.status) }}</el-tag>
+              </div>
+              <div class="wo-mobile-meta">
+                <span>现场用时 <b>{{ row.actual_duration_hours ?? 0 }} h</b></span>
+                <span>计时 <el-tag size="small" :type="row.timer_status === 'running' ? 'success' : row.timer_status === 'paused' ? 'warning' : row.timer_status === 'stale' ? 'danger' : 'info'">{{ row.timer_status === 'running' ? '计时中' : row.timer_status === 'paused' ? '暂停' : row.timer_status === 'stale' ? '超时' : '停止' }}</el-tag></span>
+                <span>数量 {{ row.quantity_completed || 0 }}/{{ row.quantity_planned ?? 1 }}</span>
+              </div>
+              <div class="wo-mobile-actions">
+                <el-button v-if="['pending','dispatched','paused','blocked'].includes(row.status)" size="small" type="primary" @click="mobileScanAction(row, 'start')">开始</el-button>
+                <el-button v-if="row.status === 'in_progress'" size="small" type="warning" @click="mobileScanAction(row, 'pause')">暂停</el-button>
+                <el-button v-if="row.status === 'in_progress'" size="small" type="success" @click="mobileScanAction(row, 'complete')">完成</el-button>
+                <el-button size="small" @click="openDetail(row)">详情</el-button>
+              </div>
+            </el-card>
+            <el-empty v-if="!rows.length" description="暂无工单" />
+          </div>
         </el-card>
       </el-tab-pane>
 
@@ -326,6 +350,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '../stores/auth'
 import type { KitCheckResult } from '../types/api'
 import WorkflowTimeline from '../components/WorkflowTimeline.vue'
+import { enqueueScan } from '../mobile/useScanSync'
+import { getDeviceId, newScanActionId } from '../mobile/scanQueue'
 
 const route = useRoute()
 const router = useRouter()
@@ -348,6 +374,35 @@ const instances = ref<any[]>([])
 const rows = ref<any[]>([])
 const loading = ref(false)
 const kitDlg = reactive<{ show: boolean; wo_code: string; loading: boolean; result: KitCheckResult | null }>({ show: false, wo_code: '', loading: false, result: null })
+async function mobileScanAction(row: any, action: 'start' | 'pause' | 'complete') {
+  let quantity = 0
+  if (action === 'complete') {
+    try {
+      const { value } = await ElMessageBox.prompt('请输入本次完成数量', '完成工单 ' + row.wo_code, { inputValue: String(row.quantity_planned || 1), inputPattern: /^\d+$/, inputErrorMessage: '请输入数量' })
+      quantity = Number(value)
+    } catch { return }
+  }
+  const payload = { code: row.wo_code, action, quantity_completed: quantity, hours_worked: 0, occurred_at: new Date().toISOString() }
+  try {
+    if (!navigator.onLine) {
+      await enqueueScan(payload)
+      ElMessage.warning('当前离线，操作已暂存，联网后自动补传')
+      return
+    }
+    await Api.post('/scan/execute', payload, { headers: { 'Idempotency-Key': newScanActionId(), 'X-Device-Id': getDeviceId() } })
+    ElMessage.success(action === 'start' ? '已开始计时' : action === 'pause' ? '已暂停计时' : '已完工')
+    await load()
+  } catch (error: any) {
+    const status = Number(error?.response?.status || 0)
+    if (!status || status >= 500) {
+      await enqueueScan(payload)
+      ElMessage.warning('网络异常，操作已暂存，联网后自动补传')
+      return
+    }
+    ElMessage.error(error?.response?.data?.error || error?.message || '操作失败')
+  }
+}
+
 const checkKit = async (row: any) => { kitDlg.show = true; kitDlg.wo_code = row.wo_code; kitDlg.loading = true; try { kitDlg.result = await Api.get('/work_orders/'+row.id+'/kit-check') } catch(_) { kitDlg.result = null } finally { kitDlg.loading = false } }
 
 // 待派工
@@ -712,5 +767,16 @@ onMounted(() => {
 /* 2026-11-05：从单项目甘特告警跳转过来时高亮目标工单 */
 :deep(.wo-row-highlight) td {
   background: var(--el-color-warning-light-8) !important;
+}
+.wo-mobile-cards { display: none; }
+.wo-mobile-card { margin-bottom: 10px; }
+.wo-mobile-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.wo-mobile-code { font-weight: 700; font-size: 15px; }
+.wo-mobile-meta { display: flex; gap: 10px; flex-wrap: wrap; color: var(--el-text-color-secondary); font-size: 12px; margin-top: 8px; }
+.wo-mobile-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.muted { color: var(--el-text-color-secondary); font-size: 12px; }
+@media (max-width: 768px) {
+  .wo-desktop-table { display: none; }
+  .wo-mobile-cards { display: block; }
 }
 </style>

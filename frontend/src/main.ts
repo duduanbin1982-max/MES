@@ -11,6 +11,7 @@ import PageToolbar from './components/PageToolbar.vue'
 import App from './App.vue'
 import router from './router'
 import './style.css'
+import { startScanSync } from './mobile/useScanSync'
 
 const app = createApp(App)
 
@@ -44,4 +45,20 @@ window.addEventListener('unhandledrejection', (event) => {
   // eslint-disable-next-line no-console
   console.error('[unhandled-rejection]', event.reason)
 })
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault()
+  ;(window as any).__tbmInstallPrompt = event
+  window.dispatchEvent(new Event('tbm-install-available'))
+})
+
 app.mount('#app')
+startScanSync()
+
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      // eslint-disable-next-line no-console
+      console.warn('[pwa] service worker 注册失败', error)
+    })
+  })
+}

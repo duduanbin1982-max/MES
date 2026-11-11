@@ -22,6 +22,9 @@
         :class="`ws-indicator--${wsStatus}`"
         aria-label="WebSocket 连接状态"
       ></span>
+      <el-tag v-if="pendingSync || failedSync" :type="failedSync ? 'danger' : 'warning'" size="small" class="sync-chip" :title="failedSync ? failedSync + ' 条同步失败，请到扫码页查看' : '待同步 ' + pendingSync + ' 条'">
+        {{ failedSync ? '同步失败 ' + failedSync : '待同步 ' + pendingSync }}
+      </el-tag>
       <el-button class="theme-toggle" :icon="isDark ? Sunny : Moon" circle @click="emit('toggle-theme')" :title="isDark ? '切换亮色' : '切换暗色'" :aria-label="isDark ? '切换亮色主题' : '切换暗色主题'" />
       <router-link to="/help/manual" class="manual-link">操作手册</router-link>
       <router-link to="/scan" class="scan-link">扫码报工</router-link>
@@ -61,6 +64,8 @@ defineProps({
   title: { type: String, default: 'TBM-MES' },
   user: { type: Object, default: null },
   wsStatus: { type: String, default: 'closed' },
+  pendingSync: { type: Number, default: 0 },
+  failedSync: { type: Number, default: 0 },
 })
 
 const emit = defineEmits(['command', 'toggle-menu', 'toggle-theme'])
@@ -125,6 +130,8 @@ const emit = defineEmits(['command', 'toggle-menu', 'toggle-theme'])
   gap: 12px;
   min-width: 0;
 }
+
+.sync-chip { cursor: default; }
 
 .ws-indicator {
   display: inline-block;

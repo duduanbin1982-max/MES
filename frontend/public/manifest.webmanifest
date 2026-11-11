@@ -1,0 +1,20 @@
+{
+  "name": "TBM-MES 成套装备生产管理",
+  "short_name": "TBM-MES",
+  "description": "项目、工单、扫码报工、设备维保与移动现场作业",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f7fa",
+  "theme_color": "#29384A",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "扫码报工", "short_name": "扫码", "url": "/scan", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "我的工单", "short_name": "工单", "url": "/work-orders" }
+  ]
+}

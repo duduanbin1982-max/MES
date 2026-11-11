@@ -17,6 +17,25 @@
       </el-input>
     </div>
 
+    <el-alert
+      v-if="scanSyncState.pending || scanSyncState.failed"
+      :title="`待同步 ${scanSyncState.pending} 条${scanSyncState.failed ? '，失败 ' + scanSyncState.failed + ' 条' : ''}；联网后自动补传`"
+      :type="scanSyncState.failed ? 'error' : 'warning'"
+      :closable="false"
+      show-icon
+      class="sync-alert"
+    >
+      <template #default>
+        <el-button size="small" :loading="scanSyncState.syncing" @click="syncScanQueue()">立即同步</el-button>
+        <el-button v-if="scanSyncState.failed" size="small" @click="retryFailedScanActions()">重试失败</el-button>
+      </template>
+    </el-alert>
+
+    <div class="camera-row">
+      <el-button type="primary" plain @click="openCamera">摄像头扫码</el-button>
+      <span class="camera-hint">PDA 扫码枪可直接输入；手机可用摄像头</span>
+    </div>
+
     <!-- 类型提示 -->
     <div v-if="target" class="type-bar">
       <el-tag :type="target.type === 'work_order' ? 'primary' : 'success'" size="large">
@@ -51,6 +70,7 @@
             <el-tag :type="timerStatus === 'running' ? 'success' : timerStatus === 'paused' ? 'warning' : timerStatus === 'stale' ? 'danger' : 'info'" size="small">
               {{ timerStatusLabel }}
             </el-tag>
+            <div class="timer-start" v-if="wakeLock.active">屏幕常亮已开启</div>
             <div class="timer-start">开始：{{ target.data.actual_start || '-' }}</div>
             <div class="timer-start" v-if="target.data.actual_end">结束：{{ target.data.actual_end }}</div>
           </div>
@@ -157,6 +177,12 @@
 
     <PageState state="empty" compact :show-action="false" v-else-if="!loading && searched" description="未找到该码" />
 
+    <el-dialog v-model="cameraDlg.show" title="摄像头扫码" width="92%" max-width="480px" @closed="stopCamera">
+      <video ref="videoRef" class="camera-video" playsinline muted></video>
+      <div v-if="camera.error" class="camera-error">{{ camera.error }}</div>
+      <div v-if="camera.scanning" class="camera-scanning">将二维码放入取景框…</div>
+    </el-dialog>
+
     <el-dialog v-model="showIssue" :title="target?.type === 'work_order' ? '<el-icon><Warning /></el-icon> 上报异常' : '<el-icon><Edit /></el-icon> 添加备注'" width="90%" max-width="500px">
       <el-form :model="issueForm" label-width="80px">
         <el-form-item :label="target?.type === 'work_order' ? '问题描述' : '备注内容'" required>
@@ -175,10 +201,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
+import { useCameraScanner } from '../mobile/useCameraScanner'
+import { useWakeLock } from '../mobile/useWakeLock'
+import { enqueueScan, syncScanQueue, retryFailedScanActions, scanSyncState } from '../mobile/useScanSync'
+import { getDeviceId, newScanActionId } from '../mobile/scanQueue'
 
+const route = useRoute()
 const code = ref('')
 const target = ref<any>(null)
 const loading = ref(false)
@@ -186,6 +218,21 @@ const searched = ref(false)
 const showIssue = ref(false)
 const issueForm = reactive({ notes: '', hours_worked: 0 })
 const resultSummary = ref<any>(null)
+const cameraDlg = reactive({ show: false })
+const videoRef = ref<HTMLVideoElement>()
+const wakeLock = useWakeLock()
+const camera = useCameraScanner(videoRef, (value: string) => {
+  code.value = value
+  cameraDlg.show = false
+  camera.stop()
+  lookup()
+})
+const openCamera = async () => {
+  cameraDlg.show = true
+  await nextTick()
+  await camera.start()
+}
+const stopCamera = () => { camera.stop() }
 
 const reportForm = reactive({
   hours_worked: 0,
@@ -278,8 +325,25 @@ const doAction = async (action: string) => {
       defect_quantity: reportForm.defect_quantity,
       notes: reportForm.notes
     }
-    const res: any = await api.post('/scan/execute', payload)
-    ElMessage.success(res.message)
+    payload.occurred_at = new Date().toISOString()
+    let res: any = null
+    if (!navigator.onLine) {
+      await enqueueScan(payload)
+      ElMessage.warning('当前离线，操作已暂存，联网后自动补传')
+      return
+    }
+    try {
+      res = await api.post('/scan/execute', payload, { headers: { 'Idempotency-Key': newScanActionId(), 'X-Device-Id': getDeviceId() } })
+      ElMessage.success(res.message)
+    } catch (error: any) {
+      const status = Number(error?.response?.status || 0)
+      if (!status || status >= 500) {
+        await enqueueScan(payload)
+        ElMessage.warning('网络异常，操作已暂存，联网后自动补传')
+        return
+      }
+      throw error
+    }
 
     // Show result summary
     const colorMap: Record<string, string> = { complete: 'var(--el-color-success)', start: 'var(--el-color-primary)', pause: 'var(--el-color-warning)' }
@@ -323,12 +387,26 @@ const submitNote = async () => {
     await lookup()
   } catch (e: any) { ElMessage.error('失败') }
 }
-onMounted(() => { timerHandle = setInterval(() => { timerNow.value = Date.now() }, 1000) })
-onUnmounted(() => { if (timerHandle) clearInterval(timerHandle) })
+watch(timerStatus, (status) => {
+  if (status === 'running') wakeLock.request()
+  else wakeLock.release()
+}, { immediate: true })
+onMounted(async () => {
+  timerHandle = setInterval(() => { timerNow.value = Date.now() }, 1000)
+  const preset = String(route.query.code || '').trim()
+  if (preset) { code.value = preset; await lookup() }
+})
+onUnmounted(() => { if (timerHandle) clearInterval(timerHandle); wakeLock.release(); camera.stop() })
 </script>
 
 <style scoped>
 .scan-page { padding: 12px; max-width: 600px; margin: 0 auto; }
+.sync-alert { margin-bottom: 10px; }
+.camera-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+.camera-hint { color: var(--el-text-color-secondary); font-size:12px; }
+.camera-video { width:100%; max-height:60vh; background:#000; border-radius:8px; object-fit:cover; }
+.camera-error { color:var(--el-color-danger); font-size:13px; margin-top:8px; }
+.camera-scanning { color:var(--el-color-primary); font-size:13px; margin-top:8px; text-align:center; }
 .scan-header { background: var(--el-color-white); padding: 16px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .type-bar { background: var(--el-color-white); padding: 12px 16px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .wo-card { margin-bottom: 12px; }

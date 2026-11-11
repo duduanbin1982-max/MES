@@ -76,6 +76,7 @@ const routes = [
       { path: '/workstation-resources', name: 'workstation-resources', component: () => import('../views/WorkstationResources.vue'), meta: { title: '工位/资源配置', icon: 'OfficeBuilding' } },
       { path: '/resources', name: 'resources', component: () => import('../views/ResourceDashboard.vue'), meta: { title: '资源分配与状态', icon: 'Monitor' } },
       { path: '/digital-twin', name: 'digital-twin', component: () => import('../views/DigitalTwin.vue'), meta: { title: '数字孪生', icon: 'Monitor' } },
+      { path: '/mobile-center', name: 'mobile-center', component: () => import('../views/MobileCenter.vue'), meta: { title: '移动端设置', icon: 'Cellphone' } },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFound.vue'), meta: { title: '页面不存在', hidden: true } },
     ]
   },
