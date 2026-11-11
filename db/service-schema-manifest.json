@@ -192,9 +192,9 @@
       "ddlStatements": 4
     },
     "scanner": {
-      "schemaVersion": 1,
-      "ddlFingerprint": "7d5dcd48739af3187c5005b99d9f1e881d4b5c0f180c6b64d8ecddf159269271",
-      "ddlStatements": 1
+      "schemaVersion": 2,
+      "ddlFingerprint": "3e1051a96034555aa4fe7a1e8112ec525bc2638e3a3a1723b7cb4328d7036630",
+      "ddlStatements": 2
     },
     "scheduleService": {
       "schemaVersion": 5,
@@ -252,9 +252,9 @@
       "ddlStatements": 0
     },
     "workOrderService": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "f3d2c4d483e9d0fa9583b8512a0fa8f4c962f8ecf2a84e6c8aea22aa6dc0319e",
-      "ddlStatements": 2
+      "schemaVersion": 3,
+      "ddlFingerprint": "fc50d1908397738eca27f336091fb5627e710c6108e18be8dac2ef377e2e4cfe",
+      "ddlStatements": 3
     }
   }
 }

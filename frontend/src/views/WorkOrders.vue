@@ -84,7 +84,18 @@
             <el-table-column label="计划结束" width="110">
               <template #default="{ row }">{{ (row.planned_end || '').slice(0, 10) || '—' }}</template>
             </el-table-column>
-            <el-table-column label="实际工时" width="100" align="right">
+            <el-table-column label="现场用时" width="100" align="right">
+              <template #default="{ row }">{{ row.actual_duration_hours ?? '-' }} h</template>
+            </el-table-column>
+            <el-table-column label="计时" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag v-if="row.timer_status === 'running'" type="success" size="small">计时中</el-tag>
+                <el-tag v-else-if="row.timer_status === 'paused'" type="warning" size="small">暂停</el-tag>
+                <el-tag v-else-if="row.timer_status === 'stale'" type="danger" size="small">超时</el-tag>
+                <el-tag v-else type="info" size="small">停止</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="报工工时" width="100" align="right">
               <template #default="{ row }">{{ row.actual_hours ?? '-' }}</template>
             </el-table-column>
             <el-table-column label="实际开始" width="110">
@@ -205,7 +216,9 @@
           <el-descriptions-item label="实际开始">{{ detailDlg.data.actual_start || '—' }}</el-descriptions-item>
           <el-descriptions-item label="实际结束">{{ detailDlg.data.actual_end || '—' }}</el-descriptions-item>
           <el-descriptions-item label="派工人员">{{ detailDlg.data.assigned_name || '未派工' }}</el-descriptions-item>
-          <el-descriptions-item label="实际工时">{{ detailDlg.data.actual_hours ?? '—' }}</el-descriptions-item>
+          <el-descriptions-item label="现场用时">{{ detailDlg.data.actual_duration_hours ?? '—' }} h</el-descriptions-item>
+          <el-descriptions-item label="计时状态">{{ detailDlg.data.timer_status === 'running' ? '计时中' : detailDlg.data.timer_status === 'paused' ? '暂停' : detailDlg.data.timer_status === 'stale' ? '超时未结束' : '停止' }}</el-descriptions-item>
+          <el-descriptions-item label="报工工时">{{ detailDlg.data.actual_hours ?? '—' }}</el-descriptions-item>
           <el-descriptions-item label="计划数量">{{ detailDlg.data.quantity_planned ?? 1 }}</el-descriptions-item>
           <el-descriptions-item label="完成数量">{{ detailDlg.data.quantity_completed ?? 0 }}</el-descriptions-item>
           <el-descriptions-item label="关联工序" :span="2">

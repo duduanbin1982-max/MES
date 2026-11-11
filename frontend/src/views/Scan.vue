@@ -42,6 +42,20 @@
           <el-descriptions-item label="工位">{{ target.data.workstation_name || '-' }}</el-descriptions-item>
         </el-descriptions>
 
+        <div class="timer-panel">
+          <div>
+            <div class="timer-label">现场计时</div>
+            <div class="timer-value">{{ timerText }}</div>
+          </div>
+          <div class="timer-meta">
+            <el-tag :type="timerStatus === 'running' ? 'success' : timerStatus === 'paused' ? 'warning' : timerStatus === 'stale' ? 'danger' : 'info'" size="small">
+              {{ timerStatusLabel }}
+            </el-tag>
+            <div class="timer-start">开始：{{ target.data.actual_start || '-' }}</div>
+            <div class="timer-start" v-if="target.data.actual_end">结束：{{ target.data.actual_end }}</div>
+          </div>
+        </div>
+
         <!-- 报工输入区 -->
         <el-card shadow="never" style="margin-top: 12px; background: var(--el-bg-color)">
           <template #header><span style="font-weight: 600"><el-icon><Edit /></el-icon> 报工信息</span></template>
@@ -49,7 +63,7 @@
             <el-form-item label="操作员">
               <el-input :model-value="currentUserName" disabled />
             </el-form-item>
-            <el-form-item label="工时">
+            <el-form-item label="补充工时(h)">
               <el-input-number v-model="reportForm.hours_worked" :min="0" :step="0.5" style="width: 100%" />
             </el-form-item>
             <el-form-item label="完成数量">
@@ -133,7 +147,7 @@
         <el-descriptions :column="2" border style="margin-top: 12px">
           <el-descriptions-item label="操作">{{ resultSummary.action }}</el-descriptions-item>
           <el-descriptions-item label="目标类型">{{ resultSummary.target_type }}</el-descriptions-item>
-          <el-descriptions-item label="工时">{{ resultSummary.hours || '-' }} h</el-descriptions-item>
+          <el-descriptions-item label="现场用时">{{ resultSummary.timer_text || (resultSummary.hours ? resultSummary.hours + ' h' : '-') }}</el-descriptions-item>
           <el-descriptions-item label="完成数量">{{ resultSummary.quantity ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="不良数量">{{ resultSummary.defects ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="备注">{{ resultSummary.notes || '-' }}</el-descriptions-item>
@@ -161,7 +175,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
 
@@ -180,6 +194,28 @@ const reportForm = reactive({
   notes: ''
 })
 
+const timerNow = ref(Date.now())
+let timerHandle: any = null
+const timerStatus = computed(() => target.value?.type === 'work_order' ? (target.value.data?.timer_status || 'stopped') : 'stopped')
+const timerStatusLabel = computed(() => (({ running: '计时中', paused: '已暂停', stale: '超时未结束', stopped: '未计时' } as Record<string, string>)[timerStatus.value] || timerStatus.value))
+const timerSeconds = computed(() => {
+  if (target.value?.type !== 'work_order') return 0
+  const base = Number(target.value.data?.actual_duration_seconds || 0)
+  if (timerStatus.value !== 'running') return base
+  const started = target.value.data?.timer_started_at
+  if (!started) return base
+  const startedMs = Date.parse(String(started).replace(' ', 'T') + 'Z')
+  if (!Number.isFinite(startedMs)) return base
+  return base + Math.max(0, Math.floor((timerNow.value - startedMs) / 1000))
+})
+const timerText = computed(() => {
+  const total = Math.max(0, timerSeconds.value)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const sec = total % 60
+  return [h, m, sec].map((v) => String(v).padStart(2, '0')).join(':')
+})
+
 // current user - try to read from localStorage
 const currentUser = computed(() => {
   try {
@@ -189,6 +225,14 @@ const currentUser = computed(() => {
 })
 const currentUserId = computed(() => currentUser.value?.id || currentUser.value?.user_id || 4)
 const currentUserName = computed(() => currentUser.value?.display_name || currentUser.value?.username || '当前用户')
+
+function formatSeconds(value: number) {
+  const total = Math.max(0, Number(value || 0))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const sec = total % 60
+  return [h, m, sec].map((v) => String(v).padStart(2, '0')).join(':')
+}
 
 const woTagType = (s: string) => ({ pending: 'info', in_progress: 'primary', paused: 'warning', completed: 'success', issue: 'danger', rework: 'danger' }[s] || 'info')
 const pnTagType = (s: string) => ({ pending: 'info', ready: 'primary', in_progress: 'success', completed: 'success', blocked: 'danger', paused: 'warning' }[s] || 'info')
@@ -247,7 +291,8 @@ const doAction = async (action: string) => {
       color: colorMap[action] || 'var(--el-color-primary)',
       action: actionLabelMap[action] || action,
       target_type: target.value.type === 'work_order' ? '工单' : '工艺节点',
-      hours: reportForm.hours_worked,
+      hours: res.actual_duration_hours ?? reportForm.hours_worked,
+      timer_text: res.actual_duration_seconds != null ? formatSeconds(res.actual_duration_seconds) : undefined,
       quantity: reportForm.quantity_completed,
       defects: reportForm.defect_quantity,
       notes: reportForm.notes
@@ -278,6 +323,8 @@ const submitNote = async () => {
     await lookup()
   } catch (e: any) { ElMessage.error('失败') }
 }
+onMounted(() => { timerHandle = setInterval(() => { timerNow.value = Date.now() }, 1000) })
+onUnmounted(() => { if (timerHandle) clearInterval(timerHandle) })
 </script>
 
 <style scoped>
@@ -289,6 +336,11 @@ const submitNote = async () => {
 .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .action-grid .el-button { height: 60px; font-size: 18px; font-weight: 500; }
 .result-card { margin-bottom: 12px; }
+.timer-panel{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(135deg,var(--el-color-primary-light-9),var(--el-fill-color-light));border:1px solid var(--el-color-primary-light-7);border-radius:8px;padding:12px 16px;margin-top:12px}
+.timer-label{font-size:12px;color:var(--el-text-color-secondary)}
+.timer-value{font-size:30px;font-weight:700;color:var(--el-color-primary);font-variant-numeric:tabular-nums;line-height:1.2}
+.timer-meta{text-align:right}
+.timer-start{font-size:12px;color:var(--el-text-color-secondary);margin-top:4px}
 .result-header { display: flex; align-items: center; }
 @media (max-width: 480px) {
   .scan-page { padding: 8px; }

@@ -17,6 +17,7 @@ const { emit, Events } = require('../app/ws/EventBus');
 const woStateMachine = require('./workOrder/stateMachine');
 const woAudit = require('./workOrder/workflowAudit');
 const { createCodeAllocator } = require('./codingRulesService');
+const { recalcWorkOrderTimer, ensureTimerColumns } = require('./workOrderTimer');
 
 const HOURS_PER_DAY = 8;
 
@@ -46,6 +47,7 @@ function register(app, db, auth) {
   addColumn("resource_allocations", "work_order_id INTEGER REFERENCES work_orders(id)");
   addColumn("work_order_operations", "quantity_completed INTEGER DEFAULT 0");
   addColumn("work_order_operations", "defect_quantity INTEGER DEFAULT 0");
+  ensureTimerColumns(db);
 
   const formatDate = (value) => {
     if (!value) return null;
@@ -88,7 +90,11 @@ function register(app, db, auth) {
     const scopeFilter = dataScope.buildFilter('work_orders', dataScope.scopeOf(req), 'wo');
     if (scopeFilter.clause) { sql += ' AND ' + scopeFilter.clause; params.push(...scopeFilter.params); }
     sql += ' ORDER BY wo.created_at DESC';
-    res.json(all(sql, params));
+    const rows = all(sql, params);
+    for (const row of rows) {
+      try { Object.assign(row, recalcWorkOrderTimer(db, row.id)); } catch (_error) { /* 老库无计时列 */ }
+    }
+    res.json(rows);
   }));
 
   // 2. 待派工（必须放在 /:id 之前）
@@ -118,6 +124,7 @@ function register(app, db, auth) {
     const dataScope = require('../app/dataScope');
     if (!dataScope.rowInScope('work_orders', dataScope.scopeOf(req), wo)) throw ApiError.forbidden('超出数据范围：该工单不在你的数据权限内');
     wo.operations = all('SELECT * FROM work_order_operations WHERE work_order_id = ? ORDER BY timestamp', [req.params.id]);
+    try { Object.assign(wo, recalcWorkOrderTimer(db, req.params.id)); } catch (_error) { /* 老库无计时列 */ }
     res.json(wo);
   }));
 

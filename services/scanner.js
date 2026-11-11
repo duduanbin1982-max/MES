@@ -11,6 +11,7 @@ const { ApiError } = require('../app/errors');
 require('../middleware/asyncHandler');
 const { feishuNotify } = require('./feishuNotify');
 const { autoUnlockSuccessors } = require('./process/node/_helpers');
+const { recalcWorkOrderTimer, ensureTimerColumns } = require('./workOrderTimer');
 
 const get = (db, sql, params) => db.prepare(sql).get(params);
 const run = (db, sql, params) => db.prepare(sql).run(params);
@@ -20,13 +21,13 @@ const TARGET_ACTIONS = {
   process_node: ["start", "pause", "complete", "qc", "block"],
 };
 const WO_TRANSITIONS = {
-  start: ["pending", "dispatched", "paused"],
+  start: ["pending", "dispatched", "paused", "blocked"],
   pause: ["in_progress"],
   complete: ["in_progress"],
   block: ["in_progress", "paused"],
 };
 const NODE_TRANSITIONS = {
-  start: ["ready", "pending", "paused"],
+  start: ["ready", "pending", "paused", "blocked"],
   pause: ["in_progress"],
   complete: ["in_progress"],
   qc: ["in_progress"],
@@ -47,6 +48,7 @@ function ensureQuantityColumns(db) {
 
 function register(_app, db) {
   ensureQuantityColumns(db);
+  ensureTimerColumns(db);
 }
 
 function scanLookup(req, res, db) {
@@ -54,7 +56,10 @@ function scanLookup(req, res, db) {
   if (!code) throw ApiError.validation('code 必填');
 
   const wo = db.prepare("SELECT wo.*, ei.instance_code, es.name_zh as subsystem_name FROM work_orders wo LEFT JOIN equipment_instances ei ON wo.equipment_instance_id = ei.id LEFT JOIN equipment_subsystems es ON wo.subsystem_id = es.id WHERE wo.wo_code = ?").get(code);
-  if (wo) return res.json({ type: 'work_order', data: wo });
+  if (wo) {
+    try { Object.assign(wo, recalcWorkOrderTimer(db, wo.id)); } catch (_error) { /* 老库无计时列 */ }
+    return res.json({ type: 'work_order', data: wo });
+  }
 
   let pnId = null;
   if (/^PN-?(\d+)/i.test(code)) pnId = parseInt(code.replace(/^PN-?/i, ''), 10);
@@ -103,8 +108,9 @@ function resolveScanOperator(req, body) {
 }
 
 function validateScanQuantities(body) {
-  const hours = body.hours_worked == null || body.hours_worked === "" ? null : Number(body.hours_worked);
-  if (hours !== null && (!Number.isFinite(hours) || hours <= 0 || hours > 24)) throw ApiError.validation("hours_worked 必须 > 0 且 <= 24");
+  const rawHours = body.hours_worked;
+  const hours = rawHours == null || rawHours === "" || Number(rawHours) === 0 ? null : Number(rawHours);
+  if (hours !== null && (!Number.isFinite(hours) || hours < 0 || hours > 24)) throw ApiError.validation("hours_worked 必须 >= 0 且 <= 24");
   for (const field of ["quantity_completed", "defect_quantity"]) {
     const raw = body[field];
     if (raw == null || raw === "") continue;
@@ -232,6 +238,10 @@ function scanExecute(req, res, db) {
   });
 
   const result = t();
+  let timer = null;
+  if (targetType === 'work_order') {
+    try { timer = recalcWorkOrderTimer(db, target.id, { discardStaleOpen: ['pause', 'block', 'complete'].includes(action) }); } catch (_error) { timer = null; }
+  }
   res.json({
     id: result.id,
     target_type: targetType,
@@ -239,6 +249,10 @@ function scanExecute(req, res, db) {
     action,
     operator_id: operatorId,
     status_after: result.statusAfter,
+    actual_duration_seconds: timer?.actual_duration_seconds,
+    actual_duration_hours: timer?.actual_duration_hours,
+    timer_status: timer?.timer_status,
+    timer_started_at: timer?.timer_started_at,
     message: '执行已记录',
   });
 }
