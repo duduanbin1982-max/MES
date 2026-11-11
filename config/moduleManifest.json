@@ -340,32 +340,44 @@
           "icon": "Monitor"
         },
         {
-          "key": "tpm",
-          "title": "点检 / TPM",
-          "path": "/field-service",
-          "entry": "/field-service?tab=logs",
-          "icon": "Tools"
-        },
-        {
           "key": "maintenance-plans",
           "title": "维保计划",
           "path": "/field-service",
           "entry": "/field-service?tab=plans",
-          "icon": "Calendar"
+          "icon": "Calendar",
+          "permission": "equipment:read"
         },
         {
-          "key": "field-service",
-          "title": "现场服务",
+          "key": "maintenance-checklists",
+          "title": "点检表",
           "path": "/field-service",
-          "entry": "/field-service",
-          "icon": "Tools"
+          "entry": "/field-service?tab=checklists",
+          "icon": "DocumentChecked",
+          "permission": "equipment:read"
+        },
+        {
+          "key": "maintenance-logs",
+          "title": "维保记录",
+          "path": "/field-service",
+          "entry": "/field-service?tab=logs",
+          "icon": "Document",
+          "permission": "equipment:read"
+        },
+        {
+          "key": "maintenance-breakdowns",
+          "title": "故障报修",
+          "path": "/field-service",
+          "entry": "/field-service?tab=breakdowns",
+          "icon": "Warning",
+          "permission": "equipment:read"
         },
         {
           "key": "spares",
           "title": "备件库",
           "path": "/field-service",
           "entry": "/field-service?tab=spares",
-          "icon": "Box"
+          "icon": "Box",
+          "permission": "equipment:read"
         }
       ]
     },
