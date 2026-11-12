@@ -1,4 +1,4 @@
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -197,6 +197,16 @@ export function useProcessHoursPage() {
       processNodes.value = (r.flat || []).map((node: ApiRecord) => ({ id: node.id, operation_name: node.operation_name || node.material_name }))
     } catch (_) { processNodes.value = [] }
   }
+
+  watch(() => reportForm.work_order_id, async (workOrderId) => {
+    if (!workOrderId) { processNodes.value = []; return }
+    const workOrder = workOrders.value.find((row: any) => Number(row.id) === Number(workOrderId))
+    if (workOrder?.equipment_instance_id) {
+      await loadProcessNodes(Number(workOrder.equipment_instance_id))
+    } else {
+      processNodes.value = []
+    }
+  })
 
   // Tab 1: 加载工时汇总
   const loadHoursSummary = async () => {
