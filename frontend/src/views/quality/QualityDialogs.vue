@@ -6,7 +6,7 @@
         <el-form-item label="工单"><el-select v-model="form.work_order_id" clearable class="full"><el-option v-for="workOrder in workOrders" :key="workOrder.id" :label="workOrder.wo_code" :value="workOrder.id" /></el-select></el-form-item>
         <el-form-item label="检验类型" required><el-select v-model="form.inspection_type" class="full"><el-option v-for="type in types" :key="type.value" :label="type.label" :value="type.value" /></el-select></el-form-item>
         <el-form-item label="结果" required><el-radio-group v-model="form.result"><el-radio-button label="pass">通过</el-radio-button><el-radio-button label="fail">不通过</el-radio-button></el-radio-group></el-form-item>
-        <el-form-item label="检验员"><el-select v-model="form.inspector_id" class="full"><el-option v-for="user in users" :key="user.id" :label="user.full_name" :value="user.id" /></el-select></el-form-item>
+        <el-form-item label="检验员"><el-select v-model="form.inspector_id" class="full" filterable placeholder="选择检验员"><el-option v-for="user in users" :key="user.id" :label="user.full_name || user.username" :value="user.id" /></el-select></el-form-item>
         <el-form-item label="备注"><el-input v-model="form.notes" type="textarea" :rows="2" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="createModel = false">取消</el-button><el-button type="primary" @click="$emit('submit')" :loading="submitting">提交</el-button></template>

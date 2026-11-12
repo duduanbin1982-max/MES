@@ -92,7 +92,10 @@ export function useInspectionRecords() {
       rows.value = await Api.get('/qc_inspections', { params })
       if (instances.value.length === 0) instances.value = await Api.get('/equipment_instances')
       if (workOrders.value.length === 0) workOrders.value = await Api.get('/work_orders')
-      if (users.value.length === 0) users.value = await Api.get('/users')
+      if (!Array.isArray(users.value) || users.value.length === 0) {
+        const userResult: any = await Api.get('/users', { params: { is_active: 1, page_size: 200 } })
+        users.value = Array.isArray(userResult) ? userResult : (userResult?.items || [])
+      }
       stats.value = await Api.get('/qc/stats')
     } finally {
       loading.value = false
