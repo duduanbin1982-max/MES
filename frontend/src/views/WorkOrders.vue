@@ -308,8 +308,8 @@
           <el-input :model-value="dispatchDlg.wo_code" disabled />
         </el-form-item>
         <el-form-item label="派工人员" required>
-          <el-select v-model="dispatchDlg.form.user_id" placeholder="选择人员" style="width: 100%">
-            <el-option v-for="w in workers" :key="w.id" :label="w.display_name || w.username" :value="w.id" />
+          <el-select v-model="dispatchDlg.form.user_id" placeholder="选择人员（可输入姓名搜索）" filterable style="width: 100%">
+            <el-option v-for="w in workers" :key="w.id" :label="w.full_name || w.display_name || w.username || ('#' + w.id)" :value="w.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="工位" required>
