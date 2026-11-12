@@ -52,6 +52,9 @@
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
+        <el-table-column label="签发时间" width="160">
+          <template #default="{ row }">{{ row.issued_at || '—' }}</template>
+        </el-table-column>
         <el-table-column label="关联" width="180" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.instance_name" class="instance-link"><el-icon><Box /></el-icon> {{ row.instance_name }}</span>
