@@ -31,9 +31,10 @@
         <el-table-column label="" width="40">
           <template #default="{ row }"><span class="doc-icon">{{ row.icon }}</span></template>
         </el-table-column>
+        <el-table-column prop="id" label="ID" width="64" />
         <el-table-column prop="doc_code" label="编码" width="160" />
         <el-table-column prop="title" label="名称" min-width="200" show-overflow-tooltip />
-        <el-table-column label="类型" width="100">
+        <el-table-column label="类型" width="110" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag size="small">{{ docTypeLabel[row.doc_type] || row.doc_type }}</el-tag>
           </template>

@@ -176,13 +176,13 @@ const route = useRoute()
 
 // 常量 (与后端 services/documentService.js 一致)
 const DOC_TYPES = [
-  { value: 'drawing',  label: '<el-icon><TrendCharts /></el-icon> 图纸' },
-  { value: 'sop',      label: '<el-icon><Document /></el-icon> SOP 作业指导' },
-  { value: 'process',  label: '<el-icon><Setting /></el-icon> 工艺文件' },
-  { value: 'qc_std',   label: '<el-icon><CircleCheck /></el-icon> 质检标准' },
-  { value: 'contract', label: '<el-icon><Document /></el-icon> 合同/技术协议' },
-  { value: 'report',   label: '<el-icon><DataAnalysis /></el-icon> 试验报告' },
-  { value: 'other',    label: '<el-icon><Paperclip /></el-icon> 其他' }
+  { value: 'drawing',  label: '图纸' },
+  { value: 'sop',      label: 'SOP' },
+  { value: 'process',  label: '工艺文件' },
+  { value: 'qc_std',   label: '质检标准' },
+  { value: 'contract', label: '合同' },
+  { value: 'report',   label: '报告' },
+  { value: 'other',    label: '其他' }
 ]
 const DOC_TYPE_LABEL: Record<string, string> = Object.fromEntries(DOC_TYPES.map(t => [t.value, t.label]))
 const STATUSES = ['draft', 'issued', 'revoked', 'archived', 'obsolete']
