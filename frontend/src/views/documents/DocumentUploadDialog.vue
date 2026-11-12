@@ -23,6 +23,7 @@
       </el-form-item>
       <el-form-item label="文档编码" required>
         <el-input v-model="uploadForm.doc_code" placeholder="例如: ZZ-001-A0" />
+        <div class="form-hint">同一项目 + 编码 + 版本不可重复；改版请用列表里的“新版本”。</div>
       </el-form-item>
       <el-form-item label="版本">
         <el-input v-model="uploadForm.version" placeholder="默认 A0" />
@@ -164,5 +165,12 @@ defineExpose({
 .upload-tip {
   color: var(--el-color-info);
   font-size: 12px;
+}
+
+.form-hint {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 4px;
 }
 </style>

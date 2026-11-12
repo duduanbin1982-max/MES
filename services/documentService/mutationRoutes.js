@@ -27,6 +27,9 @@ function registerUploadRoute(app, db) {
       } catch (_error) {
         return next(ApiError.validation("X-Doc-Meta 不是合法 JSON"));
       }
+      meta.doc_code = String(meta.doc_code || '').trim();
+      meta.title = String(meta.title || '').trim();
+      meta.version = String(meta.version || 'A0').trim() || 'A0';
       const validation = validateMeta(meta);
       if (!validation.ok) return next(ApiError.validation("文档元数据校验失败", validation.errors));
 
@@ -49,6 +52,13 @@ function registerUploadRoute(app, db) {
       const duplicate = db.prepare("SELECT id, version FROM documents WHERE equipment_instance_id = ? AND file_hash = ? AND version = ?")
         .get(meta.equipment_instance_id, fileHash, meta.version || "A0");
       if (duplicate) return next(ApiError.conflict(`文件已存在 (id=${duplicate.id} version=${duplicate.version}), hash 相同`));
+
+      // 同一项目装备下，同一文档编码 + 版本只能有一条；改版请走“新版本”接口。
+      const duplicateCode = db.prepare("SELECT id, title, version, status FROM documents WHERE equipment_instance_id = ? AND TRIM(doc_code) = ? AND version = ?")
+        .get(meta.equipment_instance_id, meta.doc_code, meta.version || "A0");
+      if (duplicateCode) {
+        return next(ApiError.conflict(`文档编码 ${meta.doc_code}（版本 ${duplicateCode.version}）已存在 (id=${duplicateCode.id}, ${duplicateCode.status})；改版请用“新版本”，不要重复上传`));
+      }
 
       if (meta.bom_node_id) {
         const bomNode = db.prepare("SELECT id, equipment_instance_id FROM instance_bom WHERE id = ?").get(meta.bom_node_id);

@@ -374,7 +374,7 @@ const submitUpload = async (fileList: any[] = []) => {
   const file = fileList[0].raw as File
   if (file.size > 50 * 1024 * 1024) return ElMessage.error('文件超过 50MB')
   const meta: any = {
-    title: uploadForm.title, doc_code: uploadForm.doc_code, version: uploadForm.version,
+    title: String(uploadForm.title || '').trim(), doc_code: String(uploadForm.doc_code || '').trim(), version: String(uploadForm.version || 'A0').trim(),
     doc_type: uploadForm.doc_type, equipment_instance_id: uploadForm.equipment_instance_id,
     bom_node_id: uploadForm.bom_node_id, eco_id: uploadForm.eco_id || undefined,
     description: uploadForm.description || undefined,
