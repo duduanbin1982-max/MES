@@ -333,7 +333,7 @@ const overviewCards = computed(() => {
   ]
 })
 
-const decorateBom = (nodes: any[]): any[] => (nodes || []).map(n => ({
+const decorateBom = (nodes: any[]): any[] => (Array.isArray(nodes) ? nodes : []).map(n => ({
   ...n,
   label: n.material_id ? (matName(n.material_id) || `物料#${n.material_id}`) : (n.notes || n.part_number || `节点#${n.id}`),
   material_name: n.material_id ? matName(n.material_id) : null,
@@ -358,8 +358,8 @@ const load = async () => {
     inst.value = ov?.instance || i
     overview.value = ov
     dash.value = d
-    bomTree.value = bom
-    workOrders.value = wo
+    bomTree.value = Array.isArray(bom) ? bom : (bom?.tree || [])
+    workOrders.value = Array.isArray(wo) ? wo : (wo?.items || [])
     materials.value = mats
     filteredBom.value = decorateBom(bomTree.value)
     nextStage.value = inst.value?.lifecycle_stage || inst.value?.status || 'design'
