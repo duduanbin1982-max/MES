@@ -21,7 +21,7 @@ function registerInspectionRoutes({ app, helpers, ApiError }) {
 
   app.get("/api/qc_inspections", wrap((req, res) => {
     const { equipment_instance_id, work_order_id, inspection_type, result } = req.query;
-    let sql = "SELECT q.*, u.full_name as inspector_name FROM qc_inspections q LEFT JOIN users u ON q.inspector_id = u.id WHERE 1=1";
+    let sql = "SELECT q.*, u.full_name as inspector_name, ei.instance_code, wo.wo_code FROM qc_inspections q LEFT JOIN users u ON q.inspector_id = u.id LEFT JOIN equipment_instances ei ON q.equipment_instance_id = ei.id LEFT JOIN work_orders wo ON q.work_order_id = wo.id WHERE 1=1";
     const params = [];
     if (equipment_instance_id) { sql += " AND q.equipment_instance_id = ?"; params.push(equipment_instance_id); }
     if (work_order_id) { sql += " AND q.work_order_id = ?"; params.push(work_order_id); }
