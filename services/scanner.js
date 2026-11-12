@@ -17,14 +17,15 @@ const get = (db, sql, params) => db.prepare(sql).get(params);
 const run = (db, sql, params) => db.prepare(sql).run(params);
 
 const TARGET_ACTIONS = {
-  work_order: ["start", "pause", "complete", "block"],
-  process_node: ["start", "pause", "complete", "qc", "block"],
+  work_order: ["start", "pause", "complete", "block", "note"],
+  process_node: ["start", "pause", "complete", "qc", "block", "note"],
 };
 const WO_TRANSITIONS = {
   start: ["pending", "dispatched", "paused", "blocked"],
   pause: ["in_progress"],
   complete: ["in_progress"],
   block: ["in_progress", "paused"],
+  note: ["pending", "dispatched", "in_progress", "paused", "blocked"],
 };
 const NODE_TRANSITIONS = {
   start: ["ready", "pending", "paused", "blocked"],
@@ -32,6 +33,7 @@ const NODE_TRANSITIONS = {
   complete: ["in_progress"],
   qc: ["in_progress"],
   block: ["in_progress", "ready"],
+  note: ["ready", "pending", "in_progress", "paused", "blocked"],
 };
 const TERMINAL_WO = ["completed", "closed", "cancelled"];
 const TERMINAL_NODE = ["completed", "cancelled"];
@@ -142,16 +144,52 @@ function validateScanQuantities(body) {
   };
 }
 
-function normalizeOccurredAt(value) {
-  if (!value) return null;
-  const ms = Date.parse(String(value));
-  if (!Number.isFinite(ms)) return null;
-  if (ms > Date.now() + 5 * 60 * 1000) return null;
-  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
-}
-
 function nowSql() {
   return new Date().toISOString().slice(0, 19).replace('T', ' ');
+}
+
+const MAX_CLIENT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_CLIENT_FUTURE_MS = 5 * 60 * 1000;
+const MAX_CLOCK_SKEW_SECONDS = 10 * 60;
+
+function evaluateClientTime(body) {
+  const raw = body.occurred_at || body.client_occurred_at || null;
+  const clientNowRaw = body.client_now || null;
+  const now = Date.now();
+  const clientNowMs = clientNowRaw ? Date.parse(String(clientNowRaw)) : null;
+  const clockSkewSeconds = Number.isFinite(clientNowMs) ? Math.round((clientNowMs - now) / 1000) : null;
+  let occurredAt = nowSql();
+  let reason = null;
+  let accepted = true;
+  if (raw) {
+    const parsed = Date.parse(String(raw));
+    if (!Number.isFinite(parsed)) {
+      reason = "INVALID_CLIENT_TIME";
+    } else if (parsed > now + MAX_CLIENT_FUTURE_MS) {
+      reason = "CLIENT_TIME_IN_FUTURE";
+    } else if (now - parsed > MAX_CLIENT_AGE_MS) {
+      reason = "CLIENT_TIME_TOO_OLD";
+    } else if (clockSkewSeconds !== null && Math.abs(clockSkewSeconds) > MAX_CLOCK_SKEW_SECONDS) {
+      reason = "DEVICE_CLOCK_SKEW";
+    } else {
+      occurredAt = new Date(parsed).toISOString().slice(0, 19).replace('T', ' ');
+    }
+    if (reason) {
+      accepted = false;
+      occurredAt = nowSql();
+    }
+  }
+  return {
+    occurredAt,
+    audit: {
+      client_time: raw ? String(raw) : null,
+      client_now: clientNowRaw ? String(clientNowRaw) : null,
+      clock_skew_seconds: clockSkewSeconds,
+      accepted,
+      reason,
+      effective_time: occurredAt,
+    },
+  };
 }
 
 function scanExecute(req, res, db) {
@@ -190,10 +228,11 @@ function scanExecute(req, res, db) {
   validateScanAction(targetType, action);
   const operatorId = resolveScanOperator(req, body);
   const quantities = validateScanQuantities(body);
-  const occurredAt = normalizeOccurredAt(body.occurred_at || body.client_occurred_at) || nowSql();
+  const timeResult = evaluateClientTime(body);
+  const occurredAt = timeResult.occurredAt;
 
   // 状态机在事务内用最新数据校验，避免并发/脏读
-  const t = db.transaction(() => {
+  const applyAction = db.transaction(() => {
     if (targetType === 'work_order') {
       const current = get(db, 'SELECT * FROM work_orders WHERE id = ?', target.id);
       assertStatusTransition('work_order', current.status, action);
@@ -277,33 +316,60 @@ function scanExecute(req, res, db) {
     return { id: r.lastInsertRowid, statusAfter };
   });
 
-  const result = t();
-  let timer = null;
-  if (targetType === 'work_order') {
-    try { timer = recalcWorkOrderTimer(db, target.id, { discardStaleOpen: ['pause', 'block', 'complete'].includes(action) }); } catch (_error) { timer = null; }
-  }
-  const payload = {
-    id: result.id,
-    target_type: targetType,
-    target_id: target.id,
-    action,
-    operator_id: operatorId,
-    status_after: result.statusAfter,
-    actual_duration_seconds: timer?.actual_duration_seconds,
-    actual_duration_hours: timer?.actual_duration_hours,
-    timer_status: timer?.timer_status,
-    timer_started_at: timer?.timer_started_at,
-    occurred_at: occurredAt,
-    message: '执行已记录',
-    idempotent_replay: false,
-  };
-  if (idemKey) {
-    try {
-      run(db, `INSERT OR IGNORE INTO scan_action_receipts
+  const execute = db.transaction(() => {
+    const result = applyAction();
+    let timer = null;
+    if (targetType === 'work_order') {
+      try { timer = recalcWorkOrderTimer(db, target.id, { discardStaleOpen: ['pause', 'block', 'complete'].includes(action) }); } catch (_error) { timer = null; }
+    }
+    const payload = {
+      id: result.id,
+      target_type: targetType,
+      target_id: target.id,
+      action,
+      operator_id: operatorId,
+      status_after: result.statusAfter,
+      actual_duration_seconds: timer?.actual_duration_seconds,
+      actual_duration_hours: timer?.actual_duration_hours,
+      timer_status: timer?.timer_status,
+      timer_started_at: timer?.timer_started_at,
+      occurred_at: occurredAt,
+      time_audit: timeResult.audit,
+      message: '执行已记录',
+      idempotent_replay: false,
+    };
+    if (idemKey) {
+      run(db, `INSERT INTO scan_action_receipts
         (idempotency_key, device_id, action, target_type, target_id, operator_id, response_json)
         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [idemKey, deviceId, action, targetType, target.id, operatorId, JSON.stringify(payload)]);
-    } catch (_error) { /* 回执表不可用时不影响扫码 */ }
+    }
+    return payload;
+  });
+
+  let payload;
+  try {
+    payload = execute();
+  } catch (error) {
+    if (idemKey) {
+      const previous = get(db, 'SELECT response_json FROM scan_action_receipts WHERE idempotency_key = ?', idemKey);
+      if (previous) {
+        const replay = JSON.parse(previous.response_json);
+        replay.idempotent_replay = true;
+        return res.json(replay);
+      }
+    }
+    throw error;
+  }
+
+  if (timeResult.audit.client_time || timeResult.audit.client_now) {
+    try {
+      run(db, `INSERT INTO mobile_time_audits
+        (device_id, operator_id, action, target_type, target_id, client_time, client_now, server_time, clock_skew_seconds, accepted, reason)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [deviceId, operatorId, action, targetType, target.id, timeResult.audit.client_time, timeResult.audit.client_now,
+          nowSql(), timeResult.audit.clock_skew_seconds, timeResult.audit.accepted ? 1 : 0, timeResult.audit.reason]);
+    } catch (_error) { /* 审计表不可用时不影响业务 */ }
   }
   res.json(payload);
 }

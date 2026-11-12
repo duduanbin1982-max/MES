@@ -1,6 +1,7 @@
 export type ScanQueueItem = {
   id: string
   userId: number | null
+  kind?: 'scan' | 'work_report_create' | 'work_report_approve' | 'work_report_reject'
   payload: any
   status: 'pending' | 'syncing' | 'failed'
   attempts: number
@@ -52,10 +53,11 @@ export function getDeviceId(): string {
   return value
 }
 
-export async function enqueueScanAction(userId: number | null, payload: any): Promise<ScanQueueItem> {
+export async function enqueueScanAction(userId: number | null, payload: any, kind: ScanQueueItem['kind'] = 'scan'): Promise<ScanQueueItem> {
   const item: ScanQueueItem = {
     id: newScanActionId(),
     userId: userId || null,
+    kind,
     payload,
     status: 'pending',
     attempts: 0,

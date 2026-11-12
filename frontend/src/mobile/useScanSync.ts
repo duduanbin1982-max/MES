@@ -1,8 +1,13 @@
 import { reactive } from 'vue'
 import { Api } from '../api'
 import { useAuthStore } from '../stores/auth'
-import { getDeviceId, listScanQueue, updateScanQueueItem, removeScanQueueItem, enqueueScanAction, type ScanQueueItem } from '../mobile/scanQueue'
+import {
+  getDeviceId, listScanQueue, updateScanQueueItem, removeScanQueueItem,
+  enqueueScanAction, type ScanQueueItem,
+} from '../mobile/scanQueue'
 import { addMobileMessage, showMobileNotification } from './notifications'
+
+export type OfflineActionKind = 'scan' | 'work_report_create' | 'work_report_approve' | 'work_report_reject'
 
 export const scanSyncState = reactive({
   pending: 0,
@@ -33,13 +38,52 @@ async function refreshState() {
   changed()
 }
 
-export async function enqueueScan(payload: any): Promise<ScanQueueItem> {
+async function enqueueOffline(kind: OfflineActionKind, payload: any, label: string): Promise<ScanQueueItem> {
   const auth = useAuthStore()
   const userId = Number(auth.user?.id || auth.user?.uid || 0) || null
-  const item = await enqueueScanAction(userId, payload)
-  addMobileMessage('info', '扫码动作已离线暂存', `${payload?.code || ''} · ${payload?.action || ''}，联网后自动补传`)
+  const item = await enqueueScanAction(userId, payload, kind)
+  addMobileMessage('info', `${label}已离线暂存`, `${payload?.code || payload?.report_id || ''}，联网后自动补传`)
   await refreshState()
   return item
+}
+
+export async function enqueueScan(payload: any): Promise<ScanQueueItem> {
+  return enqueueOffline('scan', payload, '扫码动作')
+}
+
+export async function enqueueWorkReportAction(kind: 'work_report_create' | 'work_report_approve' | 'work_report_reject', payload: any): Promise<ScanQueueItem> {
+  return enqueueOffline(kind, payload, kind === 'work_report_create' ? '报工' : '报工审批')
+}
+
+function scanRequest(item: ScanQueueItem) {
+  const payload = { ...item.payload, client_now: new Date().toISOString() }
+  return Api.post('/scan/execute', payload, {
+    headers: { 'Idempotency-Key': item.id, 'X-Device-Id': getDeviceId() },
+  })
+}
+
+function workReportRequest(item: ScanQueueItem) {
+  const kind = item.kind || 'scan'
+  if (kind === 'work_report_create') {
+    const payload = { ...item.payload, client_request_id: item.id, client_now: new Date().toISOString() }
+    return Api.post('/work-reports', payload, {
+      headers: { 'Idempotency-Key': item.id, 'X-Device-Id': getDeviceId() },
+    })
+  }
+  const reportId = item.payload?.report_id || item.payload?.id
+  if (kind === 'work_report_approve') {
+    return Api.put(`/work-reports/${reportId}/approve`, { client_now: new Date().toISOString() }, {
+      headers: { 'Idempotency-Key': item.id, 'X-Device-Id': getDeviceId() },
+    })
+  }
+  return Api.put(`/work-reports/${reportId}/reject`, { reason: item.payload?.reason || '', client_now: new Date().toISOString() }, {
+    headers: { 'Idempotency-Key': item.id, 'X-Device-Id': getDeviceId() },
+  })
+}
+
+async function sendQueueItem(item: ScanQueueItem) {
+  if (!item.kind || item.kind === 'scan') return scanRequest(item)
+  return workReportRequest(item)
 }
 
 export async function syncScanQueue(): Promise<{ synced: number; failed: number; remaining: number }> {
@@ -63,9 +107,7 @@ export async function syncScanQueue(): Promise<{ synced: number; failed: number;
       await updateScanQueueItem(item.id, { status: 'syncing', attempts: item.attempts + 1 })
       await refreshState()
       try {
-        await Api.post('/scan/execute', item.payload, {
-          headers: { 'Idempotency-Key': item.id, 'X-Device-Id': getDeviceId() },
-        })
+        await sendQueueItem(item)
         await removeScanQueueItem(item.id)
         synced += 1
         scanSyncState.lastSyncedAt = new Date().toISOString()
@@ -86,8 +128,8 @@ export async function syncScanQueue(): Promise<{ synced: number; failed: number;
   }
   const remaining = scanSyncState.pending
   if (synced || failed) {
-    addMobileMessage(failed ? 'failed' : 'sync', failed ? '扫码补传存在失败' : '扫码补传完成', `成功 ${synced} 条，失败 ${failed} 条，待同步 ${remaining} 条`)
-    showMobileNotification(failed ? '扫码补传存在失败' : '扫码补传完成', `成功 ${synced} 条，失败 ${failed} 条`)
+    addMobileMessage(failed ? 'failed' : 'sync', failed ? '离线补传存在失败' : '离线补传完成', `成功 ${synced} 条，失败 ${failed} 条，待同步 ${remaining} 条`)
+    showMobileNotification(failed ? '离线补传存在失败' : '离线补传完成', `成功 ${synced} 条，失败 ${failed} 条`)
     window.dispatchEvent(new CustomEvent('scan-sync-result', { detail: { synced, failed, remaining } }))
   }
   return { synced, failed, remaining }
@@ -105,9 +147,7 @@ export async function retryFailedScanActions(): Promise<void> {
 export async function clearFailedScanActions(): Promise<void> {
   const rows = await listScanQueue()
   for (const row of rows) {
-    if (row.status === 'failed') {
-      await removeScanQueueItem(row.id)
-    }
+    if (row.status === 'failed') await removeScanQueueItem(row.id)
   }
   await refreshState()
 }

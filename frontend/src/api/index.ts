@@ -19,10 +19,10 @@ const Api = Object.assign({
 
   get: (url: string, config?: any) => api.get(url, config),
   post: (url: string, data?: any, config?: any) => api.post(url, data, config),
-  put: (url: string, data?: any) => api.put(url, data),
-  patch: (url: string, data?: any) => api.patch(url, data),
-  del: (url: string) => api.delete(url),
-  delete: (url: string) => api.delete(url)
+  put: (url: string, data?: any, config?: any) => api.put(url, data, config),
+  patch: (url: string, data?: any, config?: any) => api.patch(url, data, config),
+  del: (url: string, config?: any) => api.delete(url, config),
+  delete: (url: string, config?: any) => api.delete(url, config)
 }, {
   defaults: api.defaults,
   interceptors: api.interceptors,

@@ -2,6 +2,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { Api } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { enqueueWorkReportAction } from '../mobile/useScanSync'
 import type { ApiRecord } from '../types/api'
 
 export function useProcessHoursPage() {
@@ -101,6 +102,11 @@ export function useProcessHoursPage() {
     }
   }
   const approveReport = async (row: any) => {
+    if (!navigator.onLine) {
+      await enqueueWorkReportAction('work_report_approve', { report_id: row.id })
+      ElMessage.warning('当前离线，审批已暂存，联网后自动补传')
+      return
+    }
     try {
       const result: any = await Api.put('/work-reports/' + row.id + '/approve')
       const cost = result?.cost_entry
@@ -108,18 +114,38 @@ export function useProcessHoursPage() {
         + (cost && cost.amount ? '，人工成本 +' + cost.amount + ' 元' : ''))
       await loadReports()
       await loadDailySummary()
-    } catch (error: any) { ElMessage.error(error?.response?.data?.message || '审批失败') }
+    } catch (error: any) {
+      if (!error?.response || Number(error.response.status) >= 500) {
+        await enqueueWorkReportAction('work_report_approve', { report_id: row.id })
+        ElMessage.warning('网络异常，审批已暂存，联网后自动补传')
+        return
+      }
+      ElMessage.error(error?.response?.data?.message || '审批失败')
+    }
   }
   const rejectReport = async (row: any) => {
+    let lastReason = ''
     try {
       const { value } = await ElMessageBox.prompt('请填写驳回原因', '驳回报工', { inputPlaceholder: '例如：工时填写有误' })
       if (!value || !String(value).trim()) return ElMessage.warning('驳回原因必填')
-      await Api.put('/work-reports/' + row.id + '/reject', { reason: String(value).trim() })
+      const reason = String(value).trim()
+      lastReason = reason
+      if (!navigator.onLine) {
+        await enqueueWorkReportAction('work_report_reject', { report_id: row.id, reason })
+        ElMessage.warning('当前离线，驳回已暂存，联网后自动补传')
+        return
+      }
+      await Api.put('/work-reports/' + row.id + '/reject', { reason })
       ElMessage.success('已驳回')
       await loadReports()
       await loadDailySummary()
     } catch (error: any) {
       if (error === 'cancel' || error === 'close') return
+      if (!error?.response || Number(error.response.status) >= 500) {
+        await enqueueWorkReportAction('work_report_reject', { report_id: row.id, reason: lastReason || '离线驳回' })
+        ElMessage.warning('网络异常，驳回已暂存，联网后自动补传')
+        return
+      }
       ElMessage.error(error?.response?.data?.message || '驳回失败')
     }
   }
@@ -231,17 +257,35 @@ export function useProcessHoursPage() {
     finally { reportsLoading.value = false }
   }
 
+  const resetReportForm = () => Object.assign(reportForm, { work_order_id: null, process_node_id: null, hours_spent: 0, quantity_completed: 0, quality_result: 'pass', notes: '' })
+  const queueReport = async (payload: any, message: string) => {
+    await enqueueWorkReportAction('work_report_create', payload)
+    ElMessage.warning(message)
+    showReportDialog.value = false
+    resetReportForm()
+  }
   const submitReport = async () => {
     if (!reportForm.work_order_id || reportForm.hours_spent <= 0) return ElMessage.warning('工单和工时必填')
     reportSaving.value = true
+    const payload = { ...reportForm, client_now: new Date().toISOString() }
     try {
-      await Api.post('/work-reports', { ...reportForm })
+      if (!navigator.onLine) {
+        await queueReport(payload, '当前离线，报工已暂存，联网后自动补传')
+        return
+      }
+      await Api.post('/work-reports', payload)
       ElMessage.success('报工成功')
       showReportDialog.value = false
-      Object.assign(reportForm, { work_order_id: null, process_node_id: null, hours_spent: 0, quantity_completed: 0, quality_result: 'pass', notes: '' })
+      resetReportForm()
       loadReports()
       loadDailySummary()
-    } catch (e) { ElMessage.error('报工失败') }
+    } catch (e: any) {
+      if (!e?.response || Number(e.response.status) >= 500) {
+        await queueReport(payload, '网络异常，报工已暂存，联网后自动补传')
+        return
+      }
+      ElMessage.error(e?.response?.data?.message || '报工失败')
+    }
     finally { reportSaving.value = false }
   }
 

@@ -152,9 +152,9 @@
       "ddlStatements": 9
     },
     "processHoursService": {
-      "schemaVersion": 2,
-      "ddlFingerprint": "587c10fdb2f64975bd55083d69a754e10ef57101dfe91c19dab67134c63262d5",
-      "ddlStatements": 1
+      "schemaVersion": 4,
+      "ddlFingerprint": "d813ba8b780a0cecdc410e4d99e3139be680ec94fc18a00b258516c8876d1cf4",
+      "ddlStatements": 2
     },
     "processMasterService": {
       "schemaVersion": 2,

@@ -23,7 +23,7 @@ const MESA_SERVICES = [
   { name: "oeeService", module: "./oeeService", schemaVersion: 2 },
   { name: "pickService", module: "./pickService", schemaVersion: 1 },
   { name: "process", module: "./process", schemaVersion: 3 },
-  { name: "processHoursService", module: "./processHoursService", schemaVersion: 2 },
+  { name: "processHoursService", module: "./processHoursService", schemaVersion: 4 },
   { name: "processMasterService", module: "./processMasterService", schemaVersion: 2 },
   { name: "processRouteService", module: "./processRouteService", schemaVersion: 2 },
   { name: "processTree", module: "./processTree", schemaVersion: 4 },

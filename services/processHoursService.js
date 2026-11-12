@@ -270,10 +270,18 @@ function registerStandardHours(app, db) {
 function registerWorkReport(app, db, auth) {
   const { all, get, run } = makeHelpers(db);
   const statusAware = hasColumn(db, "work_report_details", "status");
+  try { db.prepare("ALTER TABLE work_report_details ADD COLUMN client_request_id TEXT").run(); } catch (_error) { /* exists */ }
+  try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_work_report_client_request ON work_report_details(client_request_id)"); } catch (_error) { /* exists */ }
+  const hasClientRequestId = hasColumn(db, "work_report_details", "client_request_id");
 
   app.post("/api/work-reports", wrap((req, res) => {
     const body = req.body || {};
     const { work_order_id, operation_id, process_node_id, worker_id, work_type, hours_spent, quantity_completed, quantity_total, quality_result, start_time, end_time, workstation, notes } = body;
+    const clientRequestId = String(body.client_request_id || "").trim().slice(0, 160);
+    if (clientRequestId && hasClientRequestId) {
+      const existing = get("SELECT * FROM work_report_details WHERE client_request_id=?", [clientRequestId]);
+      if (existing) return res.json({ id: existing.id, work_order_id: existing.work_order_id, worker_id: existing.worker_id, hours_spent: existing.hours_spent, completion_pct: existing.completion_pct, status: existing.status || "approved", already: true, message: "报工已存在（幂等回放）", actual_hours: get("SELECT actual_hours FROM work_orders WHERE id=?", [existing.work_order_id]).actual_hours });
+    }
 
     const workOrder = get("SELECT id, wo_code, equipment_instance_id, assigned_to FROM work_orders WHERE id=?", [work_order_id]);
     if (!workOrder) throw ApiError.notFound("工单不存在: " + work_order_id);
@@ -319,10 +327,11 @@ function registerWorkReport(app, db, auth) {
     ensureMonthUnlocked(db, reportDate);
 
     const status = statusAware ? "pending" : null;
-    const columns = "work_order_id, operation_id, process_node_id, worker_id, work_type, hours_spent, quantity_completed, quantity_total, completion_pct, quality_result, start_time, end_time, workstation, notes, reported_by" + (statusAware ? ", status" : "");
+    const columns = "work_order_id, operation_id, process_node_id, worker_id, work_type, hours_spent, quantity_completed, quantity_total, completion_pct, quality_result, start_time, end_time, workstation, notes, reported_by" + (statusAware ? ", status" : "") + (hasClientRequestId ? ", client_request_id" : "");
     const values = [workOrder.id, operation_id || null, node ? node.id : null, resolvedWorker, type, hours, completedQty, totalQty,
       completionPct, quality, start_time || null, end_time || null, workstation || null, notes || null, currentUserId(req)];
     if (statusAware) values.push(status);
+    if (hasClientRequestId) values.push(clientRequestId || null);
 
     const result = run(`INSERT INTO work_report_details (${columns}) VALUES (${values.map(() => "?").join(",")})`, values);
     res.json({
@@ -334,6 +343,7 @@ function registerWorkReport(app, db, auth) {
       status: status || "approved",
       message: statusAware ? "报工已提交，待审批（审批通过后计入实际工时与人工成本）" : "报工成功",
       actual_hours: get("SELECT actual_hours FROM work_orders WHERE id=?", [workOrder.id]).actual_hours,
+      client_request_id: clientRequestId || null,
     });
   }));
 

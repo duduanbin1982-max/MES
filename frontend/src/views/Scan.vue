@@ -326,6 +326,7 @@ const doAction = async (action: string) => {
       notes: reportForm.notes
     }
     payload.occurred_at = new Date().toISOString()
+    payload.client_now = new Date().toISOString()
     let res: any = null
     if (!navigator.onLine) {
       await enqueueScan(payload)
@@ -370,22 +371,39 @@ const doAction = async (action: string) => {
 
 const submitNote = async () => {
   if (!issueForm.notes) { ElMessage.warning('请填写内容'); return }
+  const payload = {
+    code: code.value.trim(),
+    action: 'note',
+    operator_id: currentUserId.value,
+    notes: issueForm.notes,
+    hours_worked: issueForm.hours_worked,
+    quantity_completed: reportForm.quantity_completed,
+    defect_quantity: reportForm.defect_quantity,
+    occurred_at: new Date().toISOString(),
+    client_now: new Date().toISOString(),
+  }
   try {
-    const action = target.value?.type === 'work_order' ? 'note' : 'note'
-    await api.post('/scan/execute', {
-      code: code.value.trim(),
-      action,
-      operator_id: currentUserId.value,
-      notes: issueForm.notes,
-      hours_worked: issueForm.hours_worked,
-      quantity_completed: reportForm.quantity_completed,
-      defect_quantity: reportForm.defect_quantity
-    })
-    ElMessage.success('已记录')
+    if (!navigator.onLine) {
+      await enqueueScan(payload)
+      ElMessage.warning('当前离线，异常/备注已暂存，联网后自动补传')
+    } else {
+      try {
+        await api.post('/scan/execute', payload, { headers: { 'Idempotency-Key': newScanActionId(), 'X-Device-Id': getDeviceId() } })
+        ElMessage.success('已记录')
+      } catch (error: any) {
+        const status = Number(error?.response?.status || 0)
+        if (!status || status >= 500) {
+          await enqueueScan(payload)
+          ElMessage.warning('网络异常，异常/备注已暂存，联网后自动补传')
+        } else {
+          throw error
+        }
+      }
+    }
     showIssue.value = false
     issueForm.notes = ''; issueForm.hours_worked = 0
-    await lookup()
-  } catch (e: any) { ElMessage.error('失败') }
+    if (navigator.onLine) await lookup()
+  } catch (_e: any) { ElMessage.error('提交失败') }
 }
 watch(timerStatus, (status) => {
   if (status === 'running') wakeLock.request()
