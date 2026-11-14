@@ -77,6 +77,7 @@ const routes = [
       { path: '/resources', name: 'resources', component: () => import('../views/ResourceDashboard.vue'), meta: { title: '资源分配与状态', icon: 'Monitor' } },
       { path: '/digital-twin', name: 'digital-twin', component: () => import('../views/DigitalTwin.vue'), meta: { title: '数字孪生', icon: 'Monitor' } },
       { path: '/mobile-center', name: 'mobile-center', component: () => import('../views/MobileCenter.vue'), meta: { title: '移动端设置', icon: 'Cellphone' } },
+      { path: '/spare-production', name: 'spare-production', component: () => import('../views/SpareProduction.vue'), meta: { title: '备件生产', icon: 'Box' } },
       { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFound.vue'), meta: { title: '页面不存在', hidden: true } },
     ]
   },

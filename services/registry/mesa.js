@@ -33,6 +33,7 @@ const MESA_SERVICES = [
   { name: "spcService", module: "./spcService", schemaVersion: 1 },
   { name: "tbmAdvanced", module: "./tbmAdvanced", schemaVersion: 1 },
   { name: "traceService", module: "./traceService", schemaVersion: 3 },
+  { name: "spareProduction", module: "./spareProduction", schemaVersion: 1 },
   { name: "workOrderService", module: "./workOrderService", schemaVersion: 3, deps: { onlyForemanOrAdmin, onlyForemanAdminOrPlanner, onlyWelder, foremanOrWorker } },
 ];
 

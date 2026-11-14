@@ -179,6 +179,13 @@
           "icon": "Document"
         },
         {
+          "key": "spare-production",
+          "title": "备件生产",
+          "path": "/spare-production",
+          "entry": "/spare-production",
+          "icon": "Box"
+        },
+        {
           "key": "process-hours",
           "title": "工时与报工",
           "path": "/process-hours",

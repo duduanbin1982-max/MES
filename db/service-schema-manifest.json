@@ -221,6 +221,11 @@
       "ddlFingerprint": "b2486a294bc34c4bbe2c17ba2f908d8f5180464d55cbaa4bdabf0565f9ad78a0",
       "ddlStatements": 1
     },
+    "spareProduction": {
+      "schemaVersion": 1,
+      "ddlFingerprint": "553ff6ff9dbe7eed4cb10d886b4ccff0b81886eb1a00da6391f521d186f4cbd7",
+      "ddlStatements": 1
+    },
     "spcService": {
       "schemaVersion": 1,
       "ddlFingerprint": null,
