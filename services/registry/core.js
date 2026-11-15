@@ -8,7 +8,7 @@ const CORE_SERVICES = [
   { name: "mobileService", module: "./mobileService", schemaVersion: 1 },
   { name: "material", module: "./material", schemaVersion: 1 },
   { name: "materialPlanner", module: "./materialPlanner", schemaVersion: 2 },
-  { name: "materialService", module: "./materialService", schemaVersion: 1 },
+  { name: "materialService", module: "./materialService", schemaVersion: 2 },
   { name: "purchase", module: "./purchase", schemaVersion: 3 },
   { name: "reportService", module: "./reportService", schemaVersion: 6 },
   { name: "resourceService", module: "./resourceService", schemaVersion: 3 },
