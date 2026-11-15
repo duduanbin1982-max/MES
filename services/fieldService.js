@@ -39,7 +39,7 @@ function register(app, db) {
     return stockService.receiveStock(db, {
       materialId: material.id,
       quantity: Number(quantity),
-      location: location || part.location || "备件库",
+      location: location || part.location || undefined,
       lotNo: lotNo || undefined,
       notes: notes || "备件库入库同步（统一库存服务）",
       sourceType: "tpm_spare_in",
