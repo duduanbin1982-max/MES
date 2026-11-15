@@ -121,8 +121,13 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
                          LEFT JOIN suppliers s ON s.id = pri.supplier_id
                         WHERE pri.pr_id = ? ORDER BY pri.id`, [pr.id]);
     if (!items.length) throw ApiError.validation("采购申请没有明细");
+    const fallbackSupplierId = req.body?.supplier_id ? Number(req.body.supplier_id) : null;
+    if (fallbackSupplierId && !get("SELECT id FROM suppliers WHERE id = ?", [fallbackSupplierId])) throw ApiError.validation("指定的供应商不存在");
+    for (const item of items) {
+      if (!item.supplier_id && fallbackSupplierId) item.supplier_id = fallbackSupplierId;
+    }
     const missingSupplier = items.filter((item) => !item.supplier_id);
-    if (missingSupplier.length) throw ApiError.validation("以下物料缺少供应商，不能转采购订单: " + missingSupplier.map((item) => item.material_code).join("、"));
+    if (missingSupplier.length) throw ApiError.validation("以下物料缺少供应商，请选择供应商后再转采购订单: " + missingSupplier.map((item) => item.material_code).join("、"));
     const groups = new Map();
     for (const item of items) {
       if (!groups.has(item.supplier_id)) groups.set(item.supplier_id, []);
