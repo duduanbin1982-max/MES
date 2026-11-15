@@ -36,7 +36,7 @@ function register(app, db) {
   function receiveMaterialForSpare(part, quantity, location, notes, lotNo) {
     const material = materialForSpare(part);
     if (!material) return null;
-    return stockService.receiveStock(db, {
+    const result = stockService.receiveStock(db, {
       materialId: material.id,
       quantity: Number(quantity),
       location: location || part.location || undefined,
@@ -45,6 +45,10 @@ function register(app, db) {
       sourceType: "tpm_spare_in",
       syncSpare: false,
     });
+    if (!part.location && result?.location) {
+      run("UPDATE equipment_spare_parts SET location = ?, updated_at = datetime('now') WHERE id = ?", [result.location, part.id]);
+    }
+    return result;
   }
 
   function issueMaterialForSpare(part, quantity, notes) {
