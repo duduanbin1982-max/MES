@@ -10,6 +10,12 @@
       <el-select v-model="inventoryPolicy" clearable placeholder="库存策略" style="width:130px" @change="loadMats">
         <el-option label="常备" value="stock" /><el-option label="项目直供" value="project" /><el-option label="不库存" value="none" />
       </el-select>
+      <el-select v-model="criticalityFilter" clearable placeholder="关键性" style="width:110px" @change="loadMats">
+        <el-option label="普通" value="normal" /><el-option label="重要" value="important" /><el-option label="关键" value="critical" />
+      </el-select>
+      <el-select v-model="abcFilter" clearable placeholder="ABC" style="width:90px" @change="loadMats">
+        <el-option label="A" value="A" /><el-option label="B" value="B" /><el-option label="C" value="C" />
+      </el-select>
       <el-button type="primary" size="small" style="margin-left:auto" @click="openCreate">+ 新增物料</el-button>
     </div>
     <el-table :data="mats" stripe v-loading="loading" size="small">
@@ -24,6 +30,9 @@
       <el-table-column prop="material_type" label="类型" width="100" />
       <el-table-column label="来源" width="80"><template #default="{ row }">{{ sourceLabel(row.source_type) }}</template></el-table-column>
       <el-table-column label="库存策略" width="100"><template #default="{ row }">{{ policyLabel(row.inventory_policy) }}</template></el-table-column>
+      <el-table-column label="关键性" width="80"><template #default="{ row }">{{ criticalityLabel(row.criticality) }}</template></el-table-column>
+      <el-table-column prop="abc_class" label="ABC" width="60" />
+      <el-table-column prop="default_location" label="默认库位" width="120" />
       <el-table-column prop="spec" label="规格" width="150" />
       <el-table-column prop="unit" label="单位" width="60" />
       <el-table-column label="自制" width="70">
@@ -52,6 +61,9 @@
           <el-col :span="12"><el-form-item label="类型"><el-input v-model="matForm.material_type" placeholder="steel / electrical / purchased..." /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="来源"><el-select v-model="matForm.source_type" style="width:100%"><el-option label="外购" value="purchased" /><el-option label="自制" value="self_made" /><el-option label="委外" value="outsourced" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="库存策略"><el-select v-model="matForm.inventory_policy" style="width:100%"><el-option label="常备" value="stock" /><el-option label="项目直供" value="project" /><el-option label="不库存" value="none" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="关键性"><el-select v-model="matForm.criticality" style="width:100%"><el-option label="普通" value="normal" /><el-option label="重要" value="important" /><el-option label="关键" value="critical" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="ABC 分类"><el-select v-model="matForm.abc_class" style="width:100%"><el-option label="A" value="A" /><el-option label="B" value="B" /><el-option label="C" value="C" /></el-select></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="默认库位"><el-input v-model="matForm.default_location" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="规格"><el-input v-model="matForm.spec" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="单位"><el-input v-model="matForm.unit" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="安全库存"><el-input-number v-model="matForm.safety_stock" :min="0" style="width:100%" /></el-form-item></el-col>
@@ -79,6 +91,8 @@ const loading = ref(false)
 const categoryId = ref<number | null>(null)
 const sourceType = ref('')
 const inventoryPolicy = ref('')
+const criticalityFilter = ref('')
+const abcFilter = ref('')
 const categories = ref<any[]>([])
 const categoryTree = computed(() => {
   const map = new Map<number, any>()
@@ -98,17 +112,20 @@ const loadMats = async () => {
   if (categoryId.value) params.category_id = categoryId.value
   if (sourceType.value) params.source_type = sourceType.value
   if (inventoryPolicy.value) params.inventory_policy = inventoryPolicy.value
+  if (criticalityFilter.value) params.criticality = criticalityFilter.value
+  if (abcFilter.value) params.abc_class = abcFilter.value
   try { mats.value = await api.materials(Object.keys(params).length ? params : undefined) } catch(e) { /* 前端统一用 ElMessage 提示 */ } finally { loading.value = false }
 }
 const matDlg = ref(false)
 const saving = ref(false)
 const editingId = ref<number | null>(null)
 const emptyForm = () => ({ material_code: '', material_name: '', material_type: 'purchased', spec: '', unit: '件',
-  category_id: null as number | null, source_type: 'purchased', inventory_policy: 'stock', is_self_made: false, is_key_component: false, lot_managed: false,
+  category_id: null as number | null, source_type: 'purchased', inventory_policy: 'stock', criticality: 'normal', abc_class: 'C', default_location: '', is_self_made: false, is_key_component: false, lot_managed: false,
   safety_stock: 0, reorder_point: 0, default_supplier: '', notes: '' })
 const matForm = reactive<any>(emptyForm())
 const sourceLabel = (value: string) => ({ purchased: '外购', self_made: '自制', outsourced: '委外' } as any)[value] || value || '-'
 const policyLabel = (value: string) => ({ stock: '常备', project: '项目直供', none: '不库存' } as any)[value] || value || '-'
+const criticalityLabel = (value: string) => ({ normal: '普通', important: '重要', critical: '关键' } as any)[value] || value || '-'
 function openCreate() { editingId.value = null; Object.assign(matForm, emptyForm()); matDlg.value = true }
 function openEdit(row: any) {
   editingId.value = row.id
@@ -116,6 +133,7 @@ function openEdit(row: any) {
     material_code: row.material_code, material_name: row.material_name, material_type: row.material_type || 'purchased',
     spec: row.spec || '', unit: row.unit || '件', category_id: row.category_id || null,
     source_type: row.source_type || 'purchased', inventory_policy: row.inventory_policy || 'stock',
+    criticality: row.criticality || 'normal', abc_class: row.abc_class || 'C', default_location: row.default_location || '',
     is_self_made: !!row.is_self_made, is_key_component: !!row.is_key_component, lot_managed: !!row.lot_managed,
     safety_stock: Number(row.safety_stock || 0), reorder_point: Number(row.reorder_point || 0),
     default_supplier: row.default_supplier || '', notes: row.notes || '',
