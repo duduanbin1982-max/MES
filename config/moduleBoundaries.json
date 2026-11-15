@@ -70,6 +70,12 @@
       "to": "tbmAdvanced",
       "table": "critical_part_certificates",
       "reason": "registry 已声明 dependsOn: [tbmAdvanced]；证书表由 tbmAdvanced 建表，criticalPartsService 在其上扩展 document_id 并写入"
+    },
+    {
+      "from": "purchase",
+      "to": "materialService",
+      "table": "purchase_requisitions",
+      "reason": "采购订单全部到货后回写采购申请完成状态（2026-11-15 到货闭环）"
     }
   ],
   "allowedTriggers": [

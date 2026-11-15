@@ -82,6 +82,19 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
   ensureReceivingSchema(db);
   ensureInvoiceSchema(db);
 
+  function completeLinkedPurchaseRequisitions(poId) {
+    try {
+      if (!get("SELECT name FROM sqlite_master WHERE type='table' AND name='purchase_requisition_po_links'")) return;
+      const links = all("SELECT pr_id FROM purchase_requisition_po_links WHERE po_id = ?", [poId]);
+      for (const link of links) {
+        const pos = all(`SELECT po.status FROM purchase_requisition_po_links l JOIN purchase_orders po ON po.id=l.po_id WHERE l.pr_id=?`, [link.pr_id]);
+        if (pos.length && pos.every((row) => ["received", "closed"].includes(row.status))) {
+          run("UPDATE purchase_requisitions SET status='completed', completed_at=datetime('now'), updated_at=datetime('now') WHERE id=? AND status='converted'", [link.pr_id]);
+        }
+      }
+    } catch (_error) { /* 旧库无采购申请表时忽略 */ }
+  }
+
   app.get("/api/purchase_orders", wrap((req, res) => {
     const { supplier_id, status, equipment_instance_id } = req.query;
     let sql = `SELECT po.*, s.supplier_name, ei.instance_code
@@ -316,6 +329,7 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
 
     const result = tx();
     ensureTrackingForPo(db, get, all, run, po.id);
+    completeLinkedPurchaseRequisitions(po.id);
     audit.record(db, req, {
       action: "purchase_order.receive",
       resource_type: "purchase_order",
