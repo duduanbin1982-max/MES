@@ -57,6 +57,21 @@
         </el-table>
       </el-tab-pane>
 
+      <el-tab-pane label="批次策略" name="lot-policy">
+        <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px"
+          title="批次管理件入库必须填写批次号；非批次管理件入库自动归入 DEFAULT-物料编码 批次并累加。" />
+        <el-table :data="parts" border size="small">
+          <el-table-column prop="material_code" label="备件编码" width="180" />
+          <el-table-column prop="material_name" label="备件名称" min-width="220" />
+          <el-table-column prop="unit" label="单位" width="80" />
+          <el-table-column label="批次管理" width="160">
+            <template #default="{ row }">
+              <el-switch v-model="row.lot_managed" :active-value="1" :inactive-value="0" @change="saveLotPolicy(row)" />
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
       <el-tab-pane label="工艺模板" name="route">
         <div class="toolbar">
           <el-select v-model="selectedPartId" filterable placeholder="选择自产备件" style="width: 360px" @change="loadRoute">
@@ -277,6 +292,15 @@ async function saveBom() {
 async function removeBom(row: any) {
   try { await ElMessageBox.confirm('删除该物料行？', '确认'); await Api.delete('/spare-production/boms/' + row.id); await loadBom() }
   catch (error: any) { if (error !== 'cancel' && error !== 'close') ElMessage.error('删除失败') }
+}
+async function saveLotPolicy(row: any) {
+  try {
+    await Api.put('/spare-production/parts/' + row.id + '/lot-policy', { lot_managed: row.lot_managed ? 1 : 0 })
+    ElMessage.success(row.lot_managed ? '已设为批次管理件' : '已设为非批次管理件')
+  } catch (error: any) {
+    row.lot_managed = row.lot_managed ? 0 : 1
+    ElMessage.error(error?.response?.data?.message || '保存失败')
+  }
 }
 function openRouteDialog() {
   const nextSequence = routeSteps.value.length ? Math.max(...routeSteps.value.map((row: any) => Number(row.sequence) || 0)) + 10 : 10

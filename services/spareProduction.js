@@ -147,6 +147,13 @@ function register(app, db) {
     res.json({ ok: true, id: result.lastInsertRowid });
   }));
 
+  app.put("/api/spare-production/parts/:id/lot-policy", wrap((req, res) => {
+    const material = get("SELECT id FROM materials WHERE id = ?", [Number(req.params.id)]);
+    if (!material) throw ApiError.notFound("物料不存在");
+    run("UPDATE materials SET lot_managed = ? WHERE id = ?", [req.body?.lot_managed ? 1 : 0, material.id]);
+    res.json({ ok: true, lot_managed: req.body?.lot_managed ? 1 : 0 });
+  }));
+
   // BOM
   app.get("/api/spare-production/boms", wrap((req, res) => {
     const partId = Number(req.query.part_material_id || 0);
