@@ -66,16 +66,18 @@ function registerCatalogRoutes({ app, helpers, ApiError }) {
     if (body.inventory_policy && !["stock", "project", "none"].includes(body.inventory_policy)) throw ApiError.validation("inventory_policy 非法");
     if (body.criticality && !["normal", "important", "critical"].includes(body.criticality)) throw ApiError.validation("criticality 非法");
     if (body.abc_class && !["A", "B", "C"].includes(body.abc_class)) throw ApiError.validation("abc_class 非法");
+    const sourceType = body.source_type || (body.is_self_made ? "self_made" : "purchased");
+    const selfMade = sourceType === "self_made" ? 1 : 0;
     const result = run(`INSERT INTO materials
       (material_code, material_name, material_type, spec, unit, is_key_component, is_self_made, default_supplier,
        safety_stock, reorder_point, estimated_unit_price, actual_unit_price, notes, category_id, lot_managed,
        source_type, inventory_policy, criticality, abc_class, default_location)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [code, name, body.material_type || "purchased", body.spec || null, body.unit || "件",
-       body.is_key_component ? 1 : 0, body.is_self_made ? 1 : 0, body.default_supplier || null,
+       body.is_key_component ? 1 : 0, selfMade, body.default_supplier || null,
        Number(body.safety_stock || 0), Number(body.reorder_point || 0), Number(body.estimated_unit_price || 0),
        Number(body.actual_unit_price || 0), body.notes || null, categoryId, body.lot_managed ? 1 : 0,
-       body.source_type || "purchased", body.inventory_policy || "stock",
+       sourceType, body.inventory_policy || "stock",
        body.criticality || "normal", body.abc_class || "C", body.default_location || null]);
     res.json({ ok: true, id: result.lastInsertRowid });
   }));
@@ -94,18 +96,20 @@ function registerCatalogRoutes({ app, helpers, ApiError }) {
     const code = body.material_code === undefined ? current.material_code : String(body.material_code || "").trim();
     if (!code) throw ApiError.validation("物料编码必填");
     if (code !== current.material_code && get("SELECT id FROM materials WHERE material_code = ? AND id <> ?", [code, id])) throw ApiError.conflict("物料编码已存在");
+    const sourceType = body.source_type ?? (body.is_self_made === undefined ? (current.source_type || "purchased") : (body.is_self_made ? "self_made" : "purchased"));
+    const selfMade = sourceType === "self_made" ? 1 : 0;
     run(`UPDATE materials SET material_code=?, material_name=?, material_type=?, spec=?, unit=?, is_key_component=?,
            is_self_made=?, default_supplier=?, safety_stock=?, reorder_point=?, estimated_unit_price=?, actual_unit_price=?,
            notes=?, category_id=?, lot_managed=?, source_type=?, inventory_policy=?, criticality=?, abc_class=?, default_location=?
            WHERE id=?`,
       [code, body.material_name ?? current.material_name, body.material_type ?? current.material_type,
        body.spec === undefined ? current.spec : (body.spec || null), body.unit ?? current.unit,
-       body.is_key_component ? 1 : 0, body.is_self_made ? 1 : 0,
+       body.is_key_component ? 1 : 0, selfMade,
        body.default_supplier === undefined ? current.default_supplier : (body.default_supplier || null),
        Number(body.safety_stock ?? current.safety_stock ?? 0), Number(body.reorder_point ?? current.reorder_point ?? 0),
        Number(body.estimated_unit_price ?? current.estimated_unit_price ?? 0), Number(body.actual_unit_price ?? current.actual_unit_price ?? 0),
        body.notes === undefined ? current.notes : (body.notes || null), categoryId, body.lot_managed ? 1 : 0,
-       body.source_type ?? current.source_type ?? "purchased", body.inventory_policy ?? current.inventory_policy ?? "stock",
+       sourceType, body.inventory_policy ?? current.inventory_policy ?? "stock",
        body.criticality ?? current.criticality ?? "normal", body.abc_class ?? current.abc_class ?? "C",
        body.default_location === undefined ? current.default_location : (body.default_location || null), id]);
     res.json({ ok: true });

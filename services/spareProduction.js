@@ -140,8 +140,8 @@ function register(app, db) {
     const name = String(body.material_name || "").trim();
     if (!code || !name) throw ApiError.validation("material_code/material_name 必填");
     if (get("SELECT id FROM materials WHERE material_code=?", [code])) throw ApiError.conflict("物料编码已存在");
-    const result = run(`INSERT INTO materials (material_code, material_name, material_type, spec, unit, is_self_made, safety_stock, reorder_point, estimated_unit_price, notes, lot_managed)
-      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+    const result = run(`INSERT INTO materials (material_code, material_name, material_type, spec, unit, is_self_made, source_type, safety_stock, reorder_point, estimated_unit_price, notes, lot_managed)
+      VALUES (?, ?, ?, ?, ?, 1, 'self_made', ?, ?, ?, ?, ?)`,
       [code, name, body.material_type || "bought_part", body.spec || null, body.unit || "件",
         Number(body.safety_stock || 0), Number(body.reorder_point || 0), Number(body.estimated_unit_price || 0), body.notes || null, body.lot_managed ? 1 : 0]);
     res.json({ ok: true, id: result.lastInsertRowid });

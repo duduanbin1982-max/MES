@@ -106,7 +106,7 @@ function normalizeMaterial(row) {
     spec: String(row.spec || "").trim() || null,
     unit: String(row.unit || "件").trim(),
     is_key_component: parseBool(row.is_key_component),
-    is_self_made: parseBool(row.is_self_made),
+    is_self_made: 0,
     default_supplier: String(row.default_supplier || "").trim() || null,
     // 2026-11-07 审计修复: 这 4 列是 NOT NULL DEFAULT 0, 传 null 会触发约束 500;
     // 未填时落 0, 非法数字由 validateMaterial 用 _raw 单独报错。
@@ -115,7 +115,7 @@ function normalizeMaterial(row) {
     estimated_unit_price: parseNumber(row.estimated_unit_price) ?? 0,
     actual_unit_price: parseNumber(row.actual_unit_price) ?? 0,
     category_code: String(row.category_code || "").trim(),
-    source_type: String(row.source_type || "purchased").trim(),
+    source_type: String(row.source_type || (parseBool(row.is_self_made) ? "self_made" : "purchased")).trim(),
     inventory_policy: String(row.inventory_policy || "stock").trim(),
     criticality: String(row.criticality || "normal").trim(),
     abc_class: String(row.abc_class || "C").trim().toUpperCase(),
@@ -135,6 +135,7 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
     if (!material.material_name) errors.push("物料名称必填");
     if (!material.unit) errors.push("单位必填");
     if (!["purchased", "self_made", "outsourced"].includes(material.source_type)) errors.push("来源非法: " + material.source_type);
+    material.is_self_made = material.source_type === "self_made" ? 1 : 0;
     if (!["stock", "project", "none"].includes(material.inventory_policy)) errors.push("库存策略非法: " + material.inventory_policy);
     if (!["normal", "important", "critical"].includes(material.criticality)) errors.push("关键性非法: " + material.criticality);
     if (!["A", "B", "C"].includes(material.abc_class)) errors.push("ABC分类非法: " + material.abc_class);
