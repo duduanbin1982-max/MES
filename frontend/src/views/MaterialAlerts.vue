@@ -1,9 +1,9 @@
 <template>
   <div class="page">
     <PageToolbar
-      title="物料预警 + MRP + 齐套分析"
-      subtitle="围绕装备实例统一查看长交期预警、齐套状态、MRP 与短缺趋势。"
-      aria-label="物料预警工具栏"
+      title="项目物料预警 + MRP + 齐套分析"
+      subtitle="按装备/项目查看关键件长交期、齐套状态、MRP 与缺料风险。"
+      aria-label="项目物料预警工具栏"
     >
       <template #icon>
         <el-icon><Warning /></el-icon>
@@ -14,6 +14,7 @@
           <el-option v-for="i in instances" :key="i.id" :label="i.instance_code + ' | ' + (i.instance_name || '')" :value="i.id" />
         </el-select>
         <el-button :icon="Refresh" :loading="loading" @click="loadAlerts">刷新</el-button>
+        <el-button @click="router.push('/materials?tab=alerts')">常备库存预警</el-button>
         <el-tag v-if="autoRefresh" type="success" size="small" class="auto-refresh-tag">自动刷新 60s</el-tag>
         </div>
       </template>
@@ -269,7 +270,9 @@ import { Refresh, Warning } from '@element-plus/icons-vue'
 import PageState from '../components/PageState.vue'
 import PageToolbar from '../components/PageToolbar.vue'
 import { useMaterialAlertsPage } from '../composables/useMaterialAlertsPage'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const {
   tab,
   instances,
