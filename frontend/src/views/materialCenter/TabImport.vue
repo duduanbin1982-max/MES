@@ -41,7 +41,7 @@
       <el-table-column prop="row" label="行号" width="70" />
       <el-table-column label="编码" width="140"><template #default="{ row }">{{ row.material.material_code }}</template></el-table-column>
       <el-table-column label="名称" min-width="180"><template #default="{ row }">{{ row.material.material_name }}</template></el-table-column>
-      <el-table-column label="类型" width="110"><template #default="{ row }">{{ row.material.material_type }}</template></el-table-column>
+      <el-table-column label="类型" width="110"><template #default="{ row }">{{ materialTypeLabel(row.material.material_type) }}</template></el-table-column>
       <el-table-column label="分类" width="110"><template #default="{ row }">{{ row.material.category_code || '未分类' }}</template></el-table-column>
       <el-table-column label="来源" width="80"><template #default="{ row }">{{ row.material.source_type }}</template></el-table-column>
       <el-table-column label="库存策略" width="100"><template #default="{ row }">{{ row.material.inventory_policy }}</template></el-table-column>
@@ -87,6 +87,7 @@
 import { reactive, ref, onMounted } from 'vue'
 import { ElMessage, type UploadFile } from 'element-plus'
 import api from '../../api'
+import { materialTypeLabel } from '../../domain/materialTypes'
 
 defineProps<{ tab: string }>()
 

@@ -27,7 +27,7 @@
           <span v-else class="mat-muted">未分类</span>
         </template>
       </el-table-column>
-      <el-table-column prop="material_type" label="类型" width="100" />
+      <el-table-column label="类型" width="100"><template #default="{ row }">{{ materialTypeLabel(row.material_type) }}</template></el-table-column>
       <el-table-column label="来源" width="80"><template #default="{ row }">{{ sourceLabel(row.source_type) }}</template></el-table-column>
       <el-table-column label="库存策略" width="100"><template #default="{ row }">{{ policyLabel(row.inventory_policy) }}</template></el-table-column>
       <el-table-column label="关键性" width="80"><template #default="{ row }">{{ criticalityLabel(row.criticality) }}</template></el-table-column>
@@ -58,7 +58,7 @@
           <el-col :span="12"><el-form-item label="物料编码" required><el-input v-model="matForm.material_code" :disabled="!!editingId" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="物料名称" required><el-input v-model="matForm.material_name" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="分类"><el-tree-select v-model="matForm.category_id" :data="categoryTree" :props="{ label: 'category_name', value: 'id', children: 'children' }" check-strictly clearable style="width:100%" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="类型"><el-input v-model="matForm.material_type" placeholder="steel / electrical / purchased..." /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="类型"><el-select v-model="matForm.material_type" filterable allow-create style="width:100%"><el-option v-for="item in MATERIAL_TYPE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="来源"><el-select v-model="matForm.source_type" style="width:100%"><el-option label="外购" value="purchased" /><el-option label="自制" value="self_made" /><el-option label="委外" value="outsourced" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="库存策略"><el-select v-model="matForm.inventory_policy" style="width:100%"><el-option label="常备" value="stock" /><el-option label="项目直供" value="project" /><el-option label="不库存" value="none" /></el-select></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="关键性"><el-select v-model="matForm.criticality" style="width:100%"><el-option label="普通" value="normal" /><el-option label="重要" value="important" /><el-option label="关键" value="critical" /></el-select></el-form-item></el-col>
@@ -83,6 +83,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '../../api'
+import { MATERIAL_TYPE_OPTIONS, materialTypeLabel } from '../../domain/materialTypes'
 
 defineProps<{ tab: string }>()
 const mats = ref<any[]>([])
