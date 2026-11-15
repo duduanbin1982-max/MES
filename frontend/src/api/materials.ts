@@ -2,7 +2,9 @@ import { api } from './client'
 
 export function createMaterialsApi() {
   return {
-    materials: () => api.get('/materials'),
+    materials: (params?: any) => api.get('/materials', { params }),
+    materialCategories: () => api.get('/material-categories'),
+    updateMaterialCategory: (id: number, category_id: number | null) => api.put(`/materials/${id}/category`, { category_id }),
     inventory: () => api.get('/inventory'),
     inventoryAlerts: () => api.get('/inventory/alerts'),
     materialLots: () => api.get('/material_lots'),
