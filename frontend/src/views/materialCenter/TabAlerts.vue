@@ -6,9 +6,14 @@
         <el-tag type="warning" size="small" style="margin-left:6px">P2 关键或A类</el-tag>
         <el-tag type="info" size="small" style="margin-left:6px">P3 其他</el-tag>
       </div>
-      <el-button size="small" @click="load">刷新</el-button>
+      <div class="alerts-actions">
+        <el-button size="small" :disabled="!selected.length" type="primary" @click="generatePR(selected)">生成采购申请（选中 {{ selected.length }}）</el-button>
+        <el-button size="small" type="success" :disabled="!items.length" @click="generatePR(items)">全部生成采购申请</el-button>
+        <el-button size="small" @click="load">刷新</el-button>
+      </div>
     </div>
-    <el-table :data="items" stripe v-loading="loading" size="small" max-height="560">
+    <el-table :data="items" stripe v-loading="loading" size="small" max-height="560" @selection-change="onSelectionChange">
+      <el-table-column type="selection" width="44" />
       <el-table-column label="优先级" width="90">
         <template #default="{ row }"><el-tag :type="priorityTag(row.priority)" size="small">{{ row.priority }}</el-tag></template>
       </el-table-column>
@@ -18,32 +23,76 @@
       <el-table-column prop="abc_class" label="ABC" width="60" />
       <el-table-column prop="available_qty" label="当前可用" width="90" align="right" />
       <el-table-column prop="threshold" label="补货线" width="90" align="right" />
-      <el-table-column prop="shortage_qty" label="缺口" width="90" align="right" />
+      <el-table-column label="建议补货" width="90" align="right"><template #default="{ row }">{{ row.suggested_qty || row.shortage_qty }}</template></el-table-column>
+      <el-table-column prop="suggested_date" label="建议到货" width="110" />
       <el-table-column label="预警级别" width="90">
         <template #default="{ row }"><el-tag :type="row.severity === 'critical' ? 'danger' : row.severity === 'high' ? 'warning' : 'info'" size="small">{{ severityLabel(row.severity) }}</el-tag></template>
       </el-table-column>
     </el-table>
     <div v-if="!loading && !items.length" class="alerts-empty">暂无低于补货线的常备物料</div>
+
+    <el-divider content-position="left">最近采购申请</el-divider>
+    <el-table :data="requisitions" size="small" border>
+      <el-table-column prop="pr_no" label="采购申请号" width="180" />
+      <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag size="small">{{ row.status }}</el-tag></template></el-table-column>
+      <el-table-column label="明细" min-width="320">
+        <template #default="{ row }">
+          <span v-for="item in row.items" :key="item.id" class="pr-line">{{ item.material_code }} × {{ item.quantity }}{{ item.unit }}（{{ item.priority }}）</span>
+        </template>
+      </el-table-column>
+      <el-table-column prop="created_at" label="创建时间" width="170" />
+    </el-table>
+    <div v-if="!requisitions.length" class="alerts-empty">还没有生成采购申请</div>
   </el-card>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import api from '../../api'
 
 const items = ref<any[]>([])
+const requisitions = ref<any[]>([])
+const selected = ref<any[]>([])
 const loading = ref(false)
 const priorityTag = (value: string) => value === 'P1' ? 'danger' : value === 'P2' ? 'warning' : 'info'
 const criticalityLabel = (value: string) => ({ normal: '普通', important: '重要', critical: '关键' } as any)[value] || value || '-'
 const severityLabel = (value: string) => ({ critical: '紧急', high: '高', warning: '警告' } as any)[value] || value || '-'
+const onSelectionChange = (rows: any[]) => { selected.value = rows }
 const load = async () => {
   loading.value = true
-  try { const result: any = await api.get('/inventory/alerts'); items.value = result.items || [] } catch { items.value = [] } finally { loading.value = false }
+  try {
+    const result: any = await api.get('/inventory/alerts')
+    items.value = result.items || []
+    const prs: any = await api.get('/inventory/purchase-requisitions', { params: { limit: 10 } })
+    requisitions.value = Array.isArray(prs) ? prs : (prs.items || [])
+  } catch { items.value = []; requisitions.value = [] } finally { loading.value = false }
+}
+const generatePR = async (rows: any[]) => {
+  if (!rows.length) return ElMessage.warning('请选择需要补货的物料')
+  const payload = {
+    items: rows.map((row) => ({
+      material_id: row.id,
+      quantity: row.suggested_qty || row.shortage_qty,
+      unit: row.unit,
+      priority: row.priority,
+      suggested_date: row.suggested_date,
+    })),
+    notes: '低库存自动补货建议生成',
+  }
+  try {
+    const result: any = await api.post('/inventory/purchase-requisitions', payload)
+    ElMessage.success(`已生成采购申请 ${result.pr_no}，共 ${result.item_count} 项`)
+    selected.value = []
+    await load()
+  } catch (error: any) { ElMessage.error(error?.response?.data?.message || '生成采购申请失败') }
 }
 onMounted(load)
 </script>
 
 <style scoped>
 .alerts-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.alerts-actions { display: flex; gap: 8px; align-items: center; }
 .alerts-empty { padding: 24px; text-align: center; color: var(--el-text-color-secondary); }
+.pr-line { display: inline-block; margin-right: 14px; }
 </style>
