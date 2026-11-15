@@ -123,8 +123,8 @@
     },
     "materialService": {
       "schemaVersion": 1,
-      "ddlFingerprint": null,
-      "ddlStatements": 0
+      "ddlFingerprint": "17bec8e8aa8e3658cf795a91871a493639c26d572e00bebb927252e037ce991b",
+      "ddlStatements": 14
     },
     "mobileService": {
       "schemaVersion": 1,
