@@ -155,7 +155,7 @@ const generatePR = async (rows: any[]) => {
 const loadSuppliers = async () => {
   try {
     const result: any = await api.get('/suppliers')
-    suppliers.value = Array.isArray(result) ? result : (result.items || [])
+    suppliers.value = (Array.isArray(result) ? result : (result.items || [])).filter((s: any) => Number(s.is_active) !== 0)
   } catch { suppliers.value = [] }
 }
 onMounted(async () => { await Promise.all([load(), loadSuppliers()]) })
