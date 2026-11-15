@@ -21,17 +21,23 @@ function makeDbHelpers(db) {
  */
 function queryLowStock(db, { includeSpec = false } = {}) {
   const all = (sql, p = []) => db.prepare(sql).all(p);
+  const columns = all("PRAGMA table_info(materials)").map((column) => column.name);
+  const hasPolicy = columns.includes("inventory_policy");
+  const hasCriticality = columns.includes("criticality");
+  const hasAbc = columns.includes("abc_class");
+  const extraFields = (hasCriticality ? ", m.criticality" : "") + (hasAbc ? ", m.abc_class" : "");
   const fields = includeSpec
-    ? `m.id, m.material_code, m.material_name, m.spec, m.unit, m.safety_stock, m.reorder_point`
-    : `m.id, m.material_code, m.material_name, m.safety_stock, m.reorder_point`;
+    ? `m.id, m.material_code, m.material_name, m.spec, m.unit, m.safety_stock, m.reorder_point${extraFields}`
+    : `m.id, m.material_code, m.material_name, m.safety_stock, m.reorder_point${extraFields}`;
   const countField = includeSpec ? ', COUNT(i.id) as lot_count' : '';
+  const policyWhere = hasPolicy ? " AND m.inventory_policy = 'stock'" : "";
   const rows = all(
     `SELECT ${fields},
             COALESCE(SUM(CASE WHEN i.status='available' THEN i.quantity ELSE 0 END), 0) as available_qty${countField}
      FROM materials m
      LEFT JOIN material_lots ml ON ml.material_id = m.id
      LEFT JOIN inventory i ON i.material_lot_id = ml.id
-     WHERE COALESCE(m.safety_stock, 0) > 0 OR COALESCE(m.reorder_point, 0) > 0
+     WHERE (COALESCE(m.safety_stock, 0) > 0 OR COALESCE(m.reorder_point, 0) > 0)${policyWhere}
      GROUP BY m.id`
   );
   const toNumber = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);

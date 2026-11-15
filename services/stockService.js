@@ -42,8 +42,9 @@ function receiveStock(db, options = {}) {
   if (!materialId || !(quantity > 0)) throw ApiError.validation("materialId/quantity 必须有效");
   const material = get("SELECT * FROM materials WHERE id = ?", [materialId]);
   if (!material) throw ApiError.notFound("物料不存在");
+  if (material.inventory_policy === "none") throw ApiError.validation(`物料 ${material.material_code} 库存策略为不库存，禁止入库`);
   const unit = options.unit || material.unit || "件";
-  const location = options.location || "备件成品库";
+  const location = options.location || material.default_location || "主仓库";
   const inputLotNo = String(options.lotNo || "").trim();
   if (Number(material.lot_managed) === 1 && !inputLotNo) {
     throw ApiError.validation(`物料 ${material.material_code} 是批次管理件，必须填写批次号`);
