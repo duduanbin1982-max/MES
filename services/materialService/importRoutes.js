@@ -199,21 +199,33 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
     const results = rows.map((row, index) => validateMaterial(normalizeMaterial(row), seenCodes, index + 2));
     const invalid = results.filter((item) => !item.valid);
     if (invalid.length) throw ApiError.validation("存在校验错误，禁止导入", invalid.slice(0, 20));
+    const hasCategoryColumn = all("PRAGMA table_info(materials)").some((column) => column.name === "category_id");
     const transaction = db.transaction(() => {
       const created = [];
       for (const item of results) {
         const material = item.material;
-        const result = run(`
-          INSERT INTO materials (
-            material_code, material_name, material_type, spec, unit, is_key_component, is_self_made,
-            default_supplier, notes, safety_stock, reorder_point, estimated_unit_price, actual_unit_price, category_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-          material.material_code, material.material_name, material.material_type, material.spec, material.unit,
-          material.is_key_component, material.is_self_made, material.default_supplier, material.notes,
-          material.safety_stock, material.reorder_point, material.estimated_unit_price, material.actual_unit_price,
-          material.category_id,
-        ]);
+        const result = hasCategoryColumn
+          ? run(`
+              INSERT INTO materials (
+                material_code, material_name, material_type, spec, unit, is_key_component, is_self_made,
+                default_supplier, notes, safety_stock, reorder_point, estimated_unit_price, actual_unit_price, category_id
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              material.material_code, material.material_name, material.material_type, material.spec, material.unit,
+              material.is_key_component, material.is_self_made, material.default_supplier, material.notes,
+              material.safety_stock, material.reorder_point, material.estimated_unit_price, material.actual_unit_price,
+              material.category_id,
+            ])
+          : run(`
+              INSERT INTO materials (
+                material_code, material_name, material_type, spec, unit, is_key_component, is_self_made,
+                default_supplier, notes, safety_stock, reorder_point, estimated_unit_price, actual_unit_price
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              material.material_code, material.material_name, material.material_type, material.spec, material.unit,
+              material.is_key_component, material.is_self_made, material.default_supplier, material.notes,
+              material.safety_stock, material.reorder_point, material.estimated_unit_price, material.actual_unit_price,
+            ]);
         created.push({ id: result.lastInsertRowid, material_code: material.material_code });
       }
       return created;
