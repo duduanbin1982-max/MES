@@ -62,7 +62,7 @@
           <el-select v-model="selectedPartId" filterable placeholder="选择自产备件" style="width: 360px" @change="loadRoute">
             <el-option v-for="part in parts" :key="part.id" :label="part.material_code + ' · ' + part.material_name" :value="part.id" />
           </el-select>
-          <el-button type="primary" :disabled="!selectedPartId" @click="routeDlg = true">+ 添加工序</el-button>
+          <el-button type="primary" :disabled="!selectedPartId" @click="openRouteDialog">+ 添加工序</el-button>
         </div>
         <el-table :data="routeSteps" border size="small" empty-text="该备件还没有工艺模板">
           <el-table-column prop="sequence" label="顺序" width="80" />
@@ -277,8 +277,19 @@ async function removeBom(row: any) {
   try { await ElMessageBox.confirm('删除该物料行？', '确认'); await Api.delete('/spare-production/boms/' + row.id); await loadBom() }
   catch (error: any) { if (error !== 'cancel' && error !== 'close') ElMessage.error('删除失败') }
 }
+function openRouteDialog() {
+  const nextSequence = routeSteps.value.length ? Math.max(...routeSteps.value.map((row: any) => Number(row.sequence) || 0)) + 10 : 10
+  Object.assign(routeForm, { sequence: nextSequence, operation_name: '', workstation_id: null, standard_hours: 1, qc_required: false })
+  routeDlg.value = true
+}
 async function saveRoute() {
   if (!selectedPartId.value || !routeForm.operation_name) return ElMessage.warning('请填写工序名称')
+  const duplicate = routeSteps.value.find((row: any) => Number(row.sequence) === Number(routeForm.sequence))
+  if (duplicate) {
+    try {
+      await ElMessageBox.confirm(`顺序 ${routeForm.sequence} 已存在（${duplicate.operation_name}），继续会覆盖它。确认覆盖？`, '工序顺序重复', { type: 'warning' })
+    } catch { return }
+  }
   saving.value = true
   try {
     await Api.post('/spare-production/routes', { part_material_id: selectedPartId.value, ...routeForm })
