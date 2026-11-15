@@ -51,6 +51,7 @@ const filtered = computed(() => {
   if (!filter.value) return props.inv
   const f = filter.value.toLowerCase()
   return props.inv.filter((i: any) =>
+    (i.material_code || '').toLowerCase().includes(f) ||
     (i.material_name || '').toLowerCase().includes(f) ||
     (i.lot_no || '').toLowerCase().includes(f) ||
     (i.location || '').toLowerCase().includes(f)
