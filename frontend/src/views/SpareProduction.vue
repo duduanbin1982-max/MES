@@ -95,6 +95,7 @@
         <el-form-item label="单位"><el-input v-model="partForm.unit" placeholder="件" /></el-form-item>
         <el-form-item label="安全库存"><el-input-number v-model="partForm.safety_stock" :min="0" style="width: 100%" /></el-form-item>
         <el-form-item label="再订货点"><el-input-number v-model="partForm.reorder_point" :min="0" style="width: 100%" /></el-form-item>
+        <el-form-item label="批次管理"><el-switch v-model="partForm.lot_managed" /><span class="field-hint">开启后入库必须填写批次号</span></el-form-item>
       </el-form>
       <template #footer><el-button @click="partDlg = false">取消</el-button><el-button type="primary" :loading="saving" @click="createPart">保存</el-button></template>
     </el-dialog>
@@ -195,7 +196,7 @@ const bomLines = ref<any[]>([])
 const routeSteps = ref<any[]>([])
 const receipts = ref<any[]>([])
 const partDlg = ref(false)
-const partForm = reactive({ material_code: '', material_name: '', spec: '', unit: '件', safety_stock: 0, reorder_point: 0 })
+const partForm = reactive({ material_code: '', material_name: '', spec: '', unit: '件', safety_stock: 0, reorder_point: 0, lot_managed: false })
 const orderDlg = ref(false)
 const bomDlg = ref(false)
 const routeDlg = ref(false)
@@ -245,7 +246,7 @@ async function createPart() {
     await Api.post('/spare-production/parts', { ...partForm, material_type: 'bought_part' })
     ElMessage.success('自产备件已创建')
     partDlg.value = false
-    Object.assign(partForm, { material_code: '', material_name: '', spec: '', unit: '件', safety_stock: 0, reorder_point: 0 })
+    Object.assign(partForm, { material_code: '', material_name: '', spec: '', unit: '件', safety_stock: 0, reorder_point: 0, lot_managed: false })
     parts.value = await Api.get('/spare-production/parts')
   } catch (error: any) { ElMessage.error(error?.response?.data?.message || '创建失败') }
   finally { saving.value = false }
@@ -347,6 +348,7 @@ onMounted(loadAll)
 .kpi-value.warning { color: var(--el-color-warning); }
 .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 .section-title { margin: 16px 0 8px; font-weight: 600; }
+.field-hint { color: var(--el-text-color-secondary); font-size: 12px; margin-left: 8px; }
 .qc-actions { display: flex; gap: 10px; margin-top: 16px; }
 .receipt-box { margin-top: 12px; padding: 10px; border-radius: 8px; background: var(--el-color-success-light-9); color: var(--el-color-success); }
 </style>

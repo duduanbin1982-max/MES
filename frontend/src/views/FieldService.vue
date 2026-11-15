@@ -139,7 +139,7 @@
     </el-dialog>
 
     <el-dialog v-model="spareDlg.visible" :title="spareDlg.type === 'in' ? '备件入库' : '备件出库'" width="450px">
-      <el-form label-width="90px"><el-form-item label="备件" required><el-select v-model="spareForm.spare_part_id" filterable style="width:100%"><el-option v-for="s in spares" :key="s.id" :label="s.part_name + ' (' + s.part_code + ', 库存:' + s.current_stock + ')'" :value="s.id" /></el-select></el-form-item><el-form-item label="数量" required><el-input-number v-model="spareForm.quantity" :min="1" style="width:100%" /></el-form-item><el-form-item label="备注"><el-input v-model="spareForm.notes" type="textarea" :rows="2" /></el-form-item></el-form>
+      <el-form label-width="90px"><el-form-item label="备件" required><el-select v-model="spareForm.spare_part_id" filterable style="width:100%"><el-option v-for="s in spares" :key="s.id" :label="s.part_name + ' (' + s.part_code + ', 库存:' + s.current_stock + ')'" :value="s.id" /></el-select></el-form-item><el-form-item label="数量" required><el-input-number v-model="spareForm.quantity" :min="1" style="width:100%" /></el-form-item><el-form-item v-if="spareDlg.type === 'in'" label="批次号"><el-input v-model="spareForm.lot_no" placeholder="批次管理件必填；非批次管理留空自动归入默认批次" /></el-form-item><el-form-item label="备注"><el-input v-model="spareForm.notes" type="textarea" :rows="2" /></el-form-item></el-form>
       <template #footer><el-button @click="spareDlg.visible = false">取消</el-button><el-button type="primary" :loading="saving" @click="submitSpareAdjust">确认</el-button></template>
     </el-dialog>
   </div>

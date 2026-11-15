@@ -178,15 +178,15 @@ export function useFieldServicePage() {
   const spares = ref<any[]>([])
   const spareLoading = ref(false)
   const spareDlg = reactive({ visible: false, type: 'in' as 'in' | 'out' })
-  const spareForm = reactive({ spare_part_id: null as any, quantity: 1, notes: '' })
+  const spareForm = reactive({ spare_part_id: null as any, quantity: 1, lot_no: '', notes: '' })
   const lowStockCount = computed(() => spares.value.filter((s: any) => Number(s.current_stock) <= Number(s.min_stock)).length)
   const loadSpares = async () => { spareLoading.value = true; try { spares.value = normalizeEquip(await Api.get('/field-service/spare-parts')) } catch (_) { spares.value = [] } finally { spareLoading.value = false } }
-  const openSpareAdjustDialog = (type: 'in' | 'out') => { spareDlg.type = type; Object.assign(spareForm, { spare_part_id: null, quantity: 1, notes: '' }); spareDlg.visible = true }
+  const openSpareAdjustDialog = (type: 'in' | 'out') => { spareDlg.type = type; Object.assign(spareForm, { spare_part_id: null, quantity: 1, lot_no: '', notes: '' }); spareDlg.visible = true }
   const submitSpareAdjust = async () => {
     if (!spareForm.spare_part_id) { ElMessage.warning('请选择备件'); return }
     if (spareForm.quantity < 1) { ElMessage.warning('数量必须大于0'); return }
     saving.value = true
-    try { await Api.post('/field-service/spare-parts/adjust', { spare_part_id: spareForm.spare_part_id, quantity: spareForm.quantity, type: spareDlg.type, notes: spareForm.notes || undefined }); ElMessage.success(spareDlg.type === 'in' ? '入库成功' : '出库成功'); spareDlg.visible = false; loadSpares() }
+    try { await Api.post('/field-service/spare-parts/adjust', { spare_part_id: spareForm.spare_part_id, quantity: spareForm.quantity, type: spareDlg.type, lot_no: spareForm.lot_no || undefined, notes: spareForm.notes || undefined }); ElMessage.success(spareDlg.type === 'in' ? '入库成功' : '出库成功'); spareDlg.visible = false; loadSpares() }
     catch (error: any) { ElMessage.error('操作失败：' + errText(error)) } finally { saving.value = false }
   }
 

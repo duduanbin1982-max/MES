@@ -44,18 +44,33 @@ function receiveStock(db, options = {}) {
   if (!material) throw ApiError.notFound("物料不存在");
   const unit = options.unit || material.unit || "件";
   const location = options.location || "备件成品库";
-  const lotNo = String(options.lotNo || `STK-IN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 64);
+  const inputLotNo = String(options.lotNo || "").trim();
+  if (Number(material.lot_managed) === 1 && !inputLotNo) {
+    throw ApiError.validation(`物料 ${material.material_code} 是批次管理件，必须填写批次号`);
+  }
+  const effectiveLotNo = String(inputLotNo || `DEFAULT-${material.material_code}`).slice(0, 64);
   const tx = db.transaction(() => {
-    const lot = run("INSERT INTO material_lots (material_id, lot_no, received_date, quantity, unit, quality_status, notes) VALUES (?, ?, datetime('now'), ?, ?, 'passed', ?)",
-      [materialId, lotNo, quantity, unit, options.notes || "统一库存入库"]);
-    run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')",
-      [lot.lastInsertRowid, location, quantity, unit]);
+    let lot = get("SELECT * FROM material_lots WHERE material_id = ? AND lot_no = ?", [materialId, effectiveLotNo]);
+    const reused = Boolean(lot);
+    if (!lot) {
+      const created = run("INSERT INTO material_lots (material_id, lot_no, received_date, quantity, unit, quality_status, notes) VALUES (?, ?, datetime('now'), ?, ?, 'passed', ?)",
+        [materialId, effectiveLotNo, quantity, unit, options.notes || "统一库存入库"]);
+      lot = { id: Number(created.lastInsertRowid), lot_no: effectiveLotNo };
+    } else {
+      run("UPDATE material_lots SET quantity = quantity + ? WHERE id = ?", [quantity, lot.id]);
+    }
+    const inventory = get("SELECT id FROM inventory WHERE material_lot_id = ? AND location = ?", [lot.id, location]);
+    if (inventory) {
+      run("UPDATE inventory SET quantity = quantity + ?, last_updated = datetime('now') WHERE id = ?", [quantity, inventory.id]);
+    } else {
+      run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')", [lot.id, location, quantity, unit]);
+    }
     const movement = run(`INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, to_location, operator_id, notes)
       VALUES (?, 'receive', ?, ?, ?, ?, ?)`,
-      [lot.lastInsertRowid, quantity, unit, location, options.operatorId || null, options.notes || options.sourceType || "入库"]);
+      [lot.id, quantity, unit, location, options.operatorId || null, options.notes || options.sourceType || "入库"]);
     let spare = null;
     if (options.syncSpare !== false) spare = syncCommonSpare(db, materialId, quantity);
-    return { lot_id: Number(lot.lastInsertRowid), lot_no: lotNo, material_id: materialId, quantity, unit, location, movement_id: Number(movement.lastInsertRowid), spare };
+    return { lot_id: Number(lot.id), lot_no: lot.lot_no, material_id: materialId, quantity, unit, location, reused, movement_id: Number(movement.lastInsertRowid), spare };
   });
   return tx();
 }

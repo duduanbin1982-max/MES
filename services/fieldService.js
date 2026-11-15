@@ -6,6 +6,7 @@ const { ApiError } = require("../app/errors");
 const { wrap } = require("../middleware/asyncHandler");
 const { ensureFieldServiceSchema } = require("./fieldServiceSchema");
 const logger = require("../app/logger").createLogger("fieldService");
+const stockService = require("./stockService");
 
 function register(app, db) {
   const all = (sql, params = []) => db.prepare(sql).all(...params);
@@ -32,42 +33,31 @@ function register(app, db) {
     return get("SELECT * FROM materials WHERE material_code = ?", [code]) || null;
   }
 
-  function receiveMaterialForSpare(part, quantity, location, notes) {
+  function receiveMaterialForSpare(part, quantity, location, notes, lotNo) {
     const material = materialForSpare(part);
     if (!material) return null;
-    const lotNo = `SPARE-IN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const unit = material.unit || part.unit || "件";
-    const loc = location || part.location || "备件库";
-    const lot = run("INSERT INTO material_lots (material_id, lot_no, received_date, quantity, unit, quality_status, notes) VALUES (?, ?, datetime('now'), ?, ?, 'passed', ?)",
-      [material.id, lotNo, Number(quantity), unit, notes || "备件库入库同步"]);
-    run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')",
-      [lot.lastInsertRowid, loc, Number(quantity), unit]);
-    run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, to_location, notes) VALUES (?, 'spare_in', ?, ?, ?, ?)",
-      [lot.lastInsertRowid, Number(quantity), unit, loc, notes || "备件库入库同步"]);
-    return { material_id: material.id, lot_id: lot.lastInsertRowid, lot_no: lotNo, quantity: Number(quantity) };
+    return stockService.receiveStock(db, {
+      materialId: material.id,
+      quantity: Number(quantity),
+      location: location || part.location || "备件库",
+      lotNo: lotNo || undefined,
+      notes: notes || "备件库入库同步（统一库存服务）",
+      sourceType: "tpm_spare_in",
+      syncSpare: false,
+    });
   }
 
   function issueMaterialForSpare(part, quantity, notes) {
     const material = materialForSpare(part);
     if (!material) return null;
-    const need = Number(quantity);
-    const lots = all(`SELECT i.id AS inventory_id, i.location, i.quantity, ml.id AS lot_id, ml.lot_no, ml.unit
-                        FROM inventory i JOIN material_lots ml ON ml.id=i.material_lot_id
-                       WHERE ml.material_id = ? AND i.quantity > 0 ORDER BY ml.id, i.id`, [material.id]);
-    const available = lots.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-    if (available < need) throw ApiError.validation(`物料库存不足：${material.material_code} 需要 ${need}，可用 ${available}`);
-    let remaining = need;
-    for (const lot of lots) {
-      if (remaining <= 0) break;
-      const take = Math.min(remaining, Number(lot.quantity));
-      run("UPDATE inventory SET quantity=quantity-?, last_updated=datetime('now') WHERE id=?", [take, lot.inventory_id]);
-      run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, notes) VALUES (?, 'spare_out', ?, ?, ?, ?)",
-        [lot.lot_id, take, lot.unit || material.unit || "件", lot.location || null, notes || "备件库出库同步"]);
-      remaining -= take;
-    }
-    return { material_id: material.id, quantity: need };
+    return stockService.issueStock(db, {
+      materialId: material.id,
+      quantity: Number(quantity),
+      notes: notes || "备件库出库同步（统一库存服务）",
+      sourceType: "tpm_spare_out",
+      syncSpare: false,
+    });
   }
-
 
   const planSql = `
     SELECT p.*, e.code AS equipment_code, e.name AS equipment_name, e.status AS equipment_status,
@@ -290,7 +280,7 @@ function register(app, db) {
     const nextQty = Math.max(0, Number(part.quantity || 0) + direction * quantity);
     const tx = db.transaction(() => {
       if (direction < 0) issueMaterialForSpare(part, quantity, `备件库出库 ${part.part_code || part.id}`);
-      else receiveMaterialForSpare(part, quantity, part.location, `备件库入库 ${part.part_code || part.id}`);
+      else receiveMaterialForSpare(part, quantity, part.location, `备件库入库 ${part.part_code || part.id}`, body.lot_no);
       run("UPDATE equipment_spare_parts SET quantity = ?, updated_at = datetime('now') WHERE id = ?", [nextQty, body.spare_part_id]);
     });
     tx();
@@ -304,7 +294,7 @@ function register(app, db) {
     const delta = target - Number(part.quantity || 0);
     const tx = db.transaction(() => {
       if (delta < 0) issueMaterialForSpare(part, Math.abs(delta), `备件库盘点调整 ${part.part_code || part.id}`);
-      if (delta > 0) receiveMaterialForSpare(part, delta, part.location, `备件库盘点调整 ${part.part_code || part.id}`);
+      if (delta > 0) receiveMaterialForSpare(part, delta, part.location, `备件库盘点调整 ${part.part_code || part.id}`, req.body?.lot_no);
       run("UPDATE equipment_spare_parts SET quantity = ?, updated_at = datetime('now') WHERE id = ?", [target, part.id]);
     });
     tx();
