@@ -5,6 +5,7 @@ const { emit, Events } = require('../../../app/ws/EventBus');
 const { DEFAULT_ROLE_PERMISSIONS, hasPermission } = require('../../../app/permissions');
 const { makeDbHelpers } = require('../core');
 const { ApiError } = require("../../../app/errors");
+const stockService = require('../../stockService');
 
 
 module.exports = function createContext(app, db, deps) {
@@ -135,6 +136,12 @@ function requirePermission(...permCodes) {
       [material_lot_id, movement_type, absQty, unit || null, from_location || null, to_location || null, work_order_id || null, project_id || null, operator_id || null, notes || null]
     );
     _movementHandlers[movement_type]({ material_lot_id, from_location, to_location, absQty, unit });
+    try {
+      const delta = (movement_type === 'receive' || movement_type === 'return')
+        ? absQty
+        : (movement_type === 'issue' ? -absQty : 0);
+      if (delta) stockService.syncCommonSpare(db, lot.material_id, delta);
+    } catch (_error) { /* 备件投影同步失败不阻断物料流水 */ }
     return { id: r.lastInsertRowid };
   };
 

@@ -1,6 +1,7 @@
 "use strict";
 
 const { ApiError } = require("../../app/errors");
+const stockService = require("../stockService");
 const { allocateLots, remainingForMaterial } = require("./demand");
 const {
   DEFAULT_LOCATION,
@@ -57,6 +58,7 @@ function pickAllocation(db, workOrder, allocation, materialId, operatorId, fallb
      VALUES (?, 'issue', ?, ?, ?, ?, ?, ?)`,
     [lot.id, quantity, lot.unit || "件", location, workOrder.id, operatorId, "领料: WO-" + workOrder.wo_code],
   );
+  stockService.syncCommonSpare(db, materialId, -quantity);
 
   return {
     movement_id: Number(movement.lastInsertRowid),
@@ -182,6 +184,7 @@ function executeReturn(db, workOrderId, body, user) {
            VALUES (?, 'return', ?, ?, ?, ?, ?, ?)`,
           [lotId, quantity, lot.unit || "件", defaultLocation, workOrder.id, operatorId, (item.reason || reason || "退料") + " WO-" + workOrder.wo_code],
         );
+        if (lot.material_id) stockService.syncCommonSpare(db, lot.material_id, quantity);
 
         results.push({
           movement_id: Number(movement.lastInsertRowid),
