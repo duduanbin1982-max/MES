@@ -204,6 +204,16 @@ function register(app, db) {
 
   // ===== 备件 =====
   app.get("/api/field-service/spare-parts", wrap((req, res) => {
+    // 自产备件完工入库后，按物料编码补一条通用备件（equipment_id=NULL），避免物料库存与TPM备件库脱节。
+    try {
+      db.prepare(`INSERT INTO equipment_spare_parts
+          (equipment_id, part_code, part_name, part_type, quantity, min_stock, unit, location, supplier, unit_price, notes)
+        SELECT NULL, m.material_code, m.material_name, 'mechanical', SUM(r.quantity), COALESCE(m.safety_stock, 0), COALESCE(m.unit, '件'), '备件成品库', NULL, COALESCE(m.estimated_unit_price, 0), '自产备件完工入库自动同步'
+          FROM spare_receipts r JOIN materials m ON m.id = r.material_id
+         WHERE m.is_self_made = 1
+           AND NOT EXISTS (SELECT 1 FROM equipment_spare_parts s WHERE s.equipment_id IS NULL AND s.part_code = m.material_code)
+         GROUP BY m.id`).run();
+    } catch (_error) { /* 旧库无 receipt 表时忽略 */ }
     let sql = `SELECT s.*, s.quantity AS current_stock, e.code AS equipment_code, e.name AS equipment_name
                  FROM equipment_spare_parts s LEFT JOIN equipment e ON e.id = s.equipment_id WHERE 1=1`;
     const params = [];
