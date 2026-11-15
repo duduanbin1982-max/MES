@@ -25,6 +25,50 @@ function register(app, db) {
   } catch (_error) { /* 老库无 spare_parts 时忽略 */ }
   const today = () => new Date().toISOString().slice(0, 10);
 
+  function materialForSpare(part) {
+    if (!part || part.equipment_id != null) return null;
+    const code = String(part.part_code || "").trim();
+    if (!code) return null;
+    return get("SELECT * FROM materials WHERE material_code = ?", [code]) || null;
+  }
+
+  function receiveMaterialForSpare(part, quantity, location, notes) {
+    const material = materialForSpare(part);
+    if (!material) return null;
+    const lotNo = `SPARE-IN-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const unit = material.unit || part.unit || "件";
+    const loc = location || part.location || "备件库";
+    const lot = run("INSERT INTO material_lots (material_id, lot_no, received_date, quantity, unit, quality_status, notes) VALUES (?, ?, datetime('now'), ?, ?, 'passed', ?)",
+      [material.id, lotNo, Number(quantity), unit, notes || "备件库入库同步"]);
+    run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'available')",
+      [lot.lastInsertRowid, loc, Number(quantity), unit]);
+    run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, to_location, notes) VALUES (?, 'spare_in', ?, ?, ?, ?)",
+      [lot.lastInsertRowid, Number(quantity), unit, loc, notes || "备件库入库同步"]);
+    return { material_id: material.id, lot_id: lot.lastInsertRowid, lot_no: lotNo, quantity: Number(quantity) };
+  }
+
+  function issueMaterialForSpare(part, quantity, notes) {
+    const material = materialForSpare(part);
+    if (!material) return null;
+    const need = Number(quantity);
+    const lots = all(`SELECT i.id AS inventory_id, i.location, i.quantity, ml.id AS lot_id, ml.lot_no, ml.unit
+                        FROM inventory i JOIN material_lots ml ON ml.id=i.material_lot_id
+                       WHERE ml.material_id = ? AND i.quantity > 0 ORDER BY ml.id, i.id`, [material.id]);
+    const available = lots.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    if (available < need) throw ApiError.validation(`物料库存不足：${material.material_code} 需要 ${need}，可用 ${available}`);
+    let remaining = need;
+    for (const lot of lots) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, Number(lot.quantity));
+      run("UPDATE inventory SET quantity=quantity-?, last_updated=datetime('now') WHERE id=?", [take, lot.inventory_id]);
+      run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, from_location, notes) VALUES (?, 'spare_out', ?, ?, ?, ?)",
+        [lot.lot_id, take, lot.unit || material.unit || "件", lot.location || null, notes || "备件库出库同步"]);
+      remaining -= take;
+    }
+    return { material_id: material.id, quantity: need };
+  }
+
+
   const planSql = `
     SELECT p.*, e.code AS equipment_code, e.name AS equipment_name, e.status AS equipment_status,
            w.workshop, u.full_name AS assignee_name
@@ -244,14 +288,27 @@ function register(app, db) {
     if (!part) throw ApiError.notFound("spare part not found");
     const direction = body.type === "out" ? -1 : 1;
     const nextQty = Math.max(0, Number(part.quantity || 0) + direction * quantity);
-    run("UPDATE equipment_spare_parts SET quantity = ?, updated_at = datetime('now') WHERE id = ?", [nextQty, body.spare_part_id]);
+    const tx = db.transaction(() => {
+      if (direction < 0) issueMaterialForSpare(part, quantity, `备件库出库 ${part.part_code || part.id}`);
+      else receiveMaterialForSpare(part, quantity, part.location, `备件库入库 ${part.part_code || part.id}`);
+      run("UPDATE equipment_spare_parts SET quantity = ?, updated_at = datetime('now') WHERE id = ?", [nextQty, body.spare_part_id]);
+    });
+    tx();
     res.json({ ok: true, quantity: nextQty });
   }));
 
   app.put("/api/field-service/spare-parts/:id/stock", wrap((req, res) => {
-    if (!get("SELECT id FROM equipment_spare_parts WHERE id = ?", [req.params.id])) throw ApiError.notFound("spare part not found");
-    run("UPDATE equipment_spare_parts SET quantity = ?, updated_at = datetime('now') WHERE id = ?", [Number(req.body?.quantity || 0), req.params.id]);
-    res.json({ ok: true });
+    const part = get("SELECT * FROM equipment_spare_parts WHERE id = ?", [req.params.id]);
+    if (!part) throw ApiError.notFound("spare part not found");
+    const target = Math.max(0, Number(req.body?.quantity || 0));
+    const delta = target - Number(part.quantity || 0);
+    const tx = db.transaction(() => {
+      if (delta < 0) issueMaterialForSpare(part, Math.abs(delta), `备件库盘点调整 ${part.part_code || part.id}`);
+      if (delta > 0) receiveMaterialForSpare(part, delta, part.location, `备件库盘点调整 ${part.part_code || part.id}`);
+      run("UPDATE equipment_spare_parts SET quantity = ?, updated_at = datetime('now') WHERE id = ?", [target, part.id]);
+    });
+    tx();
+    res.json({ ok: true, quantity: target });
   }));
 
   // ===== 逾期/仪表板 =====
