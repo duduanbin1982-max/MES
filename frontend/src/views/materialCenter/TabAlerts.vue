@@ -54,6 +54,18 @@
       </el-table-column>
     </el-table>
     <div v-if="!requisitions.length" class="alerts-empty">还没有生成采购申请</div>
+
+    <el-dialog v-model="convertDlg" title="选择供应商" width="420px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom:12px"
+        title="该采购申请中有物料未维护默认供应商，请指定一个供应商用于生成采购订单。" />
+      <el-select v-model="convertSupplierId" filterable placeholder="选择供应商" style="width:100%">
+        <el-option v-for="s in suppliers" :key="s.id" :label="s.supplier_name" :value="s.id" />
+      </el-select>
+      <template #footer>
+        <el-button @click="convertDlg = false">取消</el-button>
+        <el-button type="primary" :disabled="!convertSupplierId" @click="confirmConvert">生成采购订单</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>
 
@@ -66,6 +78,10 @@ const items = ref<any[]>([])
 const requisitions = ref<any[]>([])
 const selected = ref<any[]>([])
 const loading = ref(false)
+const suppliers = ref<any[]>([])
+const convertDlg = ref(false)
+const convertSupplierId = ref<number | null>(null)
+const convertRow = ref<any>(null)
 const priorityTag = (value: string) => value === 'P1' ? 'danger' : value === 'P2' ? 'warning' : 'info'
 const criticalityLabel = (value: string) => ({ normal: '普通', important: '重要', critical: '关键' } as any)[value] || value || '-'
 const severityLabel = (value: string) => ({ critical: '紧急', high: '高', warning: '警告' } as any)[value] || value || '-'
@@ -98,14 +114,25 @@ const rejectPR = async (row: any) => {
     await prAction(row, 'reject', { reason: result.value }, '已驳回')
   } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error('驳回失败') }
 }
-const convertPR = async (row: any) => {
+const doConvert = async (row: any, supplierId?: number | null) => {
   try {
-    await ElMessageBox.confirm(`确认将 ${row.pr_no} 按供应商转为采购订单？`, '转采购订单')
-    const result: any = await api.post(`/inventory/purchase-requisitions/${row.id}/convert`, {})
+    const result: any = await api.post(`/inventory/purchase-requisitions/${row.id}/convert`, supplierId ? { supplier_id: supplierId } : {})
     ElMessage.success('已生成采购订单：' + (result.purchase_orders || []).map((p: any) => p.po_no).join('、'))
+    convertDlg.value = false
     await load()
-  } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || '转采购订单失败') }
+  } catch (e: any) { ElMessage.error(e?.response?.data?.message || '转采购订单失败') }
 }
+const convertPR = async (row: any) => {
+  const missing = (row.items || []).some((item: any) => !item.supplier_id)
+  if (missing) {
+    convertRow.value = row
+    convertSupplierId.value = null
+    convertDlg.value = true
+    return
+  }
+  try { await ElMessageBox.confirm(`确认将 ${row.pr_no} 按供应商转为采购订单？`, '转采购订单'); await doConvert(row) } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error('转采购订单失败') }
+}
+const confirmConvert = () => { if (convertRow.value && convertSupplierId.value) doConvert(convertRow.value, convertSupplierId.value) }
 const generatePR = async (rows: any[]) => {
   if (!rows.length) return ElMessage.warning('请选择需要补货的物料')
   const payload = {
@@ -125,7 +152,13 @@ const generatePR = async (rows: any[]) => {
     await load()
   } catch (error: any) { ElMessage.error(error?.response?.data?.message || '生成采购申请失败') }
 }
-onMounted(load)
+const loadSuppliers = async () => {
+  try {
+    const result: any = await api.get('/suppliers')
+    suppliers.value = Array.isArray(result) ? result : (result.items || [])
+  } catch { suppliers.value = [] }
+}
+onMounted(async () => { await Promise.all([load(), loadSuppliers()]) })
 </script>
 
 <style scoped>
