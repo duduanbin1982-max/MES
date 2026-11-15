@@ -52,8 +52,22 @@ function queryLowStock(db, { includeSpec = false } = {}) {
       shortage_qty: Math.round((threshold - available) * 1000) / 1000,
       severity: available <= 0 ? 'critical' : (available < threshold * 0.5 ? 'high' : 'warning'),
     });
-  }).filter((row) => row.available_qty < row.threshold);
-  items.sort((a, b) => b.shortage_qty - a.shortage_qty);
+  }).filter((row) => row.available_qty < row.threshold).map((row) => {
+    const criticality = String(row.criticality || "normal");
+    const abcClass = String(row.abc_class || "C").toUpperCase();
+    const criticalityScore = criticality === "critical" ? 3 : (criticality === "important" ? 2 : 1);
+    const abcScore = abcClass === "A" ? 3 : (abcClass === "B" ? 2 : 1);
+    const priorityScore = criticalityScore * 2 + abcScore;
+    const priority = priorityScore >= 9 ? "P1" : (priorityScore >= 7 ? "P2" : "P3");
+    return Object.assign({}, row, {
+      criticality,
+      abc_class: abcClass,
+      priority,
+      priority_score: priorityScore,
+    });
+  });
+  // P1/P2 优先，其次按缺口数量
+  items.sort((a, b) => (b.priority_score - a.priority_score) || (b.shortage_qty - a.shortage_qty));
   return items;
 }
 

@@ -159,11 +159,13 @@ function register(app, db) {
         for (const r of rows) {
           // 2026-11-07: 触发线可能是再订货点 (reorder_point > safety_stock), 文案与数据统一用 threshold
           const threshold = Number.isFinite(Number(r.threshold)) ? Number(r.threshold) : Number(r.safety_stock) || 0;
-          const title = "库存低于补货线: " + r.material_code;
-          const msg = r.material_name + " 现存量 " + r.available_qty + " < 补货线 " + threshold;
-          const id = triggerAlert("inventory_low", "material", r.id, title, msg, "danger", { material_code: r.material_code, available: r.available_qty, safety: r.safety_stock, threshold, shortage: r.shortage_qty }, rule.cooldown_minutes);
-          if (id) { triggered.push({ rule: rule.name, alert_id: id, source_id: r.id }); notifyChannels("inventory_low", "danger", title, msg); }
-          emit(Events.INVENTORY_LOW, { material_id: r.id, material_code: r.material_code, material_name: r.material_name, available: r.available_qty, safety: r.safety_stock, threshold, shortage: threshold - r.available_qty });
+          const priority = r.priority || "P3";
+          const title = "[" + priority + "] 库存低于补货线: " + r.material_code;
+          const msg = r.material_name + " 现存量 " + r.available_qty + " < 补货线 " + threshold + "（关键性 " + (r.criticality || "normal") + "，ABC " + (r.abc_class || "C") + "）";
+          const severity = priority === "P1" ? "danger" : (priority === "P2" ? "danger" : "warning");
+          const id = triggerAlert("inventory_low", "material", r.id, title, msg, severity, { material_code: r.material_code, available: r.available_qty, safety: r.safety_stock, threshold, shortage: r.shortage_qty, priority, criticality: r.criticality, abc_class: r.abc_class }, rule.cooldown_minutes);
+          if (id) { triggered.push({ rule: rule.name, alert_id: id, source_id: r.id }); notifyChannels("inventory_low", severity, title, msg); }
+          emit(Events.INVENTORY_LOW, { material_id: r.id, material_code: r.material_code, material_name: r.material_name, available: r.available_qty, safety: r.safety_stock, threshold, shortage: threshold - r.available_qty, priority, criticality: r.criticality, abc_class: r.abc_class });
         }
       }
       if (rule.rule_type === "wo_overdue" && condition.days_overdue_gt) {
