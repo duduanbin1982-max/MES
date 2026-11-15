@@ -15,13 +15,18 @@ function registerCatalogRoutes({ app, helpers, ApiError }) {
   }));
 
   app.get("/api/materials", wrap((req, res) => {
-    const { is_key_component, is_self_made, category_id } = req.query;
+    const { is_key_component, is_self_made, category_id, source_type, inventory_policy, criticality, abc_class, default_location } = req.query;
     let sql = `SELECT m.*, c.category_code, c.category_name
                  FROM materials m LEFT JOIN material_categories c ON c.id = m.category_id
                 WHERE 1=1`;
     const params = [];
     if (is_key_component) sql += " AND m.is_key_component = 1";
     if (is_self_made) sql += " AND m.is_self_made = 1";
+    if (source_type) { sql += " AND m.source_type = ?"; params.push(String(source_type)); }
+    if (inventory_policy) { sql += " AND m.inventory_policy = ?"; params.push(String(inventory_policy)); }
+    if (criticality) { sql += " AND m.criticality = ?"; params.push(String(criticality)); }
+    if (abc_class) { sql += " AND m.abc_class = ?"; params.push(String(abc_class)); }
+    if (default_location) { sql += " AND m.default_location = ?"; params.push(String(default_location)); }
     if (category_id) {
       const ids = [];
       const queue = [Number(category_id)];
