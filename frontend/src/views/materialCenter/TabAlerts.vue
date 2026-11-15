@@ -34,13 +34,24 @@
     <el-divider content-position="left">最近采购申请</el-divider>
     <el-table :data="requisitions" size="small" border>
       <el-table-column prop="pr_no" label="采购申请号" width="180" />
-      <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag size="small">{{ row.status }}</el-tag></template></el-table-column>
+      <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag size="small" :type="prStatusTag(row.status)">{{ prStatusLabel(row.status) }}</el-tag></template></el-table-column>
       <el-table-column label="明细" min-width="320">
         <template #default="{ row }">
           <span v-for="item in row.items" :key="item.id" class="pr-line">{{ item.material_code }} × {{ item.quantity }}{{ item.unit }}（{{ item.priority }}）</span>
         </template>
       </el-table-column>
+      <el-table-column label="采购订单" width="150"><template #default="{ row }">{{ (row.purchase_orders || []).map(p => p.po_no).join('、') || '-' }}</template></el-table-column>
       <el-table-column prop="created_at" label="创建时间" width="170" />
+      <el-table-column label="操作" width="220" fixed="right">
+        <template #default="{ row }">
+          <el-button v-if="row.status === 'draft'" size="small" type="primary" link @click="submitPR(row)">提交</el-button>
+          <template v-if="row.status === 'submitted'">
+            <el-button size="small" type="success" link @click="approvePR(row)">通过</el-button>
+            <el-button size="small" type="danger" link @click="rejectPR(row)">驳回</el-button>
+          </template>
+          <el-button v-if="row.status === 'approved'" size="small" type="warning" link @click="convertPR(row)">转采购订单</el-button>
+        </template>
+      </el-table-column>
     </el-table>
     <div v-if="!requisitions.length" class="alerts-empty">还没有生成采购申请</div>
   </el-card>
@@ -48,7 +59,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../../api'
 
 const items = ref<any[]>([])
@@ -67,6 +78,31 @@ const load = async () => {
     const prs: any = await api.get('/inventory/purchase-requisitions', { params: { limit: 10 } })
     requisitions.value = Array.isArray(prs) ? prs : (prs.items || [])
   } catch { items.value = []; requisitions.value = [] } finally { loading.value = false }
+}
+const prAction = async (row: any, action: string, body?: any, success?: string) => {
+  try {
+    await api.post(`/inventory/purchase-requisitions/${row.id}/${action}`, body || {})
+    ElMessage.success(success || '操作成功')
+    await load()
+  } catch (error: any) { ElMessage.error(error?.response?.data?.message || '操作失败') }
+}
+const submitPR = (row: any) => prAction(row, 'submit', undefined, '已提交审批')
+const approvePR = async (row: any) => {
+  try { await ElMessageBox.confirm(`确认审批通过 ${row.pr_no}？`, '审批采购申请'); await prAction(row, 'approve', undefined, '已审批通过') } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error('审批失败') }
+}
+const rejectPR = async (row: any) => {
+  try {
+    const result: any = await ElMessageBox.prompt('请输入驳回原因', '驳回采购申请', { inputPlaceholder: '驳回原因', inputValidator: (v) => !!v || '请填写原因' })
+    await prAction(row, 'reject', { reason: result.value }, '已驳回')
+  } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error('驳回失败') }
+}
+const convertPR = async (row: any) => {
+  try {
+    await ElMessageBox.confirm(`确认将 ${row.pr_no} 按供应商转为采购订单？`, '转采购订单')
+    const result: any = await api.post(`/inventory/purchase-requisitions/${row.id}/convert`, {})
+    ElMessage.success('已生成采购订单：' + (result.purchase_orders || []).map((p: any) => p.po_no).join('、'))
+    await load()
+  } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || '转采购订单失败') }
 }
 const generatePR = async (rows: any[]) => {
   if (!rows.length) return ElMessage.warning('请选择需要补货的物料')
