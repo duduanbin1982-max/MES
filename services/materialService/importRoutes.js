@@ -20,6 +20,7 @@ function normalizeHeader(value) {
     "物料编码": "material_code", "编码": "material_code", code: "material_code", material_code: "material_code",
     "物料名称": "material_name", "名称": "material_name", name: "material_name", material_name: "material_name",
     "物料类型": "material_type", "类型": "material_type", type: "material_type", material_type: "material_type",
+    "分类编码": "category_code", "分类": "category_code", category_code: "category_code",
     "规格": "spec", "型号": "spec", spec: "spec",
     "单位": "unit", unit: "unit",
     "关键件": "is_key_component", is_key_component: "is_key_component",
@@ -108,6 +109,7 @@ function normalizeMaterial(row) {
     reorder_point: parseNumber(row.reorder_point) ?? 0,
     estimated_unit_price: parseNumber(row.estimated_unit_price) ?? 0,
     actual_unit_price: parseNumber(row.actual_unit_price) ?? 0,
+    category_code: String(row.category_code || "").trim(),
     notes: String(row.notes || "").trim() || null,
   };
 }
@@ -122,6 +124,14 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
     if (!material.material_code) errors.push("物料编码必填");
     if (!material.material_name) errors.push("物料名称必填");
     if (!material.unit) errors.push("单位必填");
+    material.category_id = null;
+    if (material.category_code) {
+      const category = get("SELECT id FROM material_categories WHERE category_code = ?", [material.category_code]);
+      if (!category) errors.push("分类编码不存在: " + material.category_code);
+      else material.category_id = category.id;
+    } else {
+      warnings.push("未填写分类编码，导入后为未分类");
+    }
     if (material.material_code.length > 64) errors.push("物料编码过长(<=64)");
     if (material.material_name.length > 120) errors.push("物料名称过长(<=120)");
     if (material.unit.length > 32) errors.push("单位过长(<=32)");
@@ -166,9 +176,9 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
   app.get("/api/materials/import/template", wrap((_req, res) => {
     res.type("text/csv; charset=utf-8");
     res.send([
-      "material_code,material_name,material_type,spec,unit,is_key_component,is_self_made,default_supplier,safety_stock,reorder_point,estimated_unit_price,actual_unit_price,notes",
-      "JJ-0001,安装底板,machining,Q235B,件,0,1,机加工供应商A,2,1,120,118,示例",
-      "BZ-M8-020,内六角圆柱头螺钉,fastener,M8×20,件,0,0,东明,200,100,0.35,0.32,GB/T 70.1",
+      "material_code,material_name,material_type,spec,unit,is_key_component,is_self_made,default_supplier,safety_stock,reorder_point,estimated_unit_price,actual_unit_price,category_code,notes",
+      "JJ-0001,安装底板,machining,Q235B,件,0,1,机加工供应商A,2,1,120,118,03-01,示例",
+      "BZ-M8-020,内六角圆柱头螺钉,fastener,M8×20,件,0,0,东明,200,100,0.35,0.32,02-06,GB/T 70.1",
     ].join("\n"));
   }));
 
@@ -196,12 +206,13 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
         const result = run(`
           INSERT INTO materials (
             material_code, material_name, material_type, spec, unit, is_key_component, is_self_made,
-            default_supplier, notes, safety_stock, reorder_point, estimated_unit_price, actual_unit_price
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            default_supplier, notes, safety_stock, reorder_point, estimated_unit_price, actual_unit_price, category_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           material.material_code, material.material_name, material.material_type, material.spec, material.unit,
           material.is_key_component, material.is_self_made, material.default_supplier, material.notes,
           material.safety_stock, material.reorder_point, material.estimated_unit_price, material.actual_unit_price,
+          material.category_id,
         ]);
         created.push({ id: result.lastInsertRowid, material_code: material.material_code });
       }

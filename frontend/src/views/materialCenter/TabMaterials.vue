@@ -4,6 +4,7 @@
       <el-tree-select v-model="categoryId" :data="categoryTree" :props="{ label: 'category_name', value: 'id', children: 'children' }"
         check-strictly clearable placeholder="按分类筛选（含子类）" style="width: 300px" @change="loadMats" />
       <span class="mat-hint">选择大类会包含其下所有子类</span>
+      <el-button type="primary" size="small" style="margin-left:auto" @click="openCreate">+ 新增物料</el-button>
     </div>
     <el-table :data="mats" stripe v-loading="loading" size="small">
       <el-table-column prop="material_code" label="编码" width="140" />
@@ -29,14 +30,38 @@
         </template>
       </el-table-column>
       <el-table-column prop="default_supplier" label="默认供应商" width="140" />
+      <el-table-column label="操作" width="80" fixed="right">
+        <template #default="{ row }"><el-button size="small" link type="primary" @click="openEdit(row)">编辑</el-button></template>
+      </el-table-column>
     </el-table>
+
+    <el-dialog v-model="matDlg" :title="editingId ? '编辑物料' : '新增物料'" width="640px">
+      <el-form :model="matForm" label-width="100px">
+        <el-row :gutter="12">
+          <el-col :span="12"><el-form-item label="物料编码" required><el-input v-model="matForm.material_code" :disabled="!!editingId" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="物料名称" required><el-input v-model="matForm.material_name" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="分类"><el-tree-select v-model="matForm.category_id" :data="categoryTree" :props="{ label: 'category_name', value: 'id', children: 'children' }" check-strictly clearable style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="类型"><el-input v-model="matForm.material_type" placeholder="steel / electrical / purchased..." /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="规格"><el-input v-model="matForm.spec" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="单位"><el-input v-model="matForm.unit" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="安全库存"><el-input-number v-model="matForm.safety_stock" :min="0" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="再订货点"><el-input-number v-model="matForm.reorder_point" :min="0" style="width:100%" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="默认供应商"><el-input v-model="matForm.default_supplier" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="自制"><el-switch v-model="matForm.is_self_made" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="关键件"><el-switch v-model="matForm.is_key_component" /></el-form-item></el-col>
+          <el-col :span="12"><el-form-item label="批次管理"><el-switch v-model="matForm.lot_managed" /></el-form-item></el-col>
+          <el-col :span="24"><el-form-item label="备注"><el-input v-model="matForm.notes" type="textarea" :rows="2" /></el-form-item></el-col>
+        </el-row>
+      </el-form>
+      <template #footer><el-button @click="matDlg = false">取消</el-button><el-button type="primary" :loading="saving" @click="saveMaterial">保存</el-button></template>
+    </el-dialog>
   </el-card>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import api from '../../api'
-import { computed } from 'vue'
 
 defineProps<{ tab: string }>()
 const mats = ref<any[]>([])
@@ -58,6 +83,38 @@ const categoryTree = computed(() => {
 const loadMats = async () => {
   loading.value = true
   try { mats.value = await api.materials(categoryId.value ? { category_id: categoryId.value } : undefined) } catch(e) { /* 前端统一用 ElMessage 提示 */ } finally { loading.value = false }
+}
+const matDlg = ref(false)
+const saving = ref(false)
+const editingId = ref<number | null>(null)
+const emptyForm = () => ({ material_code: '', material_name: '', material_type: 'purchased', spec: '', unit: '件',
+  category_id: null as number | null, is_self_made: false, is_key_component: false, lot_managed: false,
+  safety_stock: 0, reorder_point: 0, default_supplier: '', notes: '' })
+const matForm = reactive<any>(emptyForm())
+function openCreate() { editingId.value = null; Object.assign(matForm, emptyForm()); matDlg.value = true }
+function openEdit(row: any) {
+  editingId.value = row.id
+  Object.assign(matForm, {
+    material_code: row.material_code, material_name: row.material_name, material_type: row.material_type || 'purchased',
+    spec: row.spec || '', unit: row.unit || '件', category_id: row.category_id || null,
+    is_self_made: !!row.is_self_made, is_key_component: !!row.is_key_component, lot_managed: !!row.lot_managed,
+    safety_stock: Number(row.safety_stock || 0), reorder_point: Number(row.reorder_point || 0),
+    default_supplier: row.default_supplier || '', notes: row.notes || '',
+  })
+  matDlg.value = true
+}
+async function saveMaterial() {
+  if (!matForm.material_code || !matForm.material_name) return ElMessage.warning('编码和名称必填')
+  saving.value = true
+  try {
+    const payload = { ...matForm, is_self_made: matForm.is_self_made ? 1 : 0, is_key_component: matForm.is_key_component ? 1 : 0, lot_managed: matForm.lot_managed ? 1 : 0 }
+    if (editingId.value) await api.updateMaterial(editingId.value, payload)
+    else await api.createMaterial(payload)
+    ElMessage.success(editingId.value ? '物料已更新' : '物料已创建')
+    matDlg.value = false
+    await loadMats()
+  } catch (error: any) { ElMessage.error(error?.response?.data?.message || '保存失败') }
+  finally { saving.value = false }
 }
 const load = async () => {
   try { categories.value = await api.materialCategories() } catch(e) { categories.value = [] }
