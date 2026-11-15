@@ -51,6 +51,11 @@
       "from": "workOrderService",
       "to": "codingRulesService",
       "reason": "工单号留空时使用编码规则原子生成（2026-11-08 编码规则审计）"
+    },
+    {
+      "from": "materialService",
+      "to": "purchase",
+      "reason": "低库存采购申请转采购订单后同步 purchase_tracking 采购跟踪记录"
     }
   ],
   "allowedWrites": [

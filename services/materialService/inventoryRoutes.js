@@ -2,6 +2,7 @@
 
 const { wrap } = require("../../middleware/asyncHandler");
 const { queryLowStock } = require("../material/core");
+const { ensureTrackingForPo } = require("../purchase/trackingSync");
 
 function registerInventoryRoutes({ app, db, helpers, ApiError }) {
   const { all, get } = helpers;
@@ -84,6 +85,11 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
   function currentUserId(req) {
     return (req.user && (req.user.uid || req.user.id || req.user.sub)) || null;
   }
+  function canApprove(req) {
+    const user = req.user || {};
+    const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+    return user.role === "admin" || user.role === "purchase_supervisor" || permissions.includes("*") || permissions.includes("purchase:approve");
+  }
 
   app.post("/api/inventory/purchase-requisitions/:id/submit", wrap((req, res) => {
     const pr = prOrThrow(Number(req.params.id));
@@ -93,6 +99,7 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
   }));
 
   app.post("/api/inventory/purchase-requisitions/:id/approve", wrap((req, res) => {
+    if (!canApprove(req)) throw ApiError.forbidden("无权审批采购申请");
     const pr = prOrThrow(Number(req.params.id));
     if (pr.status !== "submitted") throw ApiError.validation("只有已提交状态可以审批");
     run("UPDATE purchase_requisitions SET status='approved', approved_at=datetime('now'), approved_by=?, reject_reason=NULL, updated_at=datetime('now') WHERE id=?", [currentUserId(req), pr.id]);
@@ -100,6 +107,7 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
   }));
 
   app.post("/api/inventory/purchase-requisitions/:id/reject", wrap((req, res) => {
+    if (!canApprove(req)) throw ApiError.forbidden("无权驳回采购申请");
     const pr = prOrThrow(Number(req.params.id));
     if (pr.status !== "submitted") throw ApiError.validation("只有已提交状态可以驳回");
     run("UPDATE purchase_requisitions SET status='rejected', rejected_at=datetime('now'), rejected_by=?, reject_reason=?, updated_at=datetime('now') WHERE id=?", [currentUserId(req), req.body?.reason || null, pr.id]);
@@ -122,12 +130,21 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
                         WHERE pri.pr_id = ? ORDER BY pri.id`, [pr.id]);
     if (!items.length) throw ApiError.validation("采购申请没有明细");
     const fallbackSupplierId = req.body?.supplier_id ? Number(req.body.supplier_id) : null;
-    if (fallbackSupplierId && !get("SELECT id FROM suppliers WHERE id = ?", [fallbackSupplierId])) throw ApiError.validation("指定的供应商不存在");
+    if (fallbackSupplierId) {
+      const fallbackSupplier = get("SELECT id, is_active FROM suppliers WHERE id = ?", [fallbackSupplierId]);
+      if (!fallbackSupplier) throw ApiError.validation("指定的供应商不存在");
+      if (Number(fallbackSupplier.is_active) === 0) throw ApiError.validation("指定的供应商已停用");
+    }
     for (const item of items) {
       if (!item.supplier_id && fallbackSupplierId) item.supplier_id = fallbackSupplierId;
     }
     const missingSupplier = items.filter((item) => !item.supplier_id);
     if (missingSupplier.length) throw ApiError.validation("以下物料缺少供应商，请选择供应商后再转采购订单: " + missingSupplier.map((item) => item.material_code).join("、"));
+    for (const supplierId of [...new Set(items.map((item) => item.supplier_id))]) {
+      const supplier = get("SELECT id, supplier_name, is_active FROM suppliers WHERE id = ?", [supplierId]);
+      if (!supplier) throw ApiError.validation("供应商不存在: " + supplierId);
+      if (Number(supplier.is_active) === 0) throw ApiError.validation("供应商已停用，不能转采购订单: " + supplier.supplier_name);
+    }
     const groups = new Map();
     for (const item of items) {
       if (!groups.has(item.supplier_id)) groups.set(item.supplier_id, []);
@@ -152,6 +169,7 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
             [poId, line.material_id, line.quantity, line.unit, Number(line.unit_price || 0), amount, line.suggested_date, lineNo++, `PR ${pr.pr_no}`]);
         }
         run("INSERT INTO purchase_requisition_po_links (pr_id, po_id, po_no) VALUES (?, ?, ?)", [pr.id, poId, poNo]);
+        ensureTrackingForPo(db, get, all, run, poId);
         created.push({ po_id: poId, po_no: poNo, supplier_id: supplierId, item_count: lines.length, total_amount: subtotal });
       }
       run("UPDATE purchase_requisitions SET status='converted', converted_at=datetime('now'), updated_at=datetime('now') WHERE id=?", [pr.id]);
