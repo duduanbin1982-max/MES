@@ -11,7 +11,7 @@
     </template>
 
     <el-alert type="info" :closable="false" show-icon style="margin-bottom: 12px">
-      Excel 请先另存为 CSV 后导入。支持字段：material_code、material_name、material_type、spec、unit、is_key_component、is_self_made、default_supplier、safety_stock、reorder_point、estimated_unit_price、actual_unit_price、category_code、notes。
+      Excel 请先另存为 CSV 后导入。支持字段：material_code、material_name、material_type、spec、unit、is_key_component、is_self_made、default_supplier、safety_stock、reorder_point、estimated_unit_price、actual_unit_price、category_code、source_type、inventory_policy、notes。
     </el-alert>
 
     <div class="toolbar">
@@ -43,6 +43,8 @@
       <el-table-column label="名称" min-width="180"><template #default="{ row }">{{ row.material.material_name }}</template></el-table-column>
       <el-table-column label="类型" width="110"><template #default="{ row }">{{ row.material.material_type }}</template></el-table-column>
       <el-table-column label="分类" width="110"><template #default="{ row }">{{ row.material.category_code || '未分类' }}</template></el-table-column>
+      <el-table-column label="来源" width="80"><template #default="{ row }">{{ row.material.source_type }}</template></el-table-column>
+      <el-table-column label="库存策略" width="100"><template #default="{ row }">{{ row.material.inventory_policy }}</template></el-table-column>
       <el-table-column label="规格" width="130"><template #default="{ row }">{{ row.material.spec || '-' }}</template></el-table-column>
       <el-table-column label="状态" width="90"><template #default="{ row }"><el-tag :type="row.valid ? 'success' : 'danger'" size="small">{{ row.valid ? '通过' : '错误' }}</el-tag></template></el-table-column>
       <el-table-column label="错误/警告" min-width="260">
