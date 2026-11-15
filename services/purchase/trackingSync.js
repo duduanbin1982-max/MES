@@ -34,7 +34,7 @@ function ensureTrackingForPo(db, get, all, run, poId) {
     ? lines.slice(0, 3).map((line) => `${line.material_code || ""} ${line.material_name || ""}`.trim()).filter(Boolean).join(" / ")
     : po.po_no;
   const plannedDelivery = po.expected_date || lines.map((line) => line.expected_date).find(Boolean) || null;
-  const actualDelivery = po.status === "received" ? (po.received_date || null) : null;
+  const actualDelivery = po.status === "received" ? (po.received_date || new Date().toISOString().slice(0, 10)) : null;
   const trackingStatus = po.status === "received"
     ? "delivered"
     : po.status === "cancelled"
