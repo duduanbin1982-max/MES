@@ -5,7 +5,9 @@
       <el-button @click="refresh">刷新</el-button>
     </PageToolbar>
     <el-alert v-if="data.alerts.value.length" type="error" :closable="false" style="margin-bottom: 12px" show-icon>
-      <el-icon><Warning /></el-icon> {{ data.alerts.value.length }} 项物料低于安全库存: {{ data.alerts.value.slice(0, 3).map(a => a.material_code).join('、') }}{{ data.alerts.value.length > 3 ? ` 等 ${data.alerts.value.length} 项` : '' }}
+      <el-icon><Warning /></el-icon> {{ data.alerts.value.length }} 项物料低于补货线：
+      {{ data.alerts.value.slice(0, 3).map(a => `[${a.priority}] ${a.material_code}`).join('、') }}{{ data.alerts.value.length > 3 ? ` 等 ${data.alerts.value.length} 项` : '' }}
+      <el-button link type="danger" @click="activeTab = 'alerts'">查看预警</el-button>
     </el-alert>
 
     <el-tabs v-model="activeTab" type="border-card">
@@ -24,6 +26,10 @@
           <el-badge v-if="data.alerts.value.length" :value="data.alerts.value.length" type="danger" :max="99" style="margin-left: 6px" />
         </template>
         <TabInv v-if="activeTab === 'inv' || activeTab === 'mov' || activeTab === 'ops'" :inv="data.inv.value" @open-receive="dlgReceive = true" @open-allocate="dlgAllocate = true" @open-release="dlgRelease = true" @open-batch="dlgBatch = true" @open-detail="onDetail" @open-split="onSplit" @open-merge="onMerge" />
+      </el-tab-pane>
+      <el-tab-pane name="alerts">
+        <template #label><span><el-icon><Warning /></el-icon> 库存预警</span><el-badge v-if="data.alerts.value.length" :value="data.alerts.value.length" type="danger" :max="99" style="margin-left:6px" /></template>
+        <TabAlerts v-if="activeTab === 'alerts'" />
       </el-tab-pane>
       <el-tab-pane :name="'mov'">
         <template #label><span><el-icon><DataAnalysis /></el-icon> 移动记录{{ data.movTotal.value > 0 ? ` (${data.movTotal.value})` : '' }}</span></template>
@@ -60,6 +66,7 @@ const TabMaterials = defineAsyncComponent(() => import('./materialCenter/TabMate
 const TabKey      = defineAsyncComponent(() => import('./materialCenter/TabKey.vue'))
 const TabLong     = defineAsyncComponent(() => import('./materialCenter/TabLong.vue'))
 const TabInv      = defineAsyncComponent(() => import('./materialCenter/TabInv.vue'))
+const TabAlerts   = defineAsyncComponent(() => import('./materialCenter/TabAlerts.vue'))
 const TabMov      = defineAsyncComponent(() => import('./materialCenter/TabMov.vue'))
 const TabOps      = defineAsyncComponent(() => import('./materialCenter/TabOps.vue'))
 const TabImport   = defineAsyncComponent(() => import('./materialCenter/TabImport.vue'))
