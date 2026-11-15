@@ -59,11 +59,16 @@ function queryLowStock(db, { includeSpec = false } = {}) {
     const abcScore = abcClass === "A" ? 3 : (abcClass === "B" ? 2 : 1);
     const priorityScore = criticalityScore * 2 + abcScore;
     const priority = priorityScore >= 9 ? "P1" : (priorityScore >= 7 ? "P2" : "P3");
+    const suggestedQty = Math.ceil(Number(row.shortage_qty || 0) * 1000) / 1000;
+    const days = priority === "P1" ? 0 : (priority === "P2" ? 3 : 7);
+    const suggestedDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     return Object.assign({}, row, {
       criticality,
       abc_class: abcClass,
       priority,
       priority_score: priorityScore,
+      suggested_qty: suggestedQty,
+      suggested_date: suggestedDate,
     });
   });
   // P1/P2 优先，其次按缺口数量
