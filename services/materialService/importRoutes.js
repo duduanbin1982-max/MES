@@ -23,6 +23,9 @@ function normalizeHeader(value) {
     "分类编码": "category_code", "分类": "category_code", category_code: "category_code",
     "来源": "source_type", "物料来源": "source_type", source_type: "source_type",
     "库存策略": "inventory_policy", inventory_policy: "inventory_policy",
+    "关键性": "criticality", criticality: "criticality",
+    "ABC分类": "abc_class", "ABC": "abc_class", abc_class: "abc_class",
+    "默认库位": "default_location", default_location: "default_location",
     "规格": "spec", "型号": "spec", spec: "spec",
     "单位": "unit", unit: "unit",
     "关键件": "is_key_component", is_key_component: "is_key_component",
@@ -114,6 +117,9 @@ function normalizeMaterial(row) {
     category_code: String(row.category_code || "").trim(),
     source_type: String(row.source_type || "purchased").trim(),
     inventory_policy: String(row.inventory_policy || "stock").trim(),
+    criticality: String(row.criticality || "normal").trim(),
+    abc_class: String(row.abc_class || "C").trim().toUpperCase(),
+    default_location: String(row.default_location || "").trim() || null,
     notes: String(row.notes || "").trim() || null,
   };
 }
@@ -130,6 +136,8 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
     if (!material.unit) errors.push("单位必填");
     if (!["purchased", "self_made", "outsourced"].includes(material.source_type)) errors.push("来源非法: " + material.source_type);
     if (!["stock", "project", "none"].includes(material.inventory_policy)) errors.push("库存策略非法: " + material.inventory_policy);
+    if (!["normal", "important", "critical"].includes(material.criticality)) errors.push("关键性非法: " + material.criticality);
+    if (!["A", "B", "C"].includes(material.abc_class)) errors.push("ABC分类非法: " + material.abc_class);
     material.category_id = null;
     if (material.category_code) {
       const category = get("SELECT id FROM material_categories WHERE category_code = ?", [material.category_code]);
@@ -182,9 +190,9 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
   app.get("/api/materials/import/template", wrap((_req, res) => {
     res.type("text/csv; charset=utf-8");
     res.send([
-      "material_code,material_name,material_type,spec,unit,is_key_component,is_self_made,default_supplier,safety_stock,reorder_point,estimated_unit_price,actual_unit_price,category_code,source_type,inventory_policy,notes",
-      "JJ-0001,安装底板,machining,Q235B,件,0,1,机加工供应商A,2,1,120,118,03-01,self_made,stock,示例",
-      "BZ-M8-020,内六角圆柱头螺钉,fastener,M8×20,件,0,0,东明,200,100,0.35,0.32,02-06,purchased,stock,GB/T 70.1",
+      "material_code,material_name,material_type,spec,unit,is_key_component,is_self_made,default_supplier,safety_stock,reorder_point,estimated_unit_price,actual_unit_price,category_code,source_type,inventory_policy,criticality,abc_class,default_location,notes",
+      "JJ-0001,安装底板,machining,Q235B,件,0,1,机加工供应商A,2,1,120,118,03-01,self_made,stock,normal,B,自制件库,示例",
+      "BZ-M8-020,内六角圆柱头螺钉,fastener,M8×20,件,0,0,东明,200,100,0.35,0.32,02-06,purchased,stock,normal,C,五金库,GB/T 70.1",
     ].join("\n"));
   }));
 
@@ -209,6 +217,9 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
     const hasCategoryColumn = materialColumns.includes("category_id");
     const hasSourceColumn = materialColumns.includes("source_type");
     const hasPolicyColumn = materialColumns.includes("inventory_policy");
+    const hasCriticalityColumn = materialColumns.includes("criticality");
+    const hasAbcColumn = materialColumns.includes("abc_class");
+    const hasLocationColumn = materialColumns.includes("default_location");
     const transaction = db.transaction(() => {
       const created = [];
       for (const item of results) {
@@ -225,6 +236,9 @@ function registerImportRoutes({ app, db, helpers, guards, ApiError }) {
         if (hasCategoryColumn) { columns.push("category_id"); values.push(material.category_id); }
         if (hasSourceColumn) { columns.push("source_type"); values.push(material.source_type); }
         if (hasPolicyColumn) { columns.push("inventory_policy"); values.push(material.inventory_policy); }
+        if (hasCriticalityColumn) { columns.push("criticality"); values.push(material.criticality); }
+        if (hasAbcColumn) { columns.push("abc_class"); values.push(material.abc_class); }
+        if (hasLocationColumn) { columns.push("default_location"); values.push(material.default_location); }
         const result = run(
           `INSERT INTO materials (${columns.join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
           values,

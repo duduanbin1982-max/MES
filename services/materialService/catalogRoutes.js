@@ -59,6 +59,8 @@ function registerCatalogRoutes({ app, helpers, ApiError }) {
     if (categoryId && !get("SELECT id FROM material_categories WHERE id = ?", [categoryId])) throw ApiError.validation("分类不存在");
     if (body.source_type && !["purchased", "self_made", "outsourced"].includes(body.source_type)) throw ApiError.validation("source_type 非法");
     if (body.inventory_policy && !["stock", "project", "none"].includes(body.inventory_policy)) throw ApiError.validation("inventory_policy 非法");
+    if (body.criticality && !["normal", "important", "critical"].includes(body.criticality)) throw ApiError.validation("criticality 非法");
+    if (body.abc_class && !["A", "B", "C"].includes(body.abc_class)) throw ApiError.validation("abc_class 非法");
     const result = run(`INSERT INTO materials
       (material_code, material_name, material_type, spec, unit, is_key_component, is_self_made, default_supplier,
        safety_stock, reorder_point, estimated_unit_price, actual_unit_price, notes, category_id, lot_managed)
@@ -77,6 +79,8 @@ function registerCatalogRoutes({ app, helpers, ApiError }) {
     const body = req.body || {};
     if (body.source_type && !["purchased", "self_made", "outsourced"].includes(body.source_type)) throw ApiError.validation("source_type 非法");
     if (body.inventory_policy && !["stock", "project", "none"].includes(body.inventory_policy)) throw ApiError.validation("inventory_policy 非法");
+    if (body.criticality && !["normal", "important", "critical"].includes(body.criticality)) throw ApiError.validation("criticality 非法");
+    if (body.abc_class && !["A", "B", "C"].includes(body.abc_class)) throw ApiError.validation("abc_class 非法");
     const categoryId = body.category_id === undefined ? current.category_id : (body.category_id ? Number(body.category_id) : null);
     if (categoryId && !get("SELECT id FROM material_categories WHERE id = ?", [categoryId])) throw ApiError.validation("分类不存在");
     const code = body.material_code === undefined ? current.material_code : String(body.material_code || "").trim();
