@@ -69,7 +69,6 @@
           <el-col :span="12"><el-form-item label="安全库存"><el-input-number v-model="matForm.safety_stock" :min="0" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="再订货点"><el-input-number v-model="matForm.reorder_point" :min="0" style="width:100%" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="默认供应商"><el-input v-model="matForm.default_supplier" /></el-form-item></el-col>
-          <el-col :span="12"><el-form-item label="自制"><el-switch v-model="matForm.is_self_made" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="关键件"><el-switch v-model="matForm.is_key_component" /></el-form-item></el-col>
           <el-col :span="12"><el-form-item label="批次管理"><el-switch v-model="matForm.lot_managed" /></el-form-item></el-col>
           <el-col :span="24"><el-form-item label="备注"><el-input v-model="matForm.notes" type="textarea" :rows="2" /></el-form-item></el-col>
@@ -132,9 +131,9 @@ function openEdit(row: any) {
   Object.assign(matForm, {
     material_code: row.material_code, material_name: row.material_name, material_type: row.material_type || 'purchased',
     spec: row.spec || '', unit: row.unit || '件', category_id: row.category_id || null,
-    source_type: row.source_type || 'purchased', inventory_policy: row.inventory_policy || 'stock',
+    source_type: row.source_type || (row.is_self_made ? 'self_made' : 'purchased'), inventory_policy: row.inventory_policy || 'stock',
     criticality: row.criticality || 'normal', abc_class: row.abc_class || 'C', default_location: row.default_location || '',
-    is_self_made: !!row.is_self_made, is_key_component: !!row.is_key_component, lot_managed: !!row.lot_managed,
+    is_key_component: !!row.is_key_component, lot_managed: !!row.lot_managed,
     safety_stock: Number(row.safety_stock || 0), reorder_point: Number(row.reorder_point || 0),
     default_supplier: row.default_supplier || '', notes: row.notes || '',
   })
@@ -144,7 +143,7 @@ async function saveMaterial() {
   if (!matForm.material_code || !matForm.material_name) return ElMessage.warning('编码和名称必填')
   saving.value = true
   try {
-    const payload = { ...matForm, is_self_made: matForm.is_self_made ? 1 : 0, is_key_component: matForm.is_key_component ? 1 : 0, lot_managed: matForm.lot_managed ? 1 : 0 }
+    const payload = { ...matForm, is_key_component: matForm.is_key_component ? 1 : 0, lot_managed: matForm.lot_managed ? 1 : 0 }
     if (editingId.value) await api.updateMaterial(editingId.value, payload)
     else await api.createMaterial(payload)
     ElMessage.success(editingId.value ? '物料已更新' : '物料已创建')
