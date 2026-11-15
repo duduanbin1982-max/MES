@@ -85,8 +85,8 @@ const convertRow = ref<any>(null)
 const priorityTag = (value: string) => value === 'P1' ? 'danger' : value === 'P2' ? 'warning' : 'info'
 const criticalityLabel = (value: string) => ({ normal: '普通', important: '重要', critical: '关键' } as any)[value] || value || '-'
 const severityLabel = (value: string) => ({ critical: '紧急', high: '高', warning: '警告' } as any)[value] || value || '-'
-const prStatusLabel = (value: string) => ({ draft: '草稿', submitted: '已提交', approved: '已审批', rejected: '已驳回', converted: '已转采购' } as any)[value] || value
-const prStatusTag = (value: string) => ({ draft: 'info', submitted: 'warning', approved: 'success', rejected: 'danger', converted: 'success' } as any)[value] || 'info'
+const prStatusLabel = (value: string) => ({ draft: '草稿', submitted: '已提交', approved: '已审批', rejected: '已驳回', converted: '已转采购', completed: '已完成' } as any)[value] || value
+const prStatusTag = (value: string) => ({ draft: 'info', submitted: 'warning', approved: 'success', rejected: 'danger', converted: 'success', completed: 'success' } as any)[value] || 'info'
 const onSelectionChange = (rows: any[]) => { selected.value = rows }
 const load = async () => {
   loading.value = true
