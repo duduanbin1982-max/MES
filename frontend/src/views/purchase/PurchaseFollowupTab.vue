@@ -60,6 +60,9 @@
             <template #default="{ row }">{{ row.purchase_request_no || '-' }}</template>
           </el-table-column>
           <el-table-column prop="planned_delivery" label="计划到货" width="120" />
+          <el-table-column label="实际到货" width="120">
+            <template #default="{ row }">{{ row.actual_delivery || '-' }}</template>
+          </el-table-column>
           <el-table-column label="延期" width="80">
             <template #default="{ row }">
               <el-tag :type="Number(row.delay_days || 0) > 0 ? 'danger' : 'success'" size="small">{{ Number(row.delay_days || 0) }}天</el-tag>
