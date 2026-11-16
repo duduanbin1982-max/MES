@@ -183,6 +183,70 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
     res.json({ ok: true, status: "converted", purchase_orders: tx() });
   }));
 
+  app.get("/api/project-inventory", wrap((req, res) => {
+    const equipmentId = Number(req.query.equipment_instance_id);
+    if (!equipmentId) throw ApiError.validation("equipment_instance_id 必填");
+    res.json(all(`SELECT i.*, ml.lot_no, ml.quality_status, m.id AS material_id, m.material_code, m.material_name, m.unit AS material_unit
+                    FROM inventory i
+                    JOIN material_lots ml ON ml.id = i.material_lot_id
+                    JOIN materials m ON m.id = ml.material_id
+                   WHERE i.project_id = ? AND i.quantity > 0
+                   ORDER BY m.material_code, i.location, ml.lot_no`, [equipmentId]));
+  }));
+
+  app.post("/api/project-inventory/issue", wrap((req, res) => {
+    const inventoryId = Number(req.body?.inventory_id);
+    const quantity = Number(req.body?.quantity);
+    if (!inventoryId || !(quantity > 0)) throw ApiError.validation("inventory_id/quantity 必须有效");
+    const row = get("SELECT i.*, m.material_code FROM inventory i JOIN material_lots ml ON ml.id=i.material_lot_id JOIN materials m ON m.id=ml.material_id WHERE i.id = ?", [inventoryId]);
+    if (!row) throw ApiError.notFound("项目库存不存在");
+    if (!row.project_id) throw ApiError.validation("该库存不是项目直供库存");
+    if (row.status !== "available") throw ApiError.validation("该批次状态为 " + row.status + "，不能领料");
+    if (quantity > Number(row.quantity) + 1e-6) throw ApiError.validation("领料数量超过项目库存: 可用 " + row.quantity);
+    const operatorId = (req.user && (req.user.uid || req.user.id || req.user.sub)) || null;
+    const tx = db.transaction(() => {
+      run("UPDATE inventory SET quantity = quantity - ?, last_updated = datetime('now') WHERE id = ?", [quantity, inventoryId]);
+      run(`INSERT INTO material_movements
+        (material_lot_id, movement_type, quantity, unit, from_location, work_order_id, operator_id, notes, equipment_instance_id)
+        VALUES (?, 'issue', ?, ?, ?, ?, ?, ?, ?)`,
+        [row.material_lot_id, quantity, row.unit || "件", row.location, req.body?.work_order_id || null, operatorId,
+          req.body?.notes || "项目直供领料", row.project_id]);
+      return { inventory_id: inventoryId, material_code: row.material_code, quantity, equipment_instance_id: row.project_id };
+    });
+    res.json({ ok: true, ...tx() });
+  }));
+
+  app.post("/api/project-inventory/return", wrap((req, res) => {
+    const inventoryId = Number(req.body?.inventory_id);
+    const quantity = Number(req.body?.quantity);
+    if (!inventoryId || !(quantity > 0)) throw ApiError.validation("inventory_id/quantity 必须有效");
+    const row = get("SELECT i.*, m.material_code FROM inventory i JOIN material_lots ml ON ml.id=i.material_lot_id JOIN materials m ON m.id=ml.material_id WHERE i.id = ?", [inventoryId]);
+    if (!row) throw ApiError.notFound("项目库存不存在");
+    if (!row.project_id) throw ApiError.validation("该库存不是项目直供库存");
+    const operatorId = (req.user && (req.user.uid || req.user.id || req.user.sub)) || null;
+    const tx = db.transaction(() => {
+      run("UPDATE inventory SET quantity = quantity + ?, last_updated = datetime('now') WHERE id = ?", [quantity, inventoryId]);
+      run(`INSERT INTO material_movements
+        (material_lot_id, movement_type, quantity, unit, to_location, work_order_id, operator_id, notes, equipment_instance_id)
+        VALUES (?, 'return', ?, ?, ?, ?, ?, ?, ?)`,
+        [row.material_lot_id, quantity, row.unit || "件", row.location, req.body?.work_order_id || null, operatorId,
+          req.body?.notes || "项目直供退料", row.project_id]);
+      return { inventory_id: inventoryId, material_code: row.material_code, quantity, equipment_instance_id: row.project_id };
+    });
+    res.json({ ok: true, ...tx() });
+  }));
+
+  app.get("/api/project-inventory/movements", wrap((req, res) => {
+    const equipmentId = Number(req.query.equipment_instance_id);
+    if (!equipmentId) throw ApiError.validation("equipment_instance_id 必填");
+    res.json(all(`SELECT mm.*, m.material_code, m.material_name, ml.lot_no
+                    FROM material_movements mm
+                    JOIN material_lots ml ON ml.id = mm.material_lot_id
+                    JOIN materials m ON m.id = ml.material_id
+                   WHERE mm.equipment_instance_id = ?
+                   ORDER BY mm.id DESC LIMIT 200`, [equipmentId]));
+  }));
+
   app.get("/api/inventory/lot_trace", wrap((req, res) => {
     const { lot_id } = req.query;
     if (!lot_id) throw ApiError.validation("lot_id 必填");
