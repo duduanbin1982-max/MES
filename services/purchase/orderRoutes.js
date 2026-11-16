@@ -322,7 +322,7 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
           VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         `, [po.id, line.id, recvQty, lotNo, location, lotId, inventoryResult.lastInsertRowid, receivedLine.notes || "待来料检验"]);
         run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, to_location, work_order_id, project_id, notes) VALUES (?, 'receive', ?, ?, ?, ?, ?, ?)",
-          [lotId, recvQty, unit, location, null, projectId, "PO 收货: " + po.po_no + " line " + line.line_no]);
+          [lotId, recvQty, unit, location, null, null, "PO 收货: " + po.po_no + " line " + line.line_no]);
 
         const keyComponent = get("SELECT id, unit_price FROM key_components WHERE material_id = ?", line.material_id);
         if (keyComponent) {
