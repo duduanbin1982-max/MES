@@ -220,11 +220,33 @@ function register(app, db) {
     sql += " ORDER BY o.id DESC";
     res.json(all(sql, params));
   }));
+  app.get("/api/spare-production/parts/:id/completeness", wrap((req, res) => {
+    const part = partOrThrow(req.params.id);
+    const bom = all("SELECT * FROM spare_bom_lines WHERE part_material_id = ? ORDER BY id", [part.id]);
+    const template = get("SELECT * FROM spare_route_templates WHERE part_material_id = ?", [part.id]);
+    const steps = template ? all("SELECT * FROM spare_route_steps WHERE template_id = ? ORDER BY sequence", [template.id]) : [];
+    res.json({
+      material_id: part.id,
+      material_code: part.material_code,
+      has_bom: bom.length > 0,
+      bom_line_count: bom.length,
+      has_route: Boolean(template),
+      route_step_count: steps.length,
+      ready: bom.length > 0 && steps.length > 0,
+      issues: [
+        ...(bom.length === 0 ? ["没有 BOM 用料"] : []),
+        ...(steps.length === 0 ? ["没有工艺路线/工序"] : []),
+      ],
+    });
+  }));
+
   app.post("/api/spare-production/orders", wrap((req, res) => {
     const { part_material_id, planned_qty, planned_start, planned_end, priority, notes } = req.body || {};
     const part = partOrThrow(part_material_id);
     const qty = Number(planned_qty);
     if (!(qty > 0)) throw ApiError.validation("planned_qty 必须 > 0");
+    const bomCheck = all("SELECT id FROM spare_bom_lines WHERE part_material_id=? LIMIT 1", [part.id]);
+    if (!bomCheck.length) throw ApiError.validation("该自产备件没有 BOM 用料，不能创建生产工单");
     const template = get("SELECT * FROM spare_route_templates WHERE part_material_id=?", [part.id]);
     if (!template) throw ApiError.validation("该备件还没有工艺模板，请先维护工艺");
     const steps = all("SELECT * FROM spare_route_steps WHERE template_id=? ORDER BY sequence", [template.id]);
