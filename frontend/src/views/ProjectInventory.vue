@@ -10,6 +10,7 @@
           <el-option v-for="eq in equipments" :key="eq.id" :label="eq.instance_code + ' | ' + (eq.instance_name || '')" :value="eq.id" />
         </el-select>
         <el-button @click="loadAll">刷新</el-button>
+        <el-button type="warning" @click="openClosure">库存关闭/结转</el-button>
       </div>
     </PageToolbar>
 
@@ -41,6 +42,18 @@
         <el-empty v-if="!loading && equipmentId && !inventory.length" description="该项目暂无项目直供库存" />
       </el-tab-pane>
 
+      <el-tab-pane label="关闭记录" name="closures">
+        <el-table :data="closures" v-loading="loading" size="small" border>
+          <el-table-column prop="closed_at" label="关闭时间" width="180" />
+          <el-table-column prop="total_items" label="品种数" width="90" align="right" />
+          <el-table-column prop="total_quantity" label="数量" width="100" align="right" />
+          <el-table-column prop="total_value" label="结转金额" width="120" align="right"><template #default="{ row }">¥ {{ row.total_value || 0 }}</template></el-table-column>
+          <el-table-column prop="notes" label="备注" min-width="200" />
+          <el-table-column label="明细" min-width="320"><template #default="{ row }"><span v-for="item in row.items" :key="item.id" class="closure-line">{{ item.material_code }} × {{ item.quantity }}（{{ dispositionLabel(item.disposition) }}）</span></template></el-table-column>
+        </el-table>
+        <el-empty v-if="!loading && !closures.length" description="暂无关闭记录" />
+      </el-tab-pane>
+
       <el-tab-pane label="领用/退料流水" name="movements">
         <el-table :data="movements" v-loading="loading" stripe size="small" border>
           <el-table-column prop="created_at" label="时间" width="170" />
@@ -55,6 +68,29 @@
         </el-table>
       </el-tab-pane>
     </el-tabs>
+
+    <el-dialog v-model="closureDlg" title="项目库存关闭/结转" width="760px">
+      <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px"
+        title="关闭后项目库存将全部处理：转常备、退供应商或报废。此操作会生成项目库存关闭记录。" />
+      <el-table :data="closureRows" size="small" border max-height="420">
+        <el-table-column prop="material_code" label="物料" width="150" />
+        <el-table-column prop="lot_no" label="批次" width="160" />
+        <el-table-column prop="quantity" label="数量" width="90" align="right" />
+        <el-table-column label="金额" width="100" align="right"><template #default="{ row }">¥ {{ row.inventory_value || 0 }}</template></el-table-column>
+        <el-table-column label="处置方式" width="160">
+          <template #default="{ row }">
+            <el-select v-model="row.disposition" style="width:100%">
+              <el-option label="转常备库存" value="transfer" />
+              <el-option label="退供应商" value="return_supplier" />
+              <el-option label="报废" value="scrap" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="备注" min-width="160"><template #default="{ row }"><el-input v-model="row.notes" placeholder="可选" /></template></el-table-column>
+      </el-table>
+      <div class="closure-total">待处理金额：<strong>¥ {{ closureTotalValue }}</strong></div>
+      <template #footer><el-button @click="closureDlg = false">取消</el-button><el-button type="danger" :loading="saving" @click="submitClosure">确认关闭</el-button></template>
+    </el-dialog>
 
     <el-dialog v-model="issueDlg" title="项目直供领料" width="460px">
       <el-form label-width="90px">
@@ -95,8 +131,13 @@ const issueDlg = ref(false)
 const returnDlg = ref(false)
 const current = ref<any>(null)
 const summary = ref<any>({ total_value: 0, material_count: 0, total_quantity: 0 })
+const closures = ref<any[]>([])
+const closureDlg = ref(false)
+const closureRows = ref<any[]>([])
+const closureTotalValue = ref(0)
 const form = reactive({ quantity: 1, notes: '' })
-const movementLabel = (value: string) => ({ issue: '领料', return: '退料' } as any)[value] || value
+const movementLabel = (value: string) => ({ issue: '领料', return: '退料', transfer: '转常备', return_supplier: '退供应商', scrap: '报废' } as any)[value] || value
+const dispositionLabel = (value: string) => ({ transfer: '转常备', return_supplier: '退供应商', scrap: '报废' } as any)[value] || value
 
 const loadEquipments = async () => {
   try {
@@ -112,7 +153,26 @@ const loadAll = async () => {
     inventory.value = await api.get('/project-inventory', { params: { equipment_instance_id: equipmentId.value } })
     movements.value = await api.get('/project-inventory/movements', { params: { equipment_instance_id: equipmentId.value } })
     summary.value = await api.get('/project-inventory/summary', { params: { equipment_instance_id: equipmentId.value } })
+    closures.value = await api.get('/project-inventory/closures', { params: { equipment_instance_id: equipmentId.value } })
   } catch (error: any) { ElMessage.error(error?.response?.data?.message || '加载项目库存失败') } finally { loading.value = false }
+}
+const openClosure = () => {
+  closureRows.value = inventory.value.map((row: any) => ({ ...row, disposition: 'transfer', notes: '' }))
+  closureTotalValue.value = Math.round(closureRows.value.reduce((sum: number, row: any) => sum + Number(row.inventory_value || 0), 0) * 100) / 100
+  closureDlg.value = true
+}
+const submitClosure = async () => {
+  saving.value = true
+  try {
+    const result: any = await api.post('/project-inventory/close', {
+      equipment_instance_id: equipmentId.value,
+      actions: closureRows.value.map((row: any) => ({ inventory_id: row.id, disposition: row.disposition, notes: row.notes || undefined })),
+      notes: '项目库存关闭/结转',
+    })
+    ElMessage.success(`关闭完成：${result.total_items} 项，金额 ¥${result.total_value}`)
+    closureDlg.value = false
+    await loadAll()
+  } catch (error: any) { ElMessage.error(error?.response?.data?.message || '关闭失败') } finally { saving.value = false }
 }
 const openIssue = (row: any) => { current.value = row; Object.assign(form, { quantity: Math.min(1, Number(row.quantity)), notes: '' }); issueDlg.value = true }
 const openReturn = (row: any) => { current.value = row; Object.assign(form, { quantity: 1, notes: '' }); returnDlg.value = true }
@@ -147,4 +207,6 @@ onMounted(async () => { await loadEquipments(); await loadAll() })
 .kpi-row { margin-bottom: 12px; }
 .kpi-label { color: var(--el-text-color-secondary); font-size: 13px; }
 .kpi-value { margin-top: 4px; font-size: 24px; font-weight: 700; }
+.closure-total { margin-top: 12px; text-align: right; }
+.closure-line { display: inline-block; margin-right: 12px; }
 </style>

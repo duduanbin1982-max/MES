@@ -278,6 +278,94 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
                    ORDER BY mm.id DESC LIMIT 200`, [equipmentId]));
   }));
 
+  app.get("/api/project-inventory/closures", wrap((req, res) => {
+    const equipmentId = Number(req.query.equipment_instance_id);
+    if (!equipmentId) throw ApiError.validation("equipment_instance_id 必填");
+    const closures = all("SELECT * FROM project_inventory_closures WHERE equipment_instance_id = ? ORDER BY id DESC LIMIT 50", [equipmentId]);
+    for (const closure of closures) {
+      closure.items = all(`SELECT pci.*, m.material_code, m.material_name, ml.lot_no
+                             FROM project_inventory_closure_items pci
+                             LEFT JOIN materials m ON m.id = pci.material_id
+                             LEFT JOIN material_lots ml ON ml.id = pci.material_lot_id
+                            WHERE pci.closure_id = ? ORDER BY pci.id`, [closure.id]);
+    }
+    res.json(closures);
+  }));
+
+  app.post("/api/project-inventory/close", wrap((req, res) => {
+    const equipmentId = Number(req.body?.equipment_instance_id);
+    if (!equipmentId) throw ApiError.validation("equipment_instance_id 必填");
+    const actions = Array.isArray(req.body?.actions) ? req.body.actions : [];
+    const actionMap = new Map();
+    for (const action of actions) {
+      const inventoryId = Number(action.inventory_id);
+      const disposition = String(action.disposition || "");
+      if (!inventoryId) throw ApiError.validation("actions[].inventory_id 必填");
+      if (!["transfer", "return_supplier", "scrap"].includes(disposition)) throw ApiError.validation("不支持的处置方式: " + disposition);
+      actionMap.set(inventoryId, { disposition, notes: action.notes || null });
+    }
+    const rows = all(`SELECT i.*, ml.lot_no, ml.unit_cost, m.id AS material_id, m.material_code, m.material_name, m.default_location,
+                             m.actual_unit_price, m.estimated_unit_price
+                        FROM inventory i JOIN material_lots ml ON ml.id=i.material_lot_id JOIN materials m ON m.id=ml.material_id
+                       WHERE i.project_id = ? AND i.quantity > 0 ORDER BY i.id`, [equipmentId]);
+    const missing = rows.filter((row) => !actionMap.has(row.id));
+    if (missing.length) throw ApiError.validation("还有未处理的项目库存: " + missing.map((row) => row.material_code).join("、"));
+    const operatorId = (req.user && (req.user.uid || req.user.id || req.user.sub)) || null;
+    const tx = db.transaction(() => {
+      const closure = run("INSERT INTO project_inventory_closures (equipment_instance_id, closed_by, notes) VALUES (?, ?, ?)",
+        [equipmentId, operatorId, req.body?.notes || null]);
+      const closureId = Number(closure.lastInsertRowid);
+      let totalQty = 0;
+      let totalValue = 0;
+      for (const row of rows) {
+        const action = actionMap.get(row.id);
+        const unitCost = Number(row.unit_cost || row.actual_unit_price || row.estimated_unit_price || 0);
+        const amount = Math.round(unitCost * Number(row.quantity) * 100) / 100;
+        totalQty += Number(row.quantity);
+        totalValue += amount;
+        if (action.disposition === "transfer") {
+          const targetLocation = row.default_location || "主仓库-A-01";
+          run("UPDATE inventory SET project_id = NULL, location = ?, last_updated = datetime('now') WHERE id = ?", [targetLocation, row.id]);
+          run(`INSERT INTO material_movements
+            (material_lot_id, movement_type, quantity, unit, from_location, to_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
+            VALUES (?, 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [row.material_lot_id, row.quantity, row.unit || "件", row.location, targetLocation, operatorId,
+              action.notes || "项目关闭结转到常备库存", equipmentId, unitCost, amount]);
+        } else if (action.disposition === "return_supplier") {
+          run("UPDATE inventory SET quantity = 0, last_updated = datetime('now') WHERE id = ?", [row.id]);
+          run(`INSERT INTO material_movements
+            (material_lot_id, movement_type, quantity, unit, from_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
+            VALUES (?, 'return_supplier', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [row.material_lot_id, row.quantity, row.unit || "件", row.location, operatorId,
+              action.notes || "项目关闭退供应商", equipmentId, unitCost, amount]);
+        } else {
+          run("UPDATE inventory SET quantity = 0, last_updated = datetime('now') WHERE id = ?", [row.id]);
+          run(`INSERT INTO material_movements
+            (material_lot_id, movement_type, quantity, unit, from_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
+            VALUES (?, 'scrap', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [row.material_lot_id, row.quantity, row.unit || "件", row.location, operatorId,
+              action.notes || "项目关闭报废", equipmentId, unitCost, amount]);
+          try {
+            if (get("SELECT name FROM sqlite_master WHERE type='table' AND name='project_cost_entries'")) {
+              run(`INSERT INTO project_cost_entries
+                (equipment_instance_id, cost_type, source_type, source_ref, description, amount, occurred_on, status, notes, created_by)
+                VALUES (?, 'quality_loss', 'project_scrap', ?, ?, ?, date('now'), 'posted', ?, ?)`,
+                [equipmentId, String(closureId), "项目关闭报废 " + row.material_code + " × " + row.quantity, amount, action.notes || null, operatorId]);
+            }
+          } catch (_error) { /* 旧库无成本表时忽略 */ }
+        }
+        run(`INSERT INTO project_inventory_closure_items
+          (closure_id, inventory_id, material_id, material_lot_id, quantity, unit_cost, amount, disposition, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [closureId, row.id, row.material_id, row.material_lot_id, row.quantity, unitCost, amount, action.disposition, action.notes]);
+      }
+      run("UPDATE material_lots SET project_id = NULL WHERE id IN (SELECT material_lot_id FROM project_inventory_closure_items WHERE closure_id = ?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE project_id = ? AND material_lot_id = material_lots.id AND quantity > 0)", [closureId, equipmentId]);
+      run("UPDATE project_inventory_closures SET total_items=?, total_quantity=?, total_value=? WHERE id=?", [rows.length, totalQty, Math.round(totalValue * 100) / 100, closureId]);
+      return { id: closureId, total_items: rows.length, total_quantity: totalQty, total_value: Math.round(totalValue * 100) / 100 };
+    });
+    res.json({ ok: true, ...tx() });
+  }));
+
   app.get("/api/project-inventory/summary", wrap((req, res) => {
     const equipmentId = Number(req.query.equipment_instance_id);
     if (!equipmentId) throw ApiError.validation("equipment_instance_id 必填");
