@@ -249,6 +249,13 @@
           "icon": "Warning"
         },
         {
+          "key": "project-issue",
+          "title": "项目领料",
+          "path": "/project-issue",
+          "entry": "/project-issue",
+          "icon": "Box"
+        },
+        {
           "key": "purchase-orders",
           "title": "采购管理",
           "path": "/purchase",

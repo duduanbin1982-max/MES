@@ -29,6 +29,7 @@ const routes = [
       { path: '/kit-closure', name: 'kit-closure', component: () => import('../views/KitClosure.vue'), meta: { title: '齐套缺料', icon: 'Box' } },
       { path: '/materials', name: 'materials', component: () => import('../views/MaterialCenter.vue'), meta: { title: '物料中心', icon: 'Goods' } },
       { path: '/inventory', redirect: '/materials?tab=inv', meta: { hidden: true } },
+      { path: '/project-issue', name: 'project-issue', component: () => import('../views/ProjectInventory.vue'), meta: { title: '项目领料', icon: 'Box' } },
       { path: '/material-alerts', name: 'material-alerts', component: () => import('../views/MaterialAlerts.vue'), meta: { title: '项目物料预警', icon: 'Warning' } },
       { path: '/purchase', name: 'purchase', component: () => import('../views/PurchaseManagement.vue'), meta: { title: '采购管理', icon: 'ShoppingCart' } },
       { path: '/reports', name: 'reports', component: () => import('../views/Reports.vue'), meta: { title: '报表中心', icon: 'DataLine' } },
