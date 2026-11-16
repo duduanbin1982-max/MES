@@ -12,6 +12,7 @@
       <el-table-column prop="material_name" label="名称" min-width="180" />
       <el-table-column prop="lot_no" label="批次" width="140" />
       <el-table-column prop="location" label="库位" width="140" />
+      <el-table-column label="项目直供" width="120"><template #default="{ row }">{{ row.project_code || '-' }}</template></el-table-column>
       <el-table-column prop="quantity" label="数量" width="80" align="right" />
       <el-table-column prop="unit" label="单位" width="60" />
       <el-table-column label="状态" width="100">
