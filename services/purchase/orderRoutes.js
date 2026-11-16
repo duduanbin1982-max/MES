@@ -81,6 +81,12 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
   const { all, get, run } = helpers;
   ensureReceivingSchema(db);
   ensureInvoiceSchema(db);
+  for (const table of ["inventory", "material_lots"]) {
+    try {
+      const columns = new Set(all(`PRAGMA table_info(${table})`).map((column) => column.name));
+      if (columns.size && !columns.has("project_id")) db.prepare(`ALTER TABLE ${table} ADD COLUMN project_id INTEGER`).run();
+    } catch (_error) { /* 旧库无表时忽略 */ }
+  }
 
   function completeLinkedPurchaseRequisitions(poId) {
     try {
@@ -289,24 +295,34 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
           throw ApiError.validation("line " + receivedLine.line_id + " 收货超量: 已收 " + line.received_qty + " + 本次 " + recvQty + " > 订单 " + line.quantity);
         }
 
-        const supplierName = po.supplier_id ? (get("SELECT supplier_name FROM suppliers WHERE id = ?", po.supplier_id) || {}).supplier_name || null : null;
+        const supplierName = po.supplier_id ? (get("SELECT supplier_name FROM suppliers WHERE id = ?", [po.supplier_id]) || {}).supplier_name || null : null;
         const lotNo = receivedLine.lot_no || (po.po_no + "-L" + line.line_no + "-" + Date.now());
-        const dup = get("SELECT id FROM material_lots WHERE lot_no = ?", lotNo);
+        const dup = get("SELECT id FROM material_lots WHERE lot_no = ?", [lotNo]);
         if (dup) throw ApiError.validation("lot_no 已存在: " + lotNo);
-        const mat = get("SELECT unit FROM materials WHERE id = ?", line.material_id);
+        const mat = get("SELECT unit, inventory_policy FROM materials WHERE id = ?", [line.material_id]);
         const unit = line.unit || mat?.unit || "pcs";
-        const location = receivedLine.location || "主仓库-A-01";
-        const lotResult = run("INSERT INTO material_lots (material_id, lot_no, supplier, heat_no, certificate_no, received_date, quantity, unit, quality_status, notes) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, 'pending', ?)",
-          [line.material_id, lotNo, supplierName, receivedLine.heat_no || null, receivedLine.certificate_no || null, recvQty, unit, "收货自 " + po.po_no]);
+        const projectDirect = mat?.inventory_policy === "project";
+        if (projectDirect && !po.equipment_instance_id) {
+          throw ApiError.validation("项目直供物料必须关联项目采购订单: " + (line.material_code || line.material_id));
+        }
+        let location = receivedLine.location;
+        if (!location && projectDirect) {
+          const instance = get("SELECT instance_code FROM equipment_instances WHERE id = ?", [po.equipment_instance_id]);
+          location = instance?.instance_code ? "项目仓-" + instance.instance_code : "项目仓";
+        }
+        location = location || "主仓库-A-01";
+        const projectId = projectDirect ? (po.equipment_instance_id || null) : null;
+        const lotResult = run("INSERT INTO material_lots (material_id, lot_no, supplier, heat_no, certificate_no, received_date, quantity, unit, quality_status, notes, project_id) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, 'pending', ?, ?)",
+          [line.material_id, lotNo, supplierName, receivedLine.heat_no || null, receivedLine.certificate_no || null, recvQty, unit, "收货自 " + po.po_no, projectId]);
         const lotId = lotResult.lastInsertRowid;
-        const inventoryResult = run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status) VALUES (?, ?, ?, ?, 'quarantined')", [lotId, location, recvQty, unit]);
+        const inventoryResult = run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status, project_id) VALUES (?, ?, ?, ?, 'quarantined', ?)", [lotId, location, recvQty, unit, projectId]);
         const receivingResult = run(`
           INSERT INTO purchase_receiving
             (po_id, po_item_id, received_qty, quality_status, lot_no, warehouse_location, material_lot_id, inventory_id, notes)
           VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         `, [po.id, line.id, recvQty, lotNo, location, lotId, inventoryResult.lastInsertRowid, receivedLine.notes || "待来料检验"]);
         run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, to_location, work_order_id, project_id, notes) VALUES (?, 'receive', ?, ?, ?, ?, ?, ?)",
-          [lotId, recvQty, unit, location, null, po.equipment_instance_id, "PO 收货: " + po.po_no + " line " + line.line_no]);
+          [lotId, recvQty, unit, location, null, projectId, "PO 收货: " + po.po_no + " line " + line.line_no]);
 
         const keyComponent = get("SELECT id, unit_price FROM key_components WHERE material_id = ?", line.material_id);
         if (keyComponent) {

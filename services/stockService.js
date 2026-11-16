@@ -43,6 +43,7 @@ function receiveStock(db, options = {}) {
   const material = get("SELECT * FROM materials WHERE id = ?", [materialId]);
   if (!material) throw ApiError.notFound("物料不存在");
   if (material.inventory_policy === "none") throw ApiError.validation(`物料 ${material.material_code} 库存策略为不库存，禁止入库`);
+  if (material.inventory_policy === "project") throw ApiError.validation(`物料 ${material.material_code} 为项目直供，请通过项目采购收货，不能进入常备库存`);
   const unit = options.unit || material.unit || "件";
   const location = options.location || material.default_location || "主仓库";
   const inputLotNo = String(options.lotNo || "").trim();
@@ -84,9 +85,11 @@ function issueStock(db, options = {}) {
   const material = get("SELECT * FROM materials WHERE id = ?", [materialId]);
   if (!material) throw ApiError.notFound("物料不存在");
   const tx = db.transaction(() => {
+    const inventoryColumns = all("PRAGMA table_info(inventory)").map((column) => column.name);
+    const projectFilter = inventoryColumns.includes("project_id") ? " AND i.project_id IS NULL" : "";
     const lots = all(`SELECT i.id AS inventory_id, i.location, i.quantity, ml.id AS lot_id, ml.lot_no, ml.unit
                         FROM inventory i JOIN material_lots ml ON ml.id = i.material_lot_id
-                       WHERE ml.material_id = ? AND i.quantity > 0 ${options.location ? "AND i.location = ?" : ""}
+                       WHERE ml.material_id = ? AND i.quantity > 0${projectFilter} ${options.location ? "AND i.location = ?" : ""}
                        ORDER BY ml.id, i.id`, options.location ? [materialId, options.location] : [materialId]);
     const available = lots.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
     if (available < quantity) throw ApiError.validation(`物料库存不足：${material.material_code} 需要 ${quantity}，可用 ${available}`);

@@ -31,9 +31,11 @@ function queryLowStock(db, { includeSpec = false } = {}) {
     : `m.id, m.material_code, m.material_name, m.safety_stock, m.reorder_point${extraFields}`;
   const countField = includeSpec ? ', COUNT(i.id) as lot_count' : '';
   const policyWhere = hasPolicy ? " AND m.inventory_policy = 'stock'" : "";
+  const inventoryColumns = all("PRAGMA table_info(inventory)").map((column) => column.name);
+  const projectFilter = inventoryColumns.includes("project_id") ? " AND i.project_id IS NULL" : "";
   const rows = all(
     `SELECT ${fields},
-            COALESCE(SUM(CASE WHEN i.status='available' THEN i.quantity ELSE 0 END), 0) as available_qty${countField}
+            COALESCE(SUM(CASE WHEN i.status='available'${projectFilter} THEN i.quantity ELSE 0 END), 0) as available_qty${countField}
      FROM materials m
      LEFT JOIN material_lots ml ON ml.material_id = m.id
      LEFT JOIN inventory i ON i.material_lot_id = ml.id
