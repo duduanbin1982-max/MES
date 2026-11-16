@@ -412,6 +412,59 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
     res.json({ ok: true, status: "rejected" });
   }));
 
+  app.get("/api/project-inventory/cost-report", wrap((req, res) => {
+    const equipmentId = Number(req.query.equipment_instance_id);
+    if (!equipmentId) throw ApiError.validation("equipment_instance_id 必填");
+    const movementRows = all(`SELECT m.id AS material_id, m.material_code, m.material_name, m.unit,
+                                     SUM(CASE WHEN mm.movement_type='issue' THEN mm.quantity ELSE 0 END) AS issued_qty,
+                                     SUM(CASE WHEN mm.movement_type='issue' THEN mm.amount ELSE 0 END) AS issued_amount,
+                                     SUM(CASE WHEN mm.movement_type='return' THEN mm.quantity ELSE 0 END) AS returned_qty,
+                                     SUM(CASE WHEN mm.movement_type='return' THEN mm.amount ELSE 0 END) AS returned_amount,
+                                     SUM(CASE WHEN mm.movement_type='scrap' THEN mm.quantity ELSE 0 END) AS scrap_qty,
+                                     SUM(CASE WHEN mm.movement_type='scrap' THEN mm.amount ELSE 0 END) AS scrap_amount
+                                FROM material_movements mm
+                                JOIN material_lots ml ON ml.id = mm.material_lot_id
+                                JOIN materials m ON m.id = ml.material_id
+                               WHERE mm.equipment_instance_id = ?
+                               GROUP BY m.id ORDER BY m.material_code`, [equipmentId]);
+    const inventoryRows = all(`SELECT m.id AS material_id, m.material_code, m.material_name, m.unit,
+                                     SUM(i.quantity) AS remaining_qty,
+                                     SUM(i.quantity * COALESCE(NULLIF(ml.unit_cost, 0), NULLIF(m.actual_unit_price, 0), m.estimated_unit_price, 0)) AS remaining_value
+                                FROM inventory i JOIN material_lots ml ON ml.id=i.material_lot_id JOIN materials m ON m.id=ml.material_id
+                               WHERE i.project_id = ? AND i.quantity > 0 GROUP BY m.id`, [equipmentId]);
+    const map = new Map();
+    for (const row of movementRows) map.set(row.material_id, { ...row });
+    for (const row of inventoryRows) {
+      const current = map.get(row.material_id) || { material_id: row.material_id, material_code: row.material_code, material_name: row.material_name, unit: row.unit };
+      Object.assign(current, { remaining_qty: row.remaining_qty, remaining_value: row.remaining_value });
+      map.set(row.material_id, current);
+    }
+    const items = [...map.values()].map((row) => ({
+      ...row,
+      issued_qty: Number(row.issued_qty || 0),
+      issued_amount: Math.round(Number(row.issued_amount || 0) * 100) / 100,
+      returned_qty: Number(row.returned_qty || 0),
+      returned_amount: Math.round(Number(row.returned_amount || 0) * 100) / 100,
+      scrap_qty: Number(row.scrap_qty || 0),
+      scrap_amount: Math.round(Number(row.scrap_amount || 0) * 100) / 100,
+      remaining_qty: Number(row.remaining_qty || 0),
+      remaining_value: Math.round(Number(row.remaining_value || 0) * 100) / 100,
+    }));
+    const totalIssued = items.reduce((sum, row) => sum + row.issued_amount, 0);
+    const totalReturned = items.reduce((sum, row) => sum + row.returned_amount, 0);
+    const totalScrap = items.reduce((sum, row) => sum + row.scrap_amount, 0);
+    const remainingValue = items.reduce((sum, row) => sum + row.remaining_value, 0);
+    res.json({
+      equipment_instance_id: equipmentId,
+      total_issued_amount: Math.round(totalIssued * 100) / 100,
+      total_returned_amount: Math.round(totalReturned * 100) / 100,
+      total_scrap_amount: Math.round(totalScrap * 100) / 100,
+      remaining_inventory_value: Math.round(remainingValue * 100) / 100,
+      net_material_cost: Math.round((totalIssued - totalReturned + totalScrap) * 100) / 100,
+      items,
+    });
+  }));
+
   app.get("/api/project-inventory/summary", wrap((req, res) => {
     const equipmentId = Number(req.query.equipment_instance_id);
     if (!equipmentId) throw ApiError.validation("equipment_instance_id 必填");

@@ -63,6 +63,29 @@
         <el-empty v-if="!loading && !closures.length" description="暂无关闭记录" />
       </el-tab-pane>
 
+      <el-tab-pane label="成本报表" name="cost">
+        <el-row :gutter="12" class="kpi-row">
+          <el-col :span="6"><el-card shadow="hover"><div class="kpi-label">已领料成本</div><div class="kpi-value">¥ {{ costReport.total_issued_amount || 0 }}</div></el-card></el-col>
+          <el-col :span="6"><el-card shadow="hover"><div class="kpi-label">退料冲减</div><div class="kpi-value success">¥ {{ costReport.total_returned_amount || 0 }}</div></el-card></el-col>
+          <el-col :span="6"><el-card shadow="hover"><div class="kpi-label">报废损失</div><div class="kpi-value warning">¥ {{ costReport.total_scrap_amount || 0 }}</div></el-card></el-col>
+          <el-col :span="6"><el-card shadow="hover"><div class="kpi-label">净材料成本</div><div class="kpi-value">¥ {{ costReport.net_material_cost || 0 }}</div></el-card></el-col>
+        </el-row>
+        <el-card shadow="never">
+          <el-table :data="costReport.items || []" size="small" border>
+            <el-table-column prop="material_code" label="物料编码" width="150" />
+            <el-table-column prop="material_name" label="物料名称" min-width="180" />
+            <el-table-column prop="issued_qty" label="已领数量" width="100" align="right" />
+            <el-table-column label="领料金额" width="110" align="right"><template #default="{ row }">¥ {{ row.issued_amount || 0 }}</template></el-table-column>
+            <el-table-column prop="returned_qty" label="退料数量" width="100" align="right" />
+            <el-table-column label="退料金额" width="110" align="right"><template #default="{ row }">¥ {{ row.returned_amount || 0 }}</template></el-table-column>
+            <el-table-column prop="scrap_qty" label="报废数量" width="100" align="right" />
+            <el-table-column label="报废金额" width="110" align="right"><template #default="{ row }">¥ {{ row.scrap_amount || 0 }}</template></el-table-column>
+            <el-table-column prop="remaining_qty" label="剩余数量" width="100" align="right" />
+            <el-table-column label="剩余金额" width="120" align="right"><template #default="{ row }">¥ {{ row.remaining_value || 0 }}</template></el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
       <el-tab-pane label="领用/退料流水" name="movements">
         <el-table :data="movements" v-loading="loading" stripe size="small" border>
           <el-table-column prop="created_at" label="时间" width="170" />
@@ -144,6 +167,7 @@ const closures = ref<any[]>([])
 const closureDlg = ref(false)
 const closureRows = ref<any[]>([])
 const closureTotalValue = ref(0)
+const costReport = ref<any>({ total_issued_amount: 0, total_returned_amount: 0, total_scrap_amount: 0, net_material_cost: 0, items: [] })
 const form = reactive({ quantity: 1, notes: '' })
 const movementLabel = (value: string) => ({ issue: '领料', return: '退料', transfer: '转常备', return_supplier: '退供应商', scrap: '报废' } as any)[value] || value
 const dispositionLabel = (value: string) => ({ transfer: '转常备', return_supplier: '退供应商', scrap: '报废' } as any)[value] || value
@@ -165,6 +189,7 @@ const loadAll = async () => {
     movements.value = await api.get('/project-inventory/movements', { params: { equipment_instance_id: equipmentId.value } })
     summary.value = await api.get('/project-inventory/summary', { params: { equipment_instance_id: equipmentId.value } })
     closures.value = await api.get('/project-inventory/closures', { params: { equipment_instance_id: equipmentId.value } })
+    costReport.value = await api.get('/project-inventory/cost-report', { params: { equipment_instance_id: equipmentId.value } })
   } catch (error: any) { ElMessage.error(error?.response?.data?.message || '加载项目库存失败') } finally { loading.value = false }
 }
 const openClosure = () => {
@@ -234,6 +259,8 @@ onMounted(async () => { await loadEquipments(); await loadAll() })
 .kpi-row { margin-bottom: 12px; }
 .kpi-label { color: var(--el-text-color-secondary); font-size: 13px; }
 .kpi-value { margin-top: 4px; font-size: 24px; font-weight: 700; }
+.kpi-value.success { color: var(--el-color-success); }
+.kpi-value.warning { color: var(--el-color-warning); }
 .closure-total { margin-top: 12px; text-align: right; }
 .closure-line { display: inline-block; margin-right: 12px; }
 </style>
