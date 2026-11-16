@@ -292,6 +292,62 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
     res.json(closures);
   }));
 
+  function canApproveClosure(req) {
+    const user = req.user || {};
+    const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+    return user.role === "admin" || permissions.includes("*") || permissions.includes("inventory:approve") || permissions.includes("material:approve");
+  }
+
+  function processClosure(closure, operatorId) {
+    const items = all("SELECT * FROM project_inventory_closure_items WHERE closure_id = ? ORDER BY id", [closure.id]);
+    let totalQty = 0;
+    let totalValue = 0;
+    for (const item of items) {
+      const row = get("SELECT * FROM inventory WHERE id = ?", [item.inventory_id]);
+      if (!row || Number(row.project_id) !== Number(closure.equipment_instance_id) || Number(row.quantity) < Number(item.quantity)) {
+        throw ApiError.validation("库存已发生变化，不能审批: " + item.inventory_id);
+      }
+      totalQty += Number(item.quantity);
+      totalValue += Number(item.amount || 0);
+      if (item.disposition === "transfer") {
+        const material = get("SELECT default_location FROM materials WHERE id = ?", [item.material_id]);
+        const targetLocation = material?.default_location || "主仓库-A-01";
+        run("UPDATE inventory SET project_id = NULL, location = ?, last_updated = datetime('now') WHERE id = ?", [targetLocation, row.id]);
+        run(`INSERT INTO material_movements
+          (material_lot_id, movement_type, quantity, unit, from_location, to_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
+          VALUES (?, 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [row.material_lot_id, item.quantity, row.unit || "件", row.location, targetLocation, operatorId,
+            item.notes || "项目关闭结转到常备库存", closure.equipment_instance_id, item.unit_cost, item.amount]);
+      } else if (item.disposition === "return_supplier") {
+        run("UPDATE inventory SET quantity = 0, last_updated = datetime('now') WHERE id = ?", [row.id]);
+        run(`INSERT INTO material_movements
+          (material_lot_id, movement_type, quantity, unit, from_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
+          VALUES (?, 'return_supplier', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [row.material_lot_id, item.quantity, row.unit || "件", row.location, operatorId,
+            item.notes || "项目关闭退供应商", closure.equipment_instance_id, item.unit_cost, item.amount]);
+      } else {
+        run("UPDATE inventory SET quantity = 0, last_updated = datetime('now') WHERE id = ?", [row.id]);
+        run(`INSERT INTO material_movements
+          (material_lot_id, movement_type, quantity, unit, from_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
+          VALUES (?, 'scrap', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [row.material_lot_id, item.quantity, row.unit || "件", row.location, operatorId,
+            item.notes || "项目关闭报废", closure.equipment_instance_id, item.unit_cost, item.amount]);
+        try {
+          if (get("SELECT name FROM sqlite_master WHERE type='table' AND name='project_cost_entries'")) {
+            run(`INSERT INTO project_cost_entries
+              (equipment_instance_id, cost_type, source_type, source_ref, description, amount, occurred_on, status, notes, created_by)
+              VALUES (?, 'quality_loss', 'project_scrap', ?, ?, ?, date('now'), 'posted', ?, ?)`,
+              [closure.equipment_instance_id, String(closure.id), "项目关闭报废 " + item.material_id + " × " + item.quantity, item.amount, item.notes || null, operatorId]);
+          }
+        } catch (_error) { /* 旧库无成本表时忽略 */ }
+      }
+    }
+    run("UPDATE material_lots SET project_id = NULL WHERE id IN (SELECT material_lot_id FROM project_inventory_closure_items WHERE closure_id = ?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE project_id = ? AND material_lot_id = material_lots.id AND quantity > 0)", [closure.id, closure.equipment_instance_id]);
+    run("UPDATE project_inventory_closures SET status='approved', approved_at=datetime('now'), processed_at=datetime('now'), total_quantity=?, total_value=? WHERE id=?", [totalQty, Math.round(totalValue * 100) / 100, closure.id]);
+    run("UPDATE equipment_instances SET project_inventory_closed_at=datetime('now'), project_inventory_closed_by=? WHERE id=?", [operatorId, closure.equipment_instance_id]);
+    return { id: closure.id, total_items: items.length, total_quantity: totalQty, total_value: Math.round(totalValue * 100) / 100 };
+  }
+
   app.post("/api/project-inventory/close", wrap((req, res) => {
     const equipmentId = Number(req.body?.equipment_instance_id);
     if (!equipmentId) throw ApiError.validation("equipment_instance_id 必填");
@@ -304,7 +360,7 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
       if (!["transfer", "return_supplier", "scrap"].includes(disposition)) throw ApiError.validation("不支持的处置方式: " + disposition);
       actionMap.set(inventoryId, { disposition, notes: action.notes || null });
     }
-    const rows = all(`SELECT i.*, ml.lot_no, ml.unit_cost, m.id AS material_id, m.material_code, m.material_name, m.default_location,
+    const rows = all(`SELECT i.*, ml.lot_no, ml.unit_cost, m.id AS material_id, m.material_code, m.material_name,
                              m.actual_unit_price, m.estimated_unit_price
                         FROM inventory i JOIN material_lots ml ON ml.id=i.material_lot_id JOIN materials m ON m.id=ml.material_id
                        WHERE i.project_id = ? AND i.quantity > 0 ORDER BY i.id`, [equipmentId]);
@@ -312,58 +368,48 @@ function registerInventoryRoutes({ app, db, helpers, ApiError }) {
     if (missing.length) throw ApiError.validation("还有未处理的项目库存: " + missing.map((row) => row.material_code).join("、"));
     const operatorId = (req.user && (req.user.uid || req.user.id || req.user.sub)) || null;
     const tx = db.transaction(() => {
-      const closure = run("INSERT INTO project_inventory_closures (equipment_instance_id, closed_by, notes) VALUES (?, ?, ?)",
-        [equipmentId, operatorId, req.body?.notes || null]);
+      const closure = run("INSERT INTO project_inventory_closures (equipment_instance_id, status, closed_by, submitted_by, submitted_at, notes) VALUES (?, 'submitted', ?, ?, datetime('now'), ?)",
+        [equipmentId, operatorId, operatorId, req.body?.notes || null]);
       const closureId = Number(closure.lastInsertRowid);
-      let totalQty = 0;
       let totalValue = 0;
       for (const row of rows) {
         const action = actionMap.get(row.id);
         const unitCost = Number(row.unit_cost || row.actual_unit_price || row.estimated_unit_price || 0);
         const amount = Math.round(unitCost * Number(row.quantity) * 100) / 100;
-        totalQty += Number(row.quantity);
         totalValue += amount;
-        if (action.disposition === "transfer") {
-          const targetLocation = row.default_location || "主仓库-A-01";
-          run("UPDATE inventory SET project_id = NULL, location = ?, last_updated = datetime('now') WHERE id = ?", [targetLocation, row.id]);
-          run(`INSERT INTO material_movements
-            (material_lot_id, movement_type, quantity, unit, from_location, to_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
-            VALUES (?, 'transfer', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [row.material_lot_id, row.quantity, row.unit || "件", row.location, targetLocation, operatorId,
-              action.notes || "项目关闭结转到常备库存", equipmentId, unitCost, amount]);
-        } else if (action.disposition === "return_supplier") {
-          run("UPDATE inventory SET quantity = 0, last_updated = datetime('now') WHERE id = ?", [row.id]);
-          run(`INSERT INTO material_movements
-            (material_lot_id, movement_type, quantity, unit, from_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
-            VALUES (?, 'return_supplier', ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [row.material_lot_id, row.quantity, row.unit || "件", row.location, operatorId,
-              action.notes || "项目关闭退供应商", equipmentId, unitCost, amount]);
-        } else {
-          run("UPDATE inventory SET quantity = 0, last_updated = datetime('now') WHERE id = ?", [row.id]);
-          run(`INSERT INTO material_movements
-            (material_lot_id, movement_type, quantity, unit, from_location, operator_id, notes, equipment_instance_id, unit_cost, amount)
-            VALUES (?, 'scrap', ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [row.material_lot_id, row.quantity, row.unit || "件", row.location, operatorId,
-              action.notes || "项目关闭报废", equipmentId, unitCost, amount]);
-          try {
-            if (get("SELECT name FROM sqlite_master WHERE type='table' AND name='project_cost_entries'")) {
-              run(`INSERT INTO project_cost_entries
-                (equipment_instance_id, cost_type, source_type, source_ref, description, amount, occurred_on, status, notes, created_by)
-                VALUES (?, 'quality_loss', 'project_scrap', ?, ?, ?, date('now'), 'posted', ?, ?)`,
-                [equipmentId, String(closureId), "项目关闭报废 " + row.material_code + " × " + row.quantity, amount, action.notes || null, operatorId]);
-            }
-          } catch (_error) { /* 旧库无成本表时忽略 */ }
-        }
         run(`INSERT INTO project_inventory_closure_items
           (closure_id, inventory_id, material_id, material_lot_id, quantity, unit_cost, amount, disposition, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [closureId, row.id, row.material_id, row.material_lot_id, row.quantity, unitCost, amount, action.disposition, action.notes]);
       }
-      run("UPDATE material_lots SET project_id = NULL WHERE id IN (SELECT material_lot_id FROM project_inventory_closure_items WHERE closure_id = ?) AND NOT EXISTS (SELECT 1 FROM inventory WHERE project_id = ? AND material_lot_id = material_lots.id AND quantity > 0)", [closureId, equipmentId]);
-      run("UPDATE project_inventory_closures SET total_items=?, total_quantity=?, total_value=? WHERE id=?", [rows.length, totalQty, Math.round(totalValue * 100) / 100, closureId]);
-      return { id: closureId, total_items: rows.length, total_quantity: totalQty, total_value: Math.round(totalValue * 100) / 100 };
+      run("UPDATE project_inventory_closures SET total_items=?, total_quantity=?, total_value=? WHERE id=?", [rows.length, rows.reduce((sum, row) => sum + Number(row.quantity), 0), Math.round(totalValue * 100) / 100, closureId]);
+      return { id: closureId, status: "submitted", total_items: rows.length, total_value: Math.round(totalValue * 100) / 100 };
     });
     res.json({ ok: true, ...tx() });
+  }));
+
+  app.post("/api/project-inventory/closures/:id/approve", wrap((req, res) => {
+    if (!canApproveClosure(req)) throw ApiError.forbidden("无权审批项目库存关闭");
+    const closure = get("SELECT * FROM project_inventory_closures WHERE id = ?", [Number(req.params.id)]);
+    if (!closure) throw ApiError.notFound("关闭记录不存在");
+    if (closure.status !== "submitted") throw ApiError.validation("只有已提交的关闭记录可以审批");
+    const operatorId = (req.user && (req.user.uid || req.user.id || req.user.sub)) || null;
+    const tx = db.transaction(() => {
+      const result = processClosure(closure, operatorId);
+      run("UPDATE project_inventory_closures SET approved_by=?, approved_at=datetime('now') WHERE id=?", [operatorId, closure.id]);
+      return result;
+    });
+    res.json({ ok: true, status: "approved", ...tx() });
+  }));
+
+  app.post("/api/project-inventory/closures/:id/reject", wrap((req, res) => {
+    if (!canApproveClosure(req)) throw ApiError.forbidden("无权驳回项目库存关闭");
+    const closure = get("SELECT * FROM project_inventory_closures WHERE id = ?", [Number(req.params.id)]);
+    if (!closure) throw ApiError.notFound("关闭记录不存在");
+    if (closure.status !== "submitted") throw ApiError.validation("只有已提交的关闭记录可以驳回");
+    run("UPDATE project_inventory_closures SET status='rejected', rejected_at=datetime('now'), rejected_by=?, reject_reason=? WHERE id=?",
+      [(req.user && (req.user.uid || req.user.id || req.user.sub)) || null, req.body?.reason || null, closure.id]);
+    res.json({ ok: true, status: "rejected" });
   }));
 
   app.get("/api/project-inventory/summary", wrap((req, res) => {

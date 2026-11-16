@@ -44,12 +44,21 @@
 
       <el-tab-pane label="关闭记录" name="closures">
         <el-table :data="closures" v-loading="loading" size="small" border>
-          <el-table-column prop="closed_at" label="关闭时间" width="180" />
+          <el-table-column prop="submitted_at" label="提交时间" width="170" />
+          <el-table-column label="状态" width="100"><template #default="{ row }"><el-tag :type="closureStatusTag(row.status)" size="small">{{ closureStatusLabel(row.status) }}</el-tag></template></el-table-column>
           <el-table-column prop="total_items" label="品种数" width="90" align="right" />
           <el-table-column prop="total_quantity" label="数量" width="100" align="right" />
           <el-table-column prop="total_value" label="结转金额" width="120" align="right"><template #default="{ row }">¥ {{ row.total_value || 0 }}</template></el-table-column>
           <el-table-column prop="notes" label="备注" min-width="200" />
           <el-table-column label="明细" min-width="320"><template #default="{ row }"><span v-for="item in row.items" :key="item.id" class="closure-line">{{ item.material_code }} × {{ item.quantity }}（{{ dispositionLabel(item.disposition) }}）</span></template></el-table-column>
+          <el-table-column label="操作" width="150" fixed="right">
+            <template #default="{ row }">
+              <template v-if="row.status === 'submitted'">
+                <el-button size="small" type="success" link @click="approveClosure(row)">通过</el-button>
+                <el-button size="small" type="danger" link @click="rejectClosure(row)">驳回</el-button>
+              </template>
+            </template>
+          </el-table-column>
         </el-table>
         <el-empty v-if="!loading && !closures.length" description="暂无关闭记录" />
       </el-tab-pane>
@@ -69,9 +78,9 @@
       </el-tab-pane>
     </el-tabs>
 
-    <el-dialog v-model="closureDlg" title="项目库存关闭/结转" width="760px">
+    <el-dialog v-model="closureDlg" title="提交项目库存关闭申请" width="760px">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom:12px"
-        title="关闭后项目库存将全部处理：转常备、退供应商或报废。此操作会生成项目库存关闭记录。" />
+        title="提交后需审批通过才会执行：转常备、退供应商或报废，并生成项目库存关闭记录。" />
       <el-table :data="closureRows" size="small" border max-height="420">
         <el-table-column prop="material_code" label="物料" width="150" />
         <el-table-column prop="lot_no" label="批次" width="160" />
@@ -116,7 +125,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PageToolbar from '../components/PageToolbar.vue'
 import api from '../api'
 
@@ -138,6 +147,8 @@ const closureTotalValue = ref(0)
 const form = reactive({ quantity: 1, notes: '' })
 const movementLabel = (value: string) => ({ issue: '领料', return: '退料', transfer: '转常备', return_supplier: '退供应商', scrap: '报废' } as any)[value] || value
 const dispositionLabel = (value: string) => ({ transfer: '转常备', return_supplier: '退供应商', scrap: '报废' } as any)[value] || value
+const closureStatusLabel = (value: string) => ({ submitted: '待审批', approved: '已通过', rejected: '已驳回' } as any)[value] || value || '待审批'
+const closureStatusTag = (value: string) => ({ submitted: 'warning', approved: 'success', rejected: 'danger' } as any)[value] || 'info'
 
 const loadEquipments = async () => {
   try {
@@ -161,6 +172,22 @@ const openClosure = () => {
   closureTotalValue.value = Math.round(closureRows.value.reduce((sum: number, row: any) => sum + Number(row.inventory_value || 0), 0) * 100) / 100
   closureDlg.value = true
 }
+const approveClosure = async (row: any) => {
+  try {
+    await ElMessageBox.confirm(`确认审批通过该关闭申请？将执行项目库存处置。`, '审批项目库存关闭')
+    await api.post(`/project-inventory/closures/${row.id}/approve`, {})
+    ElMessage.success('已审批通过，项目库存已处理')
+    await loadAll()
+  } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || '审批失败') }
+}
+const rejectClosure = async (row: any) => {
+  try {
+    const result: any = await ElMessageBox.prompt('请输入驳回原因', '驳回项目库存关闭', { inputPlaceholder: '驳回原因', inputValidator: (v) => !!v || '请填写原因' })
+    await api.post(`/project-inventory/closures/${row.id}/reject`, { reason: result.value })
+    ElMessage.success('已驳回')
+    await loadAll()
+  } catch (e: any) { if (e !== 'cancel' && e !== 'close') ElMessage.error(e?.response?.data?.message || '驳回失败') }
+}
 const submitClosure = async () => {
   saving.value = true
   try {
@@ -169,7 +196,7 @@ const submitClosure = async () => {
       actions: closureRows.value.map((row: any) => ({ inventory_id: row.id, disposition: row.disposition, notes: row.notes || undefined })),
       notes: '项目库存关闭/结转',
     })
-    ElMessage.success(`关闭完成：${result.total_items} 项，金额 ¥${result.total_value}`)
+    ElMessage.success(`已提交关闭审批：${result.total_items} 项，金额 ¥${result.total_value}`)
     closureDlg.value = false
     await loadAll()
   } catch (error: any) { ElMessage.error(error?.response?.data?.message || '关闭失败') } finally { saving.value = false }
