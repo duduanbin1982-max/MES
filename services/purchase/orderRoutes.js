@@ -299,9 +299,11 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
         const lotNo = receivedLine.lot_no || (po.po_no + "-L" + line.line_no + "-" + Date.now());
         const dup = get("SELECT id FROM material_lots WHERE lot_no = ?", [lotNo]);
         if (dup) throw ApiError.validation("lot_no 已存在: " + lotNo);
-        const mat = get("SELECT unit, inventory_policy FROM materials WHERE id = ?", [line.material_id]);
+        const materialColumns = new Set(all("PRAGMA table_info(materials)").map((column) => column.name));
+        const policySelect = materialColumns.has("inventory_policy") ? ", inventory_policy" : "";
+        const mat = get(`SELECT unit${policySelect} FROM materials WHERE id = ?`, [line.material_id]);
         const unit = line.unit || mat?.unit || "pcs";
-        const projectDirect = mat?.inventory_policy === "project";
+        const projectDirect = materialColumns.has("inventory_policy") && mat?.inventory_policy === "project";
         if (projectDirect && !po.equipment_instance_id) {
           throw ApiError.validation("项目直供物料必须关联项目采购订单: " + (line.material_code || line.material_id));
         }
