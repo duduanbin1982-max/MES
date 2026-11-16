@@ -87,6 +87,17 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
       if (columns.size && !columns.has("project_id")) db.prepare(`ALTER TABLE ${table} ADD COLUMN project_id INTEGER`).run();
     } catch (_error) { /* 旧库无表时忽略 */ }
   }
+  for (const [table, column, type] of [
+    ["material_lots", "unit_cost", "REAL DEFAULT 0"],
+    ["material_movements", "unit_cost", "REAL DEFAULT 0"],
+    ["material_movements", "amount", "REAL DEFAULT 0"],
+    ["material_movements", "equipment_instance_id", "INTEGER"],
+  ]) {
+    try {
+      const columns = new Set(all(`PRAGMA table_info(${table})`).map((item) => item.name));
+      if (columns.size && !columns.has(column)) db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`).run();
+    } catch (_error) { /* 旧库无表时忽略 */ }
+  }
 
   function completeLinkedPurchaseRequisitions(poId) {
     try {
@@ -314,8 +325,8 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
         }
         location = location || "主仓库-A-01";
         const projectId = projectDirect ? (po.equipment_instance_id || null) : null;
-        const lotResult = run("INSERT INTO material_lots (material_id, lot_no, supplier, heat_no, certificate_no, received_date, quantity, unit, quality_status, notes, project_id) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, 'pending', ?, ?)",
-          [line.material_id, lotNo, supplierName, receivedLine.heat_no || null, receivedLine.certificate_no || null, recvQty, unit, "收货自 " + po.po_no, projectId]);
+        const lotResult = run("INSERT INTO material_lots (material_id, lot_no, supplier, heat_no, certificate_no, received_date, quantity, unit, quality_status, notes, project_id, unit_cost) VALUES (?, ?, ?, ?, ?, datetime('now'), ?, ?, 'pending', ?, ?, ?)",
+          [line.material_id, lotNo, supplierName, receivedLine.heat_no || null, receivedLine.certificate_no || null, recvQty, unit, "收货自 " + po.po_no, projectId, Number(line.unit_price || 0)]);
         const lotId = lotResult.lastInsertRowid;
         const inventoryResult = run("INSERT INTO inventory (material_lot_id, location, quantity, unit, status, project_id) VALUES (?, ?, ?, ?, 'quarantined', ?)", [lotId, location, recvQty, unit, projectId]);
         const receivingResult = run(`
@@ -323,8 +334,8 @@ function registerPurchaseOrderRoutes(app, db, helpers) {
             (po_id, po_item_id, received_qty, quality_status, lot_no, warehouse_location, material_lot_id, inventory_id, notes)
           VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)
         `, [po.id, line.id, recvQty, lotNo, location, lotId, inventoryResult.lastInsertRowid, receivedLine.notes || "待来料检验"]);
-        run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, to_location, work_order_id, project_id, notes) VALUES (?, 'receive', ?, ?, ?, ?, ?, ?)",
-          [lotId, recvQty, unit, location, null, null, "PO 收货: " + po.po_no + " line " + line.line_no]);
+        run("INSERT INTO material_movements (material_lot_id, movement_type, quantity, unit, to_location, work_order_id, project_id, notes, equipment_instance_id, unit_cost, amount) VALUES (?, 'receive', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [lotId, recvQty, unit, location, null, null, "PO 收货: " + po.po_no + " line " + line.line_no, projectId, Number(line.unit_price || 0), recvQty * Number(line.unit_price || 0)]);
 
         const keyComponent = get("SELECT id, unit_price FROM key_components WHERE material_id = ?", line.material_id);
         if (keyComponent) {

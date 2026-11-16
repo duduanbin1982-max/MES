@@ -13,6 +13,12 @@
       </div>
     </PageToolbar>
 
+    <el-row :gutter="12" class="kpi-row">
+      <el-col :span="8"><el-card shadow="hover"><div class="kpi-label">项目库存金额</div><div class="kpi-value">¥ {{ summary.total_value || 0 }}</div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="hover"><div class="kpi-label">库存品种</div><div class="kpi-value">{{ summary.material_count || 0 }}</div></el-card></el-col>
+      <el-col :span="8"><el-card shadow="hover"><div class="kpi-label">库存总数量</div><div class="kpi-value">{{ summary.total_quantity || 0 }}</div></el-card></el-col>
+    </el-row>
+
     <el-tabs v-model="tab">
       <el-tab-pane label="项目库存" name="stock">
         <el-table :data="inventory" v-loading="loading" stripe size="small" border>
@@ -22,6 +28,8 @@
           <el-table-column prop="location" label="项目库位" width="180" />
           <el-table-column prop="quantity" label="可用数量" width="100" align="right" />
           <el-table-column prop="material_unit" label="单位" width="70" />
+          <el-table-column label="单位成本" width="100" align="right"><template #default="{ row }">¥ {{ row.effective_unit_cost || 0 }}</template></el-table-column>
+          <el-table-column label="库存金额" width="120" align="right"><template #default="{ row }">¥ {{ row.inventory_value || 0 }}</template></el-table-column>
           <el-table-column label="质量状态" width="100"><template #default="{ row }"><el-tag size="small" :type="row.status === 'available' ? 'success' : 'warning'">{{ row.status === 'available' ? '可用' : row.status }}</el-tag></template></el-table-column>
           <el-table-column label="操作" width="150" fixed="right">
             <template #default="{ row }">
@@ -41,6 +49,7 @@
           <el-table-column prop="material_name" label="物料名称" min-width="180" />
           <el-table-column prop="lot_no" label="批次" width="180" />
           <el-table-column prop="quantity" label="数量" width="100" align="right" />
+          <el-table-column label="金额" width="110" align="right"><template #default="{ row }">¥ {{ row.amount || 0 }}</template></el-table-column>
           <el-table-column prop="from_location" label="出库库位" width="160" />
           <el-table-column prop="notes" label="备注" min-width="180" />
         </el-table>
@@ -85,6 +94,7 @@ const tab = ref('stock')
 const issueDlg = ref(false)
 const returnDlg = ref(false)
 const current = ref<any>(null)
+const summary = ref<any>({ total_value: 0, material_count: 0, total_quantity: 0 })
 const form = reactive({ quantity: 1, notes: '' })
 const movementLabel = (value: string) => ({ issue: '领料', return: '退料' } as any)[value] || value
 
@@ -101,6 +111,7 @@ const loadAll = async () => {
   try {
     inventory.value = await api.get('/project-inventory', { params: { equipment_instance_id: equipmentId.value } })
     movements.value = await api.get('/project-inventory/movements', { params: { equipment_instance_id: equipmentId.value } })
+    summary.value = await api.get('/project-inventory/summary', { params: { equipment_instance_id: equipmentId.value } })
   } catch (error: any) { ElMessage.error(error?.response?.data?.message || '加载项目库存失败') } finally { loading.value = false }
 }
 const openIssue = (row: any) => { current.value = row; Object.assign(form, { quantity: Math.min(1, Number(row.quantity)), notes: '' }); issueDlg.value = true }
@@ -110,7 +121,7 @@ const submitIssue = async () => {
   saving.value = true
   try {
     await api.post('/project-inventory/issue', { inventory_id: current.value.id, quantity: form.quantity, notes: form.notes })
-    ElMessage.success('项目领料成功')
+    ElMessage.success(`项目领料成功，金额 ¥${current.value?.effective_unit_cost ? (Number(current.value.effective_unit_cost) * Number(form.quantity)).toFixed(2) : '0.00'}`)
     issueDlg.value = false
     await loadAll()
   } catch (error: any) { ElMessage.error(error?.response?.data?.message || '领料失败') } finally { saving.value = false }
@@ -133,4 +144,7 @@ onMounted(async () => { await loadEquipments(); await loadAll() })
 .page-title { font-size: 20px; font-weight: 600; }
 .page-subtitle { color: var(--el-text-color-secondary); font-size: 13px; margin-top: 4px; }
 .toolbar-right { display: flex; align-items: center; gap: 10px; }
+.kpi-row { margin-bottom: 12px; }
+.kpi-label { color: var(--el-text-color-secondary); font-size: 13px; }
+.kpi-value { margin-top: 4px; font-size: 24px; font-weight: 700; }
 </style>

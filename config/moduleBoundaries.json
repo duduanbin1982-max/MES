@@ -76,6 +76,12 @@
       "to": "materialService",
       "table": "purchase_requisitions",
       "reason": "采购订单全部到货后回写采购申请完成状态（2026-11-15 到货闭环）"
+    },
+    {
+      "from": "materialService",
+      "to": "cost",
+      "table": "project_cost_entries",
+      "reason": "项目直供领料/退料写入项目成本台账（2026-11-16 项目材料成本）"
     }
   ],
   "allowedTriggers": [
